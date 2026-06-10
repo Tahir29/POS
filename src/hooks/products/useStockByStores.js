@@ -16,6 +16,9 @@ export function useStockByStores(itemId) {
     queryFn:   () => getStockByStores(itemId),
     enabled:   !!itemId,
     staleTime: APP_CONFIG.STALE_TIME.STOCK,
-    select:    (data) => data?.data ?? data?.Entities ?? data?.result ?? [],
+    select: (response) => {
+      const result = response?.data?.Entity ?? response?.data?.Entities ?? response?.data?.data ?? response?.data ?? response;
+      return Array.isArray(result) ? result : [];
+    },
   });
 }

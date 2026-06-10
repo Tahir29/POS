@@ -1,321 +1,188 @@
 'use client';
 
 // src/app/(pos)/catalog/page.jsx
-// Catalog screen — primary product browsing screen for sales associates.
-//
-// Phase 5: CategoryFilter, ProductGrid, pagination (Load More / Skip-based accumulation).
-// Phase 6: ProductSearchBar (replaces ProductSearch), useItemSearch (search mode),
-//          AdvancedFilterPanel (weight range filters), SearchResultsCount,
-//          RecentSearches (session-only), mode switching (browse ↔ search).
-//
-// Suspense boundary is on the DEFAULT EXPORT (CatalogPage), wrapping
-// CatalogScreen from outside. This is required in Next.js 13+ for any
-// component that calls useSearchParams() (via useCatalogFilters).
 
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useMemo, useState } from 'react';
 import { useSelector } from 'react-redux';
-import { toast } from 'react-toastify';
+import { toast }       from 'react-toastify';
 
 import { useCatalogFilters }  from '@/hooks/catalog/useCatalogFilters';
 import { useCatalogProducts } from '@/hooks/catalog/useCatalogProducts';
 import { useItemSearch }      from '@/hooks/catalog/useItemSearch';
-import {
-  useCategories,
-  useSubTypes,
-  useItemGroups,
-} from '@/hooks/catalog/useCategoryFilters';
+import { useCategories }      from '@/hooks/catalog/useCategoryFilters';
 
-import CategoryFilter      from '@/components/features/catalog/CategoryFilter';
-import ProductGrid         from '@/components/features/catalog/ProductGrid';
-import ProductSearchBar    from '@/components/features/catalog/ProductSearchBar';
-import AdvancedFilterPanel from '@/components/features/catalog/AdvancedFilterPanel';
-import SearchResultsCount  from '@/components/features/catalog/SearchResultsCount';
-import CatalogSkeleton     from '@/components/features/catalog/CatalogSkeleton';
+import CategoryFilter   from '@/components/features/catalog/CategoryFilter';
+import ProductGrid      from '@/components/features/catalog/ProductGrid';
+import ProductSearchBar from '@/components/features/catalog/ProductSearchBar';
+import CatalogSkeleton  from '@/components/features/catalog/CatalogSkeleton';
 
 import APP_CONFIG from '@/constants/appConfig';
 
-const { PAGINATION, SEARCH } = APP_CONFIG;
-const MAX_RECENT_SEARCHES = 5;
+const { SEARCH } = APP_CONFIG;
+const MAX_RECENT  = 5;
 
-// ── Selectors ─────────────────────────────────────────────────────────────────
-
-const selectActiveStore = (state) => ({
-  id:   state.store.activeStoreId,
-  name: state.store.activeStoreName,
-});
-
-// ── CatalogScreen (internal) ──────────────────────────────────────────────────
-// All logic lives here. Separated so CatalogPage (default export) can wrap
-// it in <Suspense> from outside — required for useSearchParams to work in
-// Next.js App Router.
+const selectStoreName = (state) => state.store.activeStoreName;
 
 function CatalogScreen() {
-  const { name: storeName } = useSelector(selectActiveStore);
+  const storeName = useSelector(selectStoreName);
 
-  // ── Filter state (URL-synced) ─────────────────────────────────────────────
   const { filters, hasActiveFilters, actions } = useCatalogFilters();
+  const { activeCategorySlug, searchQuery, show_out_of_stock } = filters;
 
-  const {
-    activeGroupId,
-    activeCategoryId,
-    activeSubTypeId,
-    showOos,
-    searchQuery,
-    Skip,
-    show_out_of_stock,
-    fromWeight,
-    toWeight,
-    fromDiamondWeight,
-    toDiamondWeight,
-  } = filters;
-
-  // ── Advanced filter panel ─────────────────────────────────────────────────
-  const [advancedOpen, setAdvancedOpen] = useState(false);
-
-  // ── Recent searches (session-only, max 5, not persisted) ─────────────────
   const [recentSearches, setRecentSearches] = useState([]);
 
-  const pushRecentSearch = useCallback((q) => {
-    if (!q || q.trim().length < SEARCH.MIN_QUERY_LENGTH) return;
-    setRecentSearches((prev) => {
-      const deduped = [q, ...prev.filter((s) => s !== q)];
-      return deduped.slice(0, MAX_RECENT_SEARCHES);
-    });
-  }, []);
+  const isSearchMode = !!searchQuery && searchQuery.length >= SEARCH.MIN_QUERY_LENGTH;
 
-  // ── Mode detection ────────────────────────────────────────────────────────
-  const hasWeightFilter =
-    fromWeight !== null ||
-    toWeight !== null ||
-    fromDiamondWeight !== null ||
-    toDiamondWeight !== null;
+  // ── Categories ─────────────────────────────────────────────────────────────
+  const { data: categories = [], isError: catsError } = useCategories();
 
-  const isSearchMode =
-    (!!searchQuery && searchQuery.length >= SEARCH.MIN_QUERY_LENGTH) ||
-    hasWeightFilter;
+  // ── Resolve slug → type_id ─────────────────────────────────────────────────
+  // slug e.g. "rings" → find category where type_name includes "rings" → get type_id
+  const activeCategoryId = useMemo(() => {
+    if (!activeCategorySlug || !categories.length) return null;
+    const slug = activeCategorySlug.replace(/-/g, ' ').toLowerCase();
 
-  // ── Category data (static, 30-min cache) ─────────────────────────────────
-  const { data: itemGroups = [],  isError: groupsError  } = useItemGroups();
-  const { data: categories = [],  isError: catsError    } = useCategories();
-  const { data: subTypes = [],    isError: subsError    } = useSubTypes();
+    // Exact match first
+    let match = categories.find((c) =>
+      c.type_name?.toLowerCase() === slug
+    );
 
-  // ── Browse mode: paginated store-scoped catalog ───────────────────────────
+    // StartsWith — handles "mangalsutra" → "mangalsutra chains"
+    if (!match) match = categories.find((c) =>
+      c.type_name?.toLowerCase().startsWith(slug + ' ') ||
+      c.type_name?.toLowerCase() === slug
+    );
+
+    return match?.type_id ?? null;
+  }, [activeCategorySlug, categories]);
+
+  // ── Browse mode ────────────────────────────────────────────────────────────
   const {
-    data: pageProducts = [],
-    isLoading:  browseLoading,
-    isFetching: browseFetching,
-    isError:    browseError,
+    data,
+    isLoading:       browseLoading,
+    isFetchingNextPage,
+    hasNextPage,
+    fetchNextPage,
+    isError:         browseError,
   } = useCatalogProducts({
-    Skip:              Skip,
-    show_out_of_stock: show_out_of_stock,
-    ...(filters.item_group_ids && { item_group_ids: filters.item_group_ids }),
-    ...(filters.type_ids       && { type_ids:       filters.type_ids }),
-    ...(filters.sub_type_ids   && { sub_type_ids:   filters.sub_type_ids }),
+    show_out_of_stock,
+    ...(activeCategoryId && { type_ids: [activeCategoryId] }),
   });
 
-  // ── Search mode: Items/List with search + weight params ───────────────────
-  const searchParams = useMemo(() => ({
-    item_search:          searchQuery ?? '',
-    item_group_ids:       activeGroupId    ? [activeGroupId]    : [],
-    type_ids:             activeCategoryId ? [activeCategoryId] : [],
-    sub_type_ids:         activeSubTypeId  ? [activeSubTypeId]  : [],
-    from_weight:          fromWeight,
-    to_weight:            toWeight,
-    from_diamond_weight:  fromDiamondWeight,
-    to_diamond_weight:    toDiamondWeight,
-  }), [
-    searchQuery,
-    activeGroupId,
-    activeCategoryId,
-    activeSubTypeId,
-    fromWeight,
-    toWeight,
-    fromDiamondWeight,
-    toDiamondWeight,
-  ]);
+  const browseProducts = data?.products ?? [];
+
+  // ── Search mode ────────────────────────────────────────────────────────────
+  const searchQueryParams = useMemo(() => ({
+    item_search: searchQuery ?? '',
+    type_ids:    activeCategoryId ? [activeCategoryId] : [],
+  }), [searchQuery, activeCategoryId]);
 
   const {
-    data: searchResults = [],
-    isLoading:  searchLoading,
-    isFetching: searchFetching,
-    isError:    searchError,
-  } = useItemSearch(searchParams);
+    data:      searchResults = [],
+    isLoading: searchLoading,
+    isError:   searchError,
+  } = useItemSearch(searchQueryParams);
 
-  // ── Accumulated product list for browse mode (Load More) ─────────────────
-  const [allProducts, setAllProducts] = useState([]);
-  const prevSkipRef       = useRef(Skip);
-  const prevFiltersKeyRef = useRef('');
-
-  const filtersKey = [
-    activeGroupId,
-    activeCategoryId,
-    activeSubTypeId,
-    show_out_of_stock,
-  ].join('|');
-
-  useEffect(() => {
-    if (browseLoading) return;
-
-    const filterChanged = filtersKey !== prevFiltersKeyRef.current;
-    const isFirstPage   = Skip === 0;
-
-    if (filterChanged || isFirstPage) {
-      setAllProducts(pageProducts);
-      prevFiltersKeyRef.current = filtersKey;
-    } else if (Skip > prevSkipRef.current) {
-      setAllProducts((prev) => {
-        const existingIds = new Set(prev.map((p) => p.item_id));
-        const fresh = pageProducts.filter((p) => !existingIds.has(p.item_id));
-        return [...prev, ...fresh];
-      });
-    }
-
-    prevSkipRef.current = Skip;
-  }, [pageProducts, browseLoading, Skip, filtersKey]);
-
-  // ── Error toasts ──────────────────────────────────────────────────────────
-  useEffect(() => {
+  // ── Error toasts ───────────────────────────────────────────────────────────
+  useCallback(() => {
     if (browseError) toast.error('Failed to load products. Please try again.');
-  }, [browseError]);
-
-  useEffect(() => {
-    if (groupsError || catsError || subsError) {
-      toast.error('Failed to load filter options.');
-    }
-  }, [groupsError, catsError, subsError]);
-
-  useEffect(() => {
     if (searchError) toast.error('Search failed. Please try again.');
-  }, [searchError]);
+    if (catsError)   toast.error('Failed to load categories.');
+  }, [browseError, searchError, catsError]);
 
-  // ── Derived display values ────────────────────────────────────────────────
-  const displayProducts = isSearchMode ? searchResults : allProducts;
+  // ── Derived ────────────────────────────────────────────────────────────────
+  const displayProducts = isSearchMode ? searchResults : browseProducts;
   const isLoading       = isSearchMode ? searchLoading  : browseLoading;
-  const isFetching      = isSearchMode ? searchFetching : browseFetching;
+  const isFetchingMore  = !isSearchMode && isFetchingNextPage;
+  const hasMore         = !isSearchMode && !!hasNextPage;
 
-  const hasMore        = !isSearchMode && !browseLoading && pageProducts.length === PAGINATION.CATALOG_TAKE;
-  const isFetchingMore = !isSearchMode && browseFetching && allProducts.length > 0 && !browseLoading;
-
-  console.log("products", displayProducts)
-
-  // ── Callbacks ─────────────────────────────────────────────────────────────
+  // ── Callbacks ──────────────────────────────────────────────────────────────
   const handleSearch = useCallback((q) => {
     actions.setSearch(q);
-    if (q.length >= SEARCH.MIN_QUERY_LENGTH) pushRecentSearch(q);
-  }, [actions, pushRecentSearch]);
+    if (q.trim().length >= SEARCH.MIN_QUERY_LENGTH) {
+      setRecentSearches((prev) => {
+        const deduped = [q, ...prev.filter((s) => s !== q)];
+        return deduped.slice(0, MAX_RECENT);
+      });
+    }
+  }, [actions]);
 
   const handleRecentSelect = useCallback((q) => {
     actions.setSearch(q);
-    pushRecentSearch(q);
-  }, [actions, pushRecentSearch]);
+  }, [actions]);
 
   const handleClearFilters = useCallback(() => {
-    setAllProducts([]);
     actions.clearFilters();
   }, [actions]);
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  const handleLoadMore = useCallback(() => {
+    if (hasNextPage && !isFetchingNextPage) fetchNextPage();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="flex h-full flex-col overflow-y-auto">
+    <div className="flex h-full flex-col">
 
-      {/* ── Page header ──────────────────────────────────────────────────── */}
+      {/* Header */}
       <div className="flex flex-col gap-1 px-4 pt-4 md:px-6 md:pt-6">
-        <h1 className="text-xl font-bold text-stone-800 md:text-2xl">
+        <h1
+          className="text-xl font-bold text-foreground md:text-2xl"
+          style={{ fontFamily: 'var(--font-abhaya)' }}
+        >
           Catalog
+          {storeName && (
+            <span className="text-sm text-muted-foreground ml-4">{storeName}</span>
+          )}
         </h1>
-        {storeName && (
-          <p className="text-sm text-stone-400">{storeName}</p>
-        )}
       </div>
 
-      {/* ── Search bar + advanced filter trigger ─────────────────────────── */}
-      <div className="px-4 pt-3 pb-3 md:px-6">
-        <ProductSearchBar
-          value={searchQuery ?? ''}
-          onSearch={handleSearch}
-          onAdvancedOpen={() => setAdvancedOpen(true)}
-          hasAdvancedActive={hasWeightFilter}
-          recentSearches={recentSearches}
-          onRecentSelect={handleRecentSelect}
-        />
-      </div>
-
-      {/* ── Category / OOS filters — browse mode only ────────────────────── */}
-      {!isSearchMode && (
-        <div className="border-b border-gray-100 bg-white">
+      {/* Search + Category filter bar */}
+      <div className="flex justify-between items-center bg-white py-2 px-2 md:mx-6 mx-4 flex-wrap gap-1 rounded-lg">
+        <div className="px-2">
+          <ProductSearchBar
+            value={searchQuery ?? ''}
+            onSearch={handleSearch}
+            recentSearches={recentSearches}
+            onRecentSelect={handleRecentSelect}
+          />
+        </div>
+        <div className="bg-card">
           <CategoryFilter
-            // itemGroups={itemGroups}
             categories={categories}
-            // subTypes={subTypes}
-            activeGroupId={activeGroupId}
-            activeCategoryId={activeCategoryId}
-            activeSubTypeId={activeSubTypeId}
-            showOos={showOos}
+            activeCategorySlug={activeCategorySlug}
             hasActiveFilters={hasActiveFilters}
-            onSelectGroup={actions.selectGroup}
             onSelectCategory={actions.selectCategory}
-            onSelectSubType={actions.selectSubType}
-            onToggleOos={actions.toggleOos}
             onClearFilters={handleClearFilters}
           />
         </div>
+      </div>
+
+      {/* Product count */}
+      {!isLoading && displayProducts.length > 0 && (
+        <p className="px-4 pt-3 text-xs text-muted-foreground md:px-6">
+          {isSearchMode
+            ? `${searchResults.length} result${searchResults.length !== 1 ? 's' : ''} for "${searchQuery}"`
+            : `${browseProducts.length} product${browseProducts.length !== 1 ? 's' : ''}${hasActiveFilters ? ' matching filters' : ''}`
+          }
+        </p>
       )}
 
-      {/* ── Scrollable content ───────────────────────────────────────────── */}
-      <div className="flex flex-1 flex-col gap-3 px-4 py-4 md:px-6">
-
-        {/* Search results count — search mode only */}
-        {isSearchMode && (
-          <SearchResultsCount
-            count={searchResults.length}
-            query={searchQuery}
-            isLoading={searchLoading}
-          />
-        )}
-
-        {/* Browse mode product count */}
-        {!isSearchMode && !isLoading && allProducts.length > 0 && (
-          <p className="text-sm text-stone-400">
-            {allProducts.length} product{allProducts.length !== 1 ? 's' : ''}
-            {hasActiveFilters ? ' matching filters' : ''}
-          </p>
-        )}
-
-        {/* Product grid */}
+      {/* Product grid */}
+      <div className="flex-1 overflow-y-auto px-4 py-3 md:px-6">
         <ProductGrid
           products={displayProducts}
           isLoading={isLoading}
           isFetchingMore={isFetchingMore}
           hasMore={hasMore}
           hasFilters={hasActiveFilters || isSearchMode}
-          onLoadMore={actions.loadMore}
+          onLoadMore={handleLoadMore}
           onClearFilters={handleClearFilters}
         />
       </div>
 
-      {/* ── Advanced filter panel (slide-in overlay) ─────────────────────── */}
-      <AdvancedFilterPanel
-        isOpen={advancedOpen}
-        onClose={() => setAdvancedOpen(false)}
-        filters={{
-          fromWeight,
-          toWeight,
-          fromDiamondWeight,
-          toDiamondWeight,
-        }}
-        actions={{
-          setWeightRange:        actions.setWeightRange,
-          setDiamondWeightRange: actions.setDiamondWeightRange,
-        }}
-        hasActiveFilters={hasWeightFilter}
-      />
     </div>
   );
 }
-
-// ── Page export ───────────────────────────────────────────────────────────────
-// Suspense wraps CatalogScreen from OUTSIDE — this is the correct pattern for
-// Next.js App Router when the inner component calls useSearchParams().
 
 export default function CatalogPage() {
   return (

@@ -6,7 +6,15 @@ const nextConfig = {
     remotePatterns: [
       {
         protocol: 'https',
+        hostname: 'lucira.live.ornaverse.in',
+      },
+      {
+        protocol: 'https',
         hostname: 'lucira.uat.ornaverse.in',
+      },
+      {
+        protocol: 'https',
+        hostname: 'cdn.shopify.com',
       },
     ],
   },

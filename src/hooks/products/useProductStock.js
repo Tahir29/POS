@@ -16,6 +16,8 @@ export function useProductStock(itemCode) {
     queryFn:   () => getStock(itemCode),
     enabled:   !!itemCode,
     staleTime: APP_CONFIG.STALE_TIME.STOCK,
-    select:    (data) => data?.data ?? data?.Entity ?? data?.result ?? null,
+    select: (response) => {
+      return response?.data?.Entity ?? response?.data?.Entities?.[0] ?? response.data.data ?? response?.data ?? null;
+    },
   });
 }

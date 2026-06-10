@@ -55,7 +55,7 @@ export const QUERY_KEYS = {
 
   // ── INVENTORY ────────────────────────────────────────────
   INVENTORY: {
-    STOCK: (itemCode, date) => ['inventory', 'stock', itemCode, date],
+    STOCK: (itemCode) => ['inventory', 'stock', itemCode],
   },
 
   // ── FULFILLMENT ──────────────────────────────────────────

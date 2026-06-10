@@ -1,14 +1,13 @@
 // src/hooks/products/useProductDetail.js
+//
+// Fetches a single item's full detail from Items/Retrieve.
+// OrnaVerse /Retrieve endpoints always wrap single records in Entity (not Entities).
 
 import { useQuery } from '@tanstack/react-query';
 import { QUERY_KEYS } from '@/constants/queryKeys';
 import APP_CONFIG from '@/constants/appConfig';
 import { getItemDetail } from '@/services/itemService';
 
-/**
- * Fetches full product detail for a single item by ID.
- * @param {number|string} itemId
- */
 export function useProductDetail(itemId) {
   const id = itemId ? parseInt(itemId, 10) : null;
 
@@ -17,6 +16,10 @@ export function useProductDetail(itemId) {
     queryFn:   () => getItemDetail(id),
     enabled:   !!id,
     staleTime: APP_CONFIG.STALE_TIME.CATALOG,
-    select:    (data) => data?.data ?? data?.Entity ?? data?.result ?? null,
+    // /Retrieve → response.data.Entity
+    select: (response) => {
+      const item = response?.data?.Entity ?? null;
+      return item && typeof item === 'object' && !Array.isArray(item) ? item : null;
+    },
   });
 }
