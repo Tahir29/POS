@@ -39,8 +39,8 @@ export function useDesignVariants(styleId) {
     staleTime: APP_CONFIG.STALE_TIME.CATALOG,
     // response.data.Entities[0].style_variants
     select: (response) => {
-      const entities = response?.data?.Entities ?? [];
-      return entities[0]?.style_variants ?? [];
+      const entity = response?.data?.Entity ?? response?.data ?? {};
+      return entity?.style_variants ?? [];
     },
   });
 

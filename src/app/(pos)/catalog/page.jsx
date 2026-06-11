@@ -125,10 +125,7 @@ function CatalogScreen() {
 
       {/* Header */}
       <div className="flex flex-col gap-1 px-4 pt-4 md:px-6 md:pt-6">
-        <h1
-          className="text-xl font-bold text-foreground md:text-2xl"
-          style={{ fontFamily: 'var(--font-abhaya)' }}
-        >
+        <h1 className="text-xl font-bold text-foreground md:text-2xl font-abhaya">
           Catalog
           {storeName && (
             <span className="text-sm text-muted-foreground ml-4">{storeName}</span>
@@ -138,7 +135,7 @@ function CatalogScreen() {
 
       {/* Search + Category filter bar */}
       <div className="flex justify-between items-center bg-white py-2 px-2 md:mx-6 mx-4 flex-wrap gap-1 rounded-lg">
-        <div className="px-2">
+        <div className="px-2 w-fit">
           <ProductSearchBar
             value={searchQuery ?? ''}
             onSearch={handleSearch}
@@ -146,7 +143,7 @@ function CatalogScreen() {
             onRecentSelect={handleRecentSelect}
           />
         </div>
-        <div className="bg-card">
+        <div className="bg-card overflow-scroll md:overflow-hidden">
           <CategoryFilter
             categories={categories}
             activeCategorySlug={activeCategorySlug}

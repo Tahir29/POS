@@ -16,7 +16,7 @@ import APP_CONFIG           from '@/constants/appConfig';
 const selectActiveStoreId = (state) => state.store.activeStoreId;
 
 // Use a larger page size for better UX — 50 per page
-const TAKE = 50;
+const TAKE = APP_CONFIG.PAGINATION.CATALOG_TAKE;
 
 export function useCatalogProducts(filters = {}) {
   const storeId = useSelector(selectActiveStoreId);
@@ -38,13 +38,24 @@ export function useCatalogProducts(filters = {}) {
     initialPageParam: 0,
 
     // getProducts returns response.data → shape: { Entities, TotalCount, Skip, Take }
-    getNextPageParam: (lastPage, allPages) => {
-      const items      = lastPage?.Entities ?? [];
-      const totalCount = lastPage?.TotalCount ?? 0;
-      const loaded     = allPages.length * TAKE;
-      // No more pages when we've loaded everything or last page was short
-      if (items.length < TAKE || loaded >= totalCount) return undefined;
-      return loaded;
+    getNextPageParam: (lastPage) => {
+      const entities   = lastPage?.Entities   ?? [];
+      const totalCount = lastPage?.TotalCount  ?? 0;
+      const skip       = lastPage?.Skip        ?? 0;
+      const pageTake   = lastPage?.Take        ?? TAKE;
+
+      // No items returned — nothing left to fetch
+      if (entities.length === 0) return undefined;
+
+      // Next skip = where the server left off (Skip + Take from the response)
+      // This is more reliable than counting client-side because it uses what
+      // the server actually processed, not what we assume was returned.
+      const nextSkip = skip + pageTake;
+
+      // All items have been loaded
+      if (nextSkip >= totalCount) return undefined;
+
+      return nextSkip;
     },
 
     // Flatten all pages into a single products array

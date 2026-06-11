@@ -57,8 +57,9 @@ const cartSlice = createSlice({
           unitPrice:  incoming.unitPrice,
           styleId:    incoming.styleId  ?? null,
           sizeId:     incoming.sizeId   ?? null,
+          sizeName:   incoming.sizeName ?? null,
           attributes: incoming.attributes ?? {},
-          imageUrl:   incoming.imageUrl  ?? null,
+          image:      incoming.image    ?? incoming.imageUrl ?? null,
         });
       }
       recalculateTotals(state);
@@ -131,11 +132,6 @@ const cartSlice = createSlice({
     // Apply a validated gift voucher
     applyGiftVoucher: (state, action) => {
       state.appliedGiftVoucher = action.payload;
-    },
-
-    // Set the order note
-    setNote: (state, action) => {
-      state.notes = action.payload;
     },
 
     // Clear the entire cart — called after successful order creation

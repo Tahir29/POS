@@ -15,6 +15,10 @@ const geistMono = Geist_Mono({
 export const metadata = {
   title: 'Lucira POS',
   description: 'Point of Sale System — Lucira Jewelry',
+   icons: {
+    icon: "https://luciraonline.myshopify.com/cdn/shop/files/Favicon_New_10.png?crop=center&height=32&v=1767615434&width=32",
+    apple: "https://luciraonline.myshopify.com/cdn/shop/files/Favicon_New_10.png?crop=center&height=32&v=1767615434&width=32",
+  },
 };
 
 export default function RootLayout({ children }) {

@@ -2,8 +2,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useSelector } from 'react-redux';
-import { useRouter } from 'next/navigation';
 import { ShoppingCart, User, LogOut, ChevronDown, Store, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -16,23 +14,22 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useAuth } from '@/hooks/auth/useAuth';
 import { useActiveStore } from '@/hooks/store/useActiveStore';
+import { useCartItemCount } from '@/hooks/cart/useCartItemCount';
 import StoreSelectModal from '@/components/features/auth/StoreSelectModal';
+import CartDrawer from '@/components/features/cart/CartDrawer';
 import { cn } from '@/lib/utils';
 
 // ── CART BADGE ────────────────────────────────────────────────
 
-function CartBadge() {
-  const router = useRouter();
-  const itemCount = useSelector((state) =>
-    state.cart.items.reduce((sum, item) => sum + item.quantity, 0)
-  );
+function CartBadge({ onOpen }) {
+  const itemCount = useCartItemCount();
 
   return (
     <Button
       variant="ghost"
       size="icon"
       className="relative min-h-[44px] min-w-[44px]"
-      onClick={() => router.push('/cart')}
+      onClick={onOpen}
       aria-label={`Cart — ${itemCount} ${itemCount === 1 ? 'item' : 'items'}`}
     >
       <ShoppingCart size={20} aria-hidden="true" />
@@ -113,15 +110,12 @@ function UserMenu() {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-48">
         <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
-          Signed in as
-        </DropdownMenuLabel>
-        <DropdownMenuLabel className="pt-0 truncate">
-          {user?.username ?? 'Staff'}
+          Signed in as <span className="truncate">{user?.username ?? 'Staff'}</span>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onClick={logout}
-          className="text-destructive focus:text-destructive cursor-pointer"
+          className="text-destructive focus:text-white cursor-pointer"
         >
           <LogOut size={15} aria-hidden="true" className="mr-2" />
           Sign out
@@ -135,6 +129,7 @@ function UserMenu() {
 
 export default function Header() {
   const [storeModalOpen, setStoreModalOpen] = useState(false);
+  const [cartOpen, setCartOpen] = useState(false);
 
   return (
     <>
@@ -147,7 +142,7 @@ export default function Header() {
 
         {/* Right — actions */}
         <div className="flex items-center gap-1">
-          <CartBadge />
+          <CartBadge onOpen={() => setCartOpen(true)} />
           <UserMenu />
         </div>
       </header>
@@ -156,6 +151,12 @@ export default function Header() {
       <StoreSelectModal
         isOpen={storeModalOpen}
         onClose={() => setStoreModalOpen(false)}
+      />
+
+      {/* Cart drawer — rendered outside header flow, available on every POS screen */}
+      <CartDrawer
+        isOpen={cartOpen}
+        onClose={() => setCartOpen(false)}
       />
     </>
   );

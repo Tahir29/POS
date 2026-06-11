@@ -88,11 +88,13 @@ export default function CustomizeSheet({
   const [selectedSizeId,       setSelectedSizeId]        = useState(null);
 
   // When sheet opens, pre-select current product's values
+  // Only seed defaults when opening AND nothing has been selected yet.
+  // This preserves user's choices when reopening.
   useEffect(() => {
     if (isOpen && product) {
-      setSelectedMetalColorId(product.metal_color_id ?? null);
-      setSelectedKaratId(product.karat_id            ?? null);
-      setSelectedSizeId(product.item_size_id          ?? null);
+      setSelectedMetalColorId((prev) => prev ?? product.metal_color_id ?? null);
+      setSelectedKaratId((prev)      => prev ?? product.karat_id       ?? null);
+      setSelectedSizeId((prev)       => prev ?? product.item_size_id   ?? null);
     }
   }, [isOpen, product]);
 

@@ -37,7 +37,6 @@ export const getItemAttributes = (attributeTypeId) =>
  * @param {number} styleId — style_id from Items/Retrieve
  */
 export const getDesignVariants = (styleId) =>
-  axiosInstance.post(API.ITEMS.DESIGNS, {
-    Take: 1,
-    style_id: styleId,
+  axiosInstance.post(API.ITEMS.DESIGN_DETAIL, {
+    EntityId: styleId,
   });

@@ -219,16 +219,20 @@ function ProductDetailScreen() {
             selectedSizeId={selectedVariant?.item_size_id ?? null}
             selectedSizeName={selectedVariant?.item_size_name ?? null}
             stockStatus={stockStatus}
-            hasSizes={false}
           />
 
-          {/* Out of stock */}
+          {/* Out of stock message */}
           {stockStatus === 'out_stock' && (
             <p className="text-sm text-destructive">
               This item is currently out of stock at your store.
-              Check other stores below.
             </p>
           )}
+
+          {/* Stock Across Stores — shown above ATC so user sees availability first */}
+          <CrossStoreStockPanel
+            storeStocks={storeStocks}
+            isLoading={storeStocksLoading}
+          />
 
         </div>
       </div>
@@ -238,11 +242,6 @@ function ProductDetailScreen() {
       {attributes.length > 0 && (
         <ProductAttributeList attributes={attributes} />
       )}
-
-      <CrossStoreStockPanel
-        storeStocks={storeStocks}
-        isLoading={storeStocksLoading}
-      />
 
       {/* Customize sheet */}
       <CustomizeSheet
