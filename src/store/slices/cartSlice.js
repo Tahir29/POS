@@ -17,7 +17,6 @@ const initialState = {
   discountAmount:      0,
   subtotal:            0,
   total:               0,
-  notes:               '',
 };
 
 // ── HELPERS ──────────────────────────────────────────────────
@@ -153,7 +152,6 @@ export const {
   removePromo,
   applyGiftCard,
   applyGiftVoucher,
-  setNote,
   clearCart,
 } = cartSlice.actions;
 
@@ -168,7 +166,6 @@ export const selectCartCustomerName   = (state) => state.cart.customerName;
 export const selectCartCustomerMobile = (state) => state.cart.customerMobile;
 export const selectAppliedPromoCode   = (state) => state.cart.appliedPromoCode;
 export const selectAppliedPromoDetails= (state) => state.cart.appliedPromoDetails;
-export const selectCartNotes          = (state) => state.cart.notes;
 export const selectIsCartEmpty        = (state) => state.cart.items.length === 0;
 
 export default cartSlice.reducer;

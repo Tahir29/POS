@@ -3,7 +3,6 @@
 // src/components/shared/BottomSheet/index.jsx
 //
 // Reusable bottom sheet / side sheet primitive.
-// Used by: SizeSelector (Phase 7), CartDrawer (Phase 8), and any future overlay.
 //
 // On tablet (md+): renders as a right-side drawer (side sheet).
 // On mobile     : renders as a bottom sheet.
@@ -15,6 +14,10 @@
 //   children  ReactNode      — sheet body content
 //   footer    ReactNode?     — optional sticky footer (confirm buttons, CTAs)
 //   maxWidth  string?        — Tailwind max-w class for side sheet (default: 'max-w-md')
+//
+// BUG 5 FIX — replaced all hardcoded colors (bg-white, stone-*) with
+// semantic CSS design tokens (bg-card, border-border, text-foreground, etc.)
+// so the sheet respects the Lucira theme and any future dark-mode changes.
 
 import { useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
@@ -31,31 +34,21 @@ export default function BottomSheet({
 
   // Lock body scroll when open
   useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
-    return () => {
-      document.body.style.overflow = '';
-    };
+    document.body.style.overflow = isOpen ? 'hidden' : '';
+    return () => { document.body.style.overflow = ''; };
   }, [isOpen]);
 
   // Close on Escape key
   useEffect(() => {
     if (!isOpen) return;
-    const handleKey = (e) => {
-      if (e.key === 'Escape') onClose();
-    };
+    const handleKey = (e) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
   }, [isOpen, onClose]);
 
-  // Focus trap: return focus to trigger on close
+  // Move focus into the sheet when it opens
   useEffect(() => {
-    if (isOpen && sheetRef.current) {
-      sheetRef.current.focus();
-    }
+    if (isOpen && sheetRef.current) sheetRef.current.focus();
   }, [isOpen]);
 
   if (!isOpen) return null;
@@ -81,13 +74,12 @@ export default function BottomSheet({
         aria-label={title}
         tabIndex={-1}
         className={`
-          fixed z-50 bg-white shadow-2xl flex flex-col
-          outline-none
+          fixed z-50 shadow-2xl flex flex-col outline-none
+          bg-card
 
           /* Mobile — bottom sheet */
           bottom-0 left-0 right-0
           rounded-t-2xl max-h-[85vh]
-          translate-y-0
 
           /* Tablet — side sheet */
           md:bottom-0 md:top-0 md:left-auto md:right-0
@@ -95,17 +87,22 @@ export default function BottomSheet({
           md:h-full md:max-h-full md:w-full ${maxWidth}
         `}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-stone-100 shrink-0">
-          <h2 className="text-base font-bold text-stone-800">{title}</h2>
+        {/* ── Header ─────────────────────────────────────────────────── */}
+        <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-border shrink-0">
+          <h2
+            className="text-base font-bold text-foreground"
+            style={{ fontFamily: 'var(--font-abhaya)' }}
+          >
+            {title}
+          </h2>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close"
             className="
               min-w-[44px] min-h-[44px] flex items-center justify-center
-              rounded-full text-stone-400
-              hover:text-stone-700 hover:bg-stone-100
+              rounded-full text-muted-foreground
+              hover:text-foreground hover:bg-secondary
               transition-colors
             "
           >
@@ -113,14 +110,14 @@ export default function BottomSheet({
           </button>
         </div>
 
-        {/* Scrollable body */}
-        <div className="flex-1 overflow-y-auto px-5 py-4">
+        {/* ── Scrollable body ────────────────────────────────────────── */}
+        <div className="flex-1 overflow-y-auto px-5 py-5">
           {children}
         </div>
 
-        {/* Sticky footer (optional) */}
+        {/* ── Sticky footer (optional) ───────────────────────────────── */}
         {footer && (
-          <div className="shrink-0 px-5 py-4 border-t border-stone-100">
+          <div className="shrink-0 px-5 py-4 border-t border-border">
             {footer}
           </div>
         )}

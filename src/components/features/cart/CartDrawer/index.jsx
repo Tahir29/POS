@@ -26,13 +26,11 @@ export default function CartDrawer({ isOpen, onClose }) {
     customerName,
     customerMobile,
     appliedPromoCode,
-    notes,
     isEmpty,
     removeItem,
     updateQuantity,
     detachCustomer,
     removePromo,
-    setNote,
   } = useCart();
 
   return (

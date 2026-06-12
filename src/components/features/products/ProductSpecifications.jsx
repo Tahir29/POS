@@ -60,7 +60,7 @@ function SpecCard({ icon, title, rows, info }) {
       <div className="flex items-center justify-between px-4 py-3 border-b border-stone-100 bg-stone-50/80">
         <div className="flex items-center gap-2">
           {icon && (
-            <span className="text-amber-600 shrink-0" aria-hidden="true">
+            <span className="text-accent shrink-0" aria-hidden="true">
               {icon}
             </span>
           )}

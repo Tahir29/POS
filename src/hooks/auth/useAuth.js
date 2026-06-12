@@ -21,6 +21,8 @@ import {
   clearStore,
 } from '@/store/slices/storeSlice';
 
+import { clearCart } from '@/store/slices/cartSlice';
+
 import TOAST from '@/constants/toastMessages'
 
 /**
@@ -102,6 +104,7 @@ export function useAuth() {
   const logout = useCallback(() => {
     dispatch(clearAuth());
     dispatch(clearStore());
+    dispatch(clearCart());
     toast.info(TOAST.AUTH.LOGOUT_SUCCESS);
     router.replace('/login');
   }, [dispatch, router]);

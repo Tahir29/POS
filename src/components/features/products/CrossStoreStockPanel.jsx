@@ -24,20 +24,20 @@ function StockQty({ qty }) {
   const n = parseFloat(qty ?? 0);
   if (n <= 0) {
     return (
-      <span className="text-xs font-semibold text-red-500">
+      <span className="text-xs font-semibold text-red-500 text-nowrap">
         Out of Stock
       </span>
     );
   }
   if (n <= LOW_STOCK_THRESHOLD) {
     return (
-      <span className="text-xs font-semibold text-amber-600">
+      <span className="text-xs font-semibold text-amber-600 text-nowrap">
         {n} left
       </span>
     );
   }
   return (
-    <span className="text-xs font-semibold text-emerald-600">
+    <span className="text-xs font-semibold text-emerald-600 text-nowrap">
       {n} in stock
     </span>
   );
@@ -76,7 +76,7 @@ export default function CrossStoreStockPanel({ storeStocks = [], isLoading }) {
         "
       >
         <div className="flex items-center gap-2">
-          <Store size={16} className="text-amber-600 shrink-0" aria-hidden="true" />
+          <Store size={16} className="text-accent shrink-0" aria-hidden="true" />
           <span className="text-sm font-semibold text-stone-700">
             Stock Across Stores
           </span>
@@ -100,7 +100,7 @@ export default function CrossStoreStockPanel({ storeStocks = [], isLoading }) {
           {isLoading && (
             <div className="flex flex-col divide-y divide-stone-100">
               {[0, 1, 2].map((i) => (
-                <div key={i} className="flex items-center justify-between px-4 py-3">
+                <div key={i} className="flex items-center justify-between px-4 py-3 gap-2">
                   <div className="h-3 w-40 rounded bg-stone-200 animate-pulse" />
                   <div className="h-3 w-16 rounded bg-stone-200 animate-pulse" />
                 </div>
@@ -124,7 +124,7 @@ export default function CrossStoreStockPanel({ storeStocks = [], isLoading }) {
                   <div
                     key={store.company_id}
                     className={`
-                      flex items-center justify-between px-4 py-3
+                      flex items-center justify-between px-4 py-3 gap-2
                       ${isActive ? 'bg-amber-50' : 'bg-white'}
                     `}
                   >

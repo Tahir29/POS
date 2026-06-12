@@ -48,9 +48,10 @@ const TOAST = {
 
   // ── CUSTOMER ─────────────────────────────────────────────
   CUSTOMER: {
-    FOUND:          (name) => `Customer ${name} found.`,
+    FOUND:          (name) => `Customer ${name} Logged in.`,
     NOT_FOUND:      'No customer found with this mobile number.',
     CREATED:        (name) => `Customer ${name} created successfully.`,
+    DETACHED:       (name) => `Customer ${name} Logged out.`,
     CREATE_FAILED:  'Failed to create customer. Please try again.',
     LOAD_FAILED:    'Failed to load customer details. Please try again.',
   },

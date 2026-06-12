@@ -52,7 +52,7 @@ const APP_CONFIG = {
 
   // ── SEARCH ───────────────────────────────────────────────
   SEARCH: {
-    DEBOUNCE_MS:    300,  // ms to wait before firing search API call
+    DEBOUNCE_MS:    500,  // ms to wait before firing search API call
     MIN_QUERY_LENGTH: 2,  // minimum characters before triggering search
   },
 

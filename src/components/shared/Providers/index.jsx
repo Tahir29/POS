@@ -37,7 +37,7 @@ export default function Providers({ children }) {
 
           {/* Toast container — mounted once, globally available */}
           <ToastContainer
-            position="top-right"
+            position="bottom-center"
             autoClose={3000}
             hideProgressBar={false}
             newestOnTop={true}

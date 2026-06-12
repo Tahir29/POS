@@ -17,6 +17,7 @@ import { useActiveStore } from '@/hooks/store/useActiveStore';
 import { useCartItemCount } from '@/hooks/cart/useCartItemCount';
 import StoreSelectModal from '@/components/features/auth/StoreSelectModal';
 import CartDrawer from '@/components/features/cart/CartDrawer';
+import HeaderCustomerControl from '@/components/layout/Header/HeaderCustomerControl';
 import { cn } from '@/lib/utils';
 
 // ── CART BADGE ────────────────────────────────────────────────
@@ -142,6 +143,7 @@ export default function Header() {
 
         {/* Right — actions */}
         <div className="flex items-center gap-1">
+          <HeaderCustomerControl />
           <CartBadge onOpen={() => setCartOpen(true)} />
           <UserMenu />
         </div>

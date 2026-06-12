@@ -80,6 +80,7 @@ function ProductDetailScreen() {
   // ── Variants ──────────────────────────────────────────────────────────────
   const {
     metalColors,
+    variantStock,
     karats,
     sizes,
     findVariant,
@@ -248,9 +249,11 @@ function ProductDetailScreen() {
         isOpen={customizeOpen}
         onClose={() => setCustomizeOpen(false)}
         product={product}
+        selectedVariant={selectedVariant}
         metalColors={metalColors}
         karats={karats}
         sizes={sizes}
+        variantStock={variantStock}
         findVariant={findVariant}
         onConfirm={handleCustomizeConfirm}
         isLoading={variantsLoading}

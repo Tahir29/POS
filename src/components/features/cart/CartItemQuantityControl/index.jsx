@@ -22,7 +22,7 @@ export default function CartItemQuantityControl({ quantity, onIncrement, onDecre
         onClick={onDecrement}
         aria-label="Decrease quantity"
         className={cn(
-          'min-h-[44px] min-w-[44px] flex items-center justify-center',
+          'min-h-[34px] min-w-[34px] flex items-center justify-center',
           'rounded-l-lg text-stone-600 hover:bg-stone-100 active:scale-95',
           'transition-colors'
         )}
@@ -42,7 +42,7 @@ export default function CartItemQuantityControl({ quantity, onIncrement, onDecre
         onClick={onIncrement}
         aria-label="Increase quantity"
         className={cn(
-          'min-h-[44px] min-w-[44px] flex items-center justify-center',
+          'min-h-[34px] min-w-[34px] flex items-center justify-center',
           'rounded-r-lg text-stone-600 hover:bg-stone-100 active:scale-95',
           'transition-colors'
         )}

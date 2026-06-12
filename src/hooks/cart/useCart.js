@@ -10,7 +10,6 @@ import {
   selectCartCustomerMobile,
   selectAppliedPromoCode,
   selectAppliedPromoDetails,
-  selectCartNotes,
   selectIsCartEmpty,
   removeItem,
   updateQuantity,
@@ -18,7 +17,6 @@ import {
   detachCustomer,
   applyPromo,
   removePromo,
-  setNote,
   clearCart,
 } from '@/store/slices/cartSlice';
 import TOAST from '@/constants/toastMessages';
@@ -32,7 +30,6 @@ export function useCart() {
   const customerMobile      = useSelector(selectCartCustomerMobile);
   const appliedPromoCode    = useSelector(selectAppliedPromoCode);
   const appliedPromoDetails = useSelector(selectAppliedPromoDetails);
-  const notes               = useSelector(selectCartNotes);
   const isEmpty             = useSelector(selectIsCartEmpty);
 
   const handleRemoveItem = (item) => {
@@ -76,10 +73,6 @@ export function useCart() {
     toast.success(TOAST.CART.PROMO_REMOVED);
   };
 
-  const handleSetNote = (note) => {
-    dispatch(setNote(note));
-  };
-
   const handleClearCart = () => {
     dispatch(clearCart());
     toast.success(TOAST.CART.CART_CLEARED);
@@ -92,7 +85,6 @@ export function useCart() {
     customerMobile,
     appliedPromoCode,
     appliedPromoDetails,
-    notes,
     isEmpty,
     removeItem: handleRemoveItem,
     updateQuantity: handleUpdateQuantity,
@@ -100,7 +92,6 @@ export function useCart() {
     detachCustomer: handleDetachCustomer,
     applyPromo: handleApplyPromo,
     removePromo: handleRemovePromo,
-    setNote: handleSetNote,
     clearCart: handleClearCart,
   };
 }
