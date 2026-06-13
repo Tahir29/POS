@@ -25,3 +25,17 @@ export async function updateSettings(settingsData) {
 
   return response.data;
 }
+
+/**
+ * Retrieves all available payment receipt modes (e.g. Cash, Card, UPI).
+ * Used in the checkout screen to present payment options. No payment
+ * modes are hardcoded.
+ * @returns {Promise<Object>} OrnaVerse response containing Entities array
+ */
+export async function getPaymentModes() {
+  const response = await axiosInstance.post(API.SETTINGS.GET_PAYMENT_MODES, {
+    Take: 0,
+  });
+
+  return response.data;
+}

@@ -21,19 +21,6 @@ const TOAST = {
     LOAD_FAILED: 'Failed to load store list. Please try again.',
   },
 
-  // ── ITEMS ────────────────────────────────────────────────
-  ITEMS: {
-    DETAIL: (itemId) => ['item', 'detail', itemId],
-    SIZES:  () => ['item-sizes', 'list'],
-    ATTRIBUTES: (typeId) => ['attributes', 'list', typeId],
-    // SEARCH: (params) => ['items', 'search', { ... }], // already added
-  },
-
-  // ── INVENTORY ────────────────────────────────────────────────
-  INVENTORY: {
-    STOCK: (itemCode) => ['stock', 'item', itemCode],
-  },
-
   // ── CART ─────────────────────────────────────────────────
   CART: {
     ITEM_ADDED:   (itemName) => `${itemName} added to cart.`,
@@ -54,6 +41,7 @@ const TOAST = {
     DETACHED:       (name) => `Customer ${name} Logged out.`,
     CREATE_FAILED:  'Failed to create customer. Please try again.',
     LOAD_FAILED:    'Failed to load customer details. Please try again.',
+    SESSION_CHANGED_REDIRECT: 'Customer changed — returning to catalog to start a fresh order.',
   },
 
   // ── ORDERS ───────────────────────────────────────────────
@@ -97,7 +85,6 @@ const TOAST = {
     LOAD_FAILED: 'Failed to load products. Please try again.',
     SEARCH_ERROR:  'Search failed. Please try again.',
     FILTER_ERROR:  'Failed to load filter options.',
-    STOCK_BY_STORES: (itemId) => ['stock', 'stores', itemId],
   },
 
   // ── GENERIC ──────────────────────────────────────────────

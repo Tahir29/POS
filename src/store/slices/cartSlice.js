@@ -10,6 +10,8 @@ const initialState = {
   customerId:          null,
   customerName:        null,
   customerMobile:      null,
+  customerAddress:     null,  // { address, address1, city, state, country, zip } — used as
+                               // shipping_address/billing_address at order creation
   appliedPromoCode:    null,
   appliedPromoDetails: null,  // full promo object from OrnaVerse
   appliedGiftCard:     null,
@@ -93,17 +95,19 @@ const cartSlice = createSlice({
 
     // Attach a found/created customer to the cart
     attachCustomer: (state, action) => {
-      const { customerId, customerName, customerMobile } = action.payload;
-      state.customerId     = customerId;
-      state.customerName   = customerName;
-      state.customerMobile = customerMobile;
+      const { customerId, customerName, customerMobile, customerAddress } = action.payload;
+      state.customerId      = customerId;
+      state.customerName    = customerName;
+      state.customerMobile  = customerMobile;
+      state.customerAddress = customerAddress ?? null;
     },
 
     // Remove the attached customer from the cart
     detachCustomer: (state) => {
-      state.customerId     = null;
-      state.customerName   = null;
-      state.customerMobile = null;
+      state.customerId      = null;
+      state.customerName    = null;
+      state.customerMobile  = null;
+      state.customerAddress = null;
     },
 
     // Apply a validated promo code and its discount
@@ -164,6 +168,7 @@ export const selectCartDiscount       = (state) => state.cart.discountAmount;
 export const selectCartCustomerId     = (state) => state.cart.customerId;
 export const selectCartCustomerName   = (state) => state.cart.customerName;
 export const selectCartCustomerMobile = (state) => state.cart.customerMobile;
+export const selectCartCustomerAddress = (state) => state.cart.customerAddress;
 export const selectAppliedPromoCode   = (state) => state.cart.appliedPromoCode;
 export const selectAppliedPromoDetails= (state) => state.cart.appliedPromoDetails;
 export const selectIsCartEmpty        = (state) => state.cart.items.length === 0;

@@ -4,23 +4,9 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { getCustomer } from '@/services/customerService';
+import { normalizeCustomer } from '@/lib/normalizers/customer';
 import { QUERY_KEYS } from '@/constants/queryKeys';
 import APP_CONFIG from '@/constants/appConfig';
-
-/**
- * Normalizes an OrnaVerse customer record into the shape used by
- * cart.attachCustomer (customerId/customerName/customerMobile) plus
- * the full record for CustomerDisplayCard.
- */
-function normalizeCustomer(entity) {
-  if (!entity) return null;
-  return {
-    customerId:     entity.party_id,
-    customerName:   entity.party_name,
-    customerMobile: entity.mobile,
-    raw:            entity,
-  };
-}
 
 /**
  * @param {string} mobile - 10-digit mobile number

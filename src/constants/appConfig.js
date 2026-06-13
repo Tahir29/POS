@@ -39,6 +39,8 @@ const APP_CONFIG = {
     INVOICES_TAKE:   100,
     SCHEMES_TAKE:    0,   // 0 = fetch all (small dataset)
     CATEGORIES_TAKE: 0,   // 0 = fetch all (small dataset)
+    CUSTOMERS_TAKE:  50,  // Customer directory — TotalCount ~1400, paginated
+    CUSTOMERS_ALL_TAKE: 5000, // One-off larger fetch for name search
   },
 
   // ── STALE TIMES (milliseconds) ───────────────────────────
@@ -75,6 +77,36 @@ const APP_CONFIG = {
   GIFT: {
     CARD_TYPE:    1,
     VOUCHER_TYPE: 2,
+  },
+
+  // ── PAYMENT MODES (Checkout — Phase 9b) ──────────────────
+  // A payment mode from PaymentReceiptMode/List is shown at checkout if:
+  //   only_for_pos === true  OR  mode_code is in ALLOWLIST
+  // ...and is NOT in DENYLIST (modes that are only_for_pos but aren't
+  // customer-facing payment instruments — exchanges, returns, schemes, etc).
+  //
+  // ALLOWLIST exists to surface modes OrnaVerse hasn't flagged only_for_pos
+  // yet (e.g. UPI). If OrnaVerse later sets only_for_pos: true for a code
+  // already in ALLOWLIST, it's harmless — the OR makes it redundant.
+  PAYMENT_MODES: {
+    // NOTE: Cash, Credit Card, Debit Card, and UPI all have
+    // only_for_pos: false in the current OrnaVerse data, but are
+    // standard customer payment instruments for a retail POS — included
+    // here explicitly. Revisit if OrnaVerse later sets only_for_pos: true
+    // for these (the OR makes this redundant, not conflicting).
+    ALLOWLIST: ['Cash', 'Credit Card', 'Debit Card', 'UPI'],
+    DENYLIST: [
+      'Exchange',
+      'Return',
+      'Old Gold',
+      'Order Advance',
+      'Scheme Payment',
+      'scheme Enrollment',
+      'Spin the Wheel',
+      'Spin the Wheel :-Coin',
+      'GoKwik',
+      'Razorpay',
+    ],
   },
 
 };

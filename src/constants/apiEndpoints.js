@@ -62,6 +62,7 @@ const API = {
   CUSTOMERS: {
     GET_CUSTOMER:    'Services/POS/Customer/GetCustomer',
     CREATE_CUSTOMER: 'Services/MarketPlace/Customer/Generate',
+    LIST:            'Services/POS/Customer/List'
   },
 
   // ── ORDERS — POS ─────────────────────────────────────────

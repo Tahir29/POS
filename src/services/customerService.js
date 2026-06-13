@@ -23,3 +23,17 @@ export function getCustomer(mobile) {
 export function createCustomer(payload) {
   return axiosInstance.post(API.CUSTOMERS.CREATE_CUSTOMER, payload);
 }
+
+/**
+ * Fetches a paginated list of customers for the active store.
+ * Maps to: POST Services/POS/Customer/List
+ * @param {{ take?: number, skip?: number, companyId: number }} params
+ * @returns {Promise<import('axios').AxiosResponse>}
+ */
+export function getCustomerList({ take = 50, skip = 0, companyId }) {
+  return axiosInstance.post(API.CUSTOMERS.LIST, {
+    Take: take,
+    Skip: skip,
+    company_id: companyId,
+  });
+}

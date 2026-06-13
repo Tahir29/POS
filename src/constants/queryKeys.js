@@ -66,6 +66,8 @@ export const QUERY_KEYS = {
   // ── CUSTOMERS ────────────────────────────────────────────
   CUSTOMERS: {
     LOOKUP: (mobile) => ['customers', 'lookup', mobile],
+    LIST:   (params) => ['customers', 'list', params],
+    ALL:    (companyId) => ['customers', 'name-search', companyId]
   },
 
   // ── ORDERS ───────────────────────────────────────────────
