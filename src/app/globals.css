@@ -273,8 +273,9 @@
   }
 }
 
-/* ── Print ────────────────────────────────────────────────────────────── */
-
+/* ── Print ──────────────────────────────────────────────────────────────
+   Used by PrintInvoiceButton (OrderConfirmationScreen, Phase 9b).
+   Hides everything except the printable invoice area. */
 @media print {
   body * {
     visibility: hidden;
@@ -286,9 +287,12 @@
   }
 
   #invoice-print-area {
-    position: absolute;
-    left: 0;
-    top: 0;
+    position: fixed;
+    inset: 0;
     width: 100%;
+    height: auto;
+    max-height: none;
+    overflow: visible;
+    padding: 1rem;
   }
 }

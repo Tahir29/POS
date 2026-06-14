@@ -3,12 +3,11 @@
 // src/app/(pos)/invoices/page.jsx
 // Invoice directory — paginated list with detail/print drill-down.
 //
-// Maps to: POST Services/POS/Invoice/List (paginated)
-//          POST Services/POS/Invoice/Retrieve (detail, reuses Phase 9b
-//          useInvoiceDetail / PrintInvoiceButton)
+// Maps to: POST Services/POS/Invoice/List (paginated, confirmed shape —
+// see useInvoiceList.js). Each row is one transaction line item, with
+// the full record (customer, items, payments, totals) attached as
+// `.raw` — the detail sheet reads directly from this, no second API call.
 //
-// Field names for both endpoints are per API_MAPPING.md's "expected
-// fields" — UNCONFIRMED. See useInvoiceList.js for normalization notes.
 // This same list/detail pattern is intended to be reused for the
 // /orders page once POS_CHANNEL_ID is resolved and Order/Generate can be
 // tested end-to-end.
@@ -22,17 +21,17 @@ import { useInvoiceList } from '@/hooks/invoices/useInvoiceList';
 
 export default function InvoicesPage() {
   const [skip, setSkip] = useState(0);
-  const [selectedInvoiceId, setSelectedInvoiceId] = useState(null);
+  const [selectedInvoice, setSelectedInvoice] = useState(null);
 
   const { invoices, totalCount, take, isLoading, isFetching, isError, refetch } = useInvoiceList({ skip });
 
   return (
     <div className="flex flex-col gap-3 max-w-3xl mx-auto w-full">
-      <div className="sticky top-0 z-10 -mx-4 -mt-4 flex items-center justify-between bg-background px-4 pt-4 pb-2 md:-mx-6 md:-mt-6 md:px-6 md:pt-6">
+      <div className="relative -mx-4 -mt-4 flex items-center justify-between bg-background px-4 pt-4 pb-2 md:-mx-6 md:-mt-6 md:px-6 md:pt-6">
         <h1 className="text-base font-bold text-stone-800">Invoices</h1>
       </div>
 
-      <div className="flex flex-col gap-1.5">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
         {isLoading ? (
           <div className="flex items-center justify-center gap-2 py-10 text-sm text-stone-500">
             <Loader2 size={16} className="animate-spin" aria-hidden="true" />
@@ -51,11 +50,11 @@ export default function InvoicesPage() {
             <p className="text-sm">No invoices found.</p>
           </div>
         ) : (
-          invoices.map((invoice) => (
+          invoices.map((invoice, idx) => (
             <InvoiceListItem
-              key={invoice.invoiceId}
+              key={invoice.raw?.transaction_item_id ?? idx}
               invoice={invoice}
-              onSelect={() => setSelectedInvoiceId(invoice.invoiceId)}
+              onSelect={() => setSelectedInvoice(invoice)}
             />
           ))
         )}
@@ -92,9 +91,9 @@ export default function InvoicesPage() {
       )}
 
       <InvoiceDetailSheet
-        invoiceId={selectedInvoiceId}
-        isOpen={!!selectedInvoiceId}
-        onClose={() => setSelectedInvoiceId(null)}
+        invoice={selectedInvoice}
+        isOpen={!!selectedInvoice}
+        onClose={() => setSelectedInvoice(null)}
       />
     </div>
   );

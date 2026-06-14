@@ -166,7 +166,7 @@ export default function CustomersPage() {
       </div>
 
       {/* List */}
-      <div className="flex flex-col gap-2">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
         {isBusy ? (
           <div className="flex items-center justify-center gap-2 py-10 text-sm text-stone-500">
             <Loader2 size={16} className="animate-spin" aria-hidden="true" />

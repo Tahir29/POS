@@ -2,12 +2,22 @@
 // Paginated invoice directory — /invoices page.
 // Maps to: POST Services/POS/Invoice/List
 //
-// NOTE: Field names (invoice_id, invoice_no, invoice_date, customer_name,
-// total_amount) are per API_MAPPING.md's "expected fields" — UNCONFIRMED
-// against a real response. normalizeInvoice() treats "NA"/missing as
-// empty so the UI degrades gracefully if names differ; revisit once a
-// real Postman response is shared (same pattern as Phase 9b promo/payment
-// modes, which both needed field-name corrections after testing).
+// CONFIRMED response shape (from a real Postman response): Entities[] of
+// flat transaction-line-item records — one row per item sold, NOT one
+// row per invoice/document. Key fields used here:
+//   transaction_id   -> invoiceId (used as EntityId for Invoice/Retrieve)
+//   document_no      -> invoiceNo
+//   document_date    -> invoiceDate
+//   party_name       -> customerName
+//   email / mobile   -> customer contact
+//   gross_amount     -> totalAmount (rounded final invoice total)
+//   item_name        -> itemName
+//   location_name / company_name -> store
+//
+// Since each row is one line item, the same document_no can repeat
+// across consecutive rows (multiple items on one invoice). For the list
+// UI we show one row per record as returned (matches the live OrnaVerse
+// "Invoices" screen, which also lists one row per line item).
 
 import { useQuery } from '@tanstack/react-query';
 import { getInvoiceList } from '@/services/orderService';
@@ -19,19 +29,22 @@ function isEmptyValue(value) {
 }
 
 /**
- * Normalizes an OrnaVerse invoice record for list display.
+ * Normalizes an OrnaVerse invoice/transaction-item record for list display.
  */
 export function normalizeInvoice(entity) {
   if (!entity) return null;
   const get = (key) => (!isEmptyValue(entity[key]) ? entity[key] : null);
 
   return {
-    invoiceId:    get('invoice_id') ?? get('EntityId'),
-    invoiceNo:    get('invoice_no') ?? get('invoice_id'),
-    invoiceDate:  get('invoice_date') ?? get('creation_date'),
-    customerName: get('customer_name') ?? get('party_name'),
-    totalAmount:  get('total_amount') ?? get('total'),
-    status:       get('status'),
+    invoiceId:    get('transaction_id') ?? get('document_id'),
+    invoiceNo:    get('document_no'),
+    invoiceDate:  get('document_date'),
+    customerName: get('party_name'),
+    customerEmail: get('email'),
+    customerMobile: get('mobile'),
+    itemName:     get('item_name'),
+    totalAmount:  get('gross_amount') ?? get('net_amount'),
+    locationName: get('location_name') ?? get('company_name'),
     raw: entity,
   };
 }
