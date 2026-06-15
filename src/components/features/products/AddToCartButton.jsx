@@ -1,0 +1,93 @@
+'use client';
+
+// src/components/features/products/AddToCartButton.jsx
+// Primary CTA on the product detail screen.
+// Dispatches cart/addItem Redux action.
+// Shows TOAST.CART.ITEM_ADDED(itemName) on success.
+//
+// Always enabled — out of stock items can be added as made-to-order.
+// Stock status display is handled separately by StockStatusBadge.
+
+import { useDispatch } from 'react-redux';
+import { toast } from 'react-toastify';
+import { ShoppingCart } from 'lucide-react';
+import { addItem } from '@/store/slices/cartSlice';
+import { resolveImageSrc } from '@/lib/resolveImageSrc';
+import TOAST from '@/constants/toastMessages';
+
+/**
+ * @param {{
+ *   product:          object,
+ *   quantity:         number,
+ *   selectedSizeId:   number | null,
+ *   selectedSizeName: string | null,
+ * }} props
+ */
+export default function AddToCartButton({
+  product,
+  quantity,
+  selectedSizeId,
+  selectedSizeName,
+}) {
+  const dispatch = useDispatch();
+
+  const isDisabled = !product;
+
+  // ── Resolve price ─────────────────────────────────────────────────────────
+  const unitPrice =
+    product?.item_rate  ??
+    product?.sale_price ??
+    product?.price      ??
+    product?.mrp        ??
+    product?.rate       ??
+    0;
+
+  // ── Resolve image (handles relative OrnaVerse paths + "NA") ────────────────
+  const resolvedImage = resolveImageSrc(product?.image_url ?? product?.image);
+
+  const handleAddToCart = () => {
+    if (isDisabled) return;
+
+    dispatch(addItem({
+      itemId:     product.item_id,
+      itemCode:   product.item_code        ?? '',
+      itemName:   product.item_name        ?? 'Unknown Product',
+      sku:        product.item_code        ?? '',
+      quantity,
+      unitPrice,
+      totalPrice: unitPrice * quantity,
+      sizeId:     selectedSizeId           ?? product.item_size_id   ?? null,
+      sizeName:   selectedSizeName         ?? product.item_size_name ?? null,
+      image:      resolvedImage,
+      styleId:    product.style_id         ?? null,
+      attributes: {
+        karat:      product.karat_name       ?? null,
+        metalColor: product.metal_color_name ?? null,
+      },
+    }));
+
+    toast.success(TOAST.CART.ITEM_ADDED(product.item_name ?? 'Item'));
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleAddToCart}
+      disabled={isDisabled}
+      aria-label="Add to Cart"
+      className="
+        flex flex-1 items-center justify-center gap-2
+        min-h-[52px] px-6 rounded-xl
+        text-base font-semibold
+        bg-primary hover:bg-primary/90 active:scale-[0.98]
+        text-primary-foreground shadow-sm hover:shadow-md
+        transition-all duration-150
+        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2
+        disabled:opacity-50 disabled:cursor-not-allowed
+      "
+    >
+      <ShoppingCart size={20} aria-hidden="true" className="shrink-0" />
+      Add to Cart
+    </button>
+  );
+}

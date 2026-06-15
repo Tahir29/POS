@@ -1,0 +1,298 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+/* ── Lucira Brand Fonts ─────────────────────────────────────────────────── */
+
+@font-face {
+  font-family: 'Abhaya Libre';
+  src: url('https://cdn.shopify.com/s/files/1/0739/8516/3482/files/AbhayaLibre-Regular.ttf?v=1779366037') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Abhaya Libre';
+  src: url('https://cdn.shopify.com/s/files/1/0739/8516/3482/files/AbhayaLibre-Medium.ttf?v=1779366037') format('truetype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Abhaya Libre';
+  src: url('https://cdn.shopify.com/s/files/1/0739/8516/3482/files/AbhayaLibre-SemiBold.ttf?v=1779366038') format('truetype');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Abhaya Libre';
+  src: url('https://cdn.shopify.com/s/files/1/0739/8516/3482/files/AbhayaLibre-Bold.ttf?v=1779366037') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Abhaya Libre';
+  src: url('https://cdn.shopify.com/s/files/1/0739/8516/3482/files/AbhayaLibre-ExtraBold.ttf?v=1779366037') format('truetype');
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Figtree';
+  src: url('https://cdn.shopify.com/s/files/1/0739/8516/3482/files/Figtree-VariableFont_wght.ttf?v=1779362620') format('truetype');
+  font-weight: 300 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Figtree';
+  src: url('https://cdn.shopify.com/s/files/1/0739/8516/3482/files/Figtree-Italic-VariableFont_wght.ttf?v=1779362621') format('truetype');
+  font-weight: 300 900;
+  font-style: italic;
+  font-display: swap;
+}
+
+/* ── Dark mode variant ──────────────────────────────────────────────────── */
+
+@custom-variant dark (&:is(.dark *));
+
+/* ── Tailwind theme tokens ──────────────────────────────────────────────── */
+
+@theme inline {
+  /* Fonts */
+  --font-sans:    var(--font-figtree);
+  --font-heading: var(--font-abhaya);
+  --font-mono:    ui-monospace, monospace;
+  --font-figtree: var(--font-figtree);
+  --font-abhaya:  var(--font-abhaya);
+
+  /* Semantic color tokens → CSS vars */
+  --color-background:        var(--background);
+  --color-foreground:        var(--foreground);
+  --color-card:              var(--card);
+  --color-card-foreground:   var(--card-foreground);
+  --color-popover:           var(--popover);
+  --color-popover-foreground:var(--popover-foreground);
+  --color-primary:           var(--primary);
+  --color-primary-foreground:var(--primary-foreground);
+  --color-secondary:         var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted:             var(--muted);
+  --color-muted-foreground:  var(--muted-foreground);
+  --color-accent:            var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive:       var(--destructive);
+  --color-border:            var(--border);
+  --color-input:             var(--input);
+  --color-ring:              var(--ring);
+
+  /* Lucira brand tokens — usable as bg-brand-*, text-brand-* etc. */
+  --color-brand-primary:    var(--brand-primary);
+  --color-brand-accent:     var(--brand-accent);
+  --color-brand-cream:      var(--brand-cream);
+  --color-brand-blush:      var(--brand-blush);
+  --color-brand-surface:    var(--brand-surface);
+  --color-brand-muted:      var(--brand-muted);
+
+  /* Status tokens */
+  --color-status-in-stock:  var(--status-in-stock);
+  --color-status-made-order:var(--status-made-order);
+  --color-status-error:     var(--status-error);
+
+  /* Sidebar */
+  --color-sidebar:                    var(--sidebar);
+  --color-sidebar-foreground:         var(--sidebar-foreground);
+  --color-sidebar-primary:            var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent:             var(--sidebar-accent);
+  --color-sidebar-accent-foreground:  var(--sidebar-accent-foreground);
+  --color-sidebar-border:             var(--sidebar-border);
+  --color-sidebar-ring:               var(--sidebar-ring);
+
+  /* Chart — using brand palette */
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  /* Border radius scale */
+  --radius-sm:  calc(var(--radius) * 0.6);
+  --radius-md:  calc(var(--radius) * 0.8);
+  --radius-lg:  var(--radius);
+  --radius-xl:  calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+/* ── :root — Light mode ─────────────────────────────────────────────────── */
+
+:root {
+  /* ── Lucira Brand Palette ─────────────────────────── */
+  --brand-primary:    #5A413F;   /* Deep burgundy  — CTAs, active nav, buttons  */
+  --brand-accent:     #B77767;   /* Terracotta     — badges, selections, hover   */
+  --brand-cream:      #FEF5F1;   /* Warm cream     — page/section backgrounds    */
+  --brand-blush:      #EFE5DE;   /* Soft blush     — offer pills, tags           */
+  --brand-surface:    #F9F9F9;   /* Off-white      — card/secondary surfaces     */
+  --brand-muted:      #FAFAFA;   /* Near white     — image backgrounds           */
+
+  /* ── Status Colors ───────────────────────────────── */
+  --status-in-stock:  #189351;   /* Green  — in stock, availability badges       */
+  --status-made-order:#AF7C3E;   /* Gold   — made-to-order, informational        */
+  --status-error:     #F83E50;   /* Red    — out of stock, errors, destructive   */
+
+  /* ── shadcn/ui semantic tokens → Lucira values ───── */
+  --background:          #FEF5F1;          /* Warm cream app background           */
+  --foreground:          #1C1210;          /* Near-black text                     */
+
+  --card:                #FFFFFF;          /* Pure white cards                    */
+  --card-foreground:     #1C1210;
+
+  --popover:             #FFFFFF;
+  --popover-foreground:  #1C1210;
+
+  --primary:             #5A413F;          /* Brand primary — buttons, CTAs       */
+  --primary-foreground:  #FEF5F1;          /* Cream text on primary               */
+
+  --secondary:           #EFE5DE;          /* Blush — secondary buttons/tags      */
+  --secondary-foreground:#5A413F;          /* Primary text on secondary           */
+
+  --muted:               #F9F9F9;          /* Surface muted                       */
+  --muted-foreground:    #8C7B78;          /* Warm grey text                      */
+
+  --accent:              #B77767;          /* Terracotta accent                   */
+  --accent-foreground:   #FFFFFF;          /* White text on accent                */
+
+  --destructive:         #F83E50;          /* Error / out of stock red            */
+
+  --border:              #E8DDD9;          /* Warm light border                   */
+  --input:               #E8DDD9;          /* Input border                        */
+  --ring:                #B77767;          /* Focus ring — terracotta             */
+
+  /* ── Sidebar ─────────────────────────────────────── */
+  --sidebar:                     #5A413F;  /* Brand primary sidebar bg            */
+  --sidebar-foreground:          #FEF5F1;  /* Cream text in sidebar               */
+  --sidebar-primary:             #B77767;  /* Active nav item — terracotta        */
+  --sidebar-primary-foreground:  #FFFFFF;
+  --sidebar-accent:              #6E524F;  /* Hover state in sidebar              */
+  --sidebar-accent-foreground:   #FEF5F1;
+  --sidebar-border:              #6E524F;  /* Subtle border in sidebar            */
+  --sidebar-ring:                #B77767;
+
+  /* ── Charts — brand palette ──────────────────────── */
+  --chart-1: #5A413F;
+  --chart-2: #B77767;
+  --chart-3: #AF7C3E;
+  --chart-4: #189351;
+  --chart-5: #EFE5DE;
+
+  /* ── Base radius ─────────────────────────────────── */
+  --radius: 0.625rem;
+
+  /* ── Font families ───────────────────────────────── */
+  --font-figtree: 'Figtree', sans-serif;
+  --font-abhaya:  'Abhaya Libre', serif;
+}
+
+/* ── Dark mode — kept minimal, POS is primarily light ───────────────────── */
+
+.dark {
+  --background:         #1C1210;
+  --foreground:         #FEF5F1;
+
+  --card:               #2A1E1C;
+  --card-foreground:    #FEF5F1;
+
+  --popover:            #2A1E1C;
+  --popover-foreground: #FEF5F1;
+
+  --primary:            #B77767;
+  --primary-foreground: #1C1210;
+
+  --secondary:          #3D2B28;
+  --secondary-foreground:#FEF5F1;
+
+  --muted:              #3D2B28;
+  --muted-foreground:   #B09490;
+
+  --accent:             #B77767;
+  --accent-foreground:  #1C1210;
+
+  --destructive:        #F83E50;
+
+  --border:             oklch(1 0 0 / 10%);
+  --input:              oklch(1 0 0 / 15%);
+  --ring:               #B77767;
+
+  --sidebar:                    #2A1E1C;
+  --sidebar-foreground:         #FEF5F1;
+  --sidebar-primary:            #B77767;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent:             #3D2B28;
+  --sidebar-accent-foreground:  #FEF5F1;
+  --sidebar-border:             oklch(1 0 0 / 10%);
+  --sidebar-ring:               #B77767;
+
+  --chart-1: #B77767;
+  --chart-2: #AF7C3E;
+  --chart-3: #189351;
+  --chart-4: #5A413F;
+  --chart-5: #3D2B28;
+}
+
+/* ── Base layer ─────────────────────────────────────────────────────────── */
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-figtree);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Headings use Abhaya Libre — the brand serif */
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-abhaya);
+  }
+
+  html {
+    @apply font-sans;
+  }
+}
+
+/* ── Print ──────────────────────────────────────────────────────────────
+   Used by PrintInvoiceButton (OrderConfirmationScreen, Phase 9b).
+   Hides everything except the printable invoice area. */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  #invoice-print-area,
+  #invoice-print-area * {
+    visibility: visible;
+  }
+
+  #invoice-print-area {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: auto;
+    max-height: none;
+    overflow: visible;
+    padding: 1rem;
+  }
+}
