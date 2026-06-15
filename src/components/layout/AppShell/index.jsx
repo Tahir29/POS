@@ -4,6 +4,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import Sidebar from '@/components/layout/Sidebar';
 import Header from '@/components/layout/Header';
 import PageLoader from '@/components/shared/PageLoader';
+import ScrollToTopButton from '@/components/shared/ScrollToTopButton';
 
 /**
  * AppShell — the root layout wrapper for all operational POS screens.
@@ -27,6 +28,7 @@ export default function AppShell({ children }) {
           </main>
         </div>
         <PageLoader />
+        <ScrollToTopButton />
       </div>
     </TooltipProvider>
   );

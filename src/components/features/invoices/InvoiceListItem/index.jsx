@@ -46,7 +46,7 @@ export default function InvoiceListItem({ invoice, onSelect }) {
       </div>
       {totalAmount != null && (
         <div className="shrink-0 text-sm font-semibold text-stone-800">
-          ₹{Number(totalAmount).toLocaleString('en-IN')}
+          &#8377;{Number(totalAmount).toLocaleString('en-IN')}
         </div>
       )}
     </button>
