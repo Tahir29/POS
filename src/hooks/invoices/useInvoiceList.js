@@ -53,7 +53,7 @@ export function normalizeInvoice(entity) {
  * @param {{ skip?: number }} [options]
  */
 export function useInvoiceList({ skip = 0 } = {}) {
-  const take = APP_CONFIG.PAGINATION.INVOICES_LIST_TAKE;
+  const take = APP_CONFIG.PAGINATION.INVOICES_TAKE;
 
   const query = useQuery({
     queryKey: QUERY_KEYS.ORDERS.INVOICE_LIST({ skip, take }),

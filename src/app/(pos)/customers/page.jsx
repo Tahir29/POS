@@ -206,7 +206,7 @@ export default function CustomersPage() {
             className="gap-1"
           >
             <ChevronLeft size={16} aria-hidden="true" />
-            Previous
+            
           </Button>
           <span className="text-sm text-stone-500">
             Page {currentPage} of {totalPages} · {totalCount} customers
@@ -219,7 +219,7 @@ export default function CustomersPage() {
             disabled={skip + take >= totalCount || isFetching}
             className="gap-1"
           >
-            Next
+            
             <ChevronRight size={16} aria-hidden="true" />
           </Button>
         </div>

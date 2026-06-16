@@ -1,14 +1,16 @@
 'use client';
 
-// src/components/features/invoices/InvoiceDetailSheet/index.jsx
-// Read-only invoice detail view, opened from /invoices.
+// src/components/features/orders/OrderDetailSheet/index.jsx
+// Read-only order detail view, opened from /orders.
 //
-// Uses the full record already returned by Invoice/List (passed in as
-// `invoice.raw`) — no second Invoice/Retrieve call needed.
+// Uses the full record already returned by Order/List (passed in as
+// `order.raw`) — no second Order/Retrieve call needed.
 //
-// PRINT LAYOUT: printable content portaled to document.body to escape
-// BottomSheet's CSS transform. Logo shown only in the print layout
-// (hidden on screen, shown via @media print / print:block).
+// PRINT LAYOUT: printable content is portaled to document.body to
+// escape BottomSheet's CSS transform (which breaks position:fixed in
+// @media print). The portal content is hidden on screen (hidden
+// print:block) and includes the full Lucira wordmark logo at the top,
+// visible only when printing.
 
 import { createPortal } from 'react-dom';
 import BottomSheet from '@/components/shared/BottomSheet';
@@ -31,39 +33,56 @@ function formatCurrency(amount) {
   return amount != null ? `₹${Number(amount).toLocaleString('en-IN')}` : null;
 }
 
-function InvoiceContent({ raw }) {
+const STATUS_LABELS = {
+  paid:    'Paid',
+  partial: 'Partially Paid',
+  due:     'Payment Due',
+};
+
+function OrderContent({ raw, status }) {
   const lineItems = raw?.line_items ?? [];
   const payments  = raw?.receipt_details ?? [];
 
   return (
     <div className="flex flex-col gap-2 text-sm">
-      <Row label="Invoice No." value={raw.document_no} />
+      <Row label="Order No." value={raw.document_no} />
       <Row
         label="Date"
         value={raw.document_date ? new Date(raw.document_date).toLocaleDateString('en-IN') : null}
       />
-      <Row label="Customer" value={raw.party_name} />
-      <Row label="Mobile"   value={raw.mobile} />
-      <Row label="Store"    value={raw.location_name ?? raw.company_name} />
+      <Row label="Customer"  value={raw.party_name} />
+      <Row label="Mobile"    value={raw.mobile} />
+      <Row label="Store"     value={raw.company_name} />
+      <Row label="Status"    value={STATUS_LABELS[status] ?? null} />
 
       {lineItems.length > 0 && (
         <div className="border-t border-stone-100 pt-2 flex flex-col gap-1.5">
           <span className="text-stone-500 text-xs font-medium uppercase tracking-wide">Items</span>
           {lineItems.map((item) => (
             <div key={item.transaction_item_id} className="flex justify-between gap-2">
-              <span className="text-stone-700 min-w-0">{item.item_name}</span>
+              <div className="min-w-0">
+                <p className="text-stone-700 truncate">{item.item_name}</p>
+                {item.item_code && (
+                  <p className="text-xs text-stone-400 truncate">{item.item_code}</p>
+                )}
+              </div>
               <span className="font-medium text-stone-800 shrink-0">
-                {formatCurrency(item.net_amount)}
+                {formatCurrency(item.gross_amount ?? item.net_amount)}
               </span>
             </div>
           ))}
         </div>
       )}
 
-      <Row label="Subtotal" value={formatCurrency(raw.net_amount)} border />
-      <Row label="Discount" value={raw.discount ? `– ${formatCurrency(raw.discount)}` : null} />
-      <Row label="Tax"      value={formatCurrency(raw.tax_amount)} />
-      <Row label="Total"    value={formatCurrency(raw.gross_amount)} bold border />
+      <Row label="Subtotal"    value={formatCurrency(raw.net_amount)} border />
+      <Row label="Discount"    value={raw.discount ? `– ${formatCurrency(raw.discount)}` : null} />
+      <Row label="Tax"         value={formatCurrency(raw.tax_amount)} />
+      <Row label="Total"       value={formatCurrency(raw.gross_amount)} bold border />
+      <Row label="Received"    value={formatCurrency(raw.receipt_amount)} />
+      <Row
+        label="Balance Due"
+        value={raw.balance_amount > 0 ? formatCurrency(raw.balance_amount) : null}
+      />
 
       {payments.length > 0 && (
         <div className="border-t border-stone-100 pt-2 flex flex-col gap-1.5">
@@ -82,27 +101,27 @@ function InvoiceContent({ raw }) {
 
 /**
  * @param {{
- *   invoice: object | null,  // normalized invoice from useInvoiceList (with .raw)
+ *   order: object | null,  // normalized order from useOrders (with .raw and .status)
  *   isOpen: boolean,
  *   onClose: () => void,
  * }} props
  */
-export default function InvoiceDetailSheet({ invoice, isOpen, onClose }) {
-  const raw = invoice?.raw;
+export default function OrderDetailSheet({ order, isOpen, onClose }) {
+  const raw = order?.raw;
 
   return (
     <>
-      <BottomSheet isOpen={isOpen} onClose={onClose} title="Invoice">
+      <BottomSheet isOpen={isOpen} onClose={onClose} title="Order">
         {raw ? (
           <div className="flex flex-col gap-4">
             <div className="rounded-xl border border-stone-200 bg-white p-4">
-              <InvoiceContent raw={raw} />
+              <OrderContent raw={raw} status={order?.status} />
             </div>
             <PrintInvoiceButton />
           </div>
         ) : (
           <p className="text-sm text-stone-500 text-center py-4">
-            Invoice details unavailable.
+            Order details unavailable.
           </p>
         )}
       </BottomSheet>
@@ -115,7 +134,7 @@ export default function InvoiceDetailSheet({ invoice, isOpen, onClose }) {
             <div className="flex justify-center items-center py-8 mb-8 border-b border-stone-100">
               <Logo variant="full" color="brown" width={140} height={44} />
             </div>
-            <InvoiceContent raw={raw} />
+            <OrderContent raw={raw} status={order?.status} />
           </div>,
           document.body
         )}
