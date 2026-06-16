@@ -44,7 +44,7 @@ const API = {
 
   // ── CATALOG ──────────────────────────────────────────────
   CATALOG: {
-    GET_PRODUCTS:       'Services/Inventory/ProductCatalog/List',
+    GET_PRODUCTS:        'Services/Inventory/ProductCatalog/List',
     GET_STOCK_BY_STORES: 'Services/Inventory/ProductCatalog/GetStockByStores',
   },
 

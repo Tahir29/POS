@@ -160,8 +160,7 @@ function ProductDetailScreen() {
 
           {/* Product name */}
           <h1
-            className="text-xl font-bold text-foreground leading-snug md:text-2xl"
-            style={{ fontFamily: 'var(--font-abhaya)' }}
+            className="text-xl font-bold text-foreground leading-snug md:text-2xl font-abhaya"
           >
             {product.item_name ?? 'Product'}
           </h1>
@@ -170,9 +169,14 @@ function ProductDetailScreen() {
           <StockStatusBadge status={stockStatus} size="md" />
 
           {/* Price */}
-          {price && (
-            <p className="text-2xl font-bold text-primary">{price}</p>
-          )}
+          <div className='flex items-center justify-start gap-2'>
+            {price && (
+              <p className="text-2xl font-bold text-primary">{price}</p>
+            )}
+            {product.compare_price && (
+              <p className="text-2xl font-bold text-muted underline">{formatPrice(product.compare_price)}</p>
+            )}
+          </div>
 
           {/* Selected variant summary */}
           {selectedVariant && (

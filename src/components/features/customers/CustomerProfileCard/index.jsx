@@ -67,15 +67,6 @@ export default function CustomerProfileCard({ customer }) {
           </div>
         )}
       </div>
-
-      <div className="flex items-start gap-2 rounded-lg bg-stone-50 px-3 py-2.5 text-xs text-stone-500 hidden">
-        <Pencil size={14} aria-hidden="true" className="shrink-0 mt-0.5 text-stone-400" />
-        <span>
-          Editing customer details is <strong>Not Available In Current API
-          Collection</strong> — no customer-update endpoint exists in the
-          OrnaVerse API.
-        </span>
-      </div>
     </div>
   );
 }

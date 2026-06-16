@@ -18,3 +18,16 @@ export async function getSchemeEnrollments({ take = 0 } = {}) {
   });
   return response.data;
 }
+
+/**
+ * Fetches all available schemes.
+ * Maps to: POST Services/CRM/Schemes/List
+ *
+ * @returns {Promise<object>} OrnaVerse response
+ */
+export async function getSchemes() {
+  const response = await axiosInstance.post(API.SCHEMES.LIST, {
+    Take: 0
+  });
+  return response.data;
+}
