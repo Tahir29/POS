@@ -77,6 +77,7 @@ export const QUERY_KEYS = {
     INVOICE_LIST:   (params)    => ['orders', 'invoice-list', params],
     INVOICE_DETAIL: (invoiceId) => ['orders', 'invoice-detail', invoiceId],
     ITEM_STATUS:    (params)    => ['orders', 'item-status', params],
+    CUSTOMER_ORDERS: (customerId) => ['orders', 'customer', customerId],
   },
 
   // ── CRM ──────────────────────────────────────────────────
@@ -91,6 +92,7 @@ export const QUERY_KEYS = {
     MATURITY:    (enrollmentId) => ['schemes', 'maturity', enrollmentId],
     FORECLOSE:   (enrollmentId) => ['schemes', 'foreclose', enrollmentId],
     CANCELLATION:(enrollmentId) => ['schemes', 'cancellation', enrollmentId],
+    CUSTOMER_ENROLLMENTS: (customerId) => ['schemes', 'enrollments', 'customer', customerId],
   },
 
 };
