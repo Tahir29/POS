@@ -1,45 +1,65 @@
-import { useQuery } from '@tanstack/react-query';
+// src/hooks/orders/useOrdersSummary.js
+// Derives today's order count for the DashboardOrderCount widget.
+//
+// Piggybacks on useAllOrders (Take: 0, same query key) so no extra
+// network call is made — the full orders list is already fetched and
+// cached by the /orders page. If the cache is cold (dashboard loaded
+// first), useAllOrders fetches it once and both consumers share the
+// result.
+//
+// "Today" is compared using the LOCAL date of each order's document_date
+// (not the raw UTC ISO prefix) so IST orders near midnight are counted
+// correctly. staleTime comes from STALE_TIME.ORDERS (2 min) via
+// useAllOrders.
 
-import { QUERY_KEYS } from '@/constants/queryKeys';
-import APP_CONFIG from '@/constants/appConfig';
-import { getOrders } from '@/services/orderService';
-import { useActiveStore } from '@/hooks/store/useActiveStore';
+import { useMemo } from 'react';
+import { useAllOrders } from '@/hooks/orders/useAllOrders';
+
+function getTodayPrefix() {
+  // Returns "YYYY-MM-DD" in LOCAL time
+  const d    = new Date();
+  const yyyy = d.getFullYear();
+  const mm   = String(d.getMonth() + 1).padStart(2, '0');
+  const dd   = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function getLocalDatePrefix(isoString) {
+  // Parses an ISO date string and returns its LOCAL "YYYY-MM-DD"
+  // so that UTC-vs-IST offset is handled correctly.
+  const d = new Date(isoString);
+  if (isNaN(d.getTime())) return null;
+  const yyyy = d.getFullYear();
+  const mm   = String(d.getMonth() + 1).padStart(2, '0');
+  const dd   = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
 
 /**
- * Fetches POS orders and derives today's order count client-side.
- * OrnaVerse has no dedicated "today's orders" endpoint — we fetch the
- * recent orders list and filter by today's date in the select transform.
- *
- * Returns the full query result. Consuming components access:
- *   data.allOrders   — full orders array
- *   data.todayCount  — number of orders placed today
- *
- * @returns {import('@tanstack/react-query').UseQueryResult} TanStack Query result object.
+ * @returns {{
+ *   data: { todayCount: number } | null,
+ *   isLoading: boolean,
+ *   isFetching: boolean,
+ *   isError: boolean,
+ *   refetch: () => void,
+ * }}
  */
 export function useOrdersSummary() {
-  const { activeStoreId } = useActiveStore();
+  const { allOrders, isLoading, isFetching, isError, refetch } = useAllOrders();
 
-  return useQuery({
-    queryKey: QUERY_KEYS.ORDERS.LIST({ storeId: activeStoreId }),
-    queryFn: () => getOrders({ take: APP_CONFIG.PAGINATION.ORDERS_TAKE, skip: 0 }),
-    staleTime: APP_CONFIG.STALE_TIME.ORDERS,
-    enabled: !!activeStoreId,
-    select: (data) => {
-      const allOrders = data?.data ?? [];
+  const todayCount = useMemo(() => {
+    const todayPrefix = getTodayPrefix();
+    return allOrders.filter((order) => {
+      if (!order.orderDate) return false;
+      return getLocalDatePrefix(order.orderDate) === todayPrefix;
+    }).length;
+  }, [allOrders]);
 
-      // Derive today's date string in YYYY-MM-DD format using local time.
-      // OrnaVerse order_date is compared by string prefix match so timezone
-      // differences on the server do not cause false negatives.
-      // Once the exact date field name is confirmed in UAT, tighten this
-      // to a single field reference.
-      const todayPrefix = new Date().toISOString().slice(0, 10);
-
-      const todayCount = allOrders.filter((order) => {
-        const dateValue = order.order_date ?? order.created_at ?? '';
-        return String(dateValue).startsWith(todayPrefix);
-      }).length;
-
-      return { allOrders, todayCount };
-    },
-  });
+  return {
+    data:       isLoading ? null : { todayCount },
+    isLoading,
+    isFetching,
+    isError,
+    refetch:    refetch ?? (() => {}),
+  };
 }

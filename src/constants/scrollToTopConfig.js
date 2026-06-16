@@ -10,6 +10,7 @@ export const SCROLL_TO_TOP_PAGES = [
   '/catalog',
   '/products',   // covers /products/[itemId] (product detail)
   '/invoices',
+  '/orders',
   '/customers',
 ];
 
