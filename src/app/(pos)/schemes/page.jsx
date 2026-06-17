@@ -2,12 +2,12 @@
 
 import { Suspense } from "react"
 import { RefreshCw, LayoutGrid } from 'lucide-react';
-import { useScheme } from "@/hooks/schemes/useSchemes";
+import { useSchemes } from "@/hooks/schemes/useSchemes";
 import SchemeCard from "@/components/features/schemes/SchemeCard";
 import PageLoader from "@/components/shared/PageLoader";
 
 function SchemesScreen() {
-    const { schemes, isLoading, isError, refetch } = useScheme()
+    const { schemes, isLoading, isError, refetch } = useSchemes()
 
     if(isLoading) return <PageLoader />
 
@@ -17,7 +17,7 @@ function SchemesScreen() {
                 <p className="text-sm text-muted-foreground text-center">
                     Failed to load schemes. Please try again.
                 </p>
-                <button onClick={() => refetch} className="flex items-center gap-2 text-sm font-medium text-primary">
+                <button onClick={() => refetch()} className="flex items-center gap-2 text-sm font-medium text-primary">
                     <RefreshCw className="w-4 h-4" />
                     Retry
                 </button>

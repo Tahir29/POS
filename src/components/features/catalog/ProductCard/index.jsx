@@ -2,34 +2,50 @@
 
 // src/components/features/catalog/ProductCard/index.jsx
 // Individual product card for the catalog grid.
-// Shows: product image, name, item code, price, stock badge.
+// Stock badge always visible on every card.
+// OOS cards dimmed to 60% opacity — still tappable for detail view.
 // Navigates to /products/[item_id] on tap.
-// Touch target: min 44x44px per CODING_STANDARDS Section 12.
 
-import { useState } from 'react';
-import Image from 'next/image';
-import { useRouter } from 'next/navigation';
-import APP_CONFIG from '@/constants/appConfig';
+import { useState }    from 'react';
+import Image           from 'next/image';
+import { useRouter }   from 'next/navigation';
+import { resolveImageSrc } from '@/lib/resolveImageSrc';
+import APP_CONFIG      from '@/constants/appConfig';
 
-// ── Image URL resolver ────────────────────────────────────────────────────────
-// Handles three cases from OrnaVerse API:
-//   1. Already a full URL  → use as-is
-//   2. Already starts with / → use as-is
-//   3. Raw filename (e.g. "LGERB02734XXVJ.jpg") → prefix with base URL
-const IMAGE_BASE_URL = process.env.NEXT_PUBLIC_ORNAVERSE_BASE_URL
-  ? `${process.env.NEXT_PUBLIC_ORNAVERSE_BASE_URL}/`.replace(/\/\/$/, '/')
-  : '';
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
-function resolveImageSrc(raw) {
-  if (!raw) return null;
-  if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
-  if (raw.startsWith('/')) return raw;
-  if (IMAGE_BASE_URL) return `${IMAGE_BASE_URL}${raw}`;
-  return null;
+function formatPrice(amount) {
+  if (!amount && amount !== 0) return null;
+  return new Intl.NumberFormat('en-IN', {
+    style:                'currency',
+    currency:             APP_CONFIG.CURRENCY.INR_CODE,
+    maximumFractionDigits: 0,
+  }).format(amount);
+}
+
+/**
+ * Derives stock status from OrnaVerse catalog product object.
+ * Checks all known field patterns defensively.
+ * IsInStockJournal: 1 = in stock, 0 = out of stock (confirmed field name).
+ */
+function getStockStatus(product) {
+  // Confirmed OrnaVerse field
+  if (product.IsInStockJournal !== undefined) {
+    return product.IsInStockJournal === 1 || product.IsInStockJournal === true;
+  }
+  if (typeof product.in_stock === 'boolean') return product.in_stock;
+  const qty =
+    product.stock_qty   ??
+    product.available_qty ??
+    product.quantity    ??
+    product.stock       ??
+    null;
+  if (qty !== null) return qty > 0;
+  // Default to in-stock if no stock field found
+  return true;
 }
 
 // ── No-image placeholder ──────────────────────────────────────────────────────
-// Shown when: no image field on item, URL resolves to null, or image fails to load.
 
 function NoImagePlaceholder() {
   return (
@@ -56,50 +72,19 @@ function NoImagePlaceholder() {
   );
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-/**
- * Formats a numeric amount as INR currency string.
- * Falls back to '—' when price is absent or zero.
- */
-function formatPrice(amount) {
-  if (!amount && amount !== 0) return '—';
-  return new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: APP_CONFIG.CURRENCY.INR_CODE,
-    maximumFractionDigits: 0,
-  }).format(amount);
-}
-
-/**
- * Derives a stock status from the catalog product object.
- * OrnaVerse may surface this as `in_stock`, `stock_qty`, or `available`.
- * We check all known field patterns defensively.
- */
-function getStockStatus(product) {
-  if (typeof product.in_stock === 'boolean') return product.in_stock;
-  const qty =
-    product.stock_qty ??
-    product.available_qty ??
-    product.quantity ??
-    product.stock ??
-    null;
-  if (qty !== null) return qty > 0;
-  return true;
-}
-
 // ── Stock Badge ───────────────────────────────────────────────────────────────
+// Always rendered — top-right corner overlay on the image.
 
 function StockBadge({ inStock }) {
   if (inStock) {
     return (
-      <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-emerald-600/20">
+      <span className="inline-flex items-center rounded-full bg-emerald-500/90 px-2.5 py-0.5 text-[11px] font-semibold text-white shadow-sm backdrop-blur-sm">
         In Stock
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-600 ring-1 ring-red-500/20">
+    <span className="inline-flex items-center rounded-full bg-red-500/90 px-2.5 py-0.5 text-[11px] font-semibold text-white shadow-sm backdrop-blur-sm">
       Out of Stock
     </span>
   );
@@ -108,34 +93,35 @@ function StockBadge({ inStock }) {
 // ── ProductCard ───────────────────────────────────────────────────────────────
 
 /**
- * @param {{ product: object }} props
- * product shape (OrnaVerse catalog fields):
- *   item_id, item_code, item_name, sale_price / price / mrp,
- *   image_url / image, in_stock, stock_qty
+ * @param {{ product: object, showStockBadge?: boolean }} props
+ * showStockBadge defaults to true — pass false to hide badge in pure browse mode.
  */
-export default function ProductCard({ product }) {
+export default function ProductCard({ product, showStockBadge = true }) {
   const router = useRouter();
-
-  // imgError: set to true by onError when the resolved URL fails to load
   const [imgError, setImgError] = useState(false);
 
   const {
     item_id,
     item_code,
     item_name,
+    item_rate,
     sale_price,
     price,
     mrp,
-    image_url,
     image,
+    image_url,
+    image_1,
   } = product;
 
-  const displayPrice = sale_price ?? price ?? mrp ?? null;
-  const inStock      = getStockStatus(product);
+  // Price: item_rate is primary per architecture; fall back to others
+  const displayPrice = item_rate ?? sale_price ?? price ?? mrp ?? null;
+  const formattedPrice = formatPrice(displayPrice);
 
-  // Try all common OrnaVerse image field names, then resolve to a valid src.
-  // If imgError is true (onError fired), skip straight to placeholder.
-  const rawSrc  = image_url ?? image ?? null;
+  const inStock = getStockStatus(product);
+
+  // Resolve image — uses shared resolver from lib
+  // Tries image → image_url → image_1, treats "NA" and empty as null
+  const rawSrc  = image ?? image_url ?? image_1 ?? null;
   const imageSrc = !imgError ? resolveImageSrc(rawSrc) : null;
 
   function handleTap() {
@@ -148,16 +134,14 @@ export default function ProductCard({ product }) {
       type="button"
       onClick={handleTap}
       className={[
-        'group relative flex flex-col overflow-hidden rounded-xl border bg-white text-left',
+        'group relative flex flex-col overflow-hidden rounded-2xl border bg-white text-left',
         'shadow-sm transition-all duration-200',
         'hover:shadow-md hover:-translate-y-0.5',
         'active:scale-[0.98] active:shadow-sm',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2',
-        !inStock && 'opacity-75',
-      ]
-        .filter(Boolean)
-        .join(' ')}
-      aria-label={`View ${item_name}`}
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
+        !inStock && 'opacity-60',
+      ].filter(Boolean).join(' ')}
+      aria-label={`View ${item_name ?? 'product'}`}
     >
       {/* ── Product Image ──────────────────────────────────── */}
       <div className="relative aspect-square w-full overflow-hidden bg-stone-50">
@@ -166,7 +150,7 @@ export default function ProductCard({ product }) {
             src={imageSrc}
             alt={item_name ?? 'Product image'}
             fill
-            sizes="(max-width: 768px) 50vw, (max-width: 1280px) 33vw, 25vw"
+            sizes="(max-width: 640px) 50vw, (max-width: 1280px) 33vw, 25vw"
             className="object-cover transition-transform duration-300 group-hover:scale-105"
             onError={() => setImgError(true)}
           />
@@ -174,17 +158,19 @@ export default function ProductCard({ product }) {
           <NoImagePlaceholder />
         )}
 
-        {/* Stock badge — top-right overlay */}
-        <div className="absolute right-2 top-2">
-          <StockBadge inStock={inStock} />
-        </div>
+        {/* Stock badge — always top-right */}
+        {showStockBadge && (
+          <div className="absolute right-2 top-2">
+            <StockBadge inStock={inStock} />
+          </div>
+        )}
       </div>
 
       {/* ── Product Info ───────────────────────────────────── */}
-      <div className="flex flex-1 flex-col gap-1 p-3">
+      <div className="flex flex-1 flex-col gap-0.5 p-3">
         {/* Item code / SKU */}
         {item_code && (
-          <p className="truncate text-[11px] font-medium uppercase tracking-wider text-stone-400">
+          <p className="truncate text-[10px] font-medium uppercase tracking-wider text-stone-400">
             {item_code}
           </p>
         )}
@@ -194,10 +180,15 @@ export default function ProductCard({ product }) {
           {item_name ?? 'Unnamed Product'}
         </p>
 
-        {/* Price */}
-        <p className="mt-auto pt-2 text-base font-bold text-amber-700">
-          {formatPrice(displayPrice)}
-        </p>
+        {/* Price — accent colour, bottom of card */}
+        {formattedPrice && (
+          <p className="mt-auto pt-2 text-sm font-bold text-[#B77767]">
+            {formattedPrice}
+          </p>
+        )}
+
+        {/* Accent underline — matches design's orange dash */}
+        <div className="mt-1.5 h-0.5 w-6 rounded-full bg-[#B77767]" aria-hidden="true" />
       </div>
     </button>
   );

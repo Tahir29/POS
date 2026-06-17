@@ -8,7 +8,7 @@
 // No "Load More" button needed.
 
 import { useEffect, useRef } from 'react';
-import ProductCard    from '@/components/features/catalog/ProductCard';
+import ProductCard     from '@/components/features/catalog/ProductCard';
 import CatalogSkeleton from '@/components/features/catalog/CatalogSkeleton';
 
 // ── Empty state ───────────────────────────────────────────────────────────────
@@ -83,13 +83,14 @@ function FetchingSpinner() {
 
 /**
  * @param {{
- *   products:       object[],
- *   isLoading:      boolean,
- *   isFetchingMore: boolean,
- *   hasMore:        boolean,
- *   hasFilters:     boolean,
- *   onLoadMore:     () => void,
- *   onClearFilters: () => void,
+ *   products:        object[],
+ *   isLoading:       boolean,
+ *   isFetchingMore:  boolean,
+ *   hasMore:         boolean,
+ *   hasFilters:      boolean,
+ *   showStockBadge:  boolean,
+ *   onLoadMore:      () => void,
+ *   onClearFilters:  () => void,
  * }} props
  */
 export default function ProductGrid({
@@ -98,6 +99,7 @@ export default function ProductGrid({
   isFetchingMore,
   hasMore,
   hasFilters,
+  showStockBadge = false,
   onLoadMore,
   onClearFilters,
 }) {
@@ -112,11 +114,9 @@ export default function ProductGrid({
 
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting) {
-          onLoadMore();
-        }
+        if (entries[0].isIntersecting) onLoadMore();
       },
-      { rootMargin: '200px' }, // trigger 200px before hitting bottom
+      { rootMargin: '200px' },
     );
 
     observer.observe(sentinel);
@@ -137,16 +137,17 @@ export default function ProductGrid({
   return (
     <div>
       {/* Grid */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
         {products.map((product) => (
           <ProductCard
             key={product.item_id ?? product.item_code}
             product={product}
+            showStockBadge={showStockBadge}
           />
         ))}
       </div>
 
-      {/* Sentinel — invisible div that triggers next page load */}
+      {/* Sentinel — triggers next page load */}
       {hasMore && (
         <div ref={sentinelRef} className="h-1 w-full" aria-hidden="true" />
       )}

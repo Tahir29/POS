@@ -1,22 +1,21 @@
 'use client';
 
 // src/components/features/catalog/CategoryFilter/index.jsx
+// Horizontal scrolling category chip bar.
+// Active chip: filled dark brown (primary). Inactive: outlined pill.
+// Matches target UI design exactly.
 
-// Only these names are shown in the filter bar.
-// Partial match used — "Mangalsutra" will match "Mangalsutra Chains" etc.
-// To add more: just add the name to this list.
 const ALLOWED_CATEGORIES = [
   'Rings',
   'Earrings',
   'Bangles',
   'Bracelets',
   'Necklaces',
+  'Pendants',
   'Mangalsutra',
   'Bestsellers',
 ];
 
-// Converts a category name to a URL slug
-// e.g. "Mangalsutra Chains" → "mangalsutra-chains"
 function toSlug(name) {
   return name.toLowerCase().replace(/\s+/g, '-');
 }
@@ -30,12 +29,12 @@ function CategoryChip({ label, isActive, onClick }) {
       onClick={onClick}
       aria-pressed={isActive}
       className={[
-        'shrink-0 min-h-[36px] px-4 py-1.5 rounded-full text-sm font-medium',
-        'border transition-colors',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1',
+        'shrink-0 min-h-[36px] px-5 py-1.5 rounded-full text-sm font-medium',
+        'border transition-all duration-150 whitespace-nowrap',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1',
         isActive
-          ? 'bg-primary border-primary text-primary-foreground shadow-sm'
-          : 'bg-card border-border text-muted-foreground hover:border-accent hover:text-accent',
+          ? 'bg-primary border-primary text-white shadow-sm'
+          : 'bg-white border-border text-stone-600 hover:border-primary/50 hover:text-primary',
       ].join(' ')}
     >
       {label}
@@ -45,75 +44,70 @@ function CategoryChip({ label, isActive, onClick }) {
 
 // ── CategoryFilter ────────────────────────────────────────────────────────────
 
+/**
+ * @param {object}      props
+ * @param {object[]}    props.categories          - Raw API categories array
+ * @param {string|null} props.activeCategorySlug  - Active slug from URL
+ * @param {boolean}     props.hasActiveFilters    - Whether any filter is active
+ * @param {function}    props.onSelectCategory    - Called with slug or null
+ * @param {function}    props.onClearFilters      - Clears all filters
+ */
 export default function CategoryFilter({
-  categories        = [],
+  categories = [],
   activeCategorySlug,
   hasActiveFilters,
   onSelectCategory,
   onClearFilters,
 }) {
-  // Match each allowed name against API categories using partial/includes match.
-  // "Mangalsutra" will match "Mangalsutra Chains", "Mangalsutra Set" etc.
   const visibleCategories = ALLOWED_CATEGORIES
-  .map((allowedName) => {
-    const allowed = allowedName.toLowerCase();
-    const match = categories.find((c) => {
-      const apiName = c.type_name?.toLowerCase() ?? '';
-      // Exact match first
-      if (apiName === allowed) return true;
-      // StartsWith — "mangalsutra" matches "mangalsutra chains"
-      if (apiName.startsWith(allowed)) return true;
-      return false;
-    });
-    return match ? { ...match, displayName: allowedName } : null;
-  })
-  .filter(Boolean);
+    .map((allowedName) => {
+      const allowed = allowedName.toLowerCase();
+      const match = categories.find((c) => {
+        const apiName = c.type_name?.toLowerCase() ?? '';
+        if (apiName === allowed) return true;
+        if (apiName.startsWith(allowed)) return true;
+        return false;
+      });
+      return match ? { ...match, displayName: allowedName } : null;
+    })
+    .filter(Boolean);
 
   return (
-    <div className="flex items-center gap-2 overflow-x-auto px-4 py-2.5 md:px-6 scrollbar-none">
+    <div className="flex items-center gap-2 overflow-x-auto scrollbar-none py-1">
 
-      {/* All */}
+      {/* ALL chip */}
       <CategoryChip
-        label="All"
-        isActive={activeCategorySlug === null}
+        label="ALL"
+        isActive={!activeCategorySlug}
         onClick={() => onSelectCategory(null)}
       />
 
-      {/* Allowed category chips */}
+      {/* Category chips */}
       {visibleCategories.map((cat) => {
-        // Use our clean display name for the slug, not the full API name
-        // So "Mangalsutra Chains" → slug is "mangalsutra" not "mangalsutra-chains"
         const slug     = toSlug(cat.displayName);
         const isActive = activeCategorySlug === slug;
-
         return (
           <CategoryChip
             key={cat.type_id}
-            label={cat.displayName}
+            label={cat.displayName.toUpperCase()}
             isActive={isActive}
             onClick={() => onSelectCategory(isActive ? null : slug)}
           />
         );
       })}
 
-      {/* Spacer */}
-      <div className="flex-1 min-w-[8px]" aria-hidden="true" />
-
-      {/* Clear */}
-      {hasActiveFilters && (
-        <button
-          type="button"
-          onClick={onClearFilters}
-          className="
-            shrink-0 min-h-[36px] px-3 py-1.5 rounded-full
-            text-xs font-medium
-            border border-destructive/30 text-destructive
-            hover:bg-destructive/10 transition-colors
-            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
-          "
-        >
-          Clear
-        </button>
+      {/* Clear filters — only when a non-category filter is active */}
+      {hasActiveFilters && activeCategorySlug && (
+        <>
+          <div className="w-px h-5 bg-border shrink-0 mx-1" aria-hidden="true" />
+          <button
+            type="button"
+            onClick={onClearFilters}
+            className="shrink-0 min-h-[36px] px-3 py-1.5 rounded-full text-xs font-medium border border-destructive/30 text-destructive hover:bg-destructive/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring whitespace-nowrap"
+          >
+            Clear
+          </button>
+        </>
       )}
     </div>
   );

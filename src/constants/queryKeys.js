@@ -51,6 +51,7 @@ export const QUERY_KEYS = {
   CATALOG: {
     PRODUCTS:         (params) => ['catalog', 'products', params],
     STOCK_BY_STORES:  (itemId) => ['catalog', 'stock-by-stores', itemId],
+    ALL:              (storeId) => ['catalog', 'all', storeId]
   },
 
   // ── INVENTORY ────────────────────────────────────────────

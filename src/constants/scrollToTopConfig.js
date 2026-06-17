@@ -12,6 +12,7 @@ export const SCROLL_TO_TOP_PAGES = [
   '/invoices',
   '/orders',
   '/customers',
+  '/schemes'
 ];
 
 /**

@@ -59,9 +59,11 @@ export default function CustomerSchemeList({ enrollments, isLoading, isError, re
                   </p>
                 )}
               </div>
-              {enrollment.status && (
-                <span className="shrink-0 rounded-full bg-stone-100 px-2 py-0.5 text-xs font-medium capitalize text-stone-600">
-                  {enrollment.status}
+              {enrollment.status != null && (
+                <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium capitalize ${
+                  enrollment.status === 1 ? 'bg-green-100 text-green-700' : 'bg-stone-100 text-stone-600'
+                }`}>
+                  {enrollment.status === 1 ? 'Active' : 'Inactive'}
                 </span>
               )}
             </div>
