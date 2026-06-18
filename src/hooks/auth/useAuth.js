@@ -23,18 +23,10 @@ import {
 
 import { clearCart } from '@/store/slices/cartSlice';
 
-import TOAST from '@/constants/toastMessages'
+import TOAST   from '@/constants/toastMessages';
+import tracker from '@/lib/analytics/tracker';
+import EVENTS  from '@/lib/analytics/events';
 
-/**
- * useAuth — central hook for authentication state and actions.
- *
- * Provides:
- *   - isAuthenticated: boolean
- *   - user: { username } | null
- *   - accessToken: string | null
- *   - login(username, password): async — authenticates, fetches stores, routes accordingly
- *   - logout(): clears auth + store slices, redirects to /login
- */
 export function useAuth() {
   const dispatch = useDispatch();
   const router = useRouter();
@@ -43,12 +35,7 @@ export function useAuth() {
   const user = useSelector(selectAuthUser);
   const accessToken = useSelector(selectAccessToken);
 
-  /**
-   * Authenticates the user, fetches their accessible stores,
-   * and routes them to store selection or directly to the dashboard.
-   */
   const login = useCallback(async (username, password) => {
-    // 1. Generate token
     const tokenData = await generateToken(username, password);
 
     dispatch(
@@ -60,48 +47,62 @@ export function useAuth() {
       })
     );
 
-    // 2. Fetch accessible stores
-    const storesData = await getUserStores();    
-
-    // OrnaVerse wraps list responses — extract the array defensively
+    const storesData = await getUserStores();
     const stores = Array.isArray(storesData)
       ? storesData
       : storesData?.Entities ?? storesData?.data ?? storesData?.result ?? [];
 
     dispatch(setAvailableStores(stores));
 
-    // 3. Fetch app settings (fire and ignore errors — non-blocking)
     try {
       await getSettings();
-    } catch {
-      // Settings failure does not block login
-    }
+    } catch {}
 
-    // 4. Route based on store count
     if (stores.length === 1) {
+      const store = stores[0];
       dispatch(
         setActiveStore({
-          storeId: stores[0].company_id,
-          storeName: stores[0].mailing_name,
-          storeCode: stores[0].company_code ?? null,
+          storeId:   store.company_id,
+          storeName: store.mailing_name,
+          storeCode: store.company_code ?? null,
         })
       );
+
+      // Agent event only — no session start
+      tracker.trackAgent(EVENTS.AGENT_LOGIN, {
+        username,
+        storeId:   store.company_id,
+        storeName: store.mailing_name,
+        timestamp: new Date().toISOString(),
+      });
+
       toast.success(TOAST.AUTH.LOGIN_SUCCESS);
       router.replace('/dashboard');
     } else {
+      tracker.trackAgent(EVENTS.AGENT_LOGIN, {
+        username,
+        storeCount: stores.length,
+        timestamp:  new Date().toISOString(),
+      });
+
       toast.success(TOAST.AUTH.LOGIN_SUCCESS);
       router.replace('/store-selection');
     }
   }, [dispatch, router]);
 
-  
-
-  /**
-   * Logs the user out.
-   * Clears auth and store slices. Cart is intentionally preserved for session resumption.
-   * Redirects to /login.
-   */
   const logout = useCallback(() => {
+    // End customer session if active
+    if (tracker.isSessionActive()) {
+      tracker.endSession('agent_logout');
+    }
+
+    tracker.trackAgent(EVENTS.AGENT_LOGOUT, {
+      timestamp: new Date().toISOString(),
+    });
+
+    // Clear everything on agent logout
+    tracker.clear();
+
     dispatch(clearAuth());
     dispatch(clearStore());
     dispatch(clearCart());
