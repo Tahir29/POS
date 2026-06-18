@@ -1,10 +1,6 @@
 'use client';
 
 // src/app/(pos)/catalog/page.jsx
-//
-// Browse mode  → useCatalogProducts (paginated infinite scroll, unchanged)
-// Search mode  → useAllCatalog (Take: 0, full dataset, client-side filter)
-// Both modes   → sort, OOS toggle, stock badge, barcode, local store selector
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter }   from 'next/navigation';
@@ -34,31 +30,47 @@ const selectStoreName     = (s) => s.store.activeStoreName;
 
 // ── Client-side helpers ───────────────────────────────────────────────────────
 
-/** Derives stock status — mirrors ProductCard logic exactly. */
 function isInStock(product) {
-  if (product.IsInStockJournal !== undefined) {
-    return product.IsInStockJournal === 1 || product.IsInStockJournal === true;
-  }
-  if (typeof product.in_stock === 'boolean') return product.in_stock;
-  const qty = product.stock_qty ?? product.available_qty ?? product.quantity ?? null;
-  if (qty !== null) return qty > 0;
-  return true;
+  return product.has_stock === true;
 }
 
-/** Returns numeric price for sort — mirrors ProductCard price priority. */
-function getPrice(product) {
-  return product.item_rate ?? product.sale_price ?? product.price ?? product.mrp ?? 0;
+function getWeight(product) {
+  return product.net_weight ?? product.weight ?? 0;
 }
 
 /**
- * Client-side filter + sort applied in search mode.
- * Browse mode products are already filtered server-side.
+ * Resolves a search query against the categories list to find matching type_ids.
+ * e.g. "rings" → finds category with type_name "Rings" → returns [1]
+ * e.g. "gold"  → no category match → returns []
+ * Supports partial match so "ring" matches "Rings", "mangal" matches "Mangalsutra"
+ */
+function getMatchingTypeIds(q, categories) {
+  if (!q || !categories.length) return [];
+  const lower = q.toLowerCase();
+  return categories
+    .filter((c) => c.type_name?.toLowerCase().includes(lower))
+    .map((c) => c.type_id)
+    .filter(Boolean);
+}
+
+/**
+ * Client-side filter + sort for search mode.
+ *
+ * Match logic (OR across all conditions):
+ *   1. item_code contains query        — SKU search ("ALR", "ALR-0289")
+ *   2. item_name contains query        — name search (usually same as code on UAT)
+ *   3. type_id is in matchingTypeIds   — category name search ("rings", "earrings")
+ *
+ * Category filter chip (activeCategoryId) is applied on top as AND.
+ * OOS toggle applied as AND.
+ * Sort applied last.
  */
 function applySearchFilters(allProducts, {
   searchQuery,
   activeCategoryId,
   showOutOfStock,
   sortBy,
+  categories,
 }) {
   let result = allProducts;
 
@@ -67,19 +79,26 @@ function applySearchFilters(allProducts, {
     result = result.filter(isInStock);
   }
 
-  // 2. Category — applied even in search mode
+  // 2. Category chip filter (AND — user explicitly selected a category)
   if (activeCategoryId) {
     result = result.filter((p) => p.type_id === activeCategoryId);
   }
 
-  // 3. Text search across name + code
+  // 3. Text search
   const q = searchQuery?.trim().toLowerCase() ?? '';
   if (q.length >= SEARCH.MIN_QUERY_LENGTH) {
-    result = result.filter(
-      (p) =>
-        p.item_name?.toLowerCase().includes(q) ||
-        p.item_code?.toLowerCase().includes(q),
-    );
+    // Find type_ids whose type_name matches the query — enables "rings" → ring products
+    const matchingTypeIds = getMatchingTypeIds(q, categories);
+
+    result = result.filter((p) => {
+      // SKU / item_code match
+      if (p.item_code?.toLowerCase().includes(q)) return true;
+      // item_name match (on UAT same as code, but may differ on live)
+      if (p.item_name?.toLowerCase().includes(q)) return true;
+      // Category name match — "rings", "earrings", "mangalsutra" etc.
+      if (matchingTypeIds.length && matchingTypeIds.includes(p.type_id)) return true;
+      return false;
+    });
   }
 
   // 4. Sort
@@ -87,8 +106,8 @@ function applySearchFilters(allProducts, {
     switch (sortBy) {
       case 'name_asc':   return (a.item_name ?? '').localeCompare(b.item_name ?? '');
       case 'name_desc':  return (b.item_name ?? '').localeCompare(a.item_name ?? '');
-      case 'price_asc':  return getPrice(a) - getPrice(b);
-      case 'price_desc': return getPrice(b) - getPrice(a);
+      case 'price_asc':  return getWeight(a) - getWeight(b);
+      case 'price_desc': return getWeight(b) - getWeight(a);
       default:           return 0;
     }
   });
@@ -96,17 +115,13 @@ function applySearchFilters(allProducts, {
   return result;
 }
 
-/**
- * Sort-only pass for browse mode products.
- * OOS + category filtering already handled server-side by useCatalogProducts.
- */
 function applyBrowseSort(products, sortBy) {
-  if (!sortBy || sortBy === 'name_asc') return products; // default — no re-sort needed
+  if (!sortBy || sortBy === 'name_asc') return products;
   return [...products].sort((a, b) => {
     switch (sortBy) {
       case 'name_desc':  return (b.item_name ?? '').localeCompare(a.item_name ?? '');
-      case 'price_asc':  return getPrice(a) - getPrice(b);
-      case 'price_desc': return getPrice(b) - getPrice(a);
+      case 'price_asc':  return getWeight(a) - getWeight(b);
+      case 'price_desc': return getWeight(b) - getWeight(a);
       default:           return 0;
     }
   });
@@ -130,10 +145,8 @@ function CatalogScreen() {
     catalogStoreId,
   } = filters;
 
-  // Effective store: local catalog override → Redux global
   const effectiveStoreId = catalogStoreId ?? reduxStoreId;
-
-  const isSearchMode = !!searchQuery && searchQuery.length >= SEARCH.MIN_QUERY_LENGTH;
+  const isSearchMode     = !!searchQuery && searchQuery.length >= SEARCH.MIN_QUERY_LENGTH;
 
   // ── Categories ────────────────────────────────────────────────────────────
   const { data: categories = [], isError: catsError } = useCategories();
@@ -150,7 +163,7 @@ function CatalogScreen() {
     );
   }, [activeCategorySlug, categories]);
 
-  // ── Browse mode — paginated infinite scroll (unchanged) ───────────────────
+  // ── Browse mode ───────────────────────────────────────────────────────────
   const {
     data,
     isLoading:         browseLoading,
@@ -159,19 +172,18 @@ function CatalogScreen() {
     fetchNextPage,
     isError:           browseError,
   } = useCatalogProducts({
+    storeId:           effectiveStoreId,
     show_out_of_stock: showOutOfStock,
     ...(activeCategoryId && { type_ids: [activeCategoryId] }),
   });
 
   const rawBrowseProducts = data?.products ?? [];
-
-  // Apply sort client-side on top of paginated browse results
-  const browseProducts = useMemo(
+  const browseProducts    = useMemo(
     () => applyBrowseSort(rawBrowseProducts, sortBy),
     [rawBrowseProducts, sortBy],
   );
 
-  // ── Search mode — full dataset, client-side filter ────────────────────────
+  // ── Search mode ───────────────────────────────────────────────────────────
   const {
     data:      allProducts = [],
     isLoading: allLoading,
@@ -185,8 +197,9 @@ function CatalogScreen() {
       activeCategoryId,
       showOutOfStock,
       sortBy,
+      categories,           // ← passed so category name matching works
     });
-  }, [isSearchMode, allProducts, searchQuery, activeCategoryId, showOutOfStock, sortBy]);
+  }, [isSearchMode, allProducts, searchQuery, activeCategoryId, showOutOfStock, sortBy, categories]);
 
   // ── Error toasts ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -195,18 +208,14 @@ function CatalogScreen() {
     if (catsError)   toast.error('Failed to load categories.');
   }, [browseError, allError, catsError]);
 
-  // ── Derived display values ────────────────────────────────────────────────
+  // ── Derived ───────────────────────────────────────────────────────────────
   const displayProducts = isSearchMode ? searchResults : browseProducts;
   const isLoading       = isSearchMode ? allLoading    : browseLoading;
   const isFetchingMore  = !isSearchMode && isFetchingNextPage;
   const hasMore         = !isSearchMode && !!hasNextPage;
-
-  // Stock badge visible when OOS toggle is ON (otherwise all visible = in stock)
-  const showStockBadge  = showOutOfStock;
+  const showStockBadge  = true; // always show — badge content reflects actual stock status
 
   // ── Barcode handler ───────────────────────────────────────────────────────
-  // Exact item_code match → navigate to product detail immediately.
-  // No match → fall back to text search so staff aren't left with blank screen.
   const handleBarcodeDetected = useCallback((code) => {
     const trimmed = code.trim();
     if (!trimmed) return;
@@ -237,13 +246,11 @@ function CatalogScreen() {
     if (hasNextPage && !isFetchingNextPage) fetchNextPage();
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
-  // ── Product count label ───────────────────────────────────────────────────
+  // ── Count label ───────────────────────────────────────────────────────────
   const countLabel = useMemo(() => {
     if (isLoading) return null;
     const n = displayProducts.length;
-    if (isSearchMode) {
-      return `${n} result${n !== 1 ? 's' : ''} for "${searchQuery}"`;
-    }
+    if (isSearchMode) return `${n} result${n !== 1 ? 's' : ''} for "${searchQuery}"`;
     return `${n} product${n !== 1 ? 's' : ''}${hasActiveFilters ? ' matching filters' : ''}`;
   }, [isLoading, displayProducts.length, isSearchMode, searchQuery, hasActiveFilters]);
 
@@ -251,7 +258,6 @@ function CatalogScreen() {
   return (
     <div className="flex h-full flex-col bg-[#FEF5F1]">
 
-      {/* ── Page title ──────────────────────────────────────────────────── */}
       <div className="flex flex-col gap-1 px-4 pt-4 md:px-6 md:pt-5">
         <h1 className="text-xl font-bold text-foreground md:text-2xl font-abhaya">
           Catalog
@@ -263,10 +269,7 @@ function CatalogScreen() {
         </h1>
       </div>
 
-      {/* ── Control bar ─────────────────────────────────────────────────── */}
       <div className="px-4 pt-3 pb-2 md:px-6">
-
-        {/* Row 1: Search | Store selector | Sort By | OOS toggle */}
         <div className="flex items-center gap-2">
           <div className="flex-1 min-w-0">
             <ProductSearchBar
@@ -277,24 +280,20 @@ function CatalogScreen() {
               onRecentSelect={actions.setSearch}
             />
           </div>
-
           <CatalogStoreSelector
             catalogStoreId={catalogStoreId}
             onStoreChange={actions.setCatalogStore}
           />
-
           <CatalogSortDropdown
             sortBy={sortBy}
             onSortChange={actions.setSortBy}
           />
-
           <OutOfStockToggle
             showOutOfStock={showOutOfStock}
             onToggle={actions.setShowOutOfStock}
           />
         </div>
 
-        {/* Row 2: Category chips */}
         <div className="mt-3 bg-white rounded-xl px-2 py-1 shadow-sm">
           <CategoryFilter
             categories={categories}
@@ -306,14 +305,12 @@ function CatalogScreen() {
         </div>
       </div>
 
-      {/* ── Product count ────────────────────────────────────────────────── */}
       {countLabel && (
         <p className="px-4 pb-1 text-xs text-muted-foreground md:px-6">
           {countLabel}
         </p>
       )}
 
-      {/* ── Product grid ─────────────────────────────────────────────────── */}
       <div className="flex-1 overflow-y-auto px-4 py-2 md:px-6">
         <ProductGrid
           products={displayProducts}
@@ -330,8 +327,6 @@ function CatalogScreen() {
     </div>
   );
 }
-
-// ── Page wrapper ──────────────────────────────────────────────────────────────
 
 export default function CatalogPage() {
   return (

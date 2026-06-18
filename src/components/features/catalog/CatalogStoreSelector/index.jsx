@@ -1,9 +1,6 @@
-// src/components/features/catalog/CatalogStoreSelector/index.jsx
-// Local store switcher for the catalog page.
-// Independent of the global header store — changes only what products are shown.
-// Falls back to the Redux activeStoreId when no local override is set.
-
 'use client';
+
+// src/components/features/catalog/CatalogStoreSelector/index.jsx
 
 import { useMemo }     from 'react';
 import { useSelector } from 'react-redux';
@@ -16,37 +13,33 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
+// Store objects shape (confirmed from StoreSelectionGrid):
+//   company_id, mailing_name, company_code
+// Redux activeStoreName is set from mailing_name via switchStore
+
 const selectAvailableStores = (s) => s.store.availableStores ?? [];
 const selectActiveStoreId   = (s) => s.store.activeStoreId;
 const selectActiveStoreName = (s) => s.store.activeStoreName;
 
-/**
- * @param {object}        props
- * @param {number|null}   props.catalogStoreId   - Currently selected local store ID (from URL)
- * @param {function}      props.onStoreChange    - Called with storeId (number)
- */
 export default function CatalogStoreSelector({ catalogStoreId, onStoreChange }) {
-  const availableStores  = useSelector(selectAvailableStores);
-  const activeStoreId    = useSelector(selectActiveStoreId);
-  const activeStoreName  = useSelector(selectActiveStoreName);
+  const availableStores = useSelector(selectAvailableStores);
+  const activeStoreId   = useSelector(selectActiveStoreId);
+  const activeStoreName = useSelector(selectActiveStoreName);
 
-  // Effective store: local override → Redux global
+  // Effective store: local catalog override → Redux global
   const effectiveId = catalogStoreId ?? activeStoreId;
 
-  const selectedStore = useMemo(() => {
-    if (!availableStores.length) return { name: activeStoreName };
-    return (
-      availableStores.find((s) => s.company_id === effectiveId) ??
-      { company_name: activeStoreName }
-    );
+  // mailing_name is the display field on store objects
+  const displayName = useMemo(() => {
+    if (!availableStores.length) return activeStoreName ?? 'Store';
+    const match = availableStores.find((s) => s.company_id === effectiveId);
+    return match?.mailing_name ?? activeStoreName ?? 'Store';
   }, [availableStores, effectiveId, activeStoreName]);
 
-  const displayName = selectedStore?.company_name ?? selectedStore?.name ?? 'Store';
-
-  // If only one store available, render a static label — no dropdown needed
+  // Single store — static label, no dropdown
   if (availableStores.length <= 1) {
     return (
-      <div className="flex items-center gap-2 rounded-full border border-border bg-white px-4 py-2 text-sm font-medium text-foreground">
+      <div className="flex items-center gap-2 rounded-full border border-border bg-white px-4 py-2 text-sm font-medium text-foreground shrink-0">
         <Store size={15} className="text-muted-foreground shrink-0" />
         <span className="max-w-[140px] truncate">{displayName}</span>
       </div>
@@ -58,7 +51,7 @@ export default function CatalogStoreSelector({ catalogStoreId, onStoreChange }) 
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          className="flex items-center gap-2 rounded-full border border-border bg-white px-4 py-2 text-sm font-medium text-foreground hover:bg-stone-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          className="flex items-center gap-2 rounded-full border border-border bg-white px-4 py-2 text-sm font-medium text-foreground hover:bg-stone-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary shrink-0"
         >
           <Store size={15} className="text-muted-foreground shrink-0" />
           <span className="max-w-[140px] truncate">{displayName}</span>
@@ -66,7 +59,7 @@ export default function CatalogStoreSelector({ catalogStoreId, onStoreChange }) 
         </button>
       </DropdownMenuTrigger>
 
-      <DropdownMenuContent align="center" className="w-52">
+      <DropdownMenuContent align="center" className="w-56">
         {availableStores.map((store) => {
           const isSelected = store.company_id === effectiveId;
           return (
@@ -75,7 +68,14 @@ export default function CatalogStoreSelector({ catalogStoreId, onStoreChange }) 
               onSelect={() => onStoreChange(store.company_id)}
               className={isSelected ? 'font-semibold text-primary' : ''}
             >
-              {store.company_name}
+              <span className="flex flex-col">
+                <span>{store.mailing_name}</span>
+                {store.company_code && (
+                  <span className="text-xs text-muted-foreground font-normal">
+                    {store.company_code}
+                  </span>
+                )}
+              </span>
               {isSelected && (
                 <span className="ml-auto text-xs text-primary">✓</span>
               )}

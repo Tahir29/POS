@@ -12,6 +12,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Search, X, ScanBarcode } from 'lucide-react';
 import APP_CONFIG from '@/constants/appConfig';
+import BarcodeScannerModal from '@/components/features/catalog/BarcodeScannerModal';
 
 const { SEARCH } = APP_CONFIG;
 
@@ -33,9 +34,9 @@ export default function ProductSearchBar({
   recentSearches = [],
   onRecentSelect,
 }) {
-  const [inputVal,    setInputVal]    = useState(value ?? '');
-  const [scanMode,    setScanMode]    = useState(false);
-  const debounceRef   = useRef(null);
+  const [inputVal,      setInputVal]      = useState(value ?? '');
+  const [cameraOpen,    setCameraOpen]    = useState(false);
+  const debounceRef    = useRef(null);
   const lastKeyTimeRef = useRef(null);
   const inputRef      = useRef(null);
 
@@ -87,15 +88,17 @@ export default function ProductSearchBar({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inputVal, onBarcodeDetected]);
 
-  // Activate scan mode: focuses the input and sets a visual indicator
-  const handleScanIconClick = () => {
-    setScanMode(true);
-    inputRef.current?.focus();
-    inputRef.current?.select();
-  };
+  // Camera scan icon — opens modal
+  const handleScanIconClick = () => setCameraOpen(true);
 
-  // Drop scan mode when input loses focus
-  const handleBlur = () => setScanMode(false);
+    // Camera modal detected a code
+  const handleCameraDetected = useCallback((code) => {
+    setCameraOpen(false);
+    setInputVal(code);
+    if (onBarcodeDetected) {
+      onBarcodeDetected(code);
+    }
+  }, [onBarcodeDetected]);
 
   useEffect(() => () => clearTimeout(debounceRef.current), []);
 
@@ -103,96 +106,95 @@ export default function ProductSearchBar({
   const showRecents = !showClear && recentSearches.length > 0;
 
   return (
-    <div className="flex flex-col gap-2 w-full">
-      <div className="relative flex-1">
+    <>
+      <div className="flex flex-col gap-2 w-full">
+        <div className="relative flex-1">
 
-        {/* Search icon — left */}
-        <span
-          aria-hidden="true"
-          className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
-        >
-          <Search size={16} />
-        </span>
+          {/* Search icon — left */}
+          <span
+            aria-hidden="true"
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
+          >
+            <Search size={16} />
+          </span>
 
-        <input
-          ref={inputRef}
-          type="search"
-          inputMode="search"
-          autoComplete="off"
-          autoCorrect="off"
-          spellCheck={false}
-          placeholder={scanMode ? 'Scan barcode or type…' : 'Search For Product'}
-          value={inputVal}
-          onChange={handleChange}
-          onKeyDown={handleKeyDown}
-          onBlur={handleBlur}
-          aria-label="Search products or scan barcode"
-          className={[
-            'w-full min-h-[44px]',
-            'pl-9 pr-16 py-2',
-            'text-sm text-foreground',
-            'bg-white border rounded-full',
-            'focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/50',
-            'placeholder:text-muted-foreground',
-            'transition-colors',
-            scanMode
-              ? 'border-primary/60 ring-2 ring-primary/20'
-              : 'border-border',
-          ].join(' ')}
-        />
+          <input
+            ref={inputRef}
+            type="search"
+            inputMode="search"
+            autoComplete="off"
+            autoCorrect="off"
+            spellCheck={false}
+            placeholder="Search For Product"
+            value={inputVal}
+            onChange={handleChange}
+            onKeyDown={handleKeyDown}
+            aria-label="Search products or scan barcode"
+            className={[
+              'w-full min-h-[44px]',
+              'pl-9 pr-16 py-2',
+              'text-sm text-foreground',
+              'bg-white border border-border rounded-full',
+              'focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/50',
+              'placeholder:text-muted-foreground',
+              'transition-colors',
+            ].join(' ')}
+          />
 
-        {/* Right side: clear OR barcode icon */}
-        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
-          {showClear ? (
-            <button
-              type="button"
-              onClick={handleClear}
-              aria-label="Clear search"
-              className="flex items-center justify-center w-6 h-6 rounded-full text-muted-foreground hover:bg-stone-100 hover:text-foreground transition-colors"
-            >
-              <X size={14} />
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={handleScanIconClick}
-              aria-label="Scan barcode"
-              title="Click then scan a barcode"
-              className={[
-                'flex items-center justify-center w-7 h-7 rounded-full transition-colors',
-                scanMode
-                  ? 'text-primary bg-primary/10'
-                  : 'text-muted-foreground hover:text-primary hover:bg-primary/10',
-              ].join(' ')}
-            >
-              <ScanBarcode size={16} />
-            </button>
-          )}
+          {/* Right side: clear OR barcode icon */}
+          <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
+            {showClear ? (
+              <button
+                type="button"
+                onClick={handleClear}
+                aria-label="Clear search"
+                className="flex items-center justify-center w-6 h-6 rounded-full text-muted-foreground hover:bg-stone-100 hover:text-foreground transition-colors"
+              >
+                <X size={14} />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleScanIconClick}
+                aria-label="Open camera to scan barcode"
+                title="Scan barcode with camera"
+                className="flex items-center justify-center w-7 h-7 rounded-full transition-colors text-muted-foreground hover:text-primary hover:bg-primary/10"
+              >
+                <ScanBarcode size={16} />
+              </button>
+            )}
+          </div>
         </div>
+
+        {/* Recent searches */}
+        {showRecents && (
+          <div
+            role="list"
+            aria-label="Recent searches"
+            className="flex-wrap items-center gap-2 hidden"
+          >
+            <span className="text-xs text-muted-foreground font-medium shrink-0">Recent:</span>
+            {recentSearches.map((q) => (
+              <button
+                key={q}
+                role="listitem"
+                type="button"
+                onClick={() => onRecentSelect(q)}
+                className="inline-flex items-center gap-1 min-h-[28px] px-3 py-1 text-xs font-medium text-muted-foreground bg-stone-100 hover:bg-primary/10 hover:text-primary rounded-full border border-transparent hover:border-primary/20 transition-colors"
+              >
+                <Search size={10} className="shrink-0 opacity-60" aria-hidden="true" />
+                {q}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
-
-      {/* Recent searches */}
-      {showRecents && (
-        <div
-          role="list"
-          aria-label="Recent searches"
-          className="flex flex-wrap items-center gap-2"
-        >
-          <span className="text-xs text-muted-foreground font-medium shrink-0">Recent:</span>
-          {recentSearches.map((q) => (
-            <button
-              key={q}
-              role="listitem"
-              type="button"
-              onClick={() => onRecentSelect(q)}
-              className="inline-flex items-center gap-1 min-h-[28px] px-3 py-1 text-xs font-medium text-muted-foreground bg-stone-100 hover:bg-primary/10 hover:text-primary rounded-full border border-transparent hover:border-primary/20 transition-colors"
-            >
-              <Search size={10} className="shrink-0 opacity-60" aria-hidden="true" />
-              {q}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
+      {/* Camera barcode scanner modal */}
+      <BarcodeScannerModal
+        isOpen={cameraOpen}
+        onDetected={handleCameraDetected}
+        onClose={() => setCameraOpen(false)}
+      />
+    </>
   );
 }

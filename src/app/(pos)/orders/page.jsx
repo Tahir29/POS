@@ -179,6 +179,7 @@ export default function OrdersPage() {
             <Input
               type="date"
               value={fromDate}
+              max={new Date().toISOString().split('T')[0]}
               onChange={(e) => setFromDate(e.target.value)}
               aria-label="From date"
               className="flex-1 min-w-0"
@@ -187,6 +188,7 @@ export default function OrdersPage() {
             <Input
               type="date"
               value={toDate}
+              max={new Date().toISOString().split('T')[0]}
               onChange={(e) => setToDate(e.target.value)}
               aria-label="To date"
               className="flex-1 min-w-0"

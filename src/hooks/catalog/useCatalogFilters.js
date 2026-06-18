@@ -12,10 +12,10 @@ import { useRouter, useSearchParams, usePathname } from 'next/navigation';
  * Value is used in URL params and matched client-side.
  */
 export const SORT_OPTIONS = [
-  { value: 'name_asc',    label: 'Name A → Z' },
-  { value: 'name_desc',   label: 'Name Z → A' },
-  { value: 'price_asc',   label: 'Price Low → High' },
-  { value: 'price_desc',  label: 'Price High → Low' },
+  { value: 'name_asc',   label: 'Name A → Z' },
+  { value: 'name_desc',  label: 'Name Z → A' },
+  { value: 'price_asc',  label: 'Weight Low → High' },
+  { value: 'price_desc', label: 'Weight High → Low' },
 ];
 
 export const DEFAULT_SORT = 'name_asc';

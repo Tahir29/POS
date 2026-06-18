@@ -79,6 +79,7 @@ function ProductDetailScreen() {
 
   // ── Variants ──────────────────────────────────────────────────────────────
   const {
+    variants,
     metalColors,
     variantStock,
     karats,
@@ -226,10 +227,10 @@ function ProductDetailScreen() {
             stockStatus={stockStatus}
           />
 
-          {/* Out of stock message */}
+          {/* Made-to-order hint for out of stock items */}
           {stockStatus === 'out_stock' && (
-            <p className="text-sm text-destructive">
-              This item is currently out of stock at your store.
+            <p className="text-sm text-primary">
+              This item is currently out of stock — can be ordered as Made to Order.
             </p>
           )}
 
@@ -254,6 +255,7 @@ function ProductDetailScreen() {
         onClose={() => setCustomizeOpen(false)}
         product={product}
         selectedVariant={selectedVariant}
+        variants={variants}
         metalColors={metalColors}
         karats={karats}
         sizes={sizes}

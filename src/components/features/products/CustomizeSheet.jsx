@@ -5,45 +5,30 @@
 // Customize sheet — shown when user taps "Customize" on product detail.
 // Uses shared BottomSheet (bottom on mobile, side sheet on tablet).
 //
-// DESIGN: matches the reference UI with:
-//   - Gold/Rose/White colour cards with metallic gradient orbs
-//   - Karat pill chips (14KT / 18KT)
-//   - Size grid chips with in-stock green dot indicators
-//   - Section headers: "SELECT GOLD COLOR & KARAT" + "SELECT RING SIZE"
-//   - Matched variant summary card
-//   - DONE footer button
-//
-// BUG FIXES applied:
-//   1. canConfirm requires all non-empty sections to have a selection
-//      (no partial confirm with only metal OR only karat chosen)
-//   2. State resets cleanly when sheet closes without confirming —
-//      reverts to the last confirmed variant values (or product defaults)
-//   3. Confirm label filters out "NA" values and trims spacing correctly
-//   4. variantStock prop enables in-stock green dot on size chips
+// FIXES:
+//   1. Stock detection uses raw variants array — checks ALL matching variants.
+//   2. OOS variants selectable as "Made to Order" (amber dot).
+//   3. MTO fallback: when no exact variant exists but all options selected,
+//      builds a pseudo-variant from base product + selections.
+//   4. canConfirm allows OOS and MTO variants.
+//   5. State resets cleanly on sheet close.
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import BottomSheet from '@/components/shared/BottomSheet';
 
 // ── Metal color gradient map ──────────────────────────────────────────────────
-// Derives the metallic orb gradient from the color name.
 const COLOR_GRADIENTS = {
   yellow: 'linear-gradient(147.45deg, #c59922 17.98%, #ead59e 48.14%, #c59922 83.84%)',
   rose:   'linear-gradient(154.36deg, #f2b5b5 10.36%, #f8dbdb 68.09%)',
   white:  'linear-gradient(143.06deg, #dfdfdf 29.61%, #f3f3f3 48.83%, #dfdfdf 66.43%)',
 };
 
-/**
- * Resolves a gradient from a metal_color_name string.
- * Matches on lowercase keywords: "yellow", "rose", "white".
- * Falls back to a neutral gradient.
- */
 function resolveGradient(name) {
   if (!name) return COLOR_GRADIENTS.white;
   const lc = name.toLowerCase();
   if (lc.includes('yellow')) return COLOR_GRADIENTS.yellow;
   if (lc.includes('rose'))   return COLOR_GRADIENTS.rose;
   if (lc.includes('white'))  return COLOR_GRADIENTS.white;
-  // Default: gold-ish for any unknown gold colour
   return COLOR_GRADIENTS.yellow;
 }
 
@@ -52,22 +37,18 @@ function resolveGradient(name) {
 function LoadingSkeleton() {
   return (
     <div className="flex flex-col gap-7">
-      {/* Section label skeleton */}
       <div className="h-3 w-40 rounded bg-muted animate-pulse" />
-      {/* Color card row */}
       <div className="grid grid-cols-3 gap-3">
         {[1, 2, 3].map((i) => (
           <div key={i} className="h-20 rounded-2xl bg-muted animate-pulse" />
         ))}
       </div>
-      {/* Karat row */}
       <div className="h-3 w-28 rounded bg-muted animate-pulse mt-2" />
       <div className="flex gap-2">
         {[1, 2].map((i) => (
           <div key={i} className="h-10 w-16 rounded-xl bg-muted animate-pulse" />
         ))}
       </div>
-      {/* Size grid */}
       <div className="h-3 w-28 rounded bg-muted animate-pulse mt-2" />
       <div className="grid grid-cols-5 gap-2">
         {Array.from({ length: 10 }).map((_, i) => (
@@ -78,17 +59,33 @@ function LoadingSkeleton() {
   );
 }
 
+// ── Stock status dot ──────────────────────────────────────────────────────────
+// Green = in stock, Amber = made to order (OOS), null = no dot
+
+function StockDot({ status, isSelected }) {
+  if (status === 'in_stock') {
+    return (
+      <span
+        aria-label="In stock"
+        className="absolute top-1.5 left-1.5 w-2 h-2 rounded-full bg-emerald-500"
+      />
+    );
+  }
+  if (status === 'made_to_order') {
+    return (
+      <span
+        aria-label="Made to order"
+        className="absolute top-1.5 left-1.5 w-2 h-2 rounded-full bg-amber-400"
+      />
+    );
+  }
+  return null;
+}
+
 // ── Metal colour card ─────────────────────────────────────────────────────────
 
-/**
- * Large card with metallic orb, karat label, and colour name.
- * Matches reference design Image 1 layout.
- */
-function MetalColorCard({ color, karat, isSelected, isInStock, onClick }) {
+function MetalColorCard({ color, karat, isSelected, stockStatus, onClick }) {
   const gradient = resolveGradient(color.name);
-  const label    = karat
-    ? `${karat.name}\n${color.name.toUpperCase()}`
-    : color.name.toUpperCase();
 
   return (
     <button
@@ -105,22 +102,14 @@ function MetalColorCard({ color, karat, isSelected, isInStock, onClick }) {
           : 'border-border bg-card hover:border-accent/60',
       ].join(' ')}
     >
-      {/* In-stock green dot — top-left */}
-      {isInStock && (
-        <span
-          aria-label="In stock"
-          className="absolute top-2 left-2 w-2 h-2 rounded-full bg-status-in-stock"
-        />
-      )}
+      <StockDot status={stockStatus} isSelected={isSelected} />
 
-      {/* Metallic orb */}
       <span
         aria-hidden="true"
         className="w-6 h-6 rounded-full shrink-0"
         style={{ background: gradient }}
       />
 
-      {/* Label: karat on top, colour name below */}
       <span className="flex flex-col items-center leading-tight text-center">
         {karat && (
           <span className="text-[11px] font-semibold text-foreground">
@@ -159,7 +148,7 @@ function KaratPill({ karat, isSelected, onClick }) {
 
 // ── Size chip ─────────────────────────────────────────────────────────────────
 
-function SizeChip({ size, isSelected, isInStock, onClick }) {
+function SizeChip({ size, isSelected, stockStatus, onClick }) {
   return (
     <button
       type="button"
@@ -176,16 +165,7 @@ function SizeChip({ size, isSelected, isInStock, onClick }) {
           : 'bg-card border-border text-foreground hover:border-accent/60',
       ].join(' ')}
     >
-      {/* In-stock green dot — top-left corner */}
-      {isInStock && (
-        <span
-          aria-label="In stock"
-          className={[
-            'absolute top-1.5 left-1.5 w-1.5 h-1.5 rounded-full',
-            isSelected ? 'bg-primary-foreground/70' : 'bg-status-in-stock',
-          ].join(' ')}
-        />
-      )}
+      <StockDot status={stockStatus} isSelected={isSelected} />
       {size.name}
     </button>
   );
@@ -209,93 +189,123 @@ function SectionLabel({ label, value }) {
 }
 
 // ── Confirm button label ──────────────────────────────────────────────────────
-// BUG 4 FIX — strip "NA" values and trim extra whitespace/separators cleanly.
 
 function buildConfirmLabel(variant, sizes, selectedSizeId) {
   if (!variant) return 'Select options to continue';
 
   const parts = [];
-  if (variant.karat_name      && variant.karat_name      !== 'NA') parts.push(variant.karat_name);
+  if (variant.karat_name       && variant.karat_name       !== 'NA') parts.push(variant.karat_name);
   if (variant.metal_color_name && variant.metal_color_name !== 'NA') parts.push(variant.metal_color_name);
 
   const sizeName = sizes.find((s) => s.id === selectedSizeId)?.name;
   if (sizeName) parts.push(`Size ${sizeName}`);
 
+  const isMTO = variant._isMTO || (variant.pieces ?? 0) === 0;
+  const stockLabel = isMTO ? ' (Made to Order)' : '';
   if (parts.length === 0) return 'Confirm';
-  return `Confirm — ${parts.join(' · ')}`;
+  return `Confirm — ${parts.join(' · ')}${stockLabel}`;
 }
 
 // ── CustomizeSheet ────────────────────────────────────────────────────────────
 
-/**
- * @param {{
- *   isOpen:        boolean,
- *   onClose:       () => void,
- *   product:       object,           — current base item (for seeding defaults)
- *   metalColors:   { id, name }[],
- *   karats:        { id, name }[],
- *   sizes:         { id, name }[],
- *   variantStock:  Map<number, number>,  — item_id → pieces (from useDesignVariants)
- *   findVariant:   (metalColorId, karatId, sizeId) => object | null,
- *   onConfirm:     (variant: object | null) => void,
- *   isLoading:     boolean,
- * }} props
- */
 export default function CustomizeSheet({
   isOpen,
   onClose,
   product,
   selectedVariant = null,
-  metalColors   = [],
-  karats        = [],
-  sizes         = [],
-  variantStock  = new Map(),
+  variants        = [],
+  metalColors     = [],
+  karats          = [],
+  sizes           = [],
+  variantStock    = new Map(),
   findVariant,
   onConfirm,
   isLoading,
 }) {
   const [selectedMetalColorId, setSelectedMetalColorId] = useState(null);
   const [selectedKaratId,      setSelectedKaratId]      = useState(null);
-  const [selectedSizeId,       setSelectedSizeId]        = useState(null);
+  const [selectedSizeId,       setSelectedSizeId]       = useState(null);
 
-  // ── BUG 2 FIX ─────────────────────────────────────────────────────────────
-  // Seed from product defaults every time the sheet opens.
-  // This ensures reopening always starts from a clean/known state —
-  // not from an abandoned mid-selection that the user cancelled.
+  // Seed from product defaults every time the sheet opens
   useEffect(() => {
     if (!isOpen) return;
-
-    // Prefer the previously confirmed variant; fall back to product defaults
     const source = selectedVariant ?? product;
     if (!source) return;
-
     setSelectedMetalColorId(source.metal_color_id ?? null);
     setSelectedKaratId(source.karat_id             ?? null);
     setSelectedSizeId(source.item_size_id          ?? null);
   }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
-  // product is intentionally excluded — we only want to re-seed on open, not
-  // on every product reference change while the sheet is already open.
 
-  // Current matched variant from selections
-  const matchedVariant = findVariant
+  // ── Variant matching ──────────────────────────────────────────────────────
+  // Try to find an exact variant first
+  const exactVariant = findVariant
     ? findVariant(selectedMetalColorId, selectedKaratId, selectedSizeId)
     : null;
 
-  const hasSizes        = sizes.length > 0;
-  const hasMetalColors  = metalColors.length > 0;
-  const hasKarats       = karats.length > 0;
+  const hasSizes       = sizes.length > 0;
+  const hasMetalColors = metalColors.length > 0;
+  const hasKarats      = karats.length > 0;
 
-  // ── BUG 3 FIX ─────────────────────────────────────────────────────────────
-  // canConfirm requires every non-empty section to have a selection.
-  // findVariant with null selectors returns the first matching variant,
-  // which could be a false-positive when the user hasn't finished choosing.
-  const metalOk = !hasMetalColors || selectedMetalColorId != null;
-  const karatOk = !hasKarats      || selectedKaratId      != null;
-  const sizeOk  = !hasSizes       || selectedSizeId       != null;
-  const canConfirm = metalOk && karatOk && sizeOk && !!matchedVariant;
+  const metalOk    = !hasMetalColors || selectedMetalColorId != null;
+  const karatOk    = !hasKarats      || selectedKaratId      != null;
+  const sizeOk     = !hasSizes       || selectedSizeId       != null;
+  const allSelected = metalOk && karatOk && sizeOk;
+
+  // ── MTO fallback ──────────────────────────────────────────────────────────
+  // When no exact variant exists but user has selected all options,
+  // build a pseudo-variant from base product + selections.
+  // This enables Made-to-Order for any valid combination.
+  const mtoFallback = useMemo(() => {
+    if (exactVariant || !allSelected || !product) return null;
+    const karatName      = karats.find((k) => k.id === selectedKaratId)?.name      ?? '';
+    const metalColorName = metalColors.find((c) => c.id === selectedMetalColorId)?.name ?? '';
+    const sizeName       = sizes.find((s) => s.id === selectedSizeId)?.name        ?? '';
+    return {
+      ...product,
+      item_id:          product.item_id,
+      item_code:        product.item_code,
+      item_name:        product.item_name,
+      karat_id:         selectedKaratId,
+      karat_name:       karatName,
+      metal_color_id:   selectedMetalColorId,
+      metal_color_name: metalColorName,
+      item_size_id:     selectedSizeId ?? null,
+      item_size_name:   sizeName || null,
+      pieces:           0,
+      _isMTO:           true,
+    };
+  }, [exactVariant, allSelected, product, selectedKaratId, selectedMetalColorId, selectedSizeId, karats, metalColors, sizes]);
+
+  // Use exact variant when available, MTO fallback otherwise
+  const matchedVariant = exactVariant ?? mtoFallback;
+  const canConfirm     = allSelected && !!matchedVariant;
+
+  // ── Stock helpers — use raw variants array ────────────────────────────────
+
+  const getComboStockStatus = useCallback((metalColorId, karatId) => {
+    const matching = variants.filter((v) => {
+      const matchMetal = metalColorId == null || v.metal_color_id === metalColorId;
+      const matchKarat = karatId      == null || v.karat_id       === karatId;
+      return matchMetal && matchKarat;
+    });
+    if (!matching.length) return null; // combo doesn't exist — no dot
+    const hasStock = matching.some((v) => (v.pieces ?? 0) > 0);
+    return hasStock ? 'in_stock' : 'made_to_order';
+  }, [variants]);
+
+  const getSizeStockStatus = useCallback((sizeId) => {
+    const matching = variants.filter((v) => {
+      const matchMetal = selectedMetalColorId == null || v.metal_color_id === selectedMetalColorId;
+      const matchKarat = selectedKaratId      == null || v.karat_id       === selectedKaratId;
+      const matchSize  = v.item_size_id === sizeId;
+      return matchMetal && matchKarat && matchSize;
+    });
+    if (!matching.length) return null; // combo doesn't exist — no dot
+    const hasStock = matching.some((v) => (v.pieces ?? 0) > 0);
+    return hasStock ? 'in_stock' : 'made_to_order';
+  }, [variants, selectedMetalColorId, selectedKaratId]);
 
   // ── Section label helpers ──────────────────────────────────────────────────
-  // Combined "SELECT GOLD COLOR & KARAT" label showing the current selection
   const metalKaratValue = (() => {
     const k = karats.find((k) => k.id === selectedKaratId)?.name;
     const c = metalColors.find((c) => c.id === selectedMetalColorId)?.name;
@@ -304,46 +314,6 @@ export default function CustomizeSheet({
   })();
 
   const sizeValue = sizes.find((s) => s.id === selectedSizeId)?.name ?? null;
-
-  // ── Stock helper ───────────────────────────────────────────────────────────
-  // A colour+karat combo is "in stock" if at least one variant matching those
-  // two (regardless of size) has pieces > 0.
-  const isColorKaratInStock = useCallback((metalColorId, karatId) => {
-    if (!findVariant) return false;
-    // Try to find any variant with this combo that has stock
-    // We check by iterating variantStock entries.
-    // Quick approach: check the matched variant for no-size products, or
-    // check if any variant matching the combo has pieces > 0.
-    for (const [itemId, pieces] of variantStock) {
-      if (pieces > 0) {
-        // Does this item_id match this color+karat combo?
-        const v = findVariant(metalColorId, karatId, null);
-        if (v && v.item_id === itemId) return true;
-      }
-    }
-    // Broader check: scan all stock entries and check variant fields
-    // (useful when findVariant returns the first match regardless of size)
-    for (const [itemId, pieces] of variantStock) {
-      if (pieces <= 0) continue;
-      // We don't have a reverse map, so we rely on variantStock being built
-      // from the variants array which contains metal_color_id + karat_id.
-      // Re-derive from the variantStock Map key being item_id:
-      // This is handled in useDesignVariants where every variant's item_id
-      // is stored. We just can't reverse lookup easily here.
-      // Fallback: if any stock entry is positive and the combo matches
-      // the single findVariant result, mark as in stock.
-      const matched = findVariant(metalColorId, karatId, null);
-      if (matched && variantStock.get(matched.item_id) > 0) return true;
-    }
-    return false;
-  }, [findVariant, variantStock]);
-
-  const isSizeInStock = useCallback((sizeId) => {
-    if (!findVariant) return false;
-    const v = findVariant(selectedMetalColorId, selectedKaratId, sizeId);
-    if (!v) return false;
-    return (variantStock.get(v.item_id) ?? 0) > 0;
-  }, [findVariant, variantStock, selectedMetalColorId, selectedKaratId]);
 
   // ── Confirm handler ────────────────────────────────────────────────────────
   const handleConfirm = () => {
@@ -365,7 +335,6 @@ export default function CustomizeSheet({
           : 'bg-muted text-muted-foreground cursor-not-allowed opacity-60',
       ].join(' ')}
     >
-      {/* BUG 4 FIX — clean label with no "NA" and proper separator */}
       {canConfirm
         ? buildConfirmLabel(matchedVariant, sizes, selectedSizeId)
         : !metalOk || !karatOk
@@ -391,13 +360,7 @@ export default function CustomizeSheet({
       ) : (
         <div className="flex flex-col gap-6">
 
-          {/* ── Metal colour cards  +  karat pills ─────────────────────────
-              Reference design Image 1 merges these into one visual section:
-              a 3-column grid of cards each showing orb + karat + colour name.
-              When both metalColors and karats exist, we render combined cards
-              (one card per color×karat combination).
-              When only one dimension exists, we fall back to separate sections.
-          */}
+          {/* ── Metal colour + karat combined cards ──────────────────────── */}
           {hasMetalColors && hasKarats ? (
             <div className="flex flex-col gap-3">
               <SectionLabel
@@ -410,7 +373,7 @@ export default function CustomizeSheet({
                     const isSelected =
                       selectedMetalColorId === color.id &&
                       selectedKaratId      === karat.id;
-                    const inStock = isColorKaratInStock(color.id, karat.id);
+                    const stockStatus = getComboStockStatus(color.id, karat.id);
 
                     return (
                       <MetalColorCard
@@ -418,7 +381,7 @@ export default function CustomizeSheet({
                         color={color}
                         karat={karat}
                         isSelected={isSelected}
-                        isInStock={inStock}
+                        stockStatus={stockStatus}
                         onClick={() => {
                           setSelectedMetalColorId(color.id);
                           setSelectedKaratId(karat.id);
@@ -428,10 +391,21 @@ export default function CustomizeSheet({
                   })
                 )}
               </div>
+
+              {/* Legend */}
+              <div className="flex items-center gap-4 mt-1">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                  <span className="text-[10px] text-muted-foreground">In Stock</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-amber-400" />
+                  <span className="text-[10px] text-muted-foreground">Made to Order</span>
+                </div>
+              </div>
             </div>
           ) : (
             <>
-              {/* Metal colour only */}
               {hasMetalColors && (
                 <div className="flex flex-col gap-3">
                   <SectionLabel label="Metal Colour" value={metalColors.find((c) => c.id === selectedMetalColorId)?.name} />
@@ -442,7 +416,7 @@ export default function CustomizeSheet({
                         color={color}
                         karat={null}
                         isSelected={selectedMetalColorId === color.id}
-                        isInStock={isColorKaratInStock(color.id, null)}
+                        stockStatus={getComboStockStatus(color.id, null)}
                         onClick={() => setSelectedMetalColorId(
                           selectedMetalColorId === color.id ? null : color.id
                         )}
@@ -452,7 +426,6 @@ export default function CustomizeSheet({
                 </div>
               )}
 
-              {/* Karat only */}
               {hasKarats && (
                 <div className="flex flex-col gap-3">
                   <SectionLabel label="Purity / Karat" value={karats.find((k) => k.id === selectedKaratId)?.name} />
@@ -473,17 +446,17 @@ export default function CustomizeSheet({
             </>
           )}
 
-          {/* ── Divider when both colour+karat AND size are shown ─────────── */}
+          {/* ── Divider ─────────────────────────────────────────────────── */}
           {(hasMetalColors || hasKarats) && hasSizes && (
             <hr className="border-border" />
           )}
 
-          {/* ── Size grid ────────────────────────────────────────────────── */}
+          {/* ── Size grid ───────────────────────────────────────────────── */}
           {hasSizes && (
             <div className="flex flex-col gap-3">
               <SectionLabel
                 label={`Select ${product?.type_name ? `${product.type_name} ` : ''}Size`}
-                value={sizeValue ? `${sizeValue} IND` : null}
+                value={sizeValue ? `${sizeValue}` : null}
               />
               <div className="grid grid-cols-5 gap-2">
                 {sizes.map((size) => (
@@ -491,7 +464,7 @@ export default function CustomizeSheet({
                     key={size.id}
                     size={size}
                     isSelected={selectedSizeId === size.id}
-                    isInStock={isSizeInStock(size.id)}
+                    stockStatus={getSizeStockStatus(size.id)}
                     onClick={() => setSelectedSizeId(
                       selectedSizeId === size.id ? null : size.id
                     )}
@@ -501,23 +474,44 @@ export default function CustomizeSheet({
             </div>
           )}
 
-          {/* ── No options ───────────────────────────────────────────────── */}
+          {/* ── No options ──────────────────────────────────────────────── */}
           {!hasMetalColors && !hasKarats && !hasSizes && (
             <p className="text-sm text-muted-foreground text-center py-8">
               No customization options available for this product.
             </p>
           )}
 
-          {/* ── Matched variant summary card ──────────────────────────────
-              Shows item name and SKU once a complete valid variant is found.
-          */}
+          {/* ── Matched variant summary card ────────────────────────────── */}
           {matchedVariant && (
-            <div className="rounded-xl bg-secondary/40 border border-border px-4 py-3">
-              <p className="text-sm font-semibold text-foreground leading-snug">
-                {matchedVariant.item_name}
-              </p>
+            <div className={[
+              'rounded-xl border px-4 py-3',
+              matchedVariant._isMTO
+                ? 'bg-amber-50/60 border-amber-200'
+                : (matchedVariant.pieces ?? 0) > 0
+                  ? 'bg-emerald-50/60 border-emerald-200'
+                  : 'bg-amber-50/60 border-amber-200',
+            ].join(' ')}>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-semibold text-foreground leading-snug">
+                  {matchedVariant.item_name}
+                </p>
+                <span className={[
+                  'text-[11px] font-semibold px-2 py-0.5 rounded-full text-nowrap',
+                  matchedVariant._isMTO || (matchedVariant.pieces ?? 0) === 0
+                    ? 'bg-amber-100 text-amber-700'
+                    : 'bg-emerald-100 text-emerald-700',
+                ].join(' ')}>
+                  {matchedVariant._isMTO
+                    ? 'Made to Order'
+                    : (matchedVariant.pieces ?? 0) > 0 ? 'In Stock' : 'Made to Order'
+                  }
+                </span>
+              </div>
               <p className="text-xs text-muted-foreground mt-0.5">
-                SKU: {matchedVariant.item_code}
+                {matchedVariant._isMTO
+                  ? `${matchedVariant.karat_name} · ${matchedVariant.metal_color_name}${matchedVariant.item_size_name ? ` · Size ${matchedVariant.item_size_name}` : ''}`
+                  : <>SKU: {matchedVariant.item_code}{(matchedVariant.pieces ?? 0) > 0 && ` · ${matchedVariant.pieces} pc${matchedVariant.pieces !== 1 ? 's' : ''}`}</>
+                }
               </p>
             </div>
           )}

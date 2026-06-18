@@ -1,52 +1,48 @@
 'use client';
 
 // src/components/features/catalog/ProductCard/index.jsx
-// Individual product card for the catalog grid.
-// Stock badge always visible on every card.
-// OOS cards dimmed to 60% opacity — still tappable for detail view.
-// Navigates to /products/[item_id] on tap.
+//
+// Confirmed ProductCatalog/List fields:
+//   item_id, item_code, item_name, has_stock (bool),
+//   weight, net_weight, metal_id, karat_id, type_id
+//   image (null for most items on UAT)
+//
+// PRICE NOTE: item_rate / compare_price are NOT returned by ProductCatalog/List.
+// They are only available from Items/Retrieve (detail endpoint).
+// Price is shown on the product detail page (/products/[itemId]).
+// Card shows: metal type (from metal_id) + net weight as the info line.
 
-import { useState }    from 'react';
-import Image           from 'next/image';
-import { useRouter }   from 'next/navigation';
+import { useState }        from 'react';
+import Image               from 'next/image';
+import { useRouter }       from 'next/navigation';
 import { resolveImageSrc } from '@/lib/resolveImageSrc';
-import APP_CONFIG      from '@/constants/appConfig';
+import APP_CONFIG          from '@/constants/appConfig';
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Metal type label ──────────────────────────────────────────────────────────
+// Maps OrnaVerse metal_id → display name using APP_CONFIG.METAL_TYPES
+const METAL_ID_TO_NAME = Object.fromEntries(
+  Object.entries(APP_CONFIG.METAL_TYPES).map(([name, id]) => [
+    id,
+    name.charAt(0) + name.slice(1).toLowerCase(), // "GOLD" → "Gold"
+  ])
+);
 
-function formatPrice(amount) {
-  if (!amount && amount !== 0) return null;
-  return new Intl.NumberFormat('en-IN', {
-    style:                'currency',
-    currency:             APP_CONFIG.CURRENCY.INR_CODE,
-    maximumFractionDigits: 0,
-  }).format(amount);
+function getMetalLabel(metal_id, karat_id) {
+  const metalName = metal_id ? METAL_ID_TO_NAME[metal_id] : null;
+  // karat_id has no name mapping available from this endpoint
+  // Display as e.g. "Silver" or "Gold" — karat shown when available from detail
+  return metalName ?? null;
 }
 
-/**
- * Derives stock status from OrnaVerse catalog product object.
- * Checks all known field patterns defensively.
- * IsInStockJournal: 1 = in stock, 0 = out of stock (confirmed field name).
- */
-function getStockStatus(product) {
-  // Confirmed OrnaVerse field
-  if (product.IsInStockJournal !== undefined) {
-    return product.IsInStockJournal === 1 || product.IsInStockJournal === true;
-  }
-  if (typeof product.in_stock === 'boolean') return product.in_stock;
-  const qty =
-    product.stock_qty   ??
-    product.available_qty ??
-    product.quantity    ??
-    product.stock       ??
-    null;
-  if (qty !== null) return qty > 0;
-  // Default to in-stock if no stock field found
-  return true;
+// ── Weight formatter ──────────────────────────────────────────────────────────
+function formatWeight(grams) {
+  if (!grams && grams !== 0) return null;
+  const n = Number(grams);
+  if (isNaN(n) || n === 0) return null;
+  return `${n.toFixed(3)} g`;
 }
 
 // ── No-image placeholder ──────────────────────────────────────────────────────
-
 function NoImagePlaceholder() {
   return (
     <div className="flex h-full w-full flex-col items-center justify-center gap-1 bg-stone-50">
@@ -73,18 +69,16 @@ function NoImagePlaceholder() {
 }
 
 // ── Stock Badge ───────────────────────────────────────────────────────────────
-// Always rendered — top-right corner overlay on the image.
-
 function StockBadge({ inStock }) {
   if (inStock) {
     return (
-      <span className="inline-flex items-center rounded-full bg-emerald-500/90 px-2.5 py-0.5 text-[11px] font-semibold text-white shadow-sm backdrop-blur-sm">
+      <span className="inline-flex items-center rounded-full bg-emerald-500/90 px-2.5 py-0.5 text-[11px] font-semibold text-white shadow-sm">
         In Stock
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center rounded-full bg-red-500/90 px-2.5 py-0.5 text-[11px] font-semibold text-white shadow-sm backdrop-blur-sm">
+    <span className="inline-flex items-center rounded-full bg-red-500/90 px-2.5 py-0.5 text-[11px] font-semibold text-white shadow-sm">
       Out of Stock
     </span>
   );
@@ -92,11 +86,7 @@ function StockBadge({ inStock }) {
 
 // ── ProductCard ───────────────────────────────────────────────────────────────
 
-/**
- * @param {{ product: object, showStockBadge?: boolean }} props
- * showStockBadge defaults to true — pass false to hide badge in pure browse mode.
- */
-export default function ProductCard({ product, showStockBadge = true }) {
+export default function ProductCard({ product, showStockBadge = false }) {
   const router = useRouter();
   const [imgError, setImgError] = useState(false);
 
@@ -104,23 +94,23 @@ export default function ProductCard({ product, showStockBadge = true }) {
     item_id,
     item_code,
     item_name,
-    item_rate,
-    sale_price,
-    price,
-    mrp,
+    has_stock,
+    weight,
+    net_weight,
+    metal_id,
+    karat_id,
     image,
     image_url,
     image_1,
   } = product;
 
-  // Price: item_rate is primary per architecture; fall back to others
-  const displayPrice = item_rate ?? sale_price ?? price ?? mrp ?? null;
-  const formattedPrice = formatPrice(displayPrice);
+  const inStock      = has_stock === true;
+  const metalLabel   = getMetalLabel(metal_id, karat_id);
+  const weightLabel  = formatWeight(net_weight ?? weight ?? null);
 
-  const inStock = getStockStatus(product);
+  // Build the info line: "Silver · 1.598 g" or just "1.598 g"
+  const infoLine = [metalLabel, weightLabel].filter(Boolean).join(' · ') || null;
 
-  // Resolve image — uses shared resolver from lib
-  // Tries image → image_url → image_1, treats "NA" and empty as null
   const rawSrc  = image ?? image_url ?? image_1 ?? null;
   const imageSrc = !imgError ? resolveImageSrc(rawSrc) : null;
 
@@ -141,9 +131,9 @@ export default function ProductCard({ product, showStockBadge = true }) {
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
         !inStock && 'opacity-60',
       ].filter(Boolean).join(' ')}
-      aria-label={`View ${item_name ?? 'product'}`}
+      aria-label={`View ${item_name ?? item_code ?? 'product'}`}
     >
-      {/* ── Product Image ──────────────────────────────────── */}
+      {/* ── Image ─────────────────────────────────────────── */}
       <div className="relative aspect-square w-full overflow-hidden bg-stone-50">
         {imageSrc ? (
           <Image
@@ -158,7 +148,6 @@ export default function ProductCard({ product, showStockBadge = true }) {
           <NoImagePlaceholder />
         )}
 
-        {/* Stock badge — always top-right */}
         {showStockBadge && (
           <div className="absolute right-2 top-2">
             <StockBadge inStock={inStock} />
@@ -166,29 +155,31 @@ export default function ProductCard({ product, showStockBadge = true }) {
         )}
       </div>
 
-      {/* ── Product Info ───────────────────────────────────── */}
+      {/* ── Info ──────────────────────────────────────────── */}
       <div className="flex flex-1 flex-col gap-0.5 p-3">
-        {/* Item code / SKU */}
+        {/* SKU */}
         {item_code && (
           <p className="truncate text-[10px] font-medium uppercase tracking-wider text-stone-400">
             {item_code}
           </p>
         )}
 
-        {/* Product name */}
-        <p className="line-clamp-2 text-sm font-semibold leading-snug text-stone-800">
-          {item_name ?? 'Unnamed Product'}
-        </p>
-
-        {/* Price — accent colour, bottom of card */}
-        {formattedPrice && (
-          <p className="mt-auto pt-2 text-sm font-bold text-[#B77767]">
-            {formattedPrice}
+        {/* Name — hide if identical to code (OrnaVerse quirk) */}
+        {item_name && item_name !== item_code && (
+          <p className="line-clamp-2 text-sm font-semibold leading-snug text-stone-800">
+            {item_name}
           </p>
         )}
 
-        {/* Accent underline — matches design's orange dash */}
-        <div className="mt-1.5 h-0.5 w-6 rounded-full bg-[#B77767]" aria-hidden="true" />
+        {/* Metal type · Weight — accent colour info line */}
+        {infoLine && (
+          <p className="mt-auto pt-1.5 text-sm font-semibold text-primary">
+            {infoLine}
+          </p>
+        )}
+
+        {/* Accent underline */}
+        <div className="mt-1.5 h-0.5 w-6 rounded-full bg-primary" aria-hidden="true" />
       </div>
     </button>
   );
