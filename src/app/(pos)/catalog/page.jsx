@@ -21,6 +21,7 @@ import OutOfStockToggle      from '@/components/features/catalog/OutOfStockToggl
 import CatalogSkeleton       from '@/components/features/catalog/CatalogSkeleton';
 
 import APP_CONFIG from '@/constants/appConfig';
+import TOAST from '@/constants/toastMessages';
 
 const { SEARCH } = APP_CONFIG;
 const MAX_RECENT  = 5;
@@ -203,9 +204,9 @@ function CatalogScreen() {
 
   // ── Error toasts ──────────────────────────────────────────────────────────
   useEffect(() => {
-    if (browseError) toast.error('Failed to load products. Please try again.');
-    if (allError)    toast.error('Failed to load search index. Please try again.');
-    if (catsError)   toast.error('Failed to load categories.');
+    if (browseError) toast.error(TOAST.CATALOG.LOAD_FAILED);
+    if (allError)    toast.error(TOAST.CATALOG.SEARCH_ERROR);
+    if (catsError)   toast.error(TOAST.CATALOG.FILTER_ERROR);
   }, [browseError, allError, catsError]);
 
   // ── Derived ───────────────────────────────────────────────────────────────

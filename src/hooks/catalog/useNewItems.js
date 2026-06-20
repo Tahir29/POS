@@ -15,6 +15,6 @@ export function useNewItems() {
     queryKey: QUERY_KEYS.ITEMS.NEW(),
     queryFn: getNewItems,
     staleTime: APP_CONFIG.STALE_TIME.STATIC,
-    select: (data) => data?.data ?? [],
+    select: (data) => data?.Entities ?? [],
   });
 }

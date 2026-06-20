@@ -21,9 +21,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { useMemo }  from 'react';
 import { getDesignVariants } from '@/services/itemService';
+import { QUERY_KEYS } from '@/constants/queryKeys';
 import APP_CONFIG    from '@/constants/appConfig';
-
-const QUERY_KEY = (styleId) => ['design-variants', styleId];
 
 function unique(arr, keyFn) {
   const seen = new Set();
@@ -63,7 +62,8 @@ function isValid(value) {
 
 export function useDesignVariants(styleId) {
   const { data: variants = [], isLoading, isError } = useQuery({
-    queryKey:  QUERY_KEY(styleId),
+    // queryKey:  QUERY_KEY(styleId),
+    queryKey:  QUERY_KEYS.ITEMS.DESIGN_VARIANTS(styleId),
     queryFn:   () => getDesignVariants(styleId),
     enabled:   !!styleId,
     staleTime: APP_CONFIG.STALE_TIME.CATALOG,
