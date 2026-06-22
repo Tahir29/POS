@@ -97,4 +97,8 @@ export const QUERY_KEYS = {
     CUSTOMER_ENROLLMENTS: (customerId) => ['schemes', 'enrollments', 'customer', customerId],
   },
 
+  // ── SHOPIFY ──────────────────────────────────────────────
+  SHOPIFY: {
+    PRODUCT_IMAGES: (externalProductId) => ['shopify', 'product-images', externalProductId],
+  },
 };

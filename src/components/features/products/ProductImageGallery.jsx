@@ -1,7 +1,15 @@
 'use client';
 
-// src/components/features/products/ProductImageGallery/index.jsx
-// Updated to read OrnaVerse image fields: image, image_1 through image_8.
+// src/components/features/products/ProductImageGallery.jsx
+//
+// IMAGE SOURCE PRIORITY (future-proof):
+//   1. shopifyImages prop  — passed from product detail page via useShopifyProductImages
+//   2. OrnaVerse fields    — product.image, image_1 … image_8 (currently null on UAT)
+//   3. NoImagePlaceholder  — when both sources are empty
+//
+// To switch image source in future (e.g. OrnaVerse starts serving images):
+//   Stop passing shopifyImages prop from the page — the component automatically
+//   falls back to OrnaVerse fields. No changes needed here.
 
 import { useState, useRef } from 'react';
 import Image from 'next/image';
@@ -11,8 +19,8 @@ const IMAGE_BASE_URL = process.env.NEXT_PUBLIC_ORNAVERSE_BASE_URL
   ? `${process.env.NEXT_PUBLIC_ORNAVERSE_BASE_URL}/`.replace(/\/\/$/, '/')
   : '';
 
-function resolveImageSrc(raw) {
-  if (!raw) return null;
+function resolveOrnaverseSrc(raw) {
+  if (!raw || raw === 'NA') return null;
   if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
   if (raw.startsWith('/')) return raw;
   if (IMAGE_BASE_URL) return `${IMAGE_BASE_URL}${raw}`;
@@ -39,14 +47,27 @@ function NoImagePlaceholder() {
   );
 }
 
-export default function ProductImageGallery({ product }) {
+/**
+ * @param {object}   product       — OrnaVerse item/style object
+ * @param {Array}    shopifyImages — [{ id, src, alt, width, height, position }]
+ *                                   from useShopifyProductImages; defaults to []
+ */
+export default function ProductImageGallery({ product, shopifyImages = [] }) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [imgErrors, setImgErrors]       = useState({});
   const touchStartX                     = useRef(null);
 
-  // ── Build image list from OrnaVerse fields ────────────────────────────────
-  // OrnaVerse returns: image, image_1, image_2 ... image_8
+  // ── Build image list ───────────────────────────────────────────────────────
+  // Priority 1: Shopify images (sorted by position, already done in hook)
+  // Priority 2: OrnaVerse image fields (currently null on UAT)
   const images = (() => {
+    if (shopifyImages.length > 0) {
+      return shopifyImages.map((img) => ({
+        src: img.src,
+        alt: img.alt ?? product?.item_name ?? 'Product image',
+      }));
+    }
+    // Fall back to OrnaVerse fields
     const fields = [
       product?.image,
       product?.image_1,
@@ -59,8 +80,9 @@ export default function ProductImageGallery({ product }) {
       product?.image_8,
     ];
     return fields
-      .map(resolveImageSrc)
-      .filter(Boolean); // removes nulls (fields that are null in API)
+      .map(resolveOrnaverseSrc)
+      .filter(Boolean)
+      .map((src) => ({ src, alt: product?.item_name ?? 'Product image' }));
   })();
 
   // ── Touch swipe ───────────────────────────────────────────────────────────
@@ -76,8 +98,8 @@ export default function ProductImageGallery({ product }) {
   const goNext = () => setCurrentIndex((i) => (i === images.length - 1 ? 0 : i + 1));
   const handleImgError = (index) => setImgErrors((prev) => ({ ...prev, [index]: true }));
 
-  const currentSrc = images[currentIndex];
-  const showImage  = images.length > 0 && currentSrc && !imgErrors[currentIndex];
+  const current   = images[currentIndex];
+  const showImage = images.length > 0 && current?.src && !imgErrors[currentIndex];
 
   return (
     <div className="flex flex-col gap-3">
@@ -92,9 +114,9 @@ export default function ProductImageGallery({ product }) {
       >
         {showImage ? (
           <Image
-            key={currentSrc}
-            src={currentSrc}
-            alt={product?.item_name ?? 'Product image'}
+            key={current.src}
+            src={current.src}
+            alt={current.alt}
             fill
             sizes="(max-width: 768px) 100vw, 50vw"
             className="object-cover"

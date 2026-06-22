@@ -17,6 +17,7 @@ import { useProductStock }      from '@/hooks/products/useProductStock';
 import { useStockByStores }     from '@/hooks/products/useStockByStores';
 import { useProductAttributes } from '@/hooks/products/useProductAttributes';
 import { useDesignVariants }    from '@/hooks/products/useDesignVariants';
+import { useShopifyProductImages } from '@/hooks/products/useShopifyProductImages';
 
 import ProductImageGallery   from '@/components/features/products/ProductImageGallery';
 import ProductSpecifications from '@/components/features/products/ProductSpecifications';
@@ -80,6 +81,7 @@ function ProductDetailScreen() {
   // ── Variants ──────────────────────────────────────────────────────────────
   const {
     variants,
+    externalProductId,
     metalColors,
     variantStock,
     karats,
@@ -88,6 +90,12 @@ function ProductDetailScreen() {
     hasVariants,
     isLoading: variantsLoading,
   } = useDesignVariants(product?.style_id ?? null);
+
+  // ── Shopify images ────────────────────────────────────────────────────────
+  // Disabled automatically when externalProductId is null (UAT).
+  // On LIVE: fetches images from Shopify Admin API via server-side proxy.
+  // primaryImage is passed to AddToCartButton so the cart item has the image.
+  const { images: shopifyImages, primaryImage } = useShopifyProductImages(externalProductId);
 
   // ── UI state ──────────────────────────────────────────────────────────────
   const [customizeOpen, setCustomizeOpen] = useState(false);
@@ -146,7 +154,7 @@ function ProductDetailScreen() {
 
         {/* Left — Image gallery */}
         <div className="w-full md:w-[45%] shrink-0">
-          <ProductImageGallery product={activeItem} />
+          <ProductImageGallery product={activeItem} shopifyImages={shopifyImages} />
         </div>
 
         {/* Right — Info + actions */}
@@ -225,6 +233,7 @@ function ProductDetailScreen() {
             selectedSizeId={selectedVariant?.item_size_id ?? null}
             selectedSizeName={selectedVariant?.item_size_name ?? null}
             stockStatus={stockStatus}
+            primaryImage={primaryImage}
           />
 
           {/* Made-to-order hint for out of stock items */}
