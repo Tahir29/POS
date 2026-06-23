@@ -135,7 +135,7 @@ export default function CustomersPage() {
   return (
     <div className="flex flex-col gap-4 max-w-3xl mx-auto w-full">
       <div className="flex items-center justify-between gap-2">
-        <h1 className="text-lg font-bold text-stone-800">Customers</h1>
+        <h1 className="text-3xl font-bold text-stone-800">Customers</h1>
         <Button type="button" onClick={() => setIsNewCustomerOpen(true)} className="gap-2">
           <UserPlus size={16} aria-hidden="true" />
           New Customer
@@ -206,7 +206,7 @@ export default function CustomersPage() {
             className="gap-1"
           >
             <ChevronLeft size={16} aria-hidden="true" />
-            Previous
+            
           </Button>
           <span className="text-sm text-stone-500">
             Page {currentPage} of {totalPages} · {totalCount} customers
@@ -219,7 +219,7 @@ export default function CustomersPage() {
             disabled={skip + take >= totalCount || isFetching}
             className="gap-1"
           >
-            Next
+            
             <ChevronRight size={16} aria-hidden="true" />
           </Button>
         </div>

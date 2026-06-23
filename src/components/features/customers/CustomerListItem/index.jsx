@@ -3,7 +3,7 @@
 // src/components/features/customers/CustomerListItem/index.jsx
 // A single row in the customer directory list. Tappable to open details.
 
-import { User, Phone, MapPin } from 'lucide-react';
+import { User, Phone, MapPin, Mail } from 'lucide-react';
 
 /**
  * @param {{
@@ -12,34 +12,58 @@ import { User, Phone, MapPin } from 'lucide-react';
  * }} props
  */
 export default function CustomerListItem({ customer, onSelect }) {
-  const { customerName, customerMobile, customerAddress } = customer;
+  const { customerName, customerMobile, customerEmail, customerAddress, raw } = customer;
+  const partyCode = raw?.party_code && raw.party_code !== 'NA' ? raw.party_code : null;
   const location = [customerAddress?.city, customerAddress?.state].filter(Boolean).join(', ');
 
   return (
     <button
       type="button"
       onClick={onSelect}
-      className="flex w-full items-center gap-3 rounded-lg border border-stone-200 bg-white p-3 text-left min-h-[56px] hover:border-primary/40 transition-colors"
+      className="w-full rounded-2xl border border-stone-200 bg-white text-left hover:border-primary/40 hover:shadow-sm transition-all overflow-hidden"
     >
-      <div className="shrink-0 flex h-10 w-10 items-center justify-center rounded-full bg-brand-cream text-primary">
-        <User size={18} aria-hidden="true" />
+      {/* Header: invoice number */}
+      <div className="px-4 pt-4 pb-3 hidden">
+        <p className="text-[15px] font-semibold text-stone-800 tracking-tight">
+          {partyCode || 'Customer Code'}
+        </p>
       </div>
-      <div className="min-w-0 flex-1">
-        <p className="font-medium text-stone-800 truncate">{customerName || 'Unnamed customer'}</p>
-        <div className="flex items-center gap-3 mt-0.5 text-xs text-stone-500">
-          {customerMobile && (
-            <span className="flex items-center gap-1">
-              <Phone size={12} aria-hidden="true" />
-              {customerMobile}
-            </span>
-          )}
-          {location && (
-            <span className="flex items-center gap-1 truncate">
-              <MapPin size={12} aria-hidden="true" className="shrink-0" />
-              <span className="truncate">{location}</span>
-            </span>
-          )}
+
+      {/* Dashed divider */}
+      <div className="mx-4 border-t border-dashed border-stone-200 hidden" />
+
+      {/* Meta rows */}
+      <div className="px-4 py-3 space-y-2">
+        {/* Row 1: Customer + Date */}
+        <div className="flex items-center justify-between gap-2">
+          <span className="flex items-center gap-2 text-[13px] text-stone-500 min-w-0">
+            <User size={13} className="shrink-0 text-stone-400" aria-hidden="true" />
+            <span className="truncate">{customerName || '—'}</span>
+          </span>
         </div>
+
+        {/* Row 3: Mobile */}
+        {customerMobile && (
+          <div className="flex items-center gap-2 text-[13px] text-stone-500">
+            <Phone size={13} className="shrink-0 text-stone-400" aria-hidden="true" />
+            <span className="truncate">{customerMobile}</span>
+          </div>
+        )}
+
+        {/* Row 4: Email */}
+        {customerEmail && (
+          <div className="flex items-center gap-2 text-[13px] text-stone-500">
+            <Mail size={13} className="shrink-0 text-stone-400" aria-hidden="true" />
+            <span className="truncate">{customerEmail}</span>
+          </div>
+        )}
+
+        {location && (
+            <div className="flex items-center gap-2 text-[13px] text-stone-500">
+              <MapPin size={12} aria-hidden="true" className="shrink-0 text-stone-400" />
+              <span className="truncate">{location}</span>
+            </div>
+          )}
       </div>
     </button>
   );

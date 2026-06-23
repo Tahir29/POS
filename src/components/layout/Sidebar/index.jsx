@@ -36,8 +36,8 @@ const NAV_ITEMS = [
   { label: 'Invoices',     href: '/invoices',     icon: FileText        },
   { label: 'Customers',    href: '/customers',    icon: Users           },
   { label: 'Schemes',      href: '/schemes',      icon: BookOpen        },
-  { label: 'Transfers',    href: '/transfers',    icon: ArrowLeftRight  },
-  { label: 'Reservations', href: '/reservations', icon: Bookmark        },
+  // { label: 'Transfers',    href: '/transfers',    icon: ArrowLeftRight  },
+  // { label: 'Reservations', href: '/reservations', icon: Bookmark, comingSoon: true },
   { label: 'Reports',      href: '/reports',      icon: BarChart2       },
 ];
 
@@ -66,7 +66,15 @@ function SidebarNavItem({ item, collapsed }) {
       aria-current={isActive ? 'page' : undefined}
     >
       <Icon size={20} aria-hidden="true" className="shrink-0" />
-      {!collapsed && <span className="truncate">{item.label}</span>}
+      {/* {!collapsed && <span className="truncate">{item.label}</span>} */}
+      {!collapsed && (
+        <span className='flex items-center gap-2 truncate'>
+          <span className='truncate'>{item.label}</span>
+          {item.comingSoon && (
+            <span className="shrink-0 rounded-full bg-sidebar-accent px-1.5 py-0.5 text-[10px] font-semibold leading-none text-sidebar-foreground/60">Soon</span>
+          )}
+        </span>
+      )}
     </Link>
   );
 
@@ -75,7 +83,8 @@ function SidebarNavItem({ item, collapsed }) {
       <Tooltip>
         <TooltipTrigger asChild>{linkContent}</TooltipTrigger>
         <TooltipContent side="right">
-          <p>{item.label}</p>
+          {/* <p>{item.label}</p> */}
+          <p>{item.label}{item.comingSoon ? ' (Coming Soon)' : ''}</p>
         </TooltipContent>
       </Tooltip>
     );
@@ -124,7 +133,7 @@ export default function Sidebar() {
       <Separator className="bg-sidebar-border" />
 
       {/* ── Bottom Nav ───────────────────────────────────── */}
-      <nav className="flex flex-col gap-1 p-2" aria-label="Secondary">
+      <nav className="hidden flex-col gap-1 p-2" aria-label="Secondary">
         {BOTTOM_ITEMS.map((item) => (
           <SidebarNavItem key={item.href} item={item} collapsed={!sidebarOpen} />
         ))}

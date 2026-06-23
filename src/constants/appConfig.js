@@ -49,12 +49,19 @@ const APP_CONFIG = {
     CATALOG:    5 * 60 * 1000,  // 5 min  — product catalog, item detail
     CUSTOMER:   5 * 60 * 1000,  // 5 min  — customer data
     ORDERS:     2 * 60 * 1000,  // 2 min  — orders, invoices, enrollments
-    STOCK:      1 * 60 * 1000,  // 1 min  — live stock levels
+    STOCK:      5 * 60 * 1000,  // 1 min  — live stock levels
+  },
+
+  // ── SESSION ──────────────────────────────────────────────
+  SESSION: {
+    IDLE_TIMEOUT_MS: 5 * 60 * 1000,
+    WARNING_BEFORE: 30 * 1000,
+    CLICK_DEBOUNCE: 300,
   },
 
   // ── SEARCH ───────────────────────────────────────────────
   SEARCH: {
-    DEBOUNCE_MS:    500,  // ms to wait before firing search API call
+    DEBOUNCE_MS:    300,  // ms to wait before firing search API call
     MIN_QUERY_LENGTH: 2,  // minimum characters before triggering search
   },
 

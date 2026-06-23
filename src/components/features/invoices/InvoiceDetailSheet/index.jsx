@@ -4,28 +4,16 @@
 // Read-only invoice detail view, opened from /invoices.
 //
 // Uses the full record already returned by Invoice/List (passed in as
-// `invoice.raw` from useInvoiceList's normalizeInvoice) rather than a
-// second Invoice/Retrieve call — the List response already includes
-// line_items[], receipt_details[], and every transaction-level field
-// (confirmed from a real response).
+// `invoice.raw`) — no second Invoice/Retrieve call needed.
 //
-// PRINT LAYOUT NOTE: BottomSheet's panel uses a CSS transform
-// (translate-y-0), which creates a new containing block for
-// `position: fixed` descendants. That broke #invoice-print-area's
-// print positioning/clipping (content rendered pinned to the sheet's
-// corner and cut off by the sheet's max-h-[85vh] overflow). Fix: render
-// the printable content a second time via a portal directly into
-// document.body — completely outside the sheet's transformed subtree —
-// hidden on screen (`hidden print:block`) and only shown by @media print.
-//
-// Field names confirmed against a real Invoice/List response:
-//   document_no, document_date, party_name, mobile, gross_amount,
-//   net_amount, discount, tax_amount, line_items[], receipt_details[]
-//   (payments), location_name / company_name.
+// PRINT LAYOUT: printable content portaled to document.body to escape
+// BottomSheet's CSS transform. Logo shown only in the print layout
+// (hidden on screen, shown via @media print / print:block).
 
 import { createPortal } from 'react-dom';
 import BottomSheet from '@/components/shared/BottomSheet';
 import PrintInvoiceButton from '@/components/features/checkout/PrintInvoiceButton';
+import Logo from '@/components/shared/Logo';
 
 function Row({ label, value, bold, border }) {
   if (value === null || value === undefined || value === '') return null;
@@ -45,7 +33,7 @@ function formatCurrency(amount) {
 
 function InvoiceContent({ raw }) {
   const lineItems = raw?.line_items ?? [];
-  const payments = raw?.receipt_details ?? [];
+  const payments  = raw?.receipt_details ?? [];
 
   return (
     <div className="flex flex-col gap-2 text-sm">
@@ -55,8 +43,9 @@ function InvoiceContent({ raw }) {
         value={raw.document_date ? new Date(raw.document_date).toLocaleDateString('en-IN') : null}
       />
       <Row label="Customer" value={raw.party_name} />
-      <Row label="Mobile" value={raw.mobile} />
-      <Row label="Store" value={raw.location_name ?? raw.company_name} />
+      <Row label="Mobile"   value={raw.mobile} />
+      <Row label="Email"   value={raw.email} />
+      <Row label="Store"    value={raw.location_name ?? raw.company_name} />
 
       {lineItems.length > 0 && (
         <div className="border-t border-stone-100 pt-2 flex flex-col gap-1.5">
@@ -74,8 +63,8 @@ function InvoiceContent({ raw }) {
 
       <Row label="Subtotal" value={formatCurrency(raw.net_amount)} border />
       <Row label="Discount" value={raw.discount ? `– ${formatCurrency(raw.discount)}` : null} />
-      <Row label="Tax" value={formatCurrency(raw.tax_amount)} />
-      <Row label="Total" value={formatCurrency(raw.gross_amount)} bold border />
+      <Row label="Tax"      value={formatCurrency(raw.tax_amount)} />
+      <Row label="Total"    value={formatCurrency(raw.gross_amount)} bold border />
 
       {payments.length > 0 && (
         <div className="border-t border-stone-100 pt-2 flex flex-col gap-1.5">
@@ -119,11 +108,14 @@ export default function InvoiceDetailSheet({ invoice, isOpen, onClose }) {
         )}
       </BottomSheet>
 
-      {/* Print-only copy, portaled to <body> to escape BottomSheet's
-          transformed/clipped container — see file header. */}
+      {/* Print-only copy portaled to <body> — escapes BottomSheet's
+          transform/overflow. Logo shown only here (hidden on screen). */}
       {raw && typeof document !== 'undefined' &&
         createPortal(
-          <div id="invoice-print-area" className="hidden print:block p-4 bg-white">
+          <div id="invoice-print-area" className="hidden print:block p-6 bg-white">
+            <div className="flex justify-center items-center py-8 mb-8 border-b border-stone-100">
+              <Logo variant="full" color="brown" width={140} height={44} />
+            </div>
             <InvoiceContent raw={raw} />
           </div>,
           document.body
