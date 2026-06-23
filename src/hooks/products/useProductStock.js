@@ -17,7 +17,7 @@ export function useProductStock(itemCode) {
     enabled:   !!itemCode,
     staleTime: APP_CONFIG.STALE_TIME.STOCK,
     select: (response) => {
-      return response?.data?.Entity ?? response?.data?.Entities?.[0] ?? response.data.data ?? response?.data ?? null;
+      return response?.data?.Entity ?? response?.data?.Entities?.[0] ?? response?.data?.data ?? response?.data ?? null;
     },
   });
 }

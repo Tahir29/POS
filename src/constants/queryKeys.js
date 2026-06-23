@@ -31,6 +31,7 @@ export const QUERY_KEYS = {
     FEATURED: ()       => ['items', 'featured'],
     SIZES:    ()       => ['items', 'sizes'],
     ATTRIBUTES: (typeId) => ['items', 'attributes', typeId],
+    DESIGN_VARIANTS: (styleId) => ['items', 'design-variants', styleId],
     SEARCH: (params) => [
       'items',
       'search',
@@ -51,6 +52,7 @@ export const QUERY_KEYS = {
   CATALOG: {
     PRODUCTS:         (params) => ['catalog', 'products', params],
     STOCK_BY_STORES:  (itemId) => ['catalog', 'stock-by-stores', itemId],
+    ALL:              (storeId) => ['catalog', 'all', storeId]
   },
 
   // ── INVENTORY ────────────────────────────────────────────
@@ -95,4 +97,8 @@ export const QUERY_KEYS = {
     CUSTOMER_ENROLLMENTS: (customerId) => ['schemes', 'enrollments', 'customer', customerId],
   },
 
+  // ── SHOPIFY ──────────────────────────────────────────────
+  SHOPIFY: {
+    PRODUCT_IMAGES: (externalProductId) => ['shopify', 'product-images', externalProductId],
+  },
 };

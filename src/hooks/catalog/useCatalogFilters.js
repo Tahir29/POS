@@ -1,90 +1,92 @@
 // src/hooks/catalog/useCatalogFilters.js
+// Manages all catalog filter state, synced to URL query params.
+// Covers: category, search, sortBy, showOutOfStock, catalogStoreId.
 
 'use client';
 
 import { useCallback, useMemo } from 'react';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
-import APP_CONFIG from '@/constants/appConfig';
 
-const PARAM = {
-  Q: 'q',
-};
+/**
+ * Sort options available in the catalog.
+ * Value is used in URL params and matched client-side.
+ */
+export const SORT_OPTIONS = [
+  { value: 'name_asc',   label: 'Name A → Z' },
+  { value: 'name_desc',  label: 'Name Z → A' },
+  { value: 'price_asc',  label: 'Weight Low → High' },
+  { value: 'price_desc', label: 'Weight High → Low' },
+];
 
-function buildParams(current, updates) {
-  const next = new URLSearchParams(current.toString());
-  for (const [key, value] of Object.entries(updates)) {
-    if (value === null || value === undefined || value === '') {
-      next.delete(key);
-    } else {
-      next.set(key, String(value));
-    }
-  }
-  return next;
-}
+export const DEFAULT_SORT = 'name_asc';
 
 export function useCatalogFilters() {
-  const router       = useRouter();
-  const pathname     = usePathname();
-  const searchParams = useSearchParams();
+  const router      = useRouter();
+  const pathname    = usePathname();
+  const params      = useSearchParams();
 
-  const activeCategorySlug = (() => {
-    for (const [key, value] of searchParams.entries()) {
-      if (key !== PARAM.Q && value === '') return key;
-    }
-    return null;
-  })();
-  const searchQuery        = searchParams.get(PARAM.Q) ?? '';
+  // ── Read from URL ──────────────────────────────────────────────────────────
+  const activeCategorySlug  = params.get('category')     ?? null;
+  const searchQuery         = params.get('q')            ?? '';
+  const sortBy              = params.get('sort')         ?? DEFAULT_SORT;
+  const showOutOfStock      = params.get('oos')          === 'true';
+  const catalogStoreId      = params.get('store')
+    ? Number(params.get('store'))
+    : null;
 
-  const hasActiveFilters = activeCategorySlug !== null || searchQuery !== '';
+  // ── Write helper ───────────────────────────────────────────────────────────
+  const setParam = useCallback((updates) => {
+    const next = new URLSearchParams(params.toString());
+    Object.entries(updates).forEach(([key, val]) => {
+      if (val === null || val === '' || val === false) {
+        next.delete(key);
+      } else {
+        next.set(key, String(val));
+      }
+    });
+    router.replace(`${pathname}?${next.toString()}`, { scroll: false });
+  }, [params, pathname, router]);
 
-  const filters = useMemo(() => ({
-    activeCategorySlug,
-    searchQuery,
-    show_out_of_stock: true,
-  }), [activeCategorySlug, searchQuery]);
+  // ── Actions ────────────────────────────────────────────────────────────────
+  const actions = useMemo(() => ({
+    setSearch: (q) => setParam({ q: q || null }),
 
-  const push = useCallback(
-    (updates) => {
-      const next = buildParams(searchParams, updates);
-      const qs   = next.toString();
-      router.replace(`${pathname}${qs ? `?${qs}` : ''}`, { scroll: false });
-    },
-    [router, pathname, searchParams],
-  );
+    selectCategory: (slug) => setParam({
+      category: slug === 'all' ? null : (slug ?? null),
+    }),
 
-  const selectCategory = useCallback(
-    (slug) => {
+    setSortBy: (val) => setParam({
+      sort: val === DEFAULT_SORT ? null : val,
+    }),
+
+    setShowOutOfStock: (val) => setParam({
+      oos: val ? 'true' : null,
+    }),
+
+    setCatalogStore: (storeId) => setParam({
+      store: storeId ?? null,
+    }),
+
+    clearFilters: () => {
       const next = new URLSearchParams();
-      // Preserve search query if active
-      const q = searchParams.get(PARAM.Q);
-      if (q) next.set(PARAM.Q, q);
-      // Add slug as a key with no value e.g. ?bangles
-      if (slug) next.append(slug, '');
-      router.replace(`${pathname}${next.toString() ? `?${next.toString()}` : ''}`, { scroll: false });
+      // preserve catalogStoreId across clear — it's a scope, not a filter
+      if (catalogStoreId) next.set('store', String(catalogStoreId));
+      router.replace(`${pathname}?${next.toString()}`, { scroll: false });
     },
-    [push, searchParams, pathname, router],
-  );
+  }), [setParam, pathname, router, catalogStoreId]);
 
-  const setSearch = useCallback(
-    (q) => {
-      if (q.length > 0 && q.length < APP_CONFIG.SEARCH.MIN_QUERY_LENGTH) return;
-      push({ [PARAM.Q]: q || null });
-    },
-    [push],
-  );
-
-  const clearFilters = useCallback(
-    () => router.replace(pathname, { scroll: false }),
-    [router, pathname],
-  );
+  // ── hasActiveFilters — excludes store + sort (those aren't "filters") ──────
+  const hasActiveFilters = !!(activeCategorySlug || searchQuery);
 
   return {
-    filters,
-    hasActiveFilters,
-    actions: {
-      selectCategory,
-      setSearch,
-      clearFilters,
+    filters: {
+      activeCategorySlug,
+      searchQuery,
+      sortBy,
+      showOutOfStock,
+      catalogStoreId,
     },
+    hasActiveFilters,
+    actions,
   };
 }

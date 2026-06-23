@@ -2,6 +2,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
 import { ShoppingCart, User, LogOut, ChevronDown, Store, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -15,6 +16,7 @@ import {
 import { useAuth } from '@/hooks/auth/useAuth';
 import { useActiveStore } from '@/hooks/store/useActiveStore';
 import { useCartItemCount } from '@/hooks/cart/useCartItemCount';
+import { openCart, closeCart, selectCartOpen } from '@/store/slices/uiSlice';
 import StoreSelectModal from '@/components/features/auth/StoreSelectModal';
 import CartDrawer from '@/components/features/cart/CartDrawer';
 import HeaderCustomerControl from '@/components/layout/Header/HeaderCustomerControl';
@@ -129,8 +131,9 @@ function UserMenu() {
 // ── HEADER ────────────────────────────────────────────────────
 
 export default function Header() {
+  const dispatch = useDispatch();
   const [storeModalOpen, setStoreModalOpen] = useState(false);
-  const [cartOpen, setCartOpen] = useState(false);
+  const cartOpen = useSelector(selectCartOpen);
 
   return (
     <>
@@ -144,7 +147,7 @@ export default function Header() {
         {/* Right — actions */}
         <div className="flex items-center gap-1">
           <HeaderCustomerControl />
-          <CartBadge onOpen={() => setCartOpen(true)} />
+          <CartBadge onOpen={() => dispatch(openCart())} />
           <UserMenu />
         </div>
       </header>
@@ -158,7 +161,7 @@ export default function Header() {
       {/* Cart drawer — rendered outside header flow, available on every POS screen */}
       <CartDrawer
         isOpen={cartOpen}
-        onClose={() => setCartOpen(false)}
+        onClose={() => dispatch(closeCart())}
       />
     </>
   );
