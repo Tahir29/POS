@@ -36,8 +36,8 @@ const NAV_ITEMS = [
   { label: 'Invoices',     href: '/invoices',     icon: FileText        },
   { label: 'Customers',    href: '/customers',    icon: Users           },
   { label: 'Schemes',      href: '/schemes',      icon: BookOpen        },
-  { label: 'Transfers',    href: '/transfers',    icon: ArrowLeftRight  },
-  { label: 'Reservations', href: '/reservations', icon: Bookmark, comingSoon: true },
+  // { label: 'Transfers',    href: '/transfers',    icon: ArrowLeftRight  },
+  // { label: 'Reservations', href: '/reservations', icon: Bookmark, comingSoon: true },
   { label: 'Reports',      href: '/reports',      icon: BarChart2       },
 ];
 
@@ -133,7 +133,7 @@ export default function Sidebar() {
       <Separator className="bg-sidebar-border" />
 
       {/* ── Bottom Nav ───────────────────────────────────── */}
-      <nav className="flex flex-col gap-1 p-2" aria-label="Secondary">
+      <nav className="hidden flex-col gap-1 p-2" aria-label="Secondary">
         {BOTTOM_ITEMS.map((item) => (
           <SidebarNavItem key={item.href} item={item} collapsed={!sidebarOpen} />
         ))}
