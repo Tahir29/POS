@@ -259,11 +259,11 @@ function CatalogScreen() {
   return (
     <div className="flex h-full flex-col bg-[#FEF5F1]">
 
-      <div className="flex flex-col gap-1 px-4 pt-4 md:px-6 md:pt-5">
-        <h1 className="text-xl font-bold text-foreground md:text-2xl font-abhaya">
+      <div className="flex flex-col gap-2 px-4 pt-4 md:px-6 md:pt-5">
+        <h1 className="text-3xl font-bold text-foreground font-abhaya">
           Catalog
           {storeName && (
-            <span className="text-sm font-normal text-muted-foreground ml-3">
+            <span className="text-base font-normal text-muted-foreground ml-3">
               {storeName}
             </span>
           )}

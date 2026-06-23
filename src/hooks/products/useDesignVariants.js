@@ -84,7 +84,7 @@ export function useDesignVariants(styleId) {
     select:    selectStyleData,
   });
 
-  const variants          = data?.variants          ?? [];
+  const variants = data?.variants ?? [];
   const externalProductId = data?.externalProductId ?? null;
 
   // Unique metal colour options — filter out NA values
