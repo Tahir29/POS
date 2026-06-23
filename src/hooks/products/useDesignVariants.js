@@ -10,20 +10,21 @@
 //                   item_size_name, pieces, ... }
 //
 // Returns derived data ready for CustomizeSheet:
-//   variants      — raw style_variants array
-//   metalColors   — unique metal colour options  [{ id, name }]
-//   karats        — unique karat options          [{ id, name }]
-//   sizes         — unique size options           [{ id, name }]
-//   variantStock  — Map<item_id, pieces>  (for in-stock dots)
-//   findVariant   — (metalColorId, karatId, sizeId) => variant | null
-//   hasVariants   — boolean
+//   variants          — raw style_variants array
+//   externalProductId — Shopify product ID (Entity.external_product_id)
+//                       used by useShopifyProductImages; null on UAT
+//   metalColors       — unique metal colour options  [{ id, name }]
+//   karats            — unique karat options          [{ id, name }]
+//   sizes             — unique size options           [{ id, name }]
+//   variantStock      — Map<item_id, pieces>  (for in-stock dots)
+//   findVariant       — (metalColorId, karatId, sizeId) => variant | null
+//   hasVariants       — boolean
 
 import { useQuery } from '@tanstack/react-query';
 import { useMemo }  from 'react';
 import { getDesignVariants } from '@/services/itemService';
+import { QUERY_KEYS } from '@/constants/queryKeys';
 import APP_CONFIG    from '@/constants/appConfig';
-
-const QUERY_KEY = (styleId) => ['design-variants', styleId];
 
 function unique(arr, keyFn) {
   const seen = new Set();
@@ -35,25 +36,38 @@ function unique(arr, keyFn) {
   });
 }
 
-// BUG 1 FIX — robust select path with multiple fallback levels.
+// Robust select with multiple fallback levels.
 // Style/Retrieve returns Entity (singular), not Entities.
-// Guard every level so a malformed response returns [] instead of crashing.
-function selectVariants(response) {
-  // Primary path: response.data.Entity.style_variants
+// Guard every level so a malformed response returns safe defaults.
+//
+// Also extracts external_product_id from Entity — used by
+// useShopifyProductImages to fetch images from Shopify Admin API.
+// When OrnaVerse starts serving images natively, remove the Shopify hook
+// call in the product detail page; this field can stay or be removed then.
+function selectStyleData(response) {
+  // Primary path: response.data.Entity
   const entity = response?.data?.Entity;
   if (entity?.style_variants && Array.isArray(entity.style_variants)) {
-    return entity.style_variants;
+    return {
+      variants:          entity.style_variants,
+      externalProductId: entity.external_product_id ?? null,
+    };
   }
-  // Fallback 1: response.data.Entities[0].style_variants (list shape)
+  // Fallback 1: response.data.Entities[0] (list shape)
   const firstEntity = response?.data?.Entities?.[0];
   if (firstEntity?.style_variants && Array.isArray(firstEntity.style_variants)) {
-    return firstEntity.style_variants;
+    return {
+      variants:          firstEntity.style_variants,
+      externalProductId: firstEntity.external_product_id ?? null,
+    };
   }
   // Fallback 2: response.data.style_variants (flat)
   const flat = response?.data?.style_variants;
-  if (Array.isArray(flat)) return flat;
+  if (Array.isArray(flat)) {
+    return { variants: flat, externalProductId: null };
+  }
   // Nothing found
-  return [];
+  return { variants: [], externalProductId: null };
 }
 
 const NA_VALUES = new Set(['NA', 'N/A', 'na', '', null, undefined]);
@@ -62,13 +76,16 @@ function isValid(value) {
 }
 
 export function useDesignVariants(styleId) {
-  const { data: variants = [], isLoading, isError } = useQuery({
-    queryKey:  QUERY_KEY(styleId),
+  const { data, isLoading, isError } = useQuery({
+    queryKey:  QUERY_KEYS.ITEMS.DESIGN_VARIANTS(styleId),
     queryFn:   () => getDesignVariants(styleId),
     enabled:   !!styleId,
     staleTime: APP_CONFIG.STALE_TIME.CATALOG,
-    select:    selectVariants,
+    select:    selectStyleData,
   });
+
+  const variants = data?.variants ?? [];
+  const externalProductId = data?.externalProductId ?? null;
 
   // Unique metal colour options — filter out NA values
   const metalColors = useMemo(() =>
@@ -121,6 +138,7 @@ export function useDesignVariants(styleId) {
 
   return {
     variants,
+    externalProductId,  // Shopify product ID — null on UAT, real ID on LIVE
     metalColors,
     karats,
     sizes,

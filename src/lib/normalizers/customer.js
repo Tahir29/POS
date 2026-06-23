@@ -58,6 +58,7 @@ export function normalizeCustomer(entity) {
     customerName:    entity.party_name,
     customerMobile:  entity.mobile,
     customerEmail:   entity.email && entity.email !== 'NA' ? entity.email : null,
+    customerPan:     entity.pan && entity.pan !== 'NA' ? entity.pan : null,
     customerAddress,
     raw: entity,
   };

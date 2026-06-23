@@ -9,7 +9,8 @@
 // requested but isn't supported by the current API surface; flagged
 // as a blocker for the OrnaVerse team.
 
-import { Mail, Phone, MapPin, CreditCard } from 'lucide-react';
+import { Mail, Phone, MapPin, CreditCard, UserCircle } from 'lucide-react';
+import Link from 'next/link';
 import BottomSheet from '@/components/shared/BottomSheet';
 import { Button } from '@/components/ui/button';
 
@@ -70,6 +71,12 @@ export default function CustomerDetailSheet({ customer, isOpen, onClose, onAttac
         >
           {isAttached ? 'Already attached to cart' : 'Attach to Cart'}
         </Button>
+        <Button asChild type="button" variant="outline" className="h-11 w-full gap-2">
+          <Link href={`/customers/${customer.customerId}`} onClick={onClose}>
+            <UserCircle size={16} aria-hidden="true" />
+            View Full Profile
+          </Link>
+       </Button>
       </div>
     </BottomSheet>
   );

@@ -59,3 +59,16 @@ export async function getInvoiceList({ take = 100, skip = 0 } = {}) {
   });
   return response.data;
 }
+
+/**
+ * Retrieves complete detail of a single POS order by its entity ID.
+ * Maps to: POST Services/POS/Order/Retrieve
+ * @param {number} orderId - The POS order entity ID (transaction_id from Order/List)
+ * @returns {Promise<object>} OrnaVerse response containing the order Entity
+ */
+export async function getOrderDetail(orderId) {
+  const response = await axiosInstance.post(API.ORDERS.RETRIEVE, {
+    EntityId: orderId,
+  });
+  return response.data;
+}

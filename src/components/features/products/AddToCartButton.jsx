@@ -21,6 +21,7 @@ import TOAST from '@/constants/toastMessages';
  *   quantity:         number,
  *   selectedSizeId:   number | null,
  *   selectedSizeName: string | null,
+ *   primaryImage:     { src: string, alt: string|null } | null,
  * }} props
  */
 export default function AddToCartButton({
@@ -28,6 +29,7 @@ export default function AddToCartButton({
   quantity,
   selectedSizeId,
   selectedSizeName,
+  primaryImage = null,
 }) {
   const dispatch = useDispatch();
 
@@ -42,8 +44,14 @@ export default function AddToCartButton({
     product?.rate       ??
     0;
 
-  // ── Resolve image (handles relative OrnaVerse paths + "NA") ────────────────
-  const resolvedImage = resolveImageSrc(product?.image_url ?? product?.image);
+  // ── Resolve image ─────────────────────────────────────────────────────────
+  // Priority 1: Shopify image (src is already an absolute URL)
+  // Priority 2: OrnaVerse image field (handles relative paths + "NA")
+  const resolvedImage =
+    primaryImage?.src ??
+    resolveImageSrc(product?.image_url ?? product?.image) ??
+    null;
+
 
   const handleAddToCart = () => {
     if (isDisabled) return;

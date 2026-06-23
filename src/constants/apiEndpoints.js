@@ -44,7 +44,7 @@ const API = {
 
   // ── CATALOG ──────────────────────────────────────────────
   CATALOG: {
-    GET_PRODUCTS:       'Services/Inventory/ProductCatalog/List',
+    GET_PRODUCTS:        'Services/Inventory/ProductCatalog/List',
     GET_STOCK_BY_STORES: 'Services/Inventory/ProductCatalog/GetStockByStores',
   },
 
@@ -62,7 +62,7 @@ const API = {
   CUSTOMERS: {
     GET_CUSTOMER:    'Services/POS/Customer/GetCustomer',
     CREATE_CUSTOMER: 'Services/MarketPlace/Customer/Generate',
-    LIST:            'Services/POS/Customer/List'
+    LIST:            'Services/POS/Customer/List',
   },
 
   // ── ORDERS — POS ─────────────────────────────────────────
