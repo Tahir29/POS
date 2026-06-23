@@ -52,6 +52,7 @@ function OrderContent({ raw, status }) {
       />
       <Row label="Customer"  value={raw.party_name} />
       <Row label="Mobile"    value={raw.mobile} />
+      <Row label="Email"    value={raw.email} />
       <Row label="Store"     value={raw.company_name} />
       <Row label="Status"    value={STATUS_LABELS[status] ?? null} />
 
