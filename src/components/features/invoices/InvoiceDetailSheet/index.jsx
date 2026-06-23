@@ -44,7 +44,7 @@ function InvoiceContent({ raw }) {
       />
       <Row label="Customer" value={raw.party_name} />
       <Row label="Mobile"   value={raw.mobile} />
-      <Row label="Mobile"   value={raw.email} />
+      <Row label="Email"   value={raw.email} />
       <Row label="Store"    value={raw.location_name ?? raw.company_name} />
 
       {lineItems.length > 0 && (
