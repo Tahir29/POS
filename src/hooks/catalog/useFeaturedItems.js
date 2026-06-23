@@ -15,6 +15,6 @@ export function useFeaturedItems() {
     queryKey: QUERY_KEYS.ITEMS.FEATURED(),
     queryFn: getFeaturedItems,
     staleTime: APP_CONFIG.STALE_TIME.STATIC,
-    select: (data) => data?.data ?? [],
+    select: (data) => data?.Entities ?? [],
   });
 }

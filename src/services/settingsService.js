@@ -39,3 +39,14 @@ export async function getPaymentModes() {
 
   return response.data;
 }
+
+/**
+ * Creates a new metal rate entry.
+ * Maps to: POST Services/Costing/MetalRates/Create
+ * @param {{ metal_type_id: number, purchase_rate: number, sales_rate: number, from_date: string, currency_id: number }} payload
+ * @returns {Promise<object>} OrnaVerse response
+ */
+export async function addMetalRate(payload) {
+  const response = await axiosInstance.post(API.COSTING.ADD_METAL_RATE, payload);
+  return response.data;
+}

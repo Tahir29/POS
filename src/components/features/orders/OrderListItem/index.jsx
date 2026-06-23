@@ -1,12 +1,10 @@
 'use client';
 
 // src/components/features/orders/OrderListItem/index.jsx
-// A single row in the orders directory list. Tappable to open details.
-// Shows order number, date, customer, total, and a derived payment
-// status badge (paid / partial / due) — see useCustomerOrders.js for
-// the normalization and status derivation logic.
+// A single card in the orders list. Tappable to open details.
+// Shows order number, customer, date, store, total, and payment status badge.
 
-import { Receipt } from 'lucide-react';
+import { User, Calendar, Store } from 'lucide-react';
 
 const STATUS_STYLES = {
   paid:    'bg-emerald-50 text-emerald-700 border-emerald-200',
@@ -24,8 +22,9 @@ function StatusBadge({ status }) {
   if (!status) return null;
   return (
     <span
-      className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-medium ${STATUS_STYLES[status] ?? 'bg-stone-50 text-stone-600 border-stone-200'}`}
+      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[12px] font-medium ${STATUS_STYLES[status] ?? 'bg-stone-50 text-stone-600 border-stone-200'}`}
     >
+      <span className="h-1.5 w-1.5 rounded-full bg-current" />
       {STATUS_LABELS[status] ?? status}
     </span>
   );
@@ -44,33 +43,58 @@ export default function OrderListItem({ order, onSelect }) {
     <button
       type="button"
       onClick={onSelect}
-      className="flex w-full items-center gap-2.5 rounded-lg border border-stone-200 bg-white px-3 py-2 text-left min-h-[48px] hover:border-primary/40 transition-colors"
+      className="w-full rounded-2xl border border-stone-200 bg-white text-left hover:border-primary/40 hover:shadow-sm transition-all overflow-hidden"
     >
-      <div className="shrink-0 flex h-8 w-8 items-center justify-center rounded-full bg-brand-cream text-primary">
-        <Receipt size={15} aria-hidden="true" />
+      {/* Header: order number */}
+      <div className="px-4 pt-4 pb-3">
+        <p className="text-[15px] font-semibold text-stone-800 tracking-tight">
+          {orderNo || 'Order'}
+        </p>
       </div>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <p className="font-medium text-stone-800 truncate">{orderNo || 'Order'}</p>
-          <StatusBadge status={status} />
-        </div>
-        <div className="flex items-center gap-3 mt-0.5 text-xs text-stone-500">
-          {customerName && <span className="truncate">{customerName}</span>}
+
+      {/* Divider — dashed */}
+      <div className="mx-4 border-t border-dashed border-stone-200" />
+
+      {/* Meta rows */}
+      <div className="px-4 py-3 space-y-2">
+        {/* Customer + Date */}
+        <div className="flex items-center justify-between gap-2">
+          <span className="flex items-center gap-2 text-[13px] text-stone-500 min-w-0">
+            <User size={13} className="shrink-0 text-stone-400" aria-hidden="true" />
+            <span className="truncate">{customerName || '—'}</span>
+          </span>
           {orderDate && (
-            <span className="truncate text-stone-400 shrink-0">
-              {new Date(orderDate).toLocaleDateString('en-IN')}
+            <span className="flex items-center gap-1.5 text-[13px] text-stone-500 shrink-0">
+              <Calendar size={13} className="text-stone-400" aria-hidden="true" />
+              {new Date(orderDate).toLocaleDateString('en-IN', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+              })}
             </span>
           )}
-          {companyName && (
-            <span className="truncate text-stone-400 hidden md:inline">{companyName}</span>
-          )}
         </div>
+
+        {/* Store */}
+        {companyName && (
+          <div className="flex items-center gap-2 text-[13px] text-stone-500">
+            <Store size={13} className="shrink-0 text-stone-400" aria-hidden="true" />
+            <span className="truncate">{companyName}</span>
+          </div>
+        )}
       </div>
-      {totalAmount != null && (
-        <div className="shrink-0 text-sm font-semibold text-stone-800">
-          &#8377;{Number(totalAmount).toLocaleString('en-IN')}
-        </div>
-      )}
+
+      {/* Footer: amount + badge */}
+      <div className="flex items-center justify-between px-4 pb-4">
+        {totalAmount != null ? (
+          <p className="text-[18px] font-bold text-stone-800">
+            &#8377;{Number(totalAmount).toLocaleString('en-IN')}
+          </p>
+        ) : (
+          <span />
+        )}
+        <StatusBadge status={status} />
+      </div>
     </button>
   );
 }

@@ -61,6 +61,7 @@ export function useCart() {
 
   const handleDetachCustomer = () => {
     dispatch(detachCustomer());
+    toast.success(TOAST.CUSTOMER.DETACHED(customerName ?? 'Customer'));
   };
 
   const handleApplyPromo = (promo) => {

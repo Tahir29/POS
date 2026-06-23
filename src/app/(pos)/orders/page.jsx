@@ -4,37 +4,47 @@
 // Orders directory — paginated browse + full-dataset search/filter.
 //
 // Search/filter behavior (mirrors /customers pattern):
-//   - Any text (2+ chars) or date range triggers a filter over the full
-//     orders dataset (useAllOrders — fetched once with Take:0, cached).
-//   - Empty search + no dates shows the paginated browse list (50/page
-//     via useOrders).
-//   - Pagination is hidden while any filter is active — the filtered
-//     result IS the full result, page count is meaningless.
+//   - Any text (2+ chars), date range, or status selection triggers a
+//     filter over the full orders dataset (useAllOrders — fetched once
+//     with Take:0, cached).
+//   - Empty search + no dates + no status shows the paginated browse
+//     list (50/page via useOrders).
+//   - Pagination is hidden while any filter is active.
 //   - A single Clear button resets all active filters at once.
-//
-// This avoids the page-1-only search problem: if an order is on page 4
-// and the user searches on page 1, useAllOrders already has all records
-// in memory so the result is found correctly.
 
 import { useMemo, useRef, useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, Loader2, Receipt, Search, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { ChevronDown } from 'lucide-react';
 import OrderListItem from '@/components/features/orders/OrderListItem';
 import OrderDetailSheet from '@/components/features/orders/OrderDetailSheet';
 import { useOrders } from '@/hooks/orders/useOrders';
 import { useAllOrders } from '@/hooks/orders/useAllOrders';
 import APP_CONFIG from '@/constants/appConfig';
 
+const STATUS_OPTIONS = [
+  { value: 'paid',    label: 'Paid' },
+  { value: 'partial', label: 'Partial' },
+  { value: 'due',     label: 'Due' },
+];
+
 export default function OrdersPage() {
   const [skip, setSkip] = useState(0);
   const [selectedOrder, setSelectedOrder] = useState(null);
 
   // Raw input state
-  const [inputVal, setInputVal]   = useState('');
+  const [inputVal, setInputVal]     = useState('');
   const [searchQuery, setSearchQuery] = useState(''); // debounced
-  const [fromDate, setFromDate]   = useState('');
-  const [toDate, setToDate]       = useState('');
+  const [fromDate, setFromDate]     = useState('');
+  const [toDate, setToDate]         = useState('');
+  const [statusFilter, setStatusFilter] = useState(''); // 'paid' | 'partial' | 'due' | ''
 
   const debounceRef = useRef(null);
 
@@ -79,12 +89,16 @@ export default function OrdersPage() {
     setSearchQuery('');
     setFromDate('');
     setToDate('');
+    setStatusFilter('');
   };
 
   // ── Filter logic ─────────────────────────────────────────
   const q = searchQuery.trim().toLowerCase();
   const isSearchActive =
-    q.length >= APP_CONFIG.SEARCH.MIN_QUERY_LENGTH || !!fromDate || !!toDate;
+    q.length >= APP_CONFIG.SEARCH.MIN_QUERY_LENGTH ||
+    !!fromDate ||
+    !!toDate ||
+    !!statusFilter;
 
   const filteredOrders = useMemo(() => {
     if (!isSearchActive) return [];
@@ -93,7 +107,7 @@ export default function OrdersPage() {
 
     if (q.length >= APP_CONFIG.SEARCH.MIN_QUERY_LENGTH) {
       result = result.filter((order) => {
-        const orderNo = order.orderNo?.toLowerCase() ?? '';
+        const orderNo  = order.orderNo?.toLowerCase() ?? '';
         const customer = order.customerName?.toLowerCase() ?? '';
         return orderNo.includes(q) || customer.includes(q);
       });
@@ -115,17 +129,20 @@ export default function OrdersPage() {
       );
     }
 
+    if (statusFilter) {
+      result = result.filter((order) => order.status === statusFilter);
+    }
+
     return result;
-  }, [allOrders, q, fromDate, toDate, isSearchActive]);
+  }, [allOrders, q, fromDate, toDate, statusFilter, isSearchActive]);
 
   // ── Display resolution ───────────────────────────────────
   const displayOrders = isSearchActive ? filteredOrders : pagedOrders;
 
-  // While search/filter is active and the full list is still loading
-  const isFilterBusy  = isSearchActive && isAllLoading && allOrders.length === 0;
-  const isLoading     = isSearchActive ? isFilterBusy : isPagedLoading;
-  const isError       = isSearchActive ? false : isPagedError;
-  const hasFilters    = !!inputVal || !!fromDate || !!toDate;
+  const isFilterBusy = isSearchActive && isAllLoading && allOrders.length === 0;
+  const isLoading    = isSearchActive ? isFilterBusy : isPagedLoading;
+  const isError      = isSearchActive ? false : isPagedError;
+  const hasFilters   = !!inputVal || !!fromDate || !!toDate || !!statusFilter;
 
   const totalPages  = Math.max(1, Math.ceil(totalCount / take));
   const currentPage = Math.floor(skip / take) + 1;
@@ -133,8 +150,7 @@ export default function OrdersPage() {
   return (
     <div className="flex flex-col gap-3 max-w-3xl mx-auto w-full">
       <div className="relative -mx-4 -mt-4 flex items-center justify-between bg-background px-4 pt-4 pb-2 md:-mx-6 md:-mt-6 md:px-6 md:pt-6">
-        <h1 className="text-base font-bold text-stone-800">Orders</h1>
-        {/* Background fetch indicator */}
+        <h1 className="text-3xl font-bold text-stone-800">Orders</h1>
         {isAllFetching && !isAllLoading && (
           <Loader2 size={14} className="animate-spin text-stone-400" aria-hidden="true" />
         )}
@@ -173,12 +189,14 @@ export default function OrdersPage() {
           )}
         </div>
 
-        {/* Date range + clear button */}
-        <div className="flex items-center gap-2 flex-wrap">
+        {/* Date range + Status dropdown + Clear — all on one row (stacked on mobile) */}
+        <div className="flex flex-col gap-2 md:flex-row md:items-center">
+          {/* Date range */}
           <div className="flex items-center gap-2 flex-1">
             <Input
               type="date"
               value={fromDate}
+              max={new Date().toISOString().split('T')[0]}
               onChange={(e) => setFromDate(e.target.value)}
               aria-label="From date"
               className="flex-1 min-w-0"
@@ -187,18 +205,51 @@ export default function OrdersPage() {
             <Input
               type="date"
               value={toDate}
+              max={new Date().toISOString().split('T')[0]}
               onChange={(e) => setToDate(e.target.value)}
               aria-label="To date"
               className="flex-1 min-w-0"
             />
           </div>
+
+          {/* Status dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full md:w-36 justify-between font-normal"
+                aria-label="Filter by status"
+              >
+                <span className={statusFilter ? 'text-stone-800' : 'text-stone-400'}>
+                  {statusFilter
+                    ? STATUS_OPTIONS.find((o) => o.value === statusFilter)?.label
+                    : 'Status'}
+                </span>
+                <ChevronDown size={14} className="text-stone-400 shrink-0" aria-hidden="true" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-36">
+              {STATUS_OPTIONS.map((opt) => (
+                <DropdownMenuItem
+                  key={opt.value}
+                  onSelect={() => setStatusFilter(opt.value)}
+                  className={statusFilter === opt.value ? 'font-medium text-primary' : ''}
+                >
+                  {opt.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Clear all */}
           {hasFilters && (
             <Button
               type="button"
               variant="outline"
               size="sm"
               onClick={handleClearAll}
-              className="gap-1.5 shrink-0"
+              className="gap-1.5 shrink-0 w-full md:w-auto"
               aria-label="Clear all filters"
             >
               <X size={14} aria-hidden="true" />

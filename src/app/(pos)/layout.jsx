@@ -1,6 +1,7 @@
 import AuthGuard from '@/components/shared/AuthGuard';
 import StoreGuard from '@/components/shared/StoreGuard';
 import AppShell from '@/components/layout/AppShell';
+import SessionProvider from '@/components/shared/SessionProvider';
 
 export const metadata = {
   title: 'Lucira POS',
@@ -10,11 +11,13 @@ export const metadata = {
 export default function PosLayout({ children }) {
   return (
     <AuthGuard>
-      <StoreGuard>
-        <AppShell>
-          {children}
-        </AppShell>
-      </StoreGuard>
+      <SessionProvider>
+        <StoreGuard>
+          <AppShell>
+            {children}
+          </AppShell>
+        </StoreGuard>
+      </SessionProvider>
     </AuthGuard>
   );
 }
