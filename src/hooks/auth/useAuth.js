@@ -1,11 +1,18 @@
+// src/hooks/auth/useAuth.js
+// Authentication — login, logout, store selection post-login.
+//
+// CHANGED: getSettings() removed — AppSettings endpoint does not exist
+// in the new API spec. Replaced with checkMetalRateToday() which warns
+// the operator if metal rates haven't been set for the day.
+
 import { useDispatch, useSelector } from 'react-redux';
 import { useRouter } from 'next/navigation';
 import { useCallback } from 'react';
 import { toast } from 'react-toastify';
 
-import { generateToken } from '@/services/authService';
-import { getUserStores } from '@/services/storeService';
-import { getSettings } from '@/services/settingsService';
+import { generateToken }       from '@/services/authService';
+import { getUserStores }       from '@/services/storeService';
+import { checkMetalRateToday } from '@/services/settingsService';
 
 import {
   setTokens,
@@ -29,20 +36,20 @@ import EVENTS  from '@/lib/analytics/events';
 
 export function useAuth() {
   const dispatch = useDispatch();
-  const router = useRouter();
+  const router   = useRouter();
 
   const isAuthenticated = useSelector(selectIsAuthenticated);
-  const user = useSelector(selectAuthUser);
-  const accessToken = useSelector(selectAccessToken);
+  const user            = useSelector(selectAuthUser);
+  const accessToken     = useSelector(selectAccessToken);
 
   const login = useCallback(async (username, password) => {
     const tokenData = await generateToken(username, password);
 
     dispatch(
       setTokens({
-        accessToken: tokenData.access_token,
+        accessToken:  tokenData.access_token,
         refreshToken: tokenData.refresh_token,
-        expiresIn: tokenData.expires_in,
+        expiresIn:    tokenData.expires_in,
         username,
       })
     );
@@ -54,21 +61,28 @@ export function useAuth() {
 
     dispatch(setAvailableStores(stores));
 
+    // Non-blocking startup check — warn if metal rates not set for today.
+    // Failure is silently swallowed so it never blocks login.
     try {
-      await getSettings();
-    } catch {}
+      const rateCheck = await checkMetalRateToday();
+      const ratesSet  = rateCheck?.is_set ?? rateCheck?.Entity?.is_set ?? true;
+      if (!ratesSet) {
+        toast.warn(TOAST.METAL_RATES.NOT_SET);
+      }
+    } catch {
+      // Network or auth issue — don't block login
+    }
 
     if (stores.length === 1) {
       const store = stores[0];
       dispatch(
         setActiveStore({
           storeId:   store.company_id,
-          storeName: store.mailing_name,
+          storeName: store.mailing_name,  // mailing_name — no company_name field
           storeCode: store.company_code ?? null,
         })
       );
 
-      // Agent event only — no session start
       tracker.trackAgent(EVENTS.AGENT_LOGIN, {
         username,
         storeId:   store.company_id,
@@ -91,7 +105,6 @@ export function useAuth() {
   }, [dispatch, router]);
 
   const logout = useCallback(() => {
-    // End customer session if active
     if (tracker.isSessionActive()) {
       tracker.endSession('agent_logout');
     }
@@ -100,7 +113,6 @@ export function useAuth() {
       timestamp: new Date().toISOString(),
     });
 
-    // Clear everything on agent logout
     tracker.clear();
 
     dispatch(clearAuth());
