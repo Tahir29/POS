@@ -1,52 +1,118 @@
+// src/services/settingsService.js
+// Settings, payment modes, taxes, metal rates, reason codes.
+// All functions are pure HTTP wrappers — no business logic.
+//
+// NOTE: AppSettings/Retrieve and AppSettings/Update are NOT present
+// in the v1.json spec — those endpoints no longer exist. Removed.
+
 import axiosInstance from '@/lib/axios/axiosInstance';
 import API from '@/constants/apiEndpoints';
 
-/**
- * Retrieves application-wide configuration settings from OrnaVerse.
- * Fetched once on application load after authentication.
- * @returns {Promise<Object>} Application settings object
- */
-export async function getSettings() {
-  const response = await axiosInstance.post(API.SETTINGS.GET_SETTINGS, {
-    EntityId: 1,
-  });
-
-  return response.data;
-}
+// ─── PAYMENT MODES ────────────────────────────────────────────────────────────
 
 /**
- * Updates application-wide configuration settings in OrnaVerse.
- * Admin-only operation.
- * @param {Object} settingsData - Settings fields to update
- * @returns {Promise<Object>} Updated settings confirmation
- */
-export async function updateSettings(settingsData) {
-  const response = await axiosInstance.post(API.SETTINGS.UPDATE_SETTINGS, settingsData);
-
-  return response.data;
-}
-
-/**
- * Retrieves all available payment receipt modes (e.g. Cash, Card, UPI).
- * Used in the checkout screen to present payment options. No payment
- * modes are hardcoded.
- * @returns {Promise<Object>} OrnaVerse response containing Entities array
+ * All payment receipt modes available for a sale (Cash, Card, UPI, etc.).
+ * Filtered client-side by ALLOWLIST/DENYLIST in appConfig.js.
+ * @returns {Promise<object>} Entities[] of PaymentReceiptModeRow
  */
 export async function getPaymentModes() {
   const response = await axiosInstance.post(API.SETTINGS.GET_PAYMENT_MODES, {
     Take: 0,
   });
-
   return response.data;
 }
 
 /**
- * Creates a new metal rate entry.
- * Maps to: POST Services/Costing/MetalRates/Create
- * @param {{ metal_type_id: number, purchase_rate: number, sales_rate: number, from_date: string, currency_id: number }} payload
- * @returns {Promise<object>} OrnaVerse response
+ * Payment modes available specifically for refund transactions.
+ * Subset of getPaymentModes() — use this on the refund screen.
+ * @returns {Promise<object>} Entities[] of PaymentReceiptModeRow
+ */
+export async function getPaymentModesForRefund() {
+  const response = await axiosInstance.post(API.SETTINGS.GET_PAYMENT_MODES_REFUND, {
+    Take: 0,
+  });
+  return response.data;
+}
+
+// ─── TAXES ────────────────────────────────────────────────────────────────────
+
+/**
+ * Fetches applicable taxes for the store (GST slabs, etc.).
+ * Used to display tax breakdown on invoices.
+ * @param {{ company_id: number }} params
+ * @returns {Promise<object>} OrnaVerse tax response
+ */
+export async function getTaxes({ company_id } = {}) {
+  const response = await axiosInstance.post(API.SETTINGS.GET_TAXES, {
+    company_id,
+  });
+  return response.data;
+}
+
+// ─── METAL RATE UTILITIES ────────────────────────────────────────────────────
+
+/**
+ * Check whether a metal rate has been entered for today.
+ * Call at POS startup — warn the operator if rates are missing.
+ * @returns {Promise<object>} OrnaVerse response with rate status
+ */
+export async function checkMetalRateToday() {
+  const response = await axiosInstance.post(API.SETTINGS.CHECK_METAL_RATE_TODAY, {});
+  return response.data;
+}
+
+/**
+ * Creates a new metal rate entry for the day.
+ * @param {{
+ *   metal_type_id: number,
+ *   purchase_rate:  number,
+ *   sales_rate:     number,
+ *   from_date:      string,
+ *   currency_id:    number
+ * }} payload
+ * @returns {Promise<object>} SaveResponse { EntityId, Error }
  */
 export async function addMetalRate(payload) {
   const response = await axiosInstance.post(API.COSTING.ADD_METAL_RATE, payload);
+  return response.data;
+}
+
+/**
+ * Fetches current metal rate for a specific metal type.
+ * @param {{ metal_type_id: number, company_id?: number }} params
+ * @returns {Promise<object>} OrnaVerse rate response
+ */
+export async function getMetalRate({ metal_type_id, company_id } = {}) {
+  const response = await axiosInstance.post(API.COSTING.GET_METAL_RATE, {
+    metal_type_id,
+    company_id,
+  });
+  return response.data;
+}
+
+/**
+ * Fetches all current metal + stone + labour rates in one call.
+ * Use on the Settings page to display current rate snapshot.
+ * @param {{ company_id?: number }} params
+ * @returns {Promise<object>} OrnaVerse all-rates response
+ */
+export async function getAllRates({ company_id } = {}) {
+  const response = await axiosInstance.post(API.COSTING.GET_ALL_RATES, {
+    company_id,
+  });
+  return response.data;
+}
+
+// ─── REASON CODES ─────────────────────────────────────────────────────────────
+
+/**
+ * Fetches reason codes used for returns, cancellations, exchanges.
+ * Static dataset — cache for session.
+ * @returns {Promise<object>} Entities[] of ReasonRow
+ */
+export async function getReasonCodes() {
+  const response = await axiosInstance.post(API.SETTINGS.GET_REASON_CODES, {
+    Take: 0,
+  });
   return response.data;
 }

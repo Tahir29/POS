@@ -1,114 +1,563 @@
 'use client';
 
 // src/app/(pos)/customers/[customerId]/page.jsx
-// Individual customer profile + history — Phase 10 Customer Detail.
+// Full customer profile page — reached via "View Full Profile" from CustomerDetailSheet.
 //
-// Reached by tapping "View Full Profile" in CustomerDetailSheet from
-// /customers. Since GetCustomer only supports lookup by mobile (no
-// lookup-by-party_id endpoint exists), this page resolves the customer
-// record from the cached full directory (useAllCustomers) by matching
-// customerId (party_id) against the route param.
+// TABS: Profile | Edit | Orders | Schemes | History | Points
+// DEFAULT TAB: Edit (so staff can immediately update customer details)
+// Edit form is pre-filled from Customer/Retrieve (full record, not list snapshot)
 //
-// Sections:
-//   - CustomerProfileCard   — name, mobile, email, address, masked PAN
-//   - CustomerOrderHistory  — useCustomerOrders (Order/List, client-filtered)
-//   - CustomerSchemeList    — useCustomerEnrollments (SchemeEnrollment/List, client-filtered)
+// Uses useRetrieveCustomer(partyId) — direct fetch by party_id.
+// No longer relies on useAllCustomers directory lookup (fragile, stale).
 
+import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Loader2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import CustomerProfileCard from '@/components/features/customers/CustomerProfileCard';
-import CustomerOrderHistory from '@/components/features/customers/CustomerOrderHistory';
-import CustomerSchemeList from '@/components/features/customers/CustomerSchemeList';
-import { useAllCustomers } from '@/hooks/customer/useAllCustomers';
-import { useCustomerOrders } from '@/hooks/customer/useCustomerOrders';
+import {
+  ArrowLeft, Loader2, Phone, Mail, MapPin, CreditCard,
+  ChevronDown, ClipboardList, BookOpen,
+} from 'lucide-react';
+import { useForm, Controller } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+
+import { Button }   from '@/components/ui/button';
+import { Input }    from '@/components/ui/input';
+import { Label }    from '@/components/ui/label';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+
+import { updateCustomerSchema }   from '@/validators/customerSchema';
+import { useRetrieveCustomer }    from '@/hooks/customer/useRetrieveCustomer';
+import { useUpdateCustomer }      from '@/hooks/customer/useUpdateCustomer';
+import { useCustomerOrders }      from '@/hooks/customer/useCustomerOrders';
 import { useCustomerEnrollments } from '@/hooks/customer/useCustomerEnrollments';
+import { useCustomerHistory }     from '@/hooks/customer/useCustomerHistory';
+import { useCustomerLoyalty }     from '@/hooks/customer/useCustomerLoyalty';
+import { useCountries, useStates, useCities } from '@/hooks/settings/useLocation';
+import APP_CONFIG from '@/constants/appConfig';
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function fmt(amount) {
+  if (amount == null) return '—';
+  return `${APP_CONFIG.CURRENCY.INR_SYMBOL}${Number(amount).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
+}
+
+function fmtDate(iso) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? iso : d.toLocaleDateString('en-IN');
+}
+
+function maskPan(pan) {
+  if (!pan || pan.length <= 4) return pan;
+  return `${'*'.repeat(pan.length - 4)}${pan.slice(-4)}`;
+}
+
+const STATUS_STYLES = {
+  paid:    'bg-emerald-50 text-emerald-700 border-emerald-200',
+  partial: 'bg-amber-50 text-amber-700 border-amber-200',
+  due:     'bg-red-50 text-red-700 border-red-200',
+};
+
+// ── Tab config ────────────────────────────────────────────────────────────────
+const TABS    = ['profile', 'edit', 'orders', 'schemes', 'history', 'points'];
+const TAB_LABELS = {
+  profile: 'Profile',
+  edit:    'Edit',
+  orders:  'Orders',
+  schemes: 'Schemes',
+  history: 'History',
+  points:  'Points',
+};
+
+// ── Shared primitives ─────────────────────────────────────────────────────────
+function TabLoading({ label }) {
+  return (
+    <div className="flex items-center justify-center gap-2 py-12 text-sm text-stone-500">
+      <Loader2 size={16} className="animate-spin" />{label}
+    </div>
+  );
+}
+function TabError({ label, onRetry }) {
+  return (
+    <div className="flex flex-col items-center gap-3 py-12 text-center">
+      <p className="text-sm text-destructive">{label}</p>
+      <Button type="button" variant="outline" size="sm" onClick={onRetry}>Retry</Button>
+    </div>
+  );
+}
+function TabEmpty({ icon, label }) {
+  return (
+    <div className="flex flex-col items-center gap-2 py-12 text-center text-stone-500">
+      {icon}<p className="text-sm">{label}</p>
+    </div>
+  );
+}
+
+// ── Profile Tab ───────────────────────────────────────────────────────────────
+function ProfileTab({ customer }) {
+  const { customerName, customerMobile, customerEmail, customerPan, customerAddress, raw } = customer;
+  const partyCode  = raw?.party_code && raw.party_code !== 'NA' ? raw.party_code : null;
+  const birthDate  = raw?.birth_date  ? fmtDate(raw.birth_date)  : null;
+  const anniversary= raw?.anniversary ? fmtDate(raw.anniversary) : null;
+  const maskedPan  = maskPan(customerPan);
+
+  return (
+    <div className="flex flex-col gap-3 text-sm">
+      {customerMobile && (
+        <div className="flex items-center gap-2 text-stone-600">
+          <Phone size={15} className="shrink-0 text-stone-400" />
+          {customerMobile}
+        </div>
+      )}
+      {customerEmail && (
+        <div className="flex items-center gap-2 text-stone-600">
+          <Mail size={15} className="shrink-0 text-stone-400" />
+          <span className="truncate">{customerEmail}</span>
+        </div>
+      )}
+      {customerAddress && (customerAddress.address || customerAddress.city) && (
+        <div className="flex items-start gap-2 text-stone-600">
+          <MapPin size={15} className="shrink-0 text-stone-400 mt-0.5" />
+          <span>
+            {[customerAddress.address, customerAddress.city, customerAddress.state, customerAddress.zip]
+              .filter(Boolean).join(', ')}
+          </span>
+        </div>
+      )}
+      {maskedPan && (
+        <div className="flex items-center gap-2 text-stone-600">
+          <CreditCard size={15} className="shrink-0 text-stone-400" />
+          PAN: {maskedPan}
+        </div>
+      )}
+      {partyCode && (
+        <p className="text-xs text-stone-400">Customer code: {partyCode}</p>
+      )}
+      {birthDate && (
+        <p className="text-xs text-stone-500">Birthday: {birthDate}</p>
+      )}
+      {anniversary && (
+        <p className="text-xs text-stone-500">Anniversary: {anniversary}</p>
+      )}
+    </div>
+  );
+}
+
+// ── Edit Tab ──────────────────────────────────────────────────────────────────
+function EditTab({ customer, onSaved }) {
+  const updateCustomer = useUpdateCustomer();
+  const raw = customer.raw;
+
+  const {
+    register, handleSubmit, control, watch, setValue, reset,
+    formState: { errors, isDirty },
+  } = useForm({
+    resolver: zodResolver(updateCustomerSchema),
+    defaultValues: {
+      party_name:  raw?.party_name  ?? '',
+      mobile:      raw?.mobile      ?? '',
+      email:       raw?.email && raw.email !== 'NA' ? raw.email : '',
+      pan_no:      raw?.pan_no && raw.pan_no !== 'NA' ? raw.pan_no : '',
+      address:     raw?.address     ?? '',
+      address_1:   raw?.address_1   ?? '',
+      country_id:  raw?.country_id  ?? null,
+      state_id:    raw?.state_id    ?? null,
+      city_id:     raw?.city_id     ?? null,
+      pin_code:    raw?.pin_code ? String(raw.pin_code) : '',
+    },
+  });
+
+  // Re-fill if customer raw changes (e.g. after save + refetch)
+  useEffect(() => {
+    reset({
+      party_name:  raw?.party_name  ?? '',
+      mobile:      raw?.mobile      ?? '',
+      email:       raw?.email && raw.email !== 'NA' ? raw.email : '',
+      pan_no:      raw?.pan_no && raw.pan_no !== 'NA' ? raw.pan_no : '',
+      address:     raw?.address     ?? '',
+      address_1:   raw?.address_1   ?? '',
+      country_id:  raw?.country_id  ?? null,
+      state_id:    raw?.state_id    ?? null,
+      city_id:     raw?.city_id     ?? null,
+      pin_code:    raw?.pin_code ? String(raw.pin_code) : '',
+    });
+  }, [raw, reset]);
+
+  const countryId = watch('country_id');
+  const stateId   = watch('state_id');
+
+  // Only reset children when parent actually changes from the loaded value
+  useEffect(() => {
+    if (countryId !== raw?.country_id) {
+      setValue('state_id', null);
+      setValue('city_id', null);
+    }
+  }, [countryId, raw?.country_id, setValue]);
+
+  useEffect(() => {
+    if (stateId !== raw?.state_id) {
+      setValue('city_id', null);
+    }
+  }, [stateId, raw?.state_id, setValue]);
+
+  const { countries, isLoading: countriesLoading } = useCountries();
+  const { states,    isLoading: statesLoading }    = useStates(countryId);
+  const { cities,    isLoading: citiesLoading }    = useCities(stateId);
+
+  const selectedCountry = countries.find((c) => c.country_id === countryId);
+  const selectedState   = states.find((s) => s.state_id === stateId);
+  const selectedCity    = cities.find((c) => c.city_id === watch('city_id'));
+
+  const onSubmit = async (formChanges) => {
+    await updateCustomer.mutateAsync({
+      partyId:     customer.customerId,
+      originalRaw: raw,
+      formChanges,
+    });
+    onSaved?.();
+  };
+
+  const LocationDropdown = ({ name, items, idKey, labelKey, placeholder, disabledMsg, disabled, isLoading: loading }) => (
+    <Controller name={name} control={control} render={({ field }) => {
+      const selected = items.find((i) => i[idKey] === field.value);
+      return (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild disabled={disabled}>
+            <button
+              type="button"
+              disabled={disabled}
+              className="flex h-11 w-full items-center justify-between rounded-lg border border-input bg-background px-3 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <span className={selected ? 'text-foreground' : 'text-muted-foreground'}>
+                {loading ? 'Loading…' : selected ? selected[labelKey] : (disabled ? disabledMsg : placeholder)}
+              </span>
+              <ChevronDown size={14} className="text-muted-foreground shrink-0" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="max-h-56 overflow-y-auto w-[--radix-dropdown-menu-trigger-width]">
+            {items.length === 0 && (
+              <div className="px-3 py-2 text-sm text-muted-foreground">
+                {loading ? 'Loading…' : 'No options found'}
+              </div>
+            )}
+            {items.map((item) => (
+              <DropdownMenuItem key={item[idKey]} onSelect={() => field.onChange(item[idKey])}>
+                {item[labelKey]}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      );
+    }} />
+  );
+
+  return (
+    <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="ep_name">Full name <span className="text-destructive">*</span></Label>
+        <Input id="ep_name" {...register('party_name')} className="h-11" />
+        {errors.party_name && <p className="text-sm text-destructive">{errors.party_name.message}</p>}
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="ep_mobile">Mobile <span className="text-destructive">*</span></Label>
+        <Input id="ep_mobile" type="tel" inputMode="numeric" {...register('mobile')} className="h-11" />
+        {errors.mobile && <p className="text-sm text-destructive">{errors.mobile.message}</p>}
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="ep_email">Email</Label>
+        <Input id="ep_email" type="email" {...register('email')} className="h-11" />
+        {errors.email && <p className="text-sm text-destructive">{errors.email.message}</p>}
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="ep_pan">PAN</Label>
+        <Input id="ep_pan" {...register('pan_no')} className="h-11" style={{ textTransform: 'uppercase' }} />
+        {errors.pan_no && <p className="text-sm text-destructive">{errors.pan_no.message}</p>}
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label>Address</Label>
+        <Input {...register('address')} className="h-11" placeholder="Address line 1" />
+        <Input {...register('address_1')} className="h-11" placeholder="Address line 2 (optional)" />
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label>Country</Label>
+        <LocationDropdown
+          name="country_id" items={countries} idKey="country_id" labelKey="country_name"
+          placeholder="Select country" isLoading={countriesLoading}
+        />
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label>State</Label>
+        <LocationDropdown
+          name="state_id" items={states} idKey="state_id" labelKey="state_name"
+          placeholder="Select state" disabled={!countryId} disabledMsg="Select country first"
+          isLoading={statesLoading}
+        />
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label>City</Label>
+        <LocationDropdown
+          name="city_id" items={cities} idKey="city_id" labelKey="city_name"
+          placeholder="Select city" disabled={!stateId} disabledMsg="Select state first"
+          isLoading={citiesLoading}
+        />
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="ep_pin">PIN Code</Label>
+        <Input id="ep_pin" type="text" inputMode="numeric" {...register('pin_code')} className="h-11" maxLength={6} />
+        {errors.pin_code && <p className="text-sm text-destructive">{errors.pin_code.message}</p>}
+      </div>
+
+      <Button type="submit" disabled={updateCustomer.isPending || !isDirty} className="h-11 mt-1">
+        {updateCustomer.isPending ? 'Saving…' : 'Save Changes'}
+      </Button>
+    </form>
+  );
+}
+
+// ── Orders Tab ────────────────────────────────────────────────────────────────
+function OrdersTab({ customerId }) {
+  const { orders, isLoading, isError, refetch } = useCustomerOrders({ customerId });
+
+  if (isLoading) return <TabLoading label="Loading orders…" />;
+  if (isError)   return <TabError label="Failed to load orders." onRetry={refetch} />;
+  if (!orders.length) return <TabEmpty icon={<ClipboardList size={28} className="text-stone-300" />} label="No orders found." />;
+
+  return (
+    <div className="flex flex-col gap-2">
+      {orders.map((order, idx) => (
+        <div key={order.orderId ?? idx} className="flex items-center justify-between gap-3 rounded-lg border border-stone-100 px-3 py-2.5">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="text-sm font-medium text-stone-800 truncate">{order.orderNo ?? `#${order.orderId}`}</p>
+              <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${STATUS_STYLES[order.status] ?? 'bg-stone-50 text-stone-600 border-stone-200'}`}>
+                {order.status}
+              </span>
+            </div>
+            {order.orderDate && <p className="text-xs text-stone-400 mt-0.5">{fmtDate(order.orderDate)}</p>}
+          </div>
+          <div className="text-right shrink-0">
+            {order.totalAmount != null && <p className="text-sm font-semibold text-stone-800">{fmt(order.totalAmount)}</p>}
+            {order.balanceAmount > 0 && <p className="text-xs text-red-500">Due {fmt(order.balanceAmount)}</p>}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Schemes Tab ───────────────────────────────────────────────────────────────
+function SchemesTab({ customerId }) {
+  const { enrollments, isLoading, isError, refetch } = useCustomerEnrollments({ customerId });
+
+  if (isLoading) return <TabLoading label="Loading schemes…" />;
+  if (isError)   return <TabError label="Failed to load schemes." onRetry={refetch} />;
+  if (!enrollments.length) return <TabEmpty icon={<BookOpen size={28} className="text-stone-300" />} label="No scheme enrollments." />;
+
+  return (
+    <div className="flex flex-col gap-2">
+      {enrollments.map((e, idx) => (
+        <div key={e.enrollmentId ?? idx} className="flex items-center justify-between gap-3 rounded-lg border border-stone-100 px-3 py-2.5">
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-stone-800 truncate">{e.schemeName ?? 'Scheme'}</p>
+            <p className="text-xs text-stone-400 mt-0.5">
+              {fmt(e.schemeAmount)}/month · {e.tenure} months
+              {e.enrolledDate ? ` · ${fmtDate(e.enrolledDate)}` : ''}
+            </p>
+            {e.investedAmount != null && (
+              <p className="text-xs text-stone-500 mt-0.5">Paid: {fmt(e.investedAmount)}</p>
+            )}
+          </div>
+          <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${e.status === 1 ? 'bg-green-100 text-green-700' : 'bg-stone-100 text-stone-500'}`}>
+            {e.status === 1 ? 'Active' : 'Inactive'}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── History Tab ───────────────────────────────────────────────────────────────
+function HistoryTab({ customerId }) {
+  const { invoiceTotal, buybackTotal, exchangeTotal, creditBalance, invoices, isLoading, isError, refetch } = useCustomerHistory(customerId);
+
+  if (isLoading) return <TabLoading label="Loading history…" />;
+  if (isError)   return <TabError label="Failed to load history." onRetry={refetch} />;
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="grid grid-cols-2 gap-2">
+        {[
+          { label: 'Total Purchases', value: fmt(invoiceTotal) },
+          { label: 'Credit Balance',  value: fmt(creditBalance) },
+          { label: 'Exchange Value',  value: fmt(exchangeTotal) },
+          { label: 'Buy Back Value',  value: fmt(buybackTotal) },
+        ].map(({ label, value }) => (
+          <div key={label} className="rounded-lg border border-stone-100 p-3">
+            <p className="text-xs text-stone-400">{label}</p>
+            <p className="text-sm font-semibold text-stone-800 mt-0.5">{value}</p>
+          </div>
+        ))}
+      </div>
+      {invoices.length > 0 && (
+        <div className="flex flex-col gap-1.5 mt-1">
+          <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Recent Invoices</p>
+          {invoices.slice(0, 10).map((inv, idx) => (
+            <div key={idx} className="flex justify-between items-center text-sm rounded-lg border border-stone-100 px-3 py-2">
+              <div>
+                <p className="text-stone-700 font-medium">{inv.document_no ?? `Invoice #${idx + 1}`}</p>
+                {inv.document_date && <p className="text-xs text-stone-400">{fmtDate(inv.document_date)}</p>}
+              </div>
+              <span className="font-semibold text-stone-800">{fmt(inv.net_amount ?? inv.sub_total)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Points Tab ────────────────────────────────────────────────────────────────
+function PointsTab({ customerId }) {
+  const { availablePoints, loyaltyHistory, isLoading, isError, refetch } = useCustomerLoyalty(customerId);
+
+  if (isLoading) return <TabLoading label="Loading points…" />;
+  if (isError)   return <TabError label="Failed to load loyalty points." onRetry={refetch} />;
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="rounded-xl border border-stone-100 bg-stone-50 p-4 text-center">
+        <p className="text-xs text-stone-400 uppercase tracking-wide">Available Points</p>
+        <p className="text-3xl font-bold text-primary mt-1">{availablePoints.toLocaleString('en-IN')}</p>
+      </div>
+      {loyaltyHistory.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide">History</p>
+          {loyaltyHistory.slice(0, 20).map((h, idx) => (
+            <div key={idx} className="flex justify-between items-center text-sm rounded-lg border border-stone-100 px-3 py-2">
+              <span className="text-stone-500 text-xs">{fmtDate(h.document_date)}</span>
+              <div className="text-right">
+                {h.points_earned > 0 && <span className="text-emerald-600 font-medium">+{h.points_earned}</span>}
+                {h.points_redeemed > 0 && <span className="text-red-500 font-medium ml-2">-{h.points_redeemed}</span>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Main Page ─────────────────────────────────────────────────────────────────
 export default function CustomerDetailPage() {
-  const params = useParams();
-  const router = useRouter();
-  const customerId = params?.customerId;
+  const params     = useParams();
+  const router     = useRouter();
+  const partyId    = Number(params?.customerId);
 
-  const { allCustomers, isLoading: isLoadingCustomers, isFetching } = useAllCustomers();
+  // Default to Edit tab so staff can immediately update details
+  const [activeTab, setActiveTab] = useState('edit');
 
-  const customer = allCustomers.find(
-    (c) => String(c.customerId) === String(customerId)
-  ) ?? null;
-
-  const {
-    orders,
-    isLoading: isLoadingOrders,
-    isError: isOrdersError,
-    refetch: refetchOrders,
-  } = useCustomerOrders({
-    customerId: customer?.customerId,
-    customerMobile: customer?.customerMobile,
-    enabled: !!customer,
+  // Fetch full customer record directly by party_id
+  const { customer, isLoading, isError, refetch } = useRetrieveCustomer(partyId, {
+    enabled: !!partyId,
   });
 
-  const {
-    enrollments,
-    isLoading: isLoadingEnrollments,
-    isError: isEnrollmentsError,
-    refetch: refetchEnrollments,
-  } = useCustomerEnrollments({
-    customerId: customer?.customerId,
-    customerMobile: customer?.customerMobile,
-    enabled: !!customer,
-  });
+  const handleSaved = () => {
+    refetch();
+  };
 
   return (
     <div className="flex flex-col gap-4 max-w-2xl mx-auto w-full">
-      <div className="relative -mx-4 -mt-4 flex items-center gap-2 bg-background px-4 pt-4 pb-2 md:-mx-6 md:-mt-6 md:px-6 md:pt-6">
+
+      {/* Header */}
+      <div className="flex items-center gap-2">
         <Button
           type="button"
           variant="ghost"
           size="icon"
           onClick={() => router.push('/customers')}
           aria-label="Back to customers"
-          className="h-9 w-9 -ml-2"
+          className="h-9 w-9 -ml-2 shrink-0"
         >
           <ArrowLeft size={18} aria-hidden="true" />
         </Button>
-        <h1 className="text-base font-bold text-stone-800">Customer Profile</h1>
+        <h1 className="text-base font-bold text-stone-800 truncate">
+          {customer?.customerName ?? 'Customer Profile'}
+        </h1>
       </div>
 
-      {isLoadingCustomers && allCustomers.length === 0 ? (
+      {/* Loading */}
+      {isLoading && (
         <div className="flex items-center justify-center gap-2 py-16 text-sm text-stone-500">
-          <Loader2 size={16} className="animate-spin" aria-hidden="true" />
+          <Loader2 size={16} className="animate-spin" />
           Loading customer…
         </div>
-      ) : !customer ? (
+      )}
+
+      {/* Error */}
+      {isError && !isLoading && (
         <div className="flex flex-col items-center gap-3 py-16 text-center">
-          <p className="text-sm text-stone-500">Customer not found.</p>
-          {isFetching && (
-            <p className="text-xs text-stone-400 flex items-center gap-1.5">
-              <Loader2 size={12} className="animate-spin" aria-hidden="true" />
-              Still loading the customer directory…
-            </p>
-          )}
-          <Button type="button" variant="outline" onClick={() => router.push('/customers')}>
+          <p className="text-sm text-destructive">Failed to load customer.</p>
+          <Button type="button" variant="outline" onClick={refetch}>Retry</Button>
+          <Button type="button" variant="ghost" size="sm" onClick={() => router.push('/customers')}>
             Back to Customers
           </Button>
         </div>
-      ) : (
-        <>
-          <CustomerProfileCard customer={customer} />
+      )}
 
-          <CustomerOrderHistory
-            orders={orders}
-            isLoading={isLoadingOrders}
-            isError={isOrdersError}
-            refetch={refetchOrders}
-          />
+      {/* Content */}
+      {customer && !isLoading && (
+        <div className="rounded-xl border border-stone-200 bg-white p-4 flex flex-col gap-4">
 
-          <CustomerSchemeList
-            enrollments={enrollments}
-            isLoading={isLoadingEnrollments}
-            isError={isEnrollmentsError}
-            refetch={refetchEnrollments}
-          />
-        </>
+          {/* Customer name + code header */}
+          <div>
+            <h2 className="text-base font-bold text-stone-800">{customer.customerName}</h2>
+            {customer.raw?.party_code && customer.raw.party_code !== 'NA' && (
+              <p className="text-xs text-stone-400 mt-0.5">Code: {customer.raw.party_code}</p>
+            )}
+          </div>
+
+          {/* Tab bar */}
+          <div className="flex gap-1 overflow-x-auto -mx-1 px-1 pb-1 scrollbar-none">
+            {TABS.map((tab) => (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => setActiveTab(tab)}
+                className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+                  activeTab === tab
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-stone-100 text-stone-500 hover:bg-stone-200'
+                }`}
+              >
+                {TAB_LABELS[tab]}
+              </button>
+            ))}
+          </div>
+
+          {/* Tab content */}
+          <div>
+            {activeTab === 'profile' && <ProfileTab customer={customer} />}
+            {activeTab === 'edit'    && <EditTab customer={customer} onSaved={handleSaved} />}
+            {activeTab === 'orders'  && <OrdersTab customerId={customer.customerId} />}
+            {activeTab === 'schemes' && <SchemesTab customerId={customer.customerId} />}
+            {activeTab === 'history' && <HistoryTab customerId={customer.customerId} />}
+            {activeTab === 'points'  && <PointsTab customerId={customer.customerId} />}
+          </div>
+
+        </div>
       )}
     </div>
   );

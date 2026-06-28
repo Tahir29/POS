@@ -1,39 +1,49 @@
 // src/services/customerService.js
-// Customer lookup and creation — Phase 9a (Customer Session).
-// All calls use axiosInstance; interceptors handle auth.
-// Source of truth: API_MAPPING.md Section 9
+// Customer lookup, creation, and update — all via native POS endpoints.
+//
+// RESPONSE CONVENTION:
+//   getCustomer()      → raw AxiosResponse (useCustomerLookup reads .data.Entities)
+//   retrieveCustomer() → raw AxiosResponse (useRetrieveCustomer reads .data.Entity)
+//   getCustomerList()  → response.data     (useCustomerList/useAllCustomers read .Entities)
+//   createCustomer()   → raw AxiosResponse (useCreateCustomer reads .data.EntityId)
+//   updateCustomer()   → raw AxiosResponse
 
 import axiosInstance from '@/lib/axios/axiosInstance';
 import API from '@/constants/apiEndpoints';
 
-/**
- * Look up a customer by mobile number.
- * @param {string} mobile - 10-digit mobile number, digits only
- * @returns {Promise<import('axios').AxiosResponse>}
- */
+// ─── LOOKUP ───────────────────────────────────────────────────────────────────
+
 export function getCustomer(mobile) {
   return axiosInstance.post(API.CUSTOMERS.GET_CUSTOMER, { mobile });
 }
 
-/**
- * Create a new customer record.
- * @param {object} payload - matches API_MAPPING.md Section 9.2 request body
- * @returns {Promise<import('axios').AxiosResponse>}
- */
-export function createCustomer(payload) {
-  return axiosInstance.post(API.CUSTOMERS.CREATE_CUSTOMER, payload);
+export function retrieveCustomer(partyId) {
+  return axiosInstance.post(API.CUSTOMERS.RETRIEVE, { EntityId: partyId });
 }
 
 /**
- * Fetches a paginated list of customers for the active store.
- * Maps to: POST Services/POS/Customer/List
- * @param {{ take?: number, skip?: number, companyId: number }} params
- * @returns {Promise<import('axios').AxiosResponse>}
+ * Returns response.data — hooks read .Entities directly.
  */
-export function getCustomerList({ take = 50, skip = 0, companyId }) {
-  return axiosInstance.post(API.CUSTOMERS.LIST, {
-    Take: take,
-    Skip: skip,
+export async function getCustomerList({ take = 50, skip = 0, companyId }) {
+  const response = await axiosInstance.post(API.CUSTOMERS.LIST, {
+    Take:       take,
+    Skip:       skip,
     company_id: companyId,
+  });
+  return response.data;  // ← unwrapped so hooks do data?.Entities not data?.data?.Entities
+}
+
+// ─── CREATE ───────────────────────────────────────────────────────────────────
+
+export function createCustomer(payload) {
+  return axiosInstance.post(API.CUSTOMERS.CREATE, { Entity: payload });
+}
+
+// ─── UPDATE ───────────────────────────────────────────────────────────────────
+
+export function updateCustomer(partyId, payload) {
+  return axiosInstance.post(API.CUSTOMERS.UPDATE, {
+    EntityId: partyId,
+    Entity:   payload,
   });
 }
