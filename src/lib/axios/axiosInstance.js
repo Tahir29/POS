@@ -7,9 +7,22 @@
 import axios from 'axios';
 import { attachInterceptors } from './interceptors';
 
+// ── SEC-007: BASE URL ASSERTION ───────────────────────────────
+// Fail loudly at startup if the env var is missing or empty.
+// A silent undefined baseURL would let requests go to the wrong host
+// or fail with cryptic CORS/network errors in production.
+const BASE_URL = process.env.NEXT_PUBLIC_ORNAVERSE_BASE_URL;
+
+if (!BASE_URL) {
+  throw new Error(
+    '[Lucira POS] NEXT_PUBLIC_ORNAVERSE_BASE_URL is not set. ' +
+    'Add it to .env.local and restart the dev server.'
+  );
+}
+
 // ── CREATE INSTANCE ───────────────────────────────────────────
 const axiosInstance = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_ORNAVERSE_BASE_URL,
+  baseURL: BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },
