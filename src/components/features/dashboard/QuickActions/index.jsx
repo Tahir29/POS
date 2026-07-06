@@ -1,15 +1,30 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { ShoppingBag, Users, ClipboardList, BookOpen } from 'lucide-react';
+import {
+  ShoppingBag,
+  RotateCcw,
+  ArrowLeftRight,
+  Gem,
+  Coins,
+  BookOpen,
+  ClipboardCheck,
+  BarChart2,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 // ── QUICK ACTION CONFIG ───────────────────────────────────────
+//
+// Expanded from 4 to 8 tiles to match the new dashboard design and the
+// already-agreed dashboard plan (post-sale modules: returns, exchange,
+// buyback, URD purchase, scheme payment, day close). All routes below
+// were confirmed to already exist in src/app/(pos)/ before wiring —
+// no new pages required.
+//
+// "Scheme Payment" links to /schemes (no dedicated payment sub-route
+// exists yet) rather than /schemes/enroll, since paying an existing
+// enrollment is a different action from enrolling a new one.
 
-/**
- * Central config for all quick-action tiles.
- * Adding a new action = adding one entry here. No JSX changes needed.
- */
 const QUICK_ACTIONS = [
   {
     id:          'new-sale',
@@ -20,43 +35,65 @@ const QUICK_ACTIONS = [
     accent:      'bg-primary text-primary-foreground hover:bg-primary/90',
   },
   {
-    id:          'customer-lookup',
-    label:       'Customer',
-    description: 'Find or create',
-    icon:        Users,
-    href:        '/customers',
+    id:          'new-return',
+    label:       'New Return',
+    description: 'Process a return',
+    icon:        RotateCcw,
+    href:        '/returns',
     accent:      'bg-card text-foreground border border-border hover:bg-accent',
   },
   {
-    id:          'todays-orders',
-    label:       "Today's Orders",
-    description: 'View & manage',
-    icon:        ClipboardList,
-    href:        '/orders',
+    id:          'exchange',
+    label:       'Exchange',
+    description: 'Item exchange',
+    icon:        ArrowLeftRight,
+    href:        '/exchange',
     accent:      'bg-card text-foreground border border-border hover:bg-accent',
   },
   {
-    id:          'scheme-enroll',
-    label:       'Scheme Enroll',
-    description: 'Enroll customer',
+    id:          'buyback',
+    label:       'Buyback',
+    description: 'Buy from customer',
+    icon:        Gem,
+    href:        '/buyback',
+    accent:      'bg-card text-foreground border border-border hover:bg-accent',
+  },
+  {
+    id:          'urd-purchase',
+    label:       'URD Purchase',
+    description: 'Record purchase',
+    icon:        Coins,
+    href:        '/urd-purchase',
+    accent:      'bg-card text-foreground border border-border hover:bg-accent',
+  },
+  {
+    id:          'scheme-payment',
+    label:       'Scheme Payment',
+    description: 'Collect instalment',
     icon:        BookOpen,
-    href:        '/schemes/enroll',
+    href:        '/schemes',
+    accent:      'bg-card text-foreground border border-border hover:bg-accent',
+  },
+  {
+    id:          'day-close',
+    label:       'Day Close',
+    description: 'Close today',
+    icon:        ClipboardCheck,
+    href:        '/daily-closing',
+    accent:      'bg-card text-foreground border border-border hover:bg-accent',
+  },
+  {
+    id:          'reports',
+    label:       'Reports',
+    description: 'View reports',
+    icon:        BarChart2,
+    href:        '/reports',
     accent:      'bg-card text-foreground border border-border hover:bg-accent',
   },
 ];
 
 // ── QUICK ACTION BUTTON ───────────────────────────────────────
 
-/**
- * QuickActionButton
- *
- * A single tappable tile for a primary POS action.
- * Meets the 44×44px minimum touch target requirement.
- * Uses router.push for navigation (not <Link>) so the component
- * remains fully controllable and testable.
- *
- * @param {{ action: object, onClick: Function }} props
- */
 function QuickActionButton({ action, onClick }) {
   const Icon = action.icon;
 
@@ -66,21 +103,16 @@ function QuickActionButton({ action, onClick }) {
       onClick={() => onClick(action.href)}
       aria-label={`${action.label} — ${action.description}`}
       className={cn(
-        // Layout
-        'flex flex-col items-center justify-center gap-2',
-        'rounded-xl p-4 min-h-[96px] w-full',
-        // Transition
+        'flex flex-col items-center justify-center gap-1.5',
+        'rounded-lg p-2.5 min-h-[76px] w-full',
         'transition-all duration-150 active:scale-[0.97]',
-        // Focus ring
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-        // Accent (per-action color)
         action.accent
       )}
     >
-      <Icon size={24} aria-hidden="true" className="shrink-0" />
+      <Icon size={18} aria-hidden="true" className="shrink-0" />
       <div className="text-center">
-        <p className="text-sm font-semibold leading-tight">{action.label}</p>
-        <p className="text-xs opacity-70 leading-tight mt-0.5">{action.description}</p>
+        <p className="text-[11px] font-semibold leading-tight">{action.label}</p>
       </div>
     </button>
   );
@@ -88,14 +120,6 @@ function QuickActionButton({ action, onClick }) {
 
 // ── QUICK ACTION GRID ─────────────────────────────────────────
 
-/**
- * QuickActionGrid
- *
- * Renders the 2×2 grid of quick-action tiles for the dashboard.
- * On wider tablets the grid spreads to 4 columns.
- *
- * No props required — all config comes from QUICK_ACTIONS above.
- */
 export default function QuickActionGrid() {
   const router = useRouter();
 
@@ -104,15 +128,15 @@ export default function QuickActionGrid() {
   };
 
   return (
-    <section aria-labelledby="quick-actions-heading">
+    <section aria-labelledby="quick-actions-heading" className="rounded-xl border border-border bg-card p-5">
       <h2
         id="quick-actions-heading"
-        className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3"
+        className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3"
       >
         Quick Actions
       </h2>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-4 gap-2.5">
         {QUICK_ACTIONS.map((action) => (
           <QuickActionButton
             key={action.id}
