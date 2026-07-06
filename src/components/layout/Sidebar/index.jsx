@@ -3,47 +3,13 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import Logo from '@/components/shared/Logo';
-import {
-  LayoutDashboard,
-  ShoppingBag,
-  ShoppingCart,
-  Users,
-  ClipboardList,
-  FileText,
-  BookOpen,
-  ArrowLeftRight,
-  Bookmark,
-  Settings,
-  BarChart2,
-  ChevronLeft,
-  ChevronRight,
-} from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useSidebar } from '@/hooks/ui/useSidebar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
-
-
-
-// ── Nav config ────────────────────────────────────────────────────────────────
-
-const NAV_ITEMS = [
-  { label: 'Dashboard',    href: '/dashboard',    icon: LayoutDashboard },
-  { label: 'Catalog',      href: '/catalog',      icon: ShoppingBag     },
-  { label: 'Cart',         href: '/cart',         icon: ShoppingCart    },
-  { label: 'Orders',       href: '/orders',       icon: ClipboardList   },
-  { label: 'Invoices',     href: '/invoices',     icon: FileText        },
-  { label: 'Customers',    href: '/customers',    icon: Users           },
-  { label: 'Schemes',      href: '/schemes',      icon: BookOpen        },
-  // { label: 'Transfers',    href: '/transfers',    icon: ArrowLeftRight  },
-  // { label: 'Reservations', href: '/reservations', icon: Bookmark, comingSoon: true },
-  { label: 'Reports',      href: '/reports',      icon: BarChart2       },
-];
-
-const BOTTOM_ITEMS = [
-  { label: 'Settings', href: '/settings', icon: Settings },
-];
+import { NAV_ITEMS, BOTTOM_ITEMS } from '@/constants/navItems';
 
 // ── SidebarNavItem ────────────────────────────────────────────────────────────
 

@@ -26,6 +26,9 @@ import { Button } from '@/components/ui/button';
 import { Input }  from '@/components/ui/input';
 import { Label }  from '@/components/ui/label';
 
+// Static build tag shown on the dark panel — matches package.json app version.
+// Update alongside releases; not wired to a dynamic source by design.
+
 // ── RATE LIMIT CONSTANTS ──────────────────────────────────────
 const MAX_ATTEMPTS    = 5;
 const LOCKOUT_MS      = 5 * 60 * 1000; // 5 minutes
@@ -116,18 +119,39 @@ export default function LoginForm() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <div className="w-full max-w-sm">
+    <div className="flex min-h-screen bg-background">
 
-        {/* Brand header */}
-        <div className="mb-10 flex flex-col items-center gap-3">
-          <Logo variant="full" width={140} height={44} priority />
+      {/* ── Left — dark brand panel ─────────────────────────────────── */}
+      <div className="relative hidden w-2/5 shrink-0 flex-col overflow-hidden bg-primary sm:flex">
+        {/* Watermark "L" — brand atmosphere, not decorative noise */}
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute -bottom-16 right-8 font-heading text-[280px] leading-none opacity-4 select-none"
+        >
+          <Logo variant="icon" color="white" width={250} height={68} priority />
+        </span>
+
+        <div className="relative flex flex-1 flex-col items-center justify-center gap-3 px-8">
+          <Logo variant="full" color="white" width={150} height={48} priority />
+          <div className="mt-1 h-px w-10 bg-accent" aria-hidden="true" />
+          <p className="font-heading text-xl text-primary-foreground">Point of Sale</p>
         </div>
+      </div>
 
-        {/* Card */}
-        <div className="rounded-2xl border border-border bg-card px-8 py-10 shadow-sm">
-          <h2 className="mb-6 text-lg font-medium text-foreground">
-            Sign in to your account
+      {/* ── Right — sign-in panel ───────────────────────────────────── */}
+      <div className="flex flex-1 items-center justify-center px-6 py-10 sm:px-12">
+        <div className="w-full max-w-sm">
+
+          {/* Logo shown only when the dark panel is hidden (small screens) */}
+          <div className="mb-8 flex justify-center sm:hidden">
+            <Logo variant="full" width={130} height={42} priority />
+          </div>
+
+          <p className="text-xs font-semibold tracking-[0.15em] text-accent">
+            WELCOME BACK
+          </p>
+          <h2 className="mt-2 mb-8 font-heading text-3xl text-foreground">
+            Sign in to continue
           </h2>
 
           {/* SEC-004: Lockout banner */}
@@ -146,7 +170,10 @@ export default function LoginForm() {
 
               {/* Username */}
               <div className="space-y-1.5">
-                <Label htmlFor="username" className="text-sm font-medium text-foreground">
+                <Label
+                  htmlFor="username"
+                  className="text-xs font-semibold tracking-[0.1em] text-muted-foreground uppercase"
+                >
                   Username
                 </Label>
                 <Input
@@ -170,7 +197,10 @@ export default function LoginForm() {
 
               {/* Password */}
               <div className="space-y-1.5">
-                <Label htmlFor="password" className="text-sm font-medium text-foreground">
+                <Label
+                  htmlFor="password"
+                  className="text-xs font-semibold tracking-[0.1em] text-muted-foreground uppercase"
+                >
                   Password
                 </Label>
                 <div className="relative">
@@ -223,8 +253,8 @@ export default function LoginForm() {
                   </span>
                 ) : (
                   <span className="flex items-center gap-2">
+                    Sign In
                     <LogIn size={16} aria-hidden="true" />
-                    Sign in
                   </span>
                 )}
               </Button>
@@ -238,13 +268,8 @@ export default function LoginForm() {
 
             </div>
           </form>
+
         </div>
-
-        {/* Footer */}
-        <p className="mt-6 text-center text-xs text-muted-foreground">
-          Lucira Jewelry &copy; {new Date().getFullYear()}
-        </p>
-
       </div>
     </div>
   );
