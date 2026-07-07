@@ -33,8 +33,8 @@ function CategoryChip({ label, isActive, onClick }) {
         'border transition-all duration-150 whitespace-nowrap',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1',
         isActive
-          ? 'bg-primary border-primary text-white shadow-sm'
-          : 'bg-white border-border text-stone-600 hover:border-primary/50 hover:text-primary',
+          ? 'bg-accent border-accent text-white shadow-sm'
+          : 'bg-white border-border text-stone-600 hover:border-accent/50 hover:text-accent',
       ].join(' ')}
     >
       {label}

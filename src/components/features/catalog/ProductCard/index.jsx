@@ -2,15 +2,19 @@
 
 // src/components/features/catalog/ProductCard/index.jsx
 //
-// Confirmed ProductCatalog/List fields:
-//   item_id, item_code, item_name, has_stock (bool),
-//   weight, net_weight, metal_id, karat_id, type_id
-//   image (null for most items on UAT)
+// SCHEMA (confirmed v1.json, see catalogService.js header comment):
+//   ProductCatalogRow already includes price + compare_price directly —
+//   no per-card detail fetch needed. The older note claiming price wasn't
+//   available on this endpoint was stale (pre-rewire) and has been
+//   corrected here.
 //
-// PRICE NOTE: item_rate / compare_price are NOT returned by ProductCatalog/List.
-// They are only available from Items/Retrieve (detail endpoint).
-// Price is shown on the product detail page (/products/[itemId]).
-// Card shows: metal type (from metal_id) + net weight as the info line.
+// Fields used: item_id, item_code, item_name, has_stock, weight, net_weight,
+// metal_id, karat_id, image/image_1, price, compare_price.
+//
+// NOT rendered (no data source at this endpoint, confirmed during audit):
+//   - Bestseller / Fast Shipping / New Arrival tags — skipped per decision
+//   - Diamond weight (ct) — not a confirmed ProductCatalogRow field
+//   - Multiple variant/color dots — only ONE dot for the item's own metal_id
 
 import { useState }        from 'react';
 import Image               from 'next/image';
@@ -18,20 +22,18 @@ import { useRouter }       from 'next/navigation';
 import { resolveImageSrc } from '@/lib/resolveImageSrc';
 import APP_CONFIG          from '@/constants/appConfig';
 
-// ── Metal type label ──────────────────────────────────────────────────────────
-// Maps OrnaVerse metal_id → display name using APP_CONFIG.METAL_TYPES
+// ── Metal type label + swatch color ───────────────────────────────────────────
+// Swatch colors are a presentation mapping (not fabricated data) — the
+// metal_id itself is real; this just gives each metal a recognizable dot.
 const METAL_ID_TO_NAME = Object.fromEntries(
   Object.entries(APP_CONFIG.METAL_TYPES).map(([name, id]) => [
     id,
-    name.charAt(0) + name.slice(1).toLowerCase(), // "GOLD" → "Gold"
+    name.charAt(0) + name.slice(1).toLowerCase(),
   ])
 );
 
-function getMetalLabel(metal_id, karat_id) {
-  const metalName = metal_id ? METAL_ID_TO_NAME[metal_id] : null;
-  // karat_id has no name mapping available from this endpoint
-  // Display as e.g. "Silver" or "Gold" — karat shown when available from detail
-  return metalName ?? null;
+function getMetalLabel(metal_id) {
+  return metal_id ? METAL_ID_TO_NAME[metal_id] ?? null : null;
 }
 
 // ── Weight formatter ──────────────────────────────────────────────────────────
@@ -40,6 +42,12 @@ function formatWeight(grams) {
   const n = Number(grams);
   if (isNaN(n) || n === 0) return null;
   return `${n.toFixed(3)} g`;
+}
+
+// ── Price formatter ────────────────────────────────────────────────────────────
+function formatINR(value) {
+  if (value == null) return null;
+  return `₹${Number(value).toLocaleString('en-IN')}`;
 }
 
 // ── No-image placeholder ──────────────────────────────────────────────────────
@@ -98,18 +106,21 @@ export default function ProductCard({ product, showStockBadge = false }) {
     weight,
     net_weight,
     metal_id,
-    karat_id,
     image,
     image_url,
     image_1,
+    price,
+    compare_price,
   } = product;
 
   const inStock      = has_stock === true;
-  const metalLabel   = getMetalLabel(metal_id, karat_id);
+  const metalLabel   = getMetalLabel(metal_id);
   const weightLabel  = formatWeight(net_weight ?? weight ?? null);
 
-  // Build the info line: "Silver · 1.598 g" or just "1.598 g"
   const infoLine = [metalLabel, weightLabel].filter(Boolean).join(' · ') || null;
+
+  const hasDiscount = compare_price != null && price != null && compare_price > price;
+  const discountPct = hasDiscount ? Math.round((1 - price / compare_price) * 100) : null;
 
   const rawSrc  = image ?? image_url ?? image_1 ?? null;
   const imageSrc = !imgError ? resolveImageSrc(rawSrc) : null;
@@ -156,30 +167,41 @@ export default function ProductCard({ product, showStockBadge = false }) {
       </div>
 
       {/* ── Info ──────────────────────────────────────────── */}
-      <div className="flex flex-1 flex-col gap-0.5 p-3">
-        {/* SKU */}
-        {item_code && (
-          <p className="truncate text-[10px] font-medium uppercase tracking-wider text-stone-400">
-            {item_code}
+      <div className="flex flex-1 flex-col gap-1 p-3">
+
+        {/* Price row — real price/compare_price from ProductCatalogRow */}
+        {price != null && (
+          <p className="flex items-baseline gap-1.5">
+            <span className="font-heading text-base font-semibold text-foreground">
+              {formatINR(price)}
+            </span>
+            {hasDiscount && (
+              <>
+                <span className="text-xs text-muted-foreground line-through">
+                  {formatINR(compare_price)}
+                </span>
+                <span className="text-xs font-semibold text-status-in-stock">
+                  {discountPct}% off
+                </span>
+              </>
+            )}
           </p>
         )}
 
-        {/* Name — hide if identical to code (OrnaVerse quirk) */}
+        {/* Name */}
         {item_name && item_name !== item_code && (
           <p className="line-clamp-2 text-sm font-semibold leading-snug text-stone-800">
             {item_name}
           </p>
         )}
 
-        {/* Metal type · Weight — accent colour info line */}
+        {/* Metal type · Weight */}
         {infoLine && (
-          <p className="mt-auto pt-1.5 text-sm font-semibold text-primary">
+          <p className="text-xs text-muted-foreground">
             {infoLine}
           </p>
         )}
-
-        {/* Accent underline */}
-        <div className="mt-1.5 h-0.5 w-6 rounded-full bg-primary" aria-hidden="true" />
+        
       </div>
     </button>
   );
