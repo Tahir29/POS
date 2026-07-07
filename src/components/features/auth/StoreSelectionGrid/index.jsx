@@ -35,9 +35,6 @@ import {
   CommandList,
 } from '@/components/ui/command';
 
-// Static build tag shown on the dark panel — kept in sync with Login.
-const APP_VERSION = 'v2.4.1';
-
 export default function StoreSelectionGrid() {
   const router = useRouter();
   const { availableStores, switchStore } = useActiveStore();
@@ -73,16 +70,12 @@ export default function StoreSelectionGrid() {
       {/* ── Left — dark brand panel ─────────────────────────────────── */}
       <div className="relative hidden w-2/5 shrink-0 flex-col overflow-hidden bg-primary sm:flex">
         {/* Watermark — real brand icon asset, matches Login treatment */}
-        <div className="pointer-events-none absolute -bottom-10 left-1/2 -translate-x-1/2 select-none">
-          <Logo
-            variant="icon"
-            color="brown"
-            width={340}
-            height={340}
-            priority={false}
-            className="opacity-20"
-          />
-        </div>
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute -bottom-16 right-8 font-heading text-[280px] leading-none opacity-4 select-none"
+        >
+          <Logo variant="icon" color="white" width={250} height={68} priority />
+        </span>
 
         <div className="relative flex flex-1 flex-col items-center justify-center gap-3 px-8 text-center">
           <Logo variant="full" color="white" width={150} height={48} priority />
@@ -97,10 +90,6 @@ export default function StoreSelectionGrid() {
             Choose the showroom you&rsquo;re working from today
           </p>
         </div>
-
-        <p className="relative px-8 pb-6 text-xs text-primary-foreground/40">
-          {APP_VERSION}
-        </p>
       </div>
 
       {/* ── Right — store selection panel ───────────────────────────── */}
