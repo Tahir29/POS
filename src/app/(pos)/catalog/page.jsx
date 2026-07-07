@@ -27,7 +27,6 @@ const { SEARCH } = APP_CONFIG;
 const MAX_RECENT  = 5;
 
 const selectActiveStoreId = (s) => s.store.activeStoreId;
-const selectStoreName     = (s) => s.store.activeStoreName;
 
 // ── Client-side helpers ───────────────────────────────────────────────────────
 
@@ -133,7 +132,6 @@ function applyBrowseSort(products, sortBy) {
 function CatalogScreen() {
   const router       = useRouter();
   const reduxStoreId = useSelector(selectActiveStoreId);
-  const storeName    = useSelector(selectStoreName);
 
   const [recentSearches, setRecentSearches] = useState([]);
 
@@ -257,20 +255,9 @@ function CatalogScreen() {
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="flex h-full flex-col bg-[#FEF5F1]">
+    <div className="flex h-full flex-col bg-background">
 
-      <div className="flex flex-col gap-2 px-4 pt-4 md:px-6 md:pt-5">
-        <h1 className="text-3xl font-bold text-foreground font-abhaya">
-          Catalog
-          {storeName && (
-            <span className="text-base font-normal text-muted-foreground ml-3">
-              {storeName}
-            </span>
-          )}
-        </h1>
-      </div>
-
-      <div className="px-4 pt-3 pb-2 md:px-6">
+      <div className="px-4 pt-4 pb-2 md:px-6 md:pt-5 bg-white">
         <div className="flex items-center gap-2">
           <div className="flex-1 min-w-0">
             <ProductSearchBar
@@ -295,7 +282,7 @@ function CatalogScreen() {
           />
         </div>
 
-        <div className="mt-3 bg-white rounded-xl px-2 py-1 shadow-sm">
+        <div className="mt-3">
           <CategoryFilter
             categories={categories}
             activeCategorySlug={activeCategorySlug}
@@ -306,23 +293,25 @@ function CatalogScreen() {
         </div>
       </div>
 
-      {countLabel && (
-        <p className="px-4 pb-1 text-xs text-muted-foreground md:px-6">
-          {countLabel}
-        </p>
-      )}
+      <div className="p-4 md:p-6">
+        {countLabel && (
+          <p className="pb-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            {countLabel}
+          </p>
+        )}
 
-      <div className="flex-1 overflow-y-auto px-4 py-2 md:px-6">
-        <ProductGrid
-          products={displayProducts}
-          isLoading={isLoading}
-          isFetchingMore={isFetchingMore}
-          hasMore={hasMore}
-          hasFilters={hasActiveFilters || isSearchMode}
-          showStockBadge={showStockBadge}
-          onLoadMore={handleLoadMore}
-          onClearFilters={handleClearFilters}
-        />
+        <div className="flex-1 overflow-y-auto py-2">
+          <ProductGrid
+            products={displayProducts}
+            isLoading={isLoading}
+            isFetchingMore={isFetchingMore}
+            hasMore={hasMore}
+            hasFilters={hasActiveFilters || isSearchMode}
+            showStockBadge={showStockBadge}
+            onLoadMore={handleLoadMore}
+            onClearFilters={handleClearFilters}
+          />
+        </div>
       </div>
 
     </div>
