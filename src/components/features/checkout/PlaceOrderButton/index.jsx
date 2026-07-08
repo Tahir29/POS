@@ -28,7 +28,7 @@ export default function PlaceOrderButton({ isValid, isPlacingOrder, onPlaceOrder
       {isPlacingOrder ? (
         <>
           <Loader2 size={18} className="animate-spin" aria-hidden="true" />
-          Placing order…
+          Generating invoice…
         </>
       ) : (
         `Place Order · ₹${total.toLocaleString('en-IN')}`

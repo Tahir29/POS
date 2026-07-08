@@ -4,7 +4,7 @@
 import { useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { useDispatch, useSelector } from 'react-redux';
-import { ShoppingCart, User, LogOut, ChevronDown, Store } from 'lucide-react';
+import { ShoppingCart, User, LogOut, ChevronDown, Store, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -17,6 +17,7 @@ import {
 import { useAuth } from '@/hooks/auth/useAuth';
 import { useActiveStore } from '@/hooks/store/useActiveStore';
 import { useCartItemCount } from '@/hooks/cart/useCartItemCount';
+import { useSmartBack } from '@/hooks/navigation/useSmartBack';
 import { openCart, closeCart, selectCartOpen } from '@/store/slices/uiSlice';
 import StoreSelectModal from '@/components/features/auth/StoreSelectModal';
 import CartDrawer from '@/components/features/cart/CartDrawer';
@@ -34,6 +35,10 @@ const ALL_NAV_ITEMS = [...NAV_ITEMS, ...BOTTOM_ITEMS];
 
 function usePageTitle() {
   const pathname = usePathname();
+
+  // Dynamic routes not covered by NAV_ITEMS — checked before the generic
+  // fallback so we don't show a raw numeric ID as the page title.
+  if (pathname.startsWith('/products/')) return 'Product Detail';
 
   const match = ALL_NAV_ITEMS.find(
     (item) => pathname === item.href || pathname.startsWith(item.href + '/')
@@ -156,6 +161,7 @@ export default function Header() {
   const [storeModalOpen, setStoreModalOpen] = useState(false);
   const cartOpen = useSelector(selectCartOpen);
   const pageTitle = usePageTitle();
+  const { canGoBack, goBack } = useSmartBack();
 
   return (
     <>
@@ -163,10 +169,24 @@ export default function Header() {
         className="flex items-center justify-between gap-4 border-b bg-card px-4 min-h-[64px] shrink-0"
         role="banner"
       >
-        {/* Left — page title (derived from the same NAV_ITEMS Sidebar uses) */}
-        <h1 className="font-heading text-xl text-foreground shrink-0 truncate">
-          {pageTitle}
-        </h1>
+        {/* Left — back button (route-dependent) + page title */}
+        <div className="flex items-center gap-2 shrink-0 min-w-0">
+          {canGoBack && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={goBack}
+              aria-label="Go back"
+              className="min-h-[40px] min-w-[40px] shrink-0"
+            >
+              <ArrowLeft size={18} aria-hidden="true" />
+            </Button>
+          )}
+          <h1 className="font-heading text-xl text-foreground truncate">
+            {pageTitle}
+          </h1>
+        </div>
 
         {/* Center — customer session (original component, restyled internally) */}
         <div className="flex flex-1 justify-center min-w-0">

@@ -15,16 +15,13 @@
 //   - useRedirectOnCustomerChange redirects to /catalog on customer switch
 //   - beforeunload warns on tab close/refresh while cart has items
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
-import { Button }       from '@/components/ui/button';
-import { Input }        from '@/components/ui/input';
-import { Label }        from '@/components/ui/label';
 import ConfirmDialog    from '@/components/shared/ConfirmDialog';
 import CheckoutCustomerSummary  from '@/components/features/checkout/CheckoutCustomerSummary';
 import CheckoutDiscountSection  from '@/components/features/checkout/CheckoutDiscountSection';
 import CheckoutPaymentSection   from '@/components/features/checkout/CheckoutPaymentSection';
+import CartItemRow              from '@/components/features/cart/CartItemRow';
 import CartSummary              from '@/components/features/cart/CartSummary';
 import PlaceOrderButton         from '@/components/features/checkout/PlaceOrderButton';
 import OrderConfirmationScreen  from '@/components/features/checkout/OrderConfirmationScreen';
@@ -33,6 +30,8 @@ import { useCartTotals }              from '@/hooks/cart/useCartTotals';
 import { useCustomerSession }         from '@/hooks/customer/useCustomerSession';
 import { useRedirectOnCustomerChange } from '@/hooks/checkout/useRedirectOnCustomerChange';
 import { useCreateInvoice }           from '@/hooks/checkout/useCreateInvoice';
+import { useBackGuard } from '@/contexts/NavigationGuardContext';
+import { useSmartBack }  from '@/hooks/navigation/useSmartBack';
 import { checkoutSchema }             from '@/validators/checkoutSchema';
 
 function CheckoutScreen() {
@@ -40,6 +39,7 @@ function CheckoutScreen() {
   const { items, isEmpty } = useCart();
   const { total }          = useCartTotals();
   const { customerId }     = useCustomerSession();
+  const { goBack, clearGuard } = useSmartBack();
 
   const {
     placeInvoice,
@@ -49,11 +49,31 @@ function CheckoutScreen() {
   } = useCreateInvoice();
 
   const [payments, setPayments]     = useState([]);
-  const [narration, setNarration]   = useState('');
   const [isBackConfirmOpen, setIsBackConfirmOpen] = useState(false);
 
   // Track whether a sale has been successfully completed
   const isConfirmed = !!invoiceResult;
+
+  // Intercept the GLOBAL back button (Header) when there are unsaved
+  // payment selections — shows the "Leave checkout?" dialog instead of
+  // navigating immediately. Returning `false` tells useSmartBack this
+  // page is handling navigation itself for now.
+  const backGuard = useCallback(() => {
+    if (items.length > 0 && !isConfirmed) {
+      setIsBackConfirmOpen(true);
+      return false;
+    }
+    return true;
+  }, [items.length, isConfirmed]);
+  useBackGuard(backGuard);
+
+  const handleConfirmLeave = () => {
+    // Clear our own guard first so the second goBack() call (below)
+    // doesn't just re-open this same dialog.
+    clearGuard();
+    setIsBackConfirmOpen(false);
+    goBack();
+  };
 
   // Stop customer-switch redirect once sale is confirmed
   useRedirectOnCustomerChange(!isConfirmed);
@@ -89,18 +109,7 @@ function CheckoutScreen() {
 
   const handlePlaceOrder = async () => {
     if (!isValid || isPlacingInvoice) return;
-    await placeInvoice({
-      paymentModes: payments,
-      narration:    narration.trim() || undefined,
-    });
-  };
-
-  const handleBack = () => {
-    if (items.length > 0) {
-      setIsBackConfirmOpen(true);
-      return;
-    }
-    router.push('/cart');
+    await placeInvoice({ paymentModes: payments });
   };
 
   // ── Confirmation screen ────────────────────────────────────────────────────
@@ -118,48 +127,32 @@ function CheckoutScreen() {
   return (
     <div className="flex flex-col gap-6 max-w-5xl mx-auto w-full pb-28">
 
-      {/* Header */}
-      <div className="flex items-center gap-2">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          onClick={handleBack}
-          aria-label="Back to cart"
-          className="min-h-[44px] min-w-[44px]"
-        >
-          <ArrowLeft size={20} aria-hidden="true" />
-        </Button>
-        <h1 className="text-lg font-bold text-stone-800">Checkout</h1>
-      </div>
-
       <div className="flex flex-col gap-4">
 
         {/* Customer attached to this sale */}
         <CheckoutCustomerSummary />
+
+        {/* Order items — same CartItemRow used on the Cart page, read-only here */}
+        <section className="rounded-xl border border-stone-200 bg-white p-4">
+          <h2 className="text-sm font-bold text-stone-800 mb-1">
+            Order Items <span className="text-muted-foreground font-normal text-xs">({items.length} item{items.length !== 1 ? 's' : ''})</span>
+          </h2>
+          <div>
+            {items.map((item) => (
+              <CartItemRow
+                key={`${item.itemId}-${item.sizeId}-${item.styleId}`}
+                item={item}
+                readOnly
+              />
+            ))}
+          </div>
+        </section>
 
         {/* Promo code / discount */}
         <CheckoutDiscountSection />
 
         {/* Payment modes + invoice helper balances */}
         <CheckoutPaymentSection onChange={setPayments} />
-
-        {/* Optional narration / notes */}
-        <section className="rounded-xl border border-stone-200 bg-white p-4">
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="checkout-narration" className="text-sm font-bold text-stone-800">
-              Notes <span className="text-muted-foreground font-normal text-xs">(optional)</span>
-            </Label>
-            <Input
-              id="checkout-narration"
-              value={narration}
-              onChange={(e) => setNarration(e.target.value)}
-              placeholder="Add a note to this invoice…"
-              className="h-11"
-              maxLength={200}
-            />
-          </div>
-        </section>
 
         {/* Order summary */}
         <section className="rounded-xl border border-stone-200 bg-white p-4">
@@ -180,7 +173,7 @@ function CheckoutScreen() {
         </div>
       </div>
 
-      {/* Back confirmation dialog */}
+      {/* Back confirmation dialog — triggered via the global Header back button */}
       <ConfirmDialog
         isOpen={isBackConfirmOpen}
         onOpenChange={setIsBackConfirmOpen}
@@ -189,7 +182,7 @@ function CheckoutScreen() {
         confirmLabel="Leave"
         cancelLabel="Stay"
         confirmVariant="destructive"
-        onConfirm={() => router.push('/cart')}
+        onConfirm={handleConfirmLeave}
       />
 
     </div>

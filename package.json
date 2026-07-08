@@ -26,6 +26,7 @@
     "react-hook-form": "^7.77.0",
     "react-redux": "^9.3.0",
     "react-toastify": "^11.1.0",
+    "react-zoom-pan-pinch": "^4.0.3",
     "redux-persist": "^6.0.0",
     "shadcn": "^4.10.0",
     "tailwind-merge": "^3.6.0",

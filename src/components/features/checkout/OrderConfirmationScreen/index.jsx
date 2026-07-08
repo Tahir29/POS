@@ -15,6 +15,7 @@ import { useRouter } from 'next/navigation';
 import { CheckCircle2, Loader2, FileDown } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { Button } from '@/components/ui/button';
+import PrintInvoiceButton from '@/components/features/checkout/PrintInvoiceButton';
 import { useInvoiceDetail } from '@/hooks/checkout/useInvoiceDetail';
 import { generateInvoicePDF } from '@/services/orderService';
 import TOAST from '@/constants/toastMessages';
@@ -150,6 +151,7 @@ export default function OrderConfirmationScreen({ transactionId, invoiceNo }) {
             : <><FileDown size={16} /> Download Invoice PDF</>
           }
         </Button>
+        <PrintInvoiceButton />
         <Button
           type="button"
           onClick={handleNewSale}

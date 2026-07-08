@@ -3,6 +3,11 @@
 // src/components/features/cart/CartItemRow/index.jsx
 // Single cart line item: image, name, SKU, attributes, quantity control,
 // unit price, line total, and a remove action.
+//
+// readOnly MODE (new): when true, hides the qty stepper and remove button,
+// showing a plain "N ×" static label instead — used to reuse this exact
+// row on the Checkout "Order Items" summary (per instruction: no need to
+// build a second item-list component there) where editing doesn't belong.
 
 import { useState } from 'react';
 import Image from 'next/image';
@@ -13,11 +18,12 @@ import { resolveImageSrc } from '@/lib/resolveImageSrc';
 /**
  * @param {{
  *   item: object,
- *   onUpdateQuantity: (item: object, quantity: number) => void,
- *   onRemove: (item: object) => void,
+ *   onUpdateQuantity?: (item: object, quantity: number) => void,
+ *   onRemove?: (item: object) => void,
+ *   readOnly?: boolean,
  * }} props
  */
-export default function CartItemRow({ item, onUpdateQuantity, onRemove }) {
+export default function CartItemRow({ item, onUpdateQuantity, onRemove, readOnly = false }) {
   const [imgError, setImgError] = useState(false);
 
   const lineTotal = item.unitPrice * item.quantity;
@@ -55,14 +61,16 @@ export default function CartItemRow({ item, onUpdateQuantity, onRemove }) {
           <p className="text-sm font-semibold text-stone-800 leading-snug line-clamp-2">
             {item.itemName ?? 'Unknown Product'}
           </p>
-          <button
-            type="button"
-            onClick={() => onRemove(item)}
-            aria-label={`Remove ${item.itemName ?? 'item'} from cart`}
-            className="shrink-0 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-full text-stone-400 hover:text-destructive hover:bg-destructive/10 transition-colors"
-          >
-            <Trash2 size={16} aria-hidden="true" />
-          </button>
+          {!readOnly && onRemove && (
+            <button
+              type="button"
+              onClick={() => onRemove(item)}
+              aria-label={`Remove ${item.itemName ?? 'item'} from cart`}
+              className="shrink-0 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-full text-stone-400 hover:text-destructive hover:bg-destructive/10 transition-colors"
+            >
+              <Trash2 size={16} aria-hidden="true" />
+            </button>
+          )}
         </div>
 
         {item.sku && (
@@ -74,11 +82,17 @@ export default function CartItemRow({ item, onUpdateQuantity, onRemove }) {
         )}
 
         <div className="flex items-end justify-between mt-1">
-          <CartItemQuantityControl
-            quantity={item.quantity}
-            onIncrement={() => onUpdateQuantity(item, item.quantity + 1)}
-            onDecrement={() => onUpdateQuantity(item, item.quantity - 1)}
-          />
+          {readOnly ? (
+            <span className="text-xs text-stone-400 tabular-nums">
+              {item.quantity} ×
+            </span>
+          ) : (
+            <CartItemQuantityControl
+              quantity={item.quantity}
+              onIncrement={() => onUpdateQuantity(item, item.quantity + 1)}
+              onDecrement={() => onUpdateQuantity(item, item.quantity - 1)}
+            />
+          )}
 
           <div className="text-right">
             <p className="text-xs text-stone-400">

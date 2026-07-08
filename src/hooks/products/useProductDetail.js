@@ -19,6 +19,15 @@ export function useProductDetail(itemId) {
     // /Retrieve → response.data.Entity
     select: (response) => {
       const item = response?.data?.Entity ?? null;
+
+      // TEMP DEBUG — remove once diamond Colour/Clarity/Cut/Cert field names
+      // are confirmed from the live response. Logs the full raw item so you
+      // can inspect exact field names in the browser console (no Postman needed).
+      if (item) {
+        console.log('[useProductDetail] raw Items/Retrieve Entity:', item);
+        console.log('[useProductDetail] diamond-related keys:', Object.keys(item).filter((k) => k.toLowerCase().includes('diamond') || k.toLowerCase().includes('colour') || k.toLowerCase().includes('color') || k.toLowerCase().includes('clarity') || k.toLowerCase().includes('cut') || k.toLowerCase().includes('cert')));
+      }
+
       return item && typeof item === 'object' && !Array.isArray(item) ? item : null;
     },
   });

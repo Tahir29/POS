@@ -4,19 +4,19 @@
 // Payment section at checkout — shows available customer balances first,
 // then standard payment mode selection with split payment support.
 //
-// INVOICE HELPERS (new — shown when customer is attached):
+// RESTYLED: balance rows now use a toggle switch (matching the design)
+// instead of an "Apply" pill button — same underlying apply/un-apply
+// logic, just a different control. Added a "Balances applied / Collected
+// / Paid in full" summary line at the bottom, matching the design.
+//
+// INVOICE HELPERS (unchanged data source):
 //   Scheme, Exchange, Credit Note, Old Gold, Advances
-//   Each shows the available balance and an "Apply" toggle.
-//   Applied amounts are added as additional payment entries.
 //
 // STANDARD PAYMENT MODES:
-//   Cash, Card, UPI, etc. — from PaymentReceiptMode/List
-//   Filtered by ALLOWLIST/DENYLIST in appConfig.
-//
-// Parent receives: onChange({ modeId, modeCode, modeName, amount }[])
+//   Cash, Card, UPI, etc. — from PaymentReceiptMode/List, unchanged.
 
 import { useEffect, useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, CheckCircle2 } from 'lucide-react';
 import { useCartTotals } from '@/hooks/cart/useCartTotals';
 import { usePaymentModes } from '@/hooks/checkout/usePaymentModes';
 import { useInvoiceHelpers } from '@/hooks/checkout/useInvoiceHelpers';
@@ -27,32 +27,43 @@ import PaymentModeSelector from '../PaymentModeSelector';
 import PaymentAmountInput from '../PaymentAmountInput';
 import APP_CONFIG from '@/constants/appConfig';
 
-// ── Invoice Helper Balance Row ────────────────────────────────────────────────
-// Shows a single available balance (scheme, exchange, etc.) with apply toggle.
+// ── Invoice Helper Balance Row — toggle switch style ─────────────────────────
+
 function HelperBalanceRow({ label, amount, modeCode, isApplied, onToggle, isLoading }) {
   if (isLoading) return null;
   if (!amount || amount <= 0) return null;
 
   return (
-    <div className="flex items-center justify-between rounded-lg border border-stone-100 bg-stone-50 px-3 py-2.5">
+    <button
+      type="button"
+      onClick={() => onToggle({ modeCode, label, amount })}
+      role="switch"
+      aria-checked={isApplied}
+      className={`
+        flex w-full items-center justify-between rounded-lg border px-3 py-2.5 text-left
+        transition-colors
+        ${isApplied ? 'border-primary/40 bg-primary/5' : 'border-stone-100 bg-stone-50'}
+      `}
+    >
       <div>
         <p className="text-xs font-medium text-stone-700">{label}</p>
         <p className="text-sm font-semibold text-primary mt-0.5">
           {APP_CONFIG.CURRENCY.INR_SYMBOL}{Number(amount).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
         </p>
       </div>
-      <button
-        type="button"
-        onClick={() => onToggle({ modeCode, label, amount })}
-        className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-          isApplied
-            ? 'bg-primary text-primary-foreground'
-            : 'bg-white border border-stone-200 text-stone-600 hover:border-primary/40'
+      <span
+        className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-200 ${
+          isApplied ? 'bg-primary' : 'bg-stone-200'
         }`}
+        aria-hidden="true"
       >
-        {isApplied ? 'Applied' : 'Apply'}
-      </button>
-    </div>
+        <span
+          className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow-sm transform transition-transform duration-200 ${
+            isApplied ? 'translate-x-4' : 'translate-x-1'
+          }`}
+        />
+      </span>
+    </button>
   );
 }
 
@@ -153,16 +164,19 @@ export default function CheckoutPaymentSection({ onChange }) {
     );
   }, [payments]);
 
+  const balancesApplied = payments.filter((p) => p.isHelper)
+    .reduce((s, p) => s + (Number(p.amount) || 0), 0);
+  const collectedByMode = payments.filter((p) => !p.isHelper);
   const paidTotal = payments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
   const remaining = Math.round((total - paidTotal) * 100) / 100;
   const isBalanced = payments.length > 0 && remaining === 0;
 
   const helperItems = [
     { label: 'Scheme Balance',  code: 'Scheme',      data: helpers.scheme,     loading: helpers.scheme?.isLoading },
-    { label: 'Exchange Value',  code: 'Exchange',    data: helpers.exchange,   loading: helpers.exchange?.isLoading },
+    { label: 'Exchange Credit', code: 'Exchange',    data: helpers.exchange,   loading: helpers.exchange?.isLoading },
     { label: 'Credit Note',     code: 'CreditNote',  data: helpers.creditNote, loading: helpers.creditNote?.isLoading },
     { label: 'Old Gold Value',  code: 'OldGold',     data: helpers.oldGold,    loading: helpers.oldGold?.isLoading },
-    { label: 'Advance Payment', code: 'Advances',    data: helpers.advances,   loading: helpers.advances?.isLoading },
+    { label: 'Advance Paid',    code: 'Advances',    data: helpers.advances,   loading: helpers.advances?.isLoading },
   ];
 
   const hasVisibleHelpers = customerId && helperItems.some((h) => h.data?.amount > 0);
@@ -194,6 +208,11 @@ export default function CheckoutPaymentSection({ onChange }) {
               isLoading={h.loading}
             />
           ))}
+          {balancesApplied > 0 && (
+            <p className="text-xs text-primary font-medium">
+              {APP_CONFIG.CURRENCY.INR_SYMBOL}{balancesApplied.toLocaleString('en-IN')} applied to this order
+            </p>
+          )}
         </div>
       )}
 
@@ -207,6 +226,7 @@ export default function CheckoutPaymentSection({ onChange }) {
       )}
 
       {/* Standard payment modes */}
+      <p className="text-xs font-medium text-stone-500 uppercase tracking-wide">Payment Method</p>
       <PaymentModeSelector
         paymentModes={paymentModes}
         selectedModeIds={selectedModeIds}
@@ -227,20 +247,36 @@ export default function CheckoutPaymentSection({ onChange }) {
             />
           ))}
 
-          {payments.length > 1 && (
-            <div className="flex items-center justify-between text-sm pt-1">
-              <span className="text-stone-500">
-                {remaining === 0
-                  ? 'Fully allocated'
-                  : remaining > 0
-                    ? `${APP_CONFIG.CURRENCY.INR_SYMBOL}${remaining.toLocaleString('en-IN')} remaining`
-                    : `${APP_CONFIG.CURRENCY.INR_SYMBOL}${Math.abs(remaining).toLocaleString('en-IN')} over total`}
-              </span>
-              <span className={`font-medium ${isBalanced ? 'text-emerald-600' : 'text-destructive'}`}>
-                {APP_CONFIG.CURRENCY.INR_SYMBOL}{paidTotal.toLocaleString('en-IN')} / {APP_CONFIG.CURRENCY.INR_SYMBOL}{total.toLocaleString('en-IN')}
-              </span>
-            </div>
-          )}
+          {/* Balances applied / Collected / Paid in full summary */}
+          <div className="flex flex-col gap-1 text-sm pt-2 border-t border-stone-100">
+            {balancesApplied > 0 && (
+              <div className="flex items-center justify-between text-stone-500">
+                <span>Balances applied</span>
+                <span>−{APP_CONFIG.CURRENCY.INR_SYMBOL}{balancesApplied.toLocaleString('en-IN')}</span>
+              </div>
+            )}
+            {collectedByMode.map((p) => (
+              <div key={p.modeId ?? p.modeCode} className="flex items-center justify-between text-stone-500">
+                <span>Collected ({p.modeName})</span>
+                <span>{APP_CONFIG.CURRENCY.INR_SYMBOL}{(Number(p.amount) || 0).toLocaleString('en-IN')}</span>
+              </div>
+            ))}
+            {isBalanced ? (
+              <p className="flex items-center gap-1.5 text-emerald-600 font-medium">
+                <CheckCircle2 size={14} aria-hidden="true" />
+                Paid in full
+              </p>
+            ) : (
+              <div className="flex items-center justify-between font-medium">
+                <span className="text-stone-500">
+                  {remaining > 0 ? 'Remaining' : 'Over total'}
+                </span>
+                <span className={remaining > 0 ? 'text-destructive' : 'text-amber-600'}>
+                  {APP_CONFIG.CURRENCY.INR_SYMBOL}{Math.abs(remaining).toLocaleString('en-IN')}
+                </span>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </section>

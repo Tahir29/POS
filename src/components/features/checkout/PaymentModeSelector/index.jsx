@@ -1,15 +1,37 @@
 'use client';
 
 // src/components/features/checkout/PaymentModeSelector/index.jsx
-// List of payment modes as selectable tiles. Supports multi-select for
-// split payments — selecting a mode adds it to the active payment split;
+// List of payment modes as selectable icon tiles. Supports multi-select
+// for split payments — selecting a mode adds it to the active payment split;
 // deselecting removes it.
+//
+// Restyled to icon-on-top tiles matching the new checkout design. The
+// mode SET itself remains fully data-driven from usePaymentModes (real
+// PaymentReceiptMode/List data) — only the icon per tile is a cosmetic
+// lookup by mode_code, with a generic fallback for anything unmapped so
+// no mode is ever hidden just because it isn't in this icon map.
 
-import { Loader2, CreditCard, Check } from 'lucide-react';
+import { Loader2, CreditCard, Check, Smartphone, Banknote, Landmark, Wallet, Calculator } from 'lucide-react';
+
+const ICON_BY_CODE = {
+  UPI:         Smartphone,
+  CASH:        Banknote,
+  CARD:        CreditCard,
+  CREDITCARD:  CreditCard,
+  DEBITCARD:   CreditCard,
+  NETBANKING:  Landmark,
+  WALLET:      Wallet,
+  EMI:         Calculator,
+};
+
+function iconFor(modeCode) {
+  const key = (modeCode ?? '').toUpperCase().replace(/[^A-Z]/g, '');
+  return ICON_BY_CODE[key] ?? CreditCard;
+}
 
 /**
  * @param {{
- *   paymentModes: { modeId: number, modeName: string }[],
+ *   paymentModes: { modeId: number, modeName: string, modeCode?: string }[],
  *   selectedModeIds: number[],
  *   onToggle: (modeId: number) => void,
  *   isLoading?: boolean,
@@ -47,9 +69,10 @@ export default function PaymentModeSelector({
   }
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+    <div className="grid grid-cols-3 gap-2">
       {paymentModes.map((mode) => {
         const isSelected = selectedModeIds.includes(mode.modeId);
+        const Icon = iconFor(mode.modeCode);
         return (
           <button
             key={mode.modeId}
@@ -57,24 +80,24 @@ export default function PaymentModeSelector({
             onClick={() => onToggle(mode.modeId)}
             aria-pressed={isSelected}
             className={`
-              flex items-center gap-2 min-h-[48px] px-3 py-2.5 rounded-xl
-              border text-sm font-medium transition-colors
+              relative flex flex-col items-center justify-center gap-1.5
+              min-h-[72px] px-2 py-3 rounded-xl border text-sm font-medium
+              transition-colors
               ${isSelected
                 ? 'border-primary bg-primary/10 text-primary'
                 : 'border-stone-200 bg-white text-stone-700 hover:border-stone-300'}
             `}
           >
-            <span
-              className={`
-                flex h-5 w-5 shrink-0 items-center justify-center rounded-full border
-                ${isSelected ? 'border-primary bg-primary text-primary-foreground' : 'border-stone-300'}
-              `}
-              aria-hidden="true"
-            >
-              {isSelected && <Check size={12} />}
-            </span>
-            <CreditCard size={16} className="shrink-0 text-stone-400" aria-hidden="true" />
-            <span className="truncate">{mode.modeName}</span>
+            {isSelected && (
+              <span
+                className="absolute right-1.5 top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-primary-foreground"
+                aria-hidden="true"
+              >
+                <Check size={10} />
+              </span>
+            )}
+            <Icon size={20} className={isSelected ? 'text-primary' : 'text-stone-400'} aria-hidden="true" />
+            <span className="truncate max-w-full text-xs">{mode.modeName}</span>
           </button>
         );
       })}
