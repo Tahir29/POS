@@ -13,7 +13,8 @@
 
 import { useState, useRef } from 'react';
 import Image from 'next/image';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ZoomIn } from 'lucide-react';
+import ProductImageZoomModal from '@/components/features/products/ProductImageZoomModal';
 
 const IMAGE_BASE_URL = process.env.NEXT_PUBLIC_ORNAVERSE_BASE_URL
   ? `${process.env.NEXT_PUBLIC_ORNAVERSE_BASE_URL}/`.replace(/\/\/$/, '/')
@@ -55,6 +56,7 @@ function NoImagePlaceholder() {
 export default function ProductImageGallery({ product, shopifyImages = [] }) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [imgErrors, setImgErrors]       = useState({});
+  const [zoomOpen, setZoomOpen]         = useState(false);
   const touchStartX                     = useRef(null);
 
   // ── Build image list ───────────────────────────────────────────────────────
@@ -113,18 +115,37 @@ export default function ProductImageGallery({ product, shopifyImages = [] }) {
         aria-label="Product image gallery"
       >
         {showImage ? (
-          <Image
-            key={current.src}
-            src={current.src}
-            alt={current.alt}
-            fill
-            sizes="(max-width: 768px) 100vw, 50vw"
-            className="object-cover"
-            priority
-            onError={() => handleImgError(currentIndex)}
-          />
+          <button
+            type="button"
+            onClick={() => setZoomOpen(true)}
+            aria-label="Tap to zoom image"
+            className="absolute inset-0 h-full w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+          >
+            <Image
+              key={current.src}
+              src={current.src}
+              alt={current.alt}
+              fill
+              sizes="(max-width: 768px) 100vw, 50vw"
+              className="object-cover"
+              priority
+              onError={() => handleImgError(currentIndex)}
+            />
+          </button>
         ) : (
           <NoImagePlaceholder />
+        )}
+
+        {/* Zoom button */}
+        {showImage && (
+          <button
+            type="button"
+            onClick={() => setZoomOpen(true)}
+            aria-label="Open image zoom"
+            className="absolute right-2 bottom-2 flex items-center justify-center w-9 h-9 rounded-full bg-white/90 backdrop-blur-sm shadow-sm text-stone-600 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors"
+          >
+            <ZoomIn size={16} />
+          </button>
         )}
 
         {images.length > 1 && (
@@ -140,6 +161,13 @@ export default function ProductImageGallery({ product, shopifyImages = [] }) {
           </>
         )}
       </div>
+
+      {/* Zoom hint */}
+      {showImage && (
+        <p className="text-center text-xs text-muted-foreground -mt-1">
+          Tap image to zoom
+        </p>
+      )}
 
       {/* Dot indicators */}
       {images.length > 1 && (
@@ -157,6 +185,14 @@ export default function ProductImageGallery({ product, shopifyImages = [] }) {
           ))}
         </div>
       )}
+
+      <ProductImageZoomModal
+        isOpen={zoomOpen}
+        onClose={() => setZoomOpen(false)}
+        images={images}
+        currentIndex={currentIndex}
+        onIndexChange={setCurrentIndex}
+      />
     </div>
   );
 }

@@ -175,6 +175,9 @@ export async function getInvoiceDetail(invoiceId) {
  * @returns {Promise<object>} SaveResponse { EntityId }
  */
 export async function createInvoice(invoiceEntity) {
+  // TEMP DEBUG — remove once the Invoice/Create 500 exception is diagnosed.
+  console.log('[createInvoice] outgoing Entity payload:', JSON.stringify(invoiceEntity, null, 2));
+
   const response = await axiosInstance.post(API.INVOICES.CREATE, {
     Entity: invoiceEntity,
   });

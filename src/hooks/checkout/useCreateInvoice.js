@@ -63,9 +63,13 @@ function buildInvoiceEntity({
     item_rate:    item.unitPrice,
     sub_total:    +(item.unitPrice * item.quantity).toFixed(2),
     net_amount:   +(item.unitPrice * item.quantity).toFixed(2),
-    style_id:     item.styleId    ?? undefined,
-    item_size_id: item.sizeId     ?? undefined,
-    narration:    item.attributes ? JSON.stringify(item.attributes) : undefined,
+    // TEMP DIAGNOSTIC — style_id / item_size_id / narration commented out
+    // to isolate whether one of these three is causing the server-side
+    // exception on Invoice/Create. Restore once confirmed innocent (or
+    // fix whichever one is the actual cause).
+    // style_id:     item.styleId    ?? undefined,
+    // item_size_id: item.sizeId     ?? undefined,
+    // narration:    item.attributes ? JSON.stringify(item.attributes) : undefined,
   }));
 
   const receipt_details = paymentModes.map((p) => ({
@@ -83,6 +87,12 @@ function buildInvoiceEntity({
     sub_total:     subtotal,
     discount:      discount ?? 0,
     net_amount:    total,
+    // Confirmed InvoiceRow field (see file header) — was previously omitted
+    // entirely. No client-side GST calculation exists yet (decided to skip
+    // that breakdown for now), so sending 0 rather than leaving the field
+    // out, in case the server's Create logic does arithmetic against it
+    // without null-guarding.
+    tax_amount:    0,
     narration:     narration ?? undefined,
     line_items,
     receipt_details,
@@ -127,7 +137,7 @@ export function useCreateInvoice() {
     onSuccess: ({ transactionId }) => {
       toast.success(TOAST.INVOICES.CREATED(transactionId));
       clearCart();
-      // Invalidate invoice + order list caches
+      // Invalidate invoice + order list caches5
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
       queryClient.invalidateQueries({ queryKey: ['orders'] });
     },

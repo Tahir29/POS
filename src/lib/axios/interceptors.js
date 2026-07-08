@@ -209,6 +209,19 @@ const handleLogout = (store) => {
  * @returns {{ code: number, message: string, details: string|null, retryable: boolean }}
  */
 const normalizeError = (error) => {
+  // TEMP DEBUG — remove once the live 500 (Invoice/Create) and 400
+  // (POSInvoice/Get* helpers) errors are diagnosed. Logs the ACTUAL raw
+  // response body from OrnaVerse, which normalizeError below normally
+  // discards in favor of a generic user-facing message.
+  if (error.response) {
+    console.error(
+      '[normalizeError] RAW error response:',
+      error.config?.url,
+      error.response.status,
+      JSON.stringify(error.response.data, null, 2)
+    );
+  }
+
   // Network error — no response received
   if (!error.response) {
     return {
