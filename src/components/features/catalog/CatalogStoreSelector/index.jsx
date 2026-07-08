@@ -51,7 +51,7 @@ export default function CatalogStoreSelector({ catalogStoreId, onStoreChange }) 
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          className="flex items-center gap-2 rounded-full border border-border bg-white px-4 py-2 text-sm font-medium text-foreground hover:bg-stone-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary shrink-0"
+          className="flex items-center gap-2 rounded-lg border border-border bg-white px-4 py-2 text-sm font-medium text-foreground hover:bg-stone-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary shrink-0"
         >
           <Store size={15} className="text-muted-foreground shrink-0" />
           <span className="max-w-[140px] truncate">{displayName}</span>

@@ -4,105 +4,123 @@ import { Suspense } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { RefreshCw } from 'lucide-react';
 
-import StoreClockHeader     from '@/components/features/dashboard/StoreClockHeader';
+import KPICard              from '@/components/features/dashboard/KPICard';
+import RecentOrdersList     from '@/components/features/dashboard/RecentOrdersList';
 import QuickActionGrid      from '@/components/features/dashboard/QuickActions';
-import ProductCarouselStrip from '@/components/features/dashboard/ProductCarousel';
-import DashboardOrderCount  from '@/components/features/dashboard/DashboardOrderCount';
+import TodaysActivityStrip  from '@/components/features/dashboard/TodaysActivityStrip';
 
-import { useFeaturedItems } from '@/hooks/catalog/useFeaturedItems';
-import { useNewItems }      from '@/hooks/catalog/useNewItems';
-import { QUERY_KEYS }       from '@/constants/queryKeys';
-
-// ── Internal screen component ─────────────────────────────────────────────────
-// Separated so the Suspense boundary can wrap it from outside.
-// useQueryClient / useFeaturedItems / useNewItems all require this to be
-// a Client Component rendered inside a Suspense boundary.
+import { useDashboardSummary } from '@/hooks/dashboard/useDashboardSummary';
 
 function DashboardScreen() {
   const queryClient = useQueryClient();
 
   const {
-    data: featuredItems = [],
-    isLoading: featuredLoading,
-    isError:   featuredError,
-    refetch:   refetchFeatured,
-  } = useFeaturedItems();
-
-  const {
-    data: newItems = [],
-    isLoading: newLoading,
-    isError:   newError,
-    refetch:   refetchNew,
-  } = useNewItems();
+    isLoading,
+    todayRevenue,
+    revenueTrendPct,
+    todayOrderCount,
+    ordersTrendDelta,
+    revenueSparkline,
+    recentOrders,
+    pendingReturnsCount,
+    activityToday,
+  } = useDashboardSummary();
 
   // ── Manual refresh ────────────────────────────────────────────────────────
-  // Invalidates featured items, new items, and orders queries.
-  // Each component re-fetches independently in the background.
+  // Invalidates orders, returns, exchange, and buyback queries — the four
+  // data sources useDashboardSummary reads from. Each list re-fetches
+  // independently in the background.
   const handleRefresh = async () => {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.ITEMS.FEATURED() }),
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.ITEMS.NEW() }),
       queryClient.invalidateQueries({ queryKey: ['orders'] }),
+      queryClient.invalidateQueries({ queryKey: ['returns', 'list'] }),
+      queryClient.invalidateQueries({ queryKey: ['exchange', 'list'] }),
+      queryClient.invalidateQueries({ queryKey: ['buyback', 'list'] }),
     ]);
   };
 
+  const revenueTrend = revenueTrendPct == null
+    ? undefined
+    : {
+        type: revenueTrendPct >= 0 ? 'up' : 'down',
+        text: `${revenueTrendPct >= 0 ? '+' : ''}${revenueTrendPct.toFixed(1)}% vs yesterday`,
+      };
+
+  const ordersTrend = {
+    type: ordersTrendDelta > 0 ? 'up' : ordersTrendDelta < 0 ? 'down' : 'neutral',
+    text: ordersTrendDelta === 0
+      ? 'Same as yesterday'
+      : `${ordersTrendDelta > 0 ? '+' : ''}${ordersTrendDelta} from yesterday`,
+  };
+
+  const returnsTrend = {
+    type: pendingReturnsCount > 0 ? 'warning' : 'neutral',
+    text: pendingReturnsCount > 0 ? 'needs attention' : 'all clear',
+  };
+
   return (
-    <div className="flex flex-col gap-6 max-w-5xl mx-auto w-full">
+    <div className="flex flex-col gap-6 max-w-6xl mx-auto w-full">
 
-      {/* ── ROW 1: Store name + clock + refresh ──────────────── */}
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex-1 min-w-0">
-          <StoreClockHeader />
-        </div>
-
-        {/* Manual refresh — tablet-friendly touch target */}
+      {/* ── Manual refresh ─────────────────────────────────────── */}
+      <div className="flex justify-end -mb-2">
         <button
           type="button"
           onClick={handleRefresh}
           aria-label="Refresh dashboard"
-          className={[
-            'flex items-center justify-center shrink-0',
-            'h-10 w-10 rounded-lg border border-border bg-card',
-            'text-muted-foreground hover:text-foreground hover:bg-accent',
-            'transition-colors duration-150 active:scale-[0.96]',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-          ].join(' ')}
+          className="flex items-center justify-center h-10 w-10 rounded-lg border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-accent transition-colors duration-150 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <RefreshCw size={16} aria-hidden="true" />
         </button>
       </div>
 
-      {/* ── ROW 2: Today's order count ────────────────────────── */}
-      <DashboardOrderCount />
+      {/* ── ROW 1: KPI cards ───────────────────────────────────── */}
+      {/* Scheme Collections intentionally omitted — no data source yet (Phase 23) */}
+      {/* Only Today's Revenue carries the terracotta accent — keeps it a single signal */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <KPICard
+          label="Today's Revenue"
+          value={`₹${todayRevenue.toLocaleString('en-IN')}`}
+          trend={revenueTrend}
+          sparkline={revenueSparkline}
+          isLoading={isLoading}
+          accent
+        />
+        <KPICard
+          label="Orders Today"
+          value={String(todayOrderCount)}
+          trend={ordersTrend}
+          isLoading={isLoading}
+        />
+        <KPICard
+          label="Pending Returns"
+          value={String(pendingReturnsCount)}
+          trend={returnsTrend}
+          isLoading={isLoading}
+        />
+      </div>
 
-      {/* ── ROW 3: Quick actions ──────────────────────────────── */}
-      <QuickActionGrid />
+      {/* ── ROW 2: Recent orders + Quick actions ──────────────────── */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <RecentOrdersList orders={recentOrders} isLoading={isLoading} />
+        </div>
+        <div className="lg:col-span-1">
+          <QuickActionGrid />
+        </div>
+      </div>
 
-      {/* ── ROW 4: Featured products ──────────────────────────── */}
-      <ProductCarouselStrip
-        title="Featured Products"
-        items={featuredItems}
-        isLoading={featuredLoading}
-        isError={featuredError}
-        onRetry={refetchFeatured}
-      />
-
-      {/* ── ROW 5: New arrivals ───────────────────────────────── */}
-      <ProductCarouselStrip
-        title="New Arrivals"
-        items={newItems}
-        isLoading={newLoading}
-        isError={newError}
-        onRetry={refetchNew}
+      {/* ── ROW 3: Today's activity ────────────────────────────── */}
+      {/* Metal Rates card intentionally omitted — no read hook exists yet */}
+      <TodaysActivityStrip
+        returns={activityToday.returns}
+        exchanges={activityToday.exchanges}
+        buybacks={activityToday.buybacks}
+        isLoading={isLoading}
       />
 
     </div>
   );
 }
-
-// ── Page export ───────────────────────────────────────────────────────────────
-// Suspense wraps DashboardScreen from OUTSIDE so Next.js App Router can
-// handle the useSearchParams / client hook suspension correctly.
 
 export default function DashboardPage() {
   return (

@@ -1,120 +1,129 @@
 // src/hooks/checkout/useCreateOrder.js
-// Order submission mutation — Phase 9b (Checkout).
-// Maps to: POST Services/MarketPlace/Order/Generate
-// Source of truth: API_MAPPING.md Section 11.3, DEVELOPMENT_PHASES.md Phase 9b
+// POS Order creation — native POS/Order/Create → POS/Order/Post flow.
+// Replaces the old MarketPlace/Order/Generate approach entirely.
+// POS_CHANNEL_ID blocker is gone — no channel field required.
 //
-// ⚠️ BLOCKED: APP_CONFIG.ORDER.POS_CHANNEL_ID is currently null. OrnaVerse's
-// `channel` field is required for order creation and must be confirmed
-// with the integration team. This hook throws before calling the API if
-// the channel is not configured, and surfaces a clear toast so the
-// associate isn't stuck on a silent failure.
+// TWO FLOWS (both available, defaulting to Invoice):
+//
+//   ORDER FLOW  (deposit/reserve — collect later):
+//     createOrder(entity) → SaveResponse { EntityId }
+//     postOrder(EntityId) → finalises stock deduction
+//
+//   INVOICE FLOW (immediate sale — use useCreateInvoice instead):
+//     See useCreateInvoice.js
+//
+// This hook handles the ORDER flow.
+// Use useCreateInvoice for the primary checkout (direct billing).
+//
+// PAYLOAD — OrderRow key fields (confirmed v1.json):
+//   party_id       — customer (required)
+//   company_id     — active store (required)
+//   document_date  — sale date ISO string (required)
+//   currency_id    — 103 = INR
+//   line_items[]   — InvoiceItemsRow subset (item_id, sku, pieces, item_rate, net_amount)
+//   receipt_details[] — InvoiceReceiptRow subset (mode_id, mode_code, mode_name, amount)
 
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSelector } from 'react-redux';
 import { toast } from 'react-toastify';
-import { createOrder } from '@/services/orderService';
+import { createOrder, postOrder } from '@/services/orderService';
 import { useCart } from '@/hooks/cart/useCart';
 import { useCartTotals } from '@/hooks/cart/useCartTotals';
 import { useCustomerSession } from '@/hooks/customer/useCustomerSession';
 import { selectActiveStoreId } from '@/store/slices/storeSlice';
+import { QUERY_KEYS } from '@/constants/queryKeys';
 import APP_CONFIG from '@/constants/appConfig';
 import TOAST from '@/constants/toastMessages';
 
 /**
- * Splits a single display name into first/last for OrnaVerse's
- * order.customer.first_name / last_name fields.
+ * Builds the OrderRow Entity payload from cart state.
+ * All field names confirmed against OrnaVerse.POS.InvoiceItemsRow schema.
  */
-function splitName(fullName) {
-  if (!fullName) return { firstName: 'Guest', lastName: '' };
-  const parts = fullName.trim().split(/\s+/);
+function buildOrderEntity({ items, subtotal, discount, total, customerId, activeStoreId, paymentModes }) {
+  const today = new Date().toISOString();
+
+  const line_items = items.map((item, idx) => ({
+    item_line_no: idx + 1,
+    item_id:      item.itemId,
+    sku:          item.sku,
+    item_code:    item.itemCode,
+    item_name:    item.itemName,
+    pieces:       item.quantity,
+    item_rate:    item.unitPrice,   // line item price field = item_rate (NOT price)
+    sub_total:    item.unitPrice * item.quantity,
+    net_amount:   item.unitPrice * item.quantity,
+    style_id:     item.styleId    ?? undefined,
+    item_size_id: item.sizeId     ?? undefined,
+  }));
+
+  const receipt_details = paymentModes.map((p) => ({
+    mode_id:   p.modeId,
+    mode_code: p.modeCode ?? '',
+    mode_name: p.modeName,
+    amount:    p.amount,
+  }));
+
   return {
-    firstName: parts[0] ?? 'Guest',
-    lastName: parts.slice(1).join(' ') || '',
+    party_id:      customerId,
+    company_id:    activeStoreId,
+    document_date: today,
+    currency_id:   APP_CONFIG.CURRENCY.INR_ID,
+    sub_total:     subtotal,
+    discount:      discount ?? 0,
+    net_amount:    total,
+    line_items,
+    receipt_details,
   };
 }
 
-/**
- * Generates a client-side order id/number. OrnaVerse requires order_id
- * and order_no to be supplied by the POS (per API_MAPPING.md). Uses a
- * timestamp-based value to avoid collisions on a single device.
- */
-function generateOrderNumber() {
-  return Date.now();
-}
-
 export function useCreateOrder() {
-  const { items, appliedPromoCode, appliedPromoDetails, clearCart } = useCart();
+  const queryClient = useQueryClient();
+  const { items, clearCart } = useCart();
   const { subtotal, discount, total } = useCartTotals();
-  const { customerId, customerName, customerMobile } = useCustomerSession();
+  const { customerId } = useCustomerSession();
   const activeStoreId = useSelector(selectActiveStoreId);
 
   const mutation = useMutation({
-    mutationFn: (paymentModes) => {
-      const channel = APP_CONFIG.ORDER.POS_CHANNEL_ID;
+    /**
+     * @param {{ modeId, modeCode, modeName, amount }[]} paymentModes
+     */
+    mutationFn: async (paymentModes) => {
+      const entity = buildOrderEntity({
+        items, subtotal, discount, total,
+        customerId, activeStoreId, paymentModes,
+      });
 
-      if (channel === null || channel === undefined) {
-        // Blocked pending OrnaVerse confirmation — see file header.
-        throw new Error('POS_CHANNEL_ID_NOT_CONFIGURED');
+      // Step 1: Create draft order
+      const createResponse = await createOrder(entity);
+      const transactionId  = createResponse?.EntityId;
+
+      if (!transactionId) {
+        throw new Error('Order creation failed — no EntityId returned');
       }
 
-      const { firstName, lastName } = splitName(customerName);
-      const orderNo = generateOrderNumber();
-
-      const payload = {
-        channel,
-        order: {
-          order_id: orderNo,
-          order_no: orderNo,
-          status: APP_CONFIG.ORDER.DEFAULT_STATUS,
-          store_id: activeStoreId,
-          customer: {
-            id: customerId,
-            first_name: firstName,
-            last_name: lastName,
-            phone: customerMobile,
-          },
-          items: items.map((item, index) => ({
-            line_item_id: index + 1,
-            sku: item.sku,
-            title: item.itemName,
-            quantity: item.quantity,
-            unit_price: item.unitPrice,
-          })),
-          subtotal,
-          discount_amount: discount,
-          total_amount: total,
-          promo_code: appliedPromoCode ?? undefined,
-          promo_details: appliedPromoDetails ?? undefined,
-          payments: paymentModes.map((p) => ({
-            mode_id: p.modeId,
-            mode_name: p.modeName,
-            amount: p.amount,
-          })),
-        },
-      };
-
-      return createOrder(payload);
+      // Step 2: Post (finalise) the order
+      const postResponse = await postOrder(transactionId);
+      return { transactionId, createResponse, postResponse };
     },
-    onSuccess: (data) => {
-      const orderNo = data?.Entity?.order_no ?? data?.Entity?.order_id ?? '';
-      toast.success(TOAST.ORDERS.CREATED(orderNo));
+
+    onSuccess: ({ transactionId }) => {
+      toast.success(TOAST.ORDERS.CREATED(transactionId));
       clearCart();
+      // Invalidate order list so it reflects the new order
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
     },
+
     onError: (error) => {
-      if (error?.message === 'POS_CHANNEL_ID_NOT_CONFIGURED') {
-        toast.error(
-          'Checkout is not yet configured for this store (POS channel ID missing). Contact support.'
-        );
-        return;
-      }
+      console.error('[useCreateOrder]', error);
       toast.error(TOAST.ORDERS.CREATE_FAILED);
     },
   });
 
   return {
-    placeOrder: mutation.mutate,
-    isPlacingOrder: mutation.isPending,
-    orderResult: mutation.data,
-    error: mutation.error,
+    placeOrder:    mutation.mutateAsync,
+    isPlacingOrder:mutation.isPending,
+    orderResult:   mutation.data,
+    error:         mutation.error,
+    reset:         mutation.reset,
   };
 }

@@ -2,8 +2,9 @@
 'use client';
 
 import { useState } from 'react';
+import { usePathname } from 'next/navigation';
 import { useDispatch, useSelector } from 'react-redux';
-import { ShoppingCart, User, LogOut, ChevronDown, Store, ChevronRight } from 'lucide-react';
+import { ShoppingCart, User, LogOut, ChevronDown, Store, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -16,11 +17,41 @@ import {
 import { useAuth } from '@/hooks/auth/useAuth';
 import { useActiveStore } from '@/hooks/store/useActiveStore';
 import { useCartItemCount } from '@/hooks/cart/useCartItemCount';
+import { useSmartBack } from '@/hooks/navigation/useSmartBack';
 import { openCart, closeCart, selectCartOpen } from '@/store/slices/uiSlice';
 import StoreSelectModal from '@/components/features/auth/StoreSelectModal';
 import CartDrawer from '@/components/features/cart/CartDrawer';
 import HeaderCustomerControl from '@/components/layout/Header/HeaderCustomerControl';
+import { NAV_ITEMS, BOTTOM_ITEMS } from '@/constants/navItems';
 import { cn } from '@/lib/utils';
+
+// ── PAGE TITLE ────────────────────────────────────────────────
+// Derives the header title from the SAME NAV_ITEMS/BOTTOM_ITEMS the
+// Sidebar uses — no second hardcoded label list to keep in sync.
+// Routes not present in nav config (e.g. detail/sub-pages) fall back
+// to a capitalized version of the last path segment.
+
+const ALL_NAV_ITEMS = [...NAV_ITEMS, ...BOTTOM_ITEMS];
+
+function usePageTitle() {
+  const pathname = usePathname();
+
+  // Dynamic routes not covered by NAV_ITEMS — checked before the generic
+  // fallback so we don't show a raw numeric ID as the page title.
+  if (pathname.startsWith('/products/')) return 'Product Detail';
+
+  const match = ALL_NAV_ITEMS.find(
+    (item) => pathname === item.href || pathname.startsWith(item.href + '/')
+  );
+  if (match) return match.label;
+
+  const segments = pathname.split('/').filter(Boolean);
+  const last = segments[segments.length - 1] ?? 'Lucira POS';
+  return last
+    .split('-')
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
+}
 
 // ── CART BADGE ────────────────────────────────────────────────
 
@@ -54,11 +85,6 @@ function CartBadge({ onOpen }) {
 
 // ── STORE INDICATOR ───────────────────────────────────────────
 
-/**
- * StoreIndicator
- * Tappable button that opens the in-session store switcher modal.
- * Only shows the chevron when multiple stores are available.
- */
 function StoreIndicator({ onOpen }) {
   const { activeStoreName, availableStores } = useActiveStore();
   const hasMultipleStores = availableStores.length > 1;
@@ -73,25 +99,28 @@ function StoreIndicator({ onOpen }) {
           : `Active store: ${activeStoreName ?? 'None'}`
       }
       className={cn(
-        'flex items-center gap-1.5 text-sm text-muted-foreground rounded-lg px-2 py-1.5 min-h-[44px]',
-        'transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-        hasMultipleStores
-          ? 'hover:bg-accent hover:text-accent-foreground cursor-pointer'
-          : 'cursor-default'
+        'flex items-center gap-1.5 rounded-lg border border-input bg-card px-3 py-2 min-h-[44px]',
+        'text-sm font-medium text-foreground transition-colors',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        hasMultipleStores ? 'hover:bg-accent cursor-pointer' : 'cursor-default'
       )}
     >
-      <Store size={15} aria-hidden="true" className="shrink-0" />
-      <span className="hidden sm:inline truncate max-w-[160px]">
+      <Store size={15} aria-hidden="true" className="shrink-0 text-muted-foreground" />
+      <span className="hidden sm:inline truncate max-w-[140px]">
         {activeStoreName ?? '—'}
       </span>
       {hasMultipleStores && (
-        <ChevronRight size={13} aria-hidden="true" className="shrink-0 opacity-60" />
+        <ChevronDown size={14} aria-hidden="true" className="shrink-0 text-muted-foreground" />
       )}
     </button>
   );
 }
 
 // ── USER MENU ─────────────────────────────────────────────────
+// Not shown in the new design's header mockup, but sign-out has to live
+// somewhere — kept as a compact icon-only menu (same judgment call as
+// the Login/Store-Selection screens where we preserved functionality
+// the static mockup didn't depict).
 
 function UserMenu() {
   const { user, logout } = useAuth();
@@ -101,14 +130,11 @@ function UserMenu() {
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"
-          className="flex items-center gap-2 min-h-[44px] px-3"
-          aria-label="User menu"
+          size="icon"
+          className="min-h-[44px] min-w-[44px]"
+          aria-label={`User menu — signed in as ${user?.username ?? 'Staff'}`}
         >
           <User size={18} aria-hidden="true" />
-          <span className="hidden md:inline text-sm font-medium max-w-[120px] truncate">
-            {user?.username ?? 'Staff'}
-          </span>
-          <ChevronDown size={14} aria-hidden="true" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-48">
@@ -134,20 +160,43 @@ export default function Header() {
   const dispatch = useDispatch();
   const [storeModalOpen, setStoreModalOpen] = useState(false);
   const cartOpen = useSelector(selectCartOpen);
+  const pageTitle = usePageTitle();
+  const { canGoBack, goBack } = useSmartBack();
 
   return (
     <>
       <header
-        className="flex items-center justify-between border-b bg-card px-4 min-h-[64px] shrink-0"
+        className="flex items-center justify-between gap-4 border-b bg-card px-4 min-h-[64px] shrink-0"
         role="banner"
       >
-        {/* Left — store context */}
-        <StoreIndicator onOpen={() => setStoreModalOpen(true)} />
+        {/* Left — back button (route-dependent) + page title */}
+        <div className="flex items-center gap-2 shrink-0 min-w-0">
+          {canGoBack && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={goBack}
+              aria-label="Go back"
+              className="min-h-[40px] min-w-[40px] shrink-0"
+            >
+              <ArrowLeft size={18} aria-hidden="true" />
+            </Button>
+          )}
+          <h1 className="font-heading text-xl text-foreground truncate">
+            {pageTitle}
+          </h1>
+        </div>
+
+        {/* Center — customer session (original component, restyled internally) */}
+        <div className="flex flex-1 justify-center min-w-0">
+          <HeaderCustomerControl />
+        </div>
 
         {/* Right — actions */}
-        <div className="flex items-center gap-1">
-          <HeaderCustomerControl />
+        <div className="flex items-center gap-2 shrink-0">
           <CartBadge onOpen={() => dispatch(openCart())} />
+          <StoreIndicator onOpen={() => setStoreModalOpen(true)} />
           <UserMenu />
         </div>
       </header>

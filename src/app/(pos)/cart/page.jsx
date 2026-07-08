@@ -1,18 +1,16 @@
 'use client';
 
 // src/app/(pos)/cart/page.jsx
-// Standalone cart page. Reuses the same Phase 8 components as
-// CartDrawer (CartItemRow, CartEmptyState, CartSummary, CartCustomerTag,
+// Standalone cart page. Reuses the same components as CartDrawer
+// (CartItemRow, CartEmptyState, CartSummary, CartCustomerTag,
 // AppliedPromoTag, ProceedToCheckoutButton) in a full-page layout.
 //
 // Needed as a real navigation target: the checkout page redirects here
-// (router.replace('/cart')) when the cart is empty, and this route was
-// previously an empty placeholder file, causing a runtime error
-// ("default export is not a React Component").
+// (router.replace('/cart')) when the cart is empty.
+//
+// Back button now lives in the global Header (see useSmartBack /
+// BACK_FALLBACKS: /cart → /catalog) — no local back button here anymore.
 
-import { useRouter } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import CartItemRow from '@/components/features/cart/CartItemRow';
 import CartEmptyState from '@/components/features/cart/CartEmptyState';
 import CartSummary from '@/components/features/cart/CartSummary';
@@ -23,7 +21,6 @@ import { useCart } from '@/hooks/cart/useCart';
 import { useRedirectOnCustomerChange } from '@/hooks/checkout/useRedirectOnCustomerChange';
 
 export default function CartPage() {
-  const router = useRouter();
   useRedirectOnCustomerChange();
 
   const {
@@ -40,19 +37,6 @@ export default function CartPage() {
 
   return (
     <div className="flex flex-col gap-6 max-w-5xl mx-auto w-full pb-28">
-      <div className="flex items-center gap-2">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          onClick={() => router.push('/catalog')}
-          aria-label="Back to catalog"
-          className="min-h-[44px] min-w-[44px]"
-        >
-          <ArrowLeft size={20} aria-hidden="true" />
-        </Button>
-        <h1 className="text-lg font-bold text-stone-800">Cart</h1>
-      </div>
 
       {isEmpty ? (
         <CartEmptyState />
@@ -70,7 +54,7 @@ export default function CartPage() {
             />
           </div>
 
-          <div className="flex flex-col">
+          <div className="rounded-xl border border-stone-200 bg-white px-4">
             {items.map((item) => (
               <CartItemRow
                 key={`${item.itemId}-${item.sizeId}-${item.styleId}`}
