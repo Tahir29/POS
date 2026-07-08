@@ -1,11 +1,21 @@
 // src/hooks/customer/useCustomerEnrollments.js
+// Scheme enrollments for a specific customer.
+// Now passes party_id to the service for server-side filtering.
+//
+// SCHEMA — POS.SchemeEnrollmentRow confirmed fields:
+//   scheme_enrollment_id, party_id, party_name, mobile
+//   scheme_display_name, scheme_code, scheme_status (enum SchemeStatus)
+//   document_date, scheme_amount, tenure
+//   invested_amount, benifit_amount (⚠️ API typo — preserve exactly)
+//   total_payable, scheme_monthly_details[]
+
 import { useQuery } from '@tanstack/react-query';
 import { getSchemeEnrollments } from '@/services/schemeService';
 import { QUERY_KEYS } from '@/constants/queryKeys';
 import APP_CONFIG from '@/constants/appConfig';
 
-function isEmptyValue(value) {
-  return value === null || value === undefined || value === 'NA' || value === '';
+function isEmptyValue(v) {
+  return v === null || v === undefined || v === 'NA' || v === '';
 }
 
 export function normalizeEnrollment(entity) {
@@ -13,50 +23,46 @@ export function normalizeEnrollment(entity) {
   const get = (key) => (!isEmptyValue(entity[key]) ? entity[key] : null);
 
   return {
-    enrollmentId:   get('scheme_enrollment_id'),
-    schemeName:     get('scheme_display_name') ?? get('scheme_code'),
-    status:         get('scheme_status'),           // 0 or 1 (int)
-    enrolledDate:   get('document_date'),
-    schemeAmount:   get('scheme_amount'),
-    tenure:         get('tenure'),
-    customerId:     get('party_id'),
-    customerName:   get('party_name'),
-    customerMobile: get('mobile'),
+    enrollmentId:    get('scheme_enrollment_id'),
+    schemeName:      get('scheme_display_name') ?? get('scheme_code'),
+    schemeCode:      get('scheme_code'),
+    status:          get('scheme_status'),       // SchemeStatus enum
+    enrolledDate:    get('document_date'),
+    schemeAmount:    get('scheme_amount'),
+    tenure:          get('tenure'),
+    investedAmount:  get('invested_amount'),
+    benifitAmount:   get('benifit_amount'),       // ⚠️ preserve API typo
+    totalPayable:    get('total_payable'),
+    maturityYear:    get('maturity_year'),
+    maturityMonth:   get('maturity_month'),
+    customerId:      get('party_id'),
+    customerName:    get('party_name'),
+    customerMobile:  get('mobile'),
     raw: entity,
   };
 }
 
-export function useCustomerEnrollments({ customerId, customerMobile, enabled = true } = {}) {
+export function useCustomerEnrollments({ customerId, enabled = true } = {}) {
   const query = useQuery({
-    queryKey: QUERY_KEYS.SCHEMES.CUSTOMER_ENROLLMENTS(customerId ?? customerMobile ?? 'none'),
-    queryFn: async () => {
-      const response = await getSchemeEnrollments({ take: 0 });
-      // Response is a bare array — no Entities wrapper
-      const entities = Array.isArray(response)
-        ? response
-        : (response?.Entities ?? response?.data ?? response?.result ?? []);
+    queryKey: QUERY_KEYS.SCHEMES.CUSTOMER_ENROLLMENTS(customerId ?? 'none'),
+    queryFn:  async () => {
+      // Pass party_id for server-side filtering — no client-side filter needed
+      const data     = await getSchemeEnrollments({ take: 0, party_id: customerId });
+      // SchemeEnrollment/List may return bare array or wrapped Entities
+      const entities = Array.isArray(data)
+        ? data
+        : (data?.Entities ?? data?.data ?? []);
       return entities.map(normalizeEnrollment).filter(Boolean);
     },
-    enabled: enabled && (!!customerId || !!customerMobile),
+    enabled:   enabled && !!customerId,
     staleTime: APP_CONFIG.STALE_TIME.ORDERS,
   });
 
-  const allEnrollments = query.data ?? [];
-  const enrollments = allEnrollments.filter((enrollment) => {
-    if (customerId != null && enrollment.customerId != null) {
-      return String(enrollment.customerId) === String(customerId);
-    }
-    if (customerMobile && enrollment.customerMobile) {
-      return enrollment.customerMobile === customerMobile;
-    }
-    return false;
-  });
-
   return {
-    enrollments,
-    isLoading:  query.isLoading,
-    isFetching: query.isFetching,
-    isError:    query.isError,
-    refetch:    query.refetch,
+    enrollments: query.data ?? [],
+    isLoading:   query.isLoading,
+    isFetching:  query.isFetching,
+    isError:     query.isError,
+    refetch:     query.refetch,
   };
 }
