@@ -25,6 +25,7 @@ export const NAV_ITEMS = [
   { label: 'Cart',         href: '/cart',         icon: ShoppingCart    },
   { label: 'Orders',       href: '/orders',       icon: ClipboardList   },
   { label: 'Invoices',     href: '/invoices',     icon: FileText        },
+  { label: 'Transactions', href: '/transactions', icon: ArrowLeftRight  },
   { label: 'Customers',    href: '/customers',    icon: Users           },
   { label: 'Schemes',      href: '/schemes',      icon: BookOpen        },
   // { label: 'Transfers',    href: '/transfers',    icon: ArrowLeftRight  },

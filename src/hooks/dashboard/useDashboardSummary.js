@@ -13,20 +13,23 @@
 // (Phase 23, still queued). Do not fabricate that data; add it here once
 // Phase 23 lands.
 //
-// Piggybacks entirely on hooks that already exist elsewhere in the app
-// (useAllOrders, useReturns, useExchanges, useBuybacks) so this adds zero
-// new network calls beyond what those pages already trigger.
+// PHASE 22.5 UPDATE: migrated off the deleted hooks/returns, hooks/exchange,
+// hooks/buyback (per-module) hooks onto the consolidated
+// hooks/transactions/useTransactionLists.js hooks, which back the single
+// /transactions page. Two shape differences from the old hooks, handled below:
+//   1. New hooks take { skip, enabled } (fixed page size from APP_CONFIG),
+//      not { page, pageSize } — page size here is the default (50 rows),
+//      not the old SUMMARY_PAGE_SIZE of 300. Fine for a "today" widget in a
+//      single store; revisit if a store does >50 returns/exchanges/buybacks
+//      in one day.
+//   2. New hooks return raw normalizeTransaction rows (no precomputed
+//      `.status`) — pending-return detection is derived here from
+//      raw.balance_amount / raw.receipt_amount, matching the same logic the
+//      old normalizeReturn used to do inline.
 
 import { useMemo } from 'react';
 import { useAllOrders } from '@/hooks/orders/useAllOrders';
-import { useReturns }   from '@/hooks/returns/useReturns';
-import { useExchanges } from '@/hooks/exchange/useExchanges';
-import { useBuybacks }  from '@/hooks/buyback/useBuybacks';
-
-// Large-enough page size to approximate "all records for today" for the
-// summary widgets, consistent with the useAll* full-fetch pattern used
-// elsewhere (Take:300-style) rather than the default 50-row page.
-const SUMMARY_PAGE_SIZE = 300;
+import { useReturns, useExchanges, useBuybacks } from '@/hooks/transactions/useTransactionLists';
 
 // ── Date helpers ──────────────────────────────────────────────
 // Mirrors the LOCAL-date comparison approach in useOrdersSummary so
@@ -51,6 +54,13 @@ function daysAgoPrefix(n) {
   return toLocalPrefix(d);
 }
 
+// A return is "pending" when nothing has been refunded back yet.
+function isPendingReturn(item) {
+  const balance = item.raw?.balance_amount ?? 0;
+  const receipt = item.raw?.receipt_amount ?? 0;
+  return !(balance <= 0 && receipt > 0) && receipt === 0;
+}
+
 /**
  * @returns {{
  *   isLoading: boolean,
@@ -67,9 +77,9 @@ function daysAgoPrefix(n) {
  */
 export function useDashboardSummary() {
   const { allOrders, isLoading: ordersLoading, isError: ordersError } = useAllOrders();
-  const { returns,   isLoading: returnsLoading,   isError: returnsError }   = useReturns({ page: 1, pageSize: SUMMARY_PAGE_SIZE });
-  const { exchanges, isLoading: exchangesLoading, isError: exchangesError } = useExchanges({ page: 1, pageSize: SUMMARY_PAGE_SIZE });
-  const { buybacks,  isLoading: buybacksLoading,  isError: buybacksError }  = useBuybacks({ page: 1, pageSize: SUMMARY_PAGE_SIZE });
+  const { items: returns,   isLoading: returnsLoading,   isError: returnsError }   = useReturns({ skip: 0 });
+  const { items: exchanges, isLoading: exchangesLoading, isError: exchangesError } = useExchanges({ skip: 0 });
+  const { items: buybacks,  isLoading: buybacksLoading,  isError: buybacksError }  = useBuybacks({ skip: 0 });
 
   const isLoading = ordersLoading || returnsLoading || exchangesLoading || buybacksLoading;
   const isError   = ordersError || returnsError || exchangesError || buybacksError;
@@ -125,7 +135,7 @@ export function useDashboardSummary() {
       .slice(0, 4);
 
     // ── Pending Returns ──────────────────────────────────────────
-    const pendingReturnsCount = returns.filter((r) => r.status === 'pending').length;
+    const pendingReturnsCount = returns.filter(isPendingReturn).length;
 
     // ── Today's Activity ─────────────────────────────────────────
     const countToday = (list) =>

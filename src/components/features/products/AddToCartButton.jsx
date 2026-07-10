@@ -87,8 +87,8 @@ export default function AddToCartButton({
         flex flex-1 items-center justify-center gap-2
         min-h-[52px] px-6 rounded-xl
         text-base font-semibold
-        bg-primary hover:bg-primary/90 active:scale-[0.98]
-        text-primary-foreground shadow-sm hover:shadow-md
+        bg-accent hover:bg-accent/90 active:scale-[0.98]
+        text-accent-foreground shadow-sm hover:shadow-md
         transition-all duration-150
         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2
         disabled:opacity-50 disabled:cursor-not-allowed
