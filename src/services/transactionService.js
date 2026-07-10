@@ -21,7 +21,8 @@
 //   - All list responses: { Entities[], TotalCount }
 //   - All retrieve responses: { Entity }
 //   - All create/post responses: { EntityId } (the new transaction_id)
-//   - current_company_id must be passed for every list/create call
+//   - company_id must be passed for every list/create call (matches Order/Invoice convention;
+//     NOT current_company_id, which is the Inventory/ProductCatalog-specific field name)
 
 import axiosInstance from '@/lib/axios/axiosInstance';
 import API           from '@/constants/apiEndpoints';
@@ -34,7 +35,7 @@ import API           from '@/constants/apiEndpoints';
  */
 export async function getReturns({ company_id, take = 50, skip = 0 } = {}) {
   const response = await axiosInstance.post(API.RETURNS.LIST, {
-    current_company_id: company_id,
+    company_id: company_id ?? undefined,
     Take: take,
     Skip: skip,
   });
@@ -93,7 +94,7 @@ export async function cancelReturn(transactionId) {
  */
 export async function getRefunds({ company_id, take = 50, skip = 0 } = {}) {
   const response = await axiosInstance.post(API.REFUNDS.LIST, {
-    current_company_id: company_id,
+    company_id: company_id ?? undefined,
     Take: take,
     Skip: skip,
   });
@@ -163,7 +164,7 @@ export async function deleteRefund(transactionId) {
  */
 export async function getCreditNotes({ company_id, take = 50, skip = 0 } = {}) {
   const response = await axiosInstance.post(API.CREDIT_NOTES.LIST, {
-    current_company_id: company_id,
+    company_id: company_id ?? undefined,
     Take: take,
     Skip: skip,
   });
@@ -222,7 +223,7 @@ export async function cancelCreditNote(transactionId) {
  */
 export async function getExchanges({ company_id, take = 50, skip = 0 } = {}) {
   const response = await axiosInstance.post(API.EXCHANGE.LIST, {
-    current_company_id: company_id,
+    company_id: company_id ?? undefined,
     Take: take,
     Skip: skip,
   });
@@ -281,7 +282,7 @@ export async function cancelExchange(transactionId) {
  */
 export async function getBuybacks({ company_id, take = 50, skip = 0 } = {}) {
   const response = await axiosInstance.post(API.BUYBACK.LIST, {
-    current_company_id: company_id,
+    company_id: company_id ?? undefined,
     Take: take,
     Skip: skip,
   });
@@ -340,7 +341,7 @@ export async function cancelBuyback(transactionId) {
  */
 export async function getURDPurchases({ company_id, take = 50, skip = 0 } = {}) {
   const response = await axiosInstance.post(API.URD_PURCHASE.LIST, {
-    current_company_id: company_id,
+    company_id: company_id ?? undefined,
     Take: take,
     Skip: skip,
   });

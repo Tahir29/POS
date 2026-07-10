@@ -23,8 +23,7 @@
 //   so calling components can surface field-level feedback if needed.
 //
 // TOAST MESSAGES:
-//   Generic messages defined inline — TOAST constants don't yet cover
-//   transactions (they will be added in Phase 28 polish pass).
+//   Sourced from TOAST.{RETURNS,REFUNDS,CREDIT_NOTES,EXCHANGE,BUYBACK,URD_PURCHASE}.
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSelector }                 from 'react-redux';
@@ -59,7 +58,7 @@ export function useCreateReturn({ onSuccess } = {}) {
     mutationFn: (payload) => createReturn(payload),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['returns'] });
-      toast.success('Return created successfully.');
+      toast.success(TOAST.RETURNS.CREATED);
       onSuccess?.(data);
     },
     onError: (error) => {
@@ -75,7 +74,7 @@ export function usePostReturn({ onSuccess } = {}) {
     mutationFn: (transactionId) => postReturn(transactionId),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['returns'] });
-      toast.success('Return posted successfully.');
+      toast.success(TOAST.RETURNS.POST_SUCCESS);
       onSuccess?.(data);
     },
     onError: (error) => {
@@ -91,7 +90,7 @@ export function useCancelReturn({ onSuccess } = {}) {
     mutationFn: (transactionId) => cancelReturn(transactionId),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['returns'] });
-      toast.success('Return cancelled.');
+      toast.success(TOAST.RETURNS.CANCELLED);
       onSuccess?.(data);
     },
     onError: (error) => {
@@ -109,7 +108,7 @@ export function useCreateRefund({ onSuccess } = {}) {
     mutationFn: (payload) => createRefund(payload),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['refunds'] });
-      toast.success('Refund created.');
+      toast.success(TOAST.REFUNDS.CREATED);
       onSuccess?.(data);
     },
     onError: (error) => {
@@ -137,7 +136,7 @@ export function useAddRefundReceipt({ onSuccess } = {}) {
     mutationFn: (payload) => addRefundReceipt(payload),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['refunds'] });
-      toast.success('Refund completed successfully.');
+      toast.success(TOAST.REFUNDS.COMPLETED);
       onSuccess?.(data);
     },
     onError: (error) => {
@@ -153,7 +152,7 @@ export function useDeleteRefund({ onSuccess } = {}) {
     mutationFn: (transactionId) => deleteRefund(transactionId),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['refunds'] });
-      toast.success('Refund deleted.');
+      toast.success(TOAST.REFUNDS.DELETED);
       onSuccess?.(data);
     },
     onError: (error) => {
@@ -171,7 +170,7 @@ export function useCreateCreditNote({ onSuccess } = {}) {
     mutationFn: (payload) => createCreditNote(payload),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['credit-notes'] });
-      toast.success('Credit note created successfully.');
+      toast.success(TOAST.CREDIT_NOTES.CREATED);
       onSuccess?.(data);
     },
     onError: (error) => {
@@ -187,7 +186,7 @@ export function usePostCreditNote({ onSuccess } = {}) {
     mutationFn: (transactionId) => postCreditNote(transactionId),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['credit-notes'] });
-      toast.success('Credit note posted successfully.');
+      toast.success(TOAST.CREDIT_NOTES.POSTED);
       onSuccess?.(data);
     },
     onError: (error) => {
@@ -203,7 +202,7 @@ export function useCancelCreditNote({ onSuccess } = {}) {
     mutationFn: (transactionId) => cancelCreditNote(transactionId),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['credit-notes'] });
-      toast.success('Credit note cancelled.');
+      toast.success(TOAST.CREDIT_NOTES.CANCELLED);
       onSuccess?.(data);
     },
     onError: (error) => {
@@ -221,7 +220,7 @@ export function useCreateExchange({ onSuccess } = {}) {
     mutationFn: (payload) => createExchange(payload),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['exchange'] });
-      toast.success('Exchange created successfully.');
+      toast.success(TOAST.EXCHANGE.CREATED);
       onSuccess?.(data);
     },
     onError: (error) => {
@@ -237,7 +236,7 @@ export function usePostExchange({ onSuccess } = {}) {
     mutationFn: (transactionId) => postExchange(transactionId),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['exchange'] });
-      toast.success('Exchange posted successfully.');
+      toast.success(TOAST.EXCHANGE.POSTED);
       onSuccess?.(data);
     },
     onError: (error) => {
@@ -253,7 +252,7 @@ export function useCancelExchange({ onSuccess } = {}) {
     mutationFn: (transactionId) => cancelExchange(transactionId),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['exchange'] });
-      toast.success('Exchange cancelled.');
+      toast.success(TOAST.EXCHANGE.CANCELLED);
       onSuccess?.(data);
     },
     onError: (error) => {
@@ -271,7 +270,7 @@ export function useCreateBuyback({ onSuccess } = {}) {
     mutationFn: (payload) => createBuyback(payload),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['buyback'] });
-      toast.success('Buyback created successfully.');
+      toast.success(TOAST.BUYBACK.CREATED);
       onSuccess?.(data);
     },
     onError: (error) => {
@@ -287,7 +286,7 @@ export function usePostBuyback({ onSuccess } = {}) {
     mutationFn: (transactionId) => postBuyback(transactionId),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['buyback'] });
-      toast.success('Buyback posted successfully.');
+      toast.success(TOAST.BUYBACK.POSTED);
       onSuccess?.(data);
     },
     onError: (error) => {
@@ -303,7 +302,7 @@ export function useCancelBuyback({ onSuccess } = {}) {
     mutationFn: (transactionId) => cancelBuyback(transactionId),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['buyback'] });
-      toast.success('Buyback cancelled.');
+      toast.success(TOAST.BUYBACK.CANCELLED);
       onSuccess?.(data);
     },
     onError: (error) => {
@@ -321,7 +320,7 @@ export function useCreateURDPurchase({ onSuccess } = {}) {
     mutationFn: (payload) => createURDPurchase(payload),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['urd-purchase'] });
-      toast.success('URD purchase created successfully.');
+      toast.success(TOAST.URD_PURCHASE.CREATED);
       onSuccess?.(data);
     },
     onError: (error) => {
@@ -337,7 +336,7 @@ export function usePostURDPurchase({ onSuccess } = {}) {
     mutationFn: (transactionId) => postURDPurchase(transactionId),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['urd-purchase'] });
-      toast.success('URD purchase posted successfully.');
+      toast.success(TOAST.URD_PURCHASE.POSTED);
       onSuccess?.(data);
     },
     onError: (error) => {
@@ -353,7 +352,7 @@ export function useCancelURDPurchase({ onSuccess } = {}) {
     mutationFn: (transactionId) => cancelURDPurchase(transactionId),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['urd-purchase'] });
-      toast.success('URD purchase cancelled.');
+      toast.success(TOAST.URD_PURCHASE.CANCELLED);
       onSuccess?.(data);
     },
     onError: (error) => {

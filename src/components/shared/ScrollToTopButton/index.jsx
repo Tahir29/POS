@@ -122,7 +122,7 @@ export default function ScrollToTopButton() {
       onClick={handleClick}
       aria-label="Scroll to top"
       className={`
-        fixed bottom-20 right-4 z-99 md:bottom-10 md:right-10
+        fixed bottom-30 right-4 z-99 md:right-10
         flex h-11 w-11 items-center justify-center rounded-full
         bg-primary text-primary-foreground shadow-lg
         transition-all duration-200
