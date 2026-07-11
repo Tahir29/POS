@@ -7,6 +7,8 @@ import {
   ArrowLeftRight,
   Gem,
   Coins,
+  CreditCard,
+  FileText,
   BookOpen,
   ClipboardCheck,
   BarChart2,
@@ -15,15 +17,12 @@ import { cn } from '@/lib/utils';
 
 // ── QUICK ACTION CONFIG ───────────────────────────────────────
 //
-// Expanded from 4 to 8 tiles to match the new dashboard design and the
-// already-agreed dashboard plan (post-sale modules: returns, exchange,
-// buyback, URD purchase, scheme payment, day close). All routes below
-// were confirmed to already exist in src/app/(pos)/ before wiring —
-// no new pages required.
-//
-// "Scheme Payment" links to /schemes (no dedicated payment sub-route
-// exists yet) rather than /schemes/enroll, since paying an existing
-// enrollment is a different action from enrolling a new one.
+// PHASE 22.5 — all six transaction types (Returns, Refunds, Credit Notes,
+// Exchange, Buyback, URD Purchase) now live as tabs on the single
+// /transactions page, which supports deep-linking via ?tab=<id>. The
+// previously-separate /returns, /exchange, /buyback, /urd-purchase pages
+// have been deleted, so these tiles route there instead. Refunds and
+// Credit Notes are new tiles — they had no create UI anywhere before.
 
 const QUICK_ACTIONS = [
   {
@@ -39,7 +38,23 @@ const QUICK_ACTIONS = [
     label:       'New Return',
     description: 'Process a return',
     icon:        RotateCcw,
-    href:        '/returns',
+    href:        '/transactions?tab=returns',
+    accent:      'bg-card text-foreground border border-border hover:bg-accent',
+  },
+  {
+    id:          'refund',
+    label:       'Refund',
+    description: 'Refund customer',
+    icon:        CreditCard,
+    href:        '/transactions?tab=refunds',
+    accent:      'bg-card text-foreground border border-border hover:bg-accent',
+  },
+  {
+    id:          'credit-note',
+    label:       'Credit Note',
+    description: 'Issue store credit',
+    icon:        FileText,
+    href:        '/transactions?tab=credit-notes',
     accent:      'bg-card text-foreground border border-border hover:bg-accent',
   },
   {
@@ -47,7 +62,7 @@ const QUICK_ACTIONS = [
     label:       'Exchange',
     description: 'Item exchange',
     icon:        ArrowLeftRight,
-    href:        '/exchange',
+    href:        '/transactions?tab=exchange',
     accent:      'bg-card text-foreground border border-border hover:bg-accent',
   },
   {
@@ -55,7 +70,7 @@ const QUICK_ACTIONS = [
     label:       'Buyback',
     description: 'Buy from customer',
     icon:        Gem,
-    href:        '/buyback',
+    href:        '/transactions?tab=buyback',
     accent:      'bg-card text-foreground border border-border hover:bg-accent',
   },
   {
@@ -63,7 +78,7 @@ const QUICK_ACTIONS = [
     label:       'URD Purchase',
     description: 'Record purchase',
     icon:        Coins,
-    href:        '/urd-purchase',
+    href:        '/transactions?tab=urd',
     accent:      'bg-card text-foreground border border-border hover:bg-accent',
   },
   {

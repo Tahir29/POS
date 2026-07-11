@@ -125,40 +125,52 @@ function CheckoutScreen() {
 
   // ── Checkout form ──────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col gap-6 max-w-5xl mx-auto w-full pb-28">
+    <div className="flex flex-col gap-6 max-w-5xl mx-auto w-full pb-28 p-4 md:p-6">
+      <div className='flex align-top justify-center gap-4'>
+        <div className="flex flex-col gap-4 w-full">
+          {/* Customer attached to this sale */}
+          <CheckoutCustomerSummary />
+
+          {/* Order items — same CartItemRow used on the Cart page, read-only here */}
+          <section className="rounded-xl border border-stone-200 bg-white p-4">
+            <h2 className="text-sm font-bold text-stone-800 mb-1">
+              Order Items <span className="text-muted-foreground font-normal text-xs">({items.length} item{items.length !== 1 ? 's' : ''})</span>
+            </h2>
+            <div>
+              {items.map((item) => (
+                <CartItemRow
+                  key={`${item.itemId}-${item.sizeId}-${item.styleId}`}
+                  item={item}
+                  readOnly
+                />
+              ))}
+            </div>
+          </section>
+
+          {/* Order summary */}
+          <section className="rounded-xl border border-stone-200 bg-white p-4">
+            <h2 className="text-sm font-bold text-stone-800 mb-1">Order Summary</h2>
+            <CartSummary />
+          </section>
+        </div>
+        <div className="flex flex-col gap-4 w-full">
+          {/* Promo code / discount */}
+          <CheckoutDiscountSection />
+
+          {/* Payment modes + invoice helper balances */}
+          <CheckoutPaymentSection onChange={setPayments} />
+        </div>
+      </div>
 
       <div className="flex flex-col gap-4">
 
-        {/* Customer attached to this sale */}
-        <CheckoutCustomerSummary />
+        
 
-        {/* Order items — same CartItemRow used on the Cart page, read-only here */}
-        <section className="rounded-xl border border-stone-200 bg-white p-4">
-          <h2 className="text-sm font-bold text-stone-800 mb-1">
-            Order Items <span className="text-muted-foreground font-normal text-xs">({items.length} item{items.length !== 1 ? 's' : ''})</span>
-          </h2>
-          <div>
-            {items.map((item) => (
-              <CartItemRow
-                key={`${item.itemId}-${item.sizeId}-${item.styleId}`}
-                item={item}
-                readOnly
-              />
-            ))}
-          </div>
-        </section>
+        
 
-        {/* Promo code / discount */}
-        <CheckoutDiscountSection />
+        
 
-        {/* Payment modes + invoice helper balances */}
-        <CheckoutPaymentSection onChange={setPayments} />
-
-        {/* Order summary */}
-        <section className="rounded-xl border border-stone-200 bg-white p-4">
-          <h2 className="text-sm font-bold text-stone-800 mb-1">Order Summary</h2>
-          <CartSummary />
-        </section>
+        
 
       </div>
 

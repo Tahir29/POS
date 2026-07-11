@@ -52,7 +52,7 @@ export default function ProductStickyActionBar({
 
   return (
     <div className="sticky bottom-0 left-0 right-0 z-20 border-t border-border bg-card px-4 py-3 md:px-6">
-      <div className="max-w-5xl mx-auto">
+      <div className="max-w-full mx-auto">
 
         {/* Made-to-Order notice — non-blocking, quantity is never capped */}
         {madeToOrderQty > 0 && (
@@ -77,23 +77,24 @@ export default function ProductStickyActionBar({
               {total != null ? formatINR(total) : '—'}
             </p>
           </div>
+          <div className="flex items-center gap-3">
+            {/* Quantity — not capped by stock */}
+            <QuantitySelector
+              quantity={quantity}
+              onChange={onQuantityChange}
+              maxQty={QUANTITY_CEILING}
+            />
 
-          {/* Quantity — not capped by stock */}
-          <QuantitySelector
-            quantity={quantity}
-            onChange={onQuantityChange}
-            maxQty={QUANTITY_CEILING}
-          />
-
-          {/* Add to Cart — always enabled regardless of stock vs quantity */}
-          <AddToCartButton
-            product={product}
-            quantity={quantity}
-            selectedSizeId={selectedSizeId}
-            selectedSizeName={selectedSizeName}
-            stockStatus={stockStatus}
-            primaryImage={primaryImage}
-          />
+            {/* Add to Cart — always enabled regardless of stock vs quantity */}
+            <AddToCartButton
+              product={product}
+              quantity={quantity}
+              selectedSizeId={selectedSizeId}
+              selectedSizeName={selectedSizeName}
+              stockStatus={stockStatus}
+              primaryImage={primaryImage}
+            />
+          </div>
         </div>
       </div>
     </div>
