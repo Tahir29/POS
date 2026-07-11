@@ -10,23 +10,53 @@
 // To switch image source in future (e.g. OrnaVerse starts serving images):
 //   Stop passing shopifyImages prop from the page — the component automatically
 //   falls back to OrnaVerse fields. No changes needed here.
+//
+// FIX: this file used to carry its own local copy of the OrnaVerse path
+// resolver (resolveOrnaverseSrc), separate from lib/resolveImageSrc.js.
+// That local copy never got the "upload/" path-prefix fix applied to the
+// shared helper, so it was silently still broken here even after the
+// catalog grid was fixed — it just never showed because OrnaVerse's
+// native image fields are null on UAT. Now imports the shared,
+// corrected resolveImageSrc instead of maintaining a second copy.
 
 import { useState, useRef } from 'react';
 import Image from 'next/image';
 import { ChevronLeft, ChevronRight, ZoomIn } from 'lucide-react';
 import ProductImageZoomModal from '@/components/features/products/ProductImageZoomModal';
+import { resolveImageSrc } from '@/lib/resolveImageSrc';
 
-const IMAGE_BASE_URL = process.env.NEXT_PUBLIC_ORNAVERSE_BASE_URL
-  ? `${process.env.NEXT_PUBLIC_ORNAVERSE_BASE_URL}/`.replace(/\/\/$/, '/')
-  : '';
+// Known colour keywords used in Shopify image `alt` text. Anything whose alt
+// doesn't match one of these (e.g. "Cert") is treated as colour-agnostic and
+// always shown alongside whichever colour is active.
+const COLOR_KEYWORDS = ['yellow', 'rose', 'white'];
 
-function resolveOrnaverseSrc(raw) {
-  if (!raw || raw === 'NA') return null;
-  if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
-  if (raw.startsWith('/')) return raw;
-  if (IMAGE_BASE_URL) return `${IMAGE_BASE_URL}${raw}`;
-  return null;
+function altMatchesColor(alt, colorNameLower) {
+  if (!alt) return false;
+  const altLower = alt.toLowerCase();
+  return colorNameLower.includes(altLower) || altLower.includes(colorNameLower);
 }
+
+function isColorAgnostic(alt) {
+  if (!alt) return true;
+  const altLower = alt.toLowerCase();
+  return !COLOR_KEYWORDS.some((kw) => altLower.includes(kw));
+}
+
+function filterShopifyImagesByColor(shopifyImages, activeColorName) {
+  if (!activeColorName || shopifyImages.length === 0) return shopifyImages;
+
+  const colorNameLower = activeColorName.toLowerCase();
+  const matched = shopifyImages.filter(
+    (img) => altMatchesColor(img.alt, colorNameLower) || isColorAgnostic(img.alt)
+  );
+
+  // Defensive fallback — if the active colour name doesn't match anything
+  // (e.g. an unexpected colour name we haven't seen), show everything
+  // rather than an empty gallery.
+  return matched.length > 0 ? matched : shopifyImages;
+}
+
+
 
 function NoImagePlaceholder() {
   return (
@@ -48,23 +78,44 @@ function NoImagePlaceholder() {
   );
 }
 
+function GallerySkeleton() {
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="w-full rounded-2xl bg-stone-100 animate-pulse" style={{ aspectRatio: '1 / 1' }} />
+      <div className="flex gap-2 justify-center">
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="w-14 h-14 rounded-lg bg-stone-100 animate-pulse shrink-0" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /**
- * @param {object}   product       — OrnaVerse item/style object
- * @param {Array}    shopifyImages — [{ id, src, alt, width, height, position }]
- *                                   from useShopifyProductImages; defaults to []
+  * @param {object}   product         — OrnaVerse item/style object
+ * @param {Array}    shopifyImages   — [{ id, src, alt, width, height, position }]
+ *                                     from useShopifyProductImages; defaults to []
+ * @param {string}   activeColorName — the currently active item's metal_color_name
+ *                                     (e.g. "Yellow Gold"), used to filter shopifyImages
+ *                                     down to just that colour's photos
+ * @param {boolean}  isLoading       — true while variant/Shopify data is still
+ *                                     resolving — shows a skeleton instead of
+ *                                     the "no image" empty state
  */
-export default function ProductImageGallery({ product, shopifyImages = [] }) {
+export default function ProductImageGallery({ product, shopifyImages = [], activeColorName = null, isLoading = false }) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [imgErrors, setImgErrors]       = useState({});
   const [zoomOpen, setZoomOpen]         = useState(false);
   const touchStartX                     = useRef(null);
 
   // ── Build image list ───────────────────────────────────────────────────────
-  // Priority 1: Shopify images (sorted by position, already done in hook)
+    // Priority 1: Shopify images (sorted by position, already done in hook),
+  //             filtered down to the active variant's colour.
   // Priority 2: OrnaVerse image fields (currently null on UAT)
   const images = (() => {
     if (shopifyImages.length > 0) {
-      return shopifyImages.map((img) => ({
+      const filtered = filterShopifyImagesByColor(shopifyImages, activeColorName);
+      return filtered.map((img) => ({
         src: img.src,
         alt: img.alt ?? product?.item_name ?? 'Product image',
       }));
@@ -82,10 +133,15 @@ export default function ProductImageGallery({ product, shopifyImages = [] }) {
       product?.image_8,
     ];
     return fields
-      .map(resolveOrnaverseSrc)
+      .map(resolveImageSrc)
       .filter(Boolean)
       .map((src) => ({ src, alt: product?.item_name ?? 'Product image' }));
   })();
+
+  // Reset to the first image whenever the filtered set changes shape (e.g.
+  // switching colour) so we don't end up pointed at an index that no longer
+  // exists in the new, shorter filtered list.
+  const safeIndex = currentIndex < images.length ? currentIndex : 0;
 
   // ── Touch swipe ───────────────────────────────────────────────────────────
   const handleTouchStart = (e) => { touchStartX.current = e.touches[0].clientX; };
@@ -100,8 +156,14 @@ export default function ProductImageGallery({ product, shopifyImages = [] }) {
   const goNext = () => setCurrentIndex((i) => (i === images.length - 1 ? 0 : i + 1));
   const handleImgError = (index) => setImgErrors((prev) => ({ ...prev, [index]: true }));
 
-  const current   = images[currentIndex];
-  const showImage = images.length > 0 && current?.src && !imgErrors[currentIndex];
+  // Genuinely loading (no data of any kind to show yet) — skeleton, not the
+  // hard "no image" state.
+  if (isLoading && images.length === 0) {
+    return <GallerySkeleton />;
+  }
+
+  const current   = images[safeIndex];
+  const showImage = images.length > 0 && current?.src && !imgErrors[safeIndex];
 
   return (
     <div className="flex flex-col gap-3">
@@ -129,7 +191,7 @@ export default function ProductImageGallery({ product, shopifyImages = [] }) {
               sizes="(max-width: 768px) 100vw, 50vw"
               className="object-cover"
               priority
-              onError={() => handleImgError(currentIndex)}
+              onError={() => handleImgError(safeIndex)}
             />
           </button>
         ) : (
@@ -169,19 +231,37 @@ export default function ProductImageGallery({ product, shopifyImages = [] }) {
         </p>
       )}
 
-      {/* Dot indicators */}
+      {/* Thumbnail strip — replaces dot indicators */}
       {images.length > 1 && (
-        <div role="tablist" aria-label="Image thumbnails" className="flex items-center justify-center gap-1.5">
-          {images.map((_, i) => (
+        <div
+          role="tablist"
+          aria-label="Image thumbnails"
+          className="flex items-center gap-2 overflow-x-auto scrollbar-none px-0.5 py-0.5"
+        >
+          {images.map((img, i) => (
             <button
-              key={i} role="tab"
-              aria-selected={i === currentIndex}
+              key={img.src}
+              role="tab"
+              aria-selected={i === safeIndex}
               aria-label={`Image ${i + 1}`}
               onClick={() => setCurrentIndex(i)}
-              className={`rounded-full transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${
-                i === currentIndex ? 'w-4 h-2 bg-amber-500' : 'w-2 h-2 bg-stone-300 hover:bg-stone-400'
+              className={`relative w-14 h-14 shrink-0 rounded-lg overflow-hidden border-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${
+                i === safeIndex ? 'border-amber-500' : 'border-transparent hover:border-stone-300'
               }`}
-            />
+            >
+              {!imgErrors[i] ? (
+                <Image
+                  src={img.src}
+                  alt={img.alt}
+                  fill
+                  sizes="56px"
+                  className="object-cover"
+                  onError={() => handleImgError(i)}
+                />
+              ) : (
+                <div className="w-full h-full bg-stone-100" />
+              )}
+            </button>
           ))}
         </div>
       )}
@@ -190,7 +270,7 @@ export default function ProductImageGallery({ product, shopifyImages = [] }) {
         isOpen={zoomOpen}
         onClose={() => setZoomOpen(false)}
         images={images}
-        currentIndex={currentIndex}
+        currentIndex={safeIndex}
         onIndexChange={setCurrentIndex}
       />
     </div>

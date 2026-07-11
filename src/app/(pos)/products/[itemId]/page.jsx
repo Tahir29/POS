@@ -36,6 +36,7 @@ import ProductAttributeList  from '@/components/features/products/ProductAttribu
 import ProductBreadcrumb     from '@/components/features/products/ProductBreadcrumb';
 import ProductDetailSkeleton from '@/components/features/products/ProductDetailSkeleton';
 import CrossStoreStockPanel  from '@/components/features/products/CrossStoreStockPanel';
+import ProductTrustBadge     from '@/components/features/products/ProductTrustBadge';
 import CustomizeSheet        from '@/components/features/products/CustomizeSheet';
 import ProductStickyActionBar from '@/components/features/products/ProductStickyActionBar';
 import ProductTrustSection   from '@/components/features/products/ProductTrustSection';
@@ -93,7 +94,7 @@ function ProductDetailScreen() {
 
   const { data: stockData, isLoading: stockLoading, isFetching: stockFetching } = useProductStock(product?.item_code);
   const { data: storeStocks = [], isLoading: storeStocksLoading } = useStockByStores(product?.item_id);
-  const { data: attributes = [] }                              = useProductAttributes(product?.type_id ?? null);
+  const { data: attributes = [] } = useProductAttributes(null);
 
   // ── Variants ──────────────────────────────────────────────────────────────
   const {
@@ -109,7 +110,14 @@ function ProductDetailScreen() {
   } = useDesignVariants(product?.style_id ?? null);
 
   // ── Shopify images ────────────────────────────────────────────────────────
-  const { images: shopifyImages, primaryImage } = useShopifyProductImages(externalProductId);
+    const { images: shopifyImages, primaryImage, isLoading: shopifyImagesLoading } = useShopifyProductImages(externalProductId);
+
+  // Gallery is genuinely "loading" while either: variants are still
+  // resolving (which is what determines externalProductId in the first
+  // place), or the Shopify images fetch itself is in flight. Combining both
+  // avoids the gallery flashing a hard "no image" state before either has
+  // had a chance to return data.
+  const imagesLoading = variantsLoading || shopifyImagesLoading;
 
   // ── UI state ──────────────────────────────────────────────────────────────
   const [customizeOpen, setCustomizeOpen] = useState(false);
@@ -117,11 +125,11 @@ function ProductDetailScreen() {
   const [quantity, setQuantity] = useState(1);
 
   // Reset when navigating to a different product
-  useEffect(() => {
-    setSelectedVariant(null);
-    setCustomizeOpen(false);
-    setQuantity(1);
-  }, [itemId]);
+  // useEffect(() => {
+  //   setSelectedVariant(null);
+  //   setCustomizeOpen(false);
+  //   setQuantity(1);
+  // }, [itemId]);
 
   useEffect(() => {
     if (detailError) toast.error(TOAST.GENERIC.SOMETHING_WRONG);
@@ -198,11 +206,11 @@ function ProductDetailScreen() {
 
         <ProductBreadcrumb product={product} />
 
-        <div className="flex flex-col md:flex-row gap-6 md:gap-8">
+        <div className="flex flex-col xl:flex-row gap-6 md:gap-8">
 
           {/* Left — Image gallery */}
-          <div className="w-full md:w-[45%] shrink-0">
-            <ProductImageGallery product={activeItem} shopifyImages={shopifyImages} />
+          <div className="w-full xl:w-[45%] shrink-0">
+            <ProductImageGallery product={activeItem} shopifyImages={shopifyImages} activeColorName={activeItem?.metal_color_name ?? null} isLoading={imagesLoading} />
           </div>
 
           {/* Right — Info + actions */}
@@ -216,7 +224,7 @@ function ProductDetailScreen() {
             )}
 
             {/* Product name */}
-            <h1 className="font-heading text-xl text-foreground leading-snug md:text-2xl">
+            <h1 className="font-heading text-xl text-foreground leading-snug md:text-3xl">
               {product.item_name ?? 'Product'}
             </h1>
 
@@ -316,13 +324,15 @@ function ProductDetailScreen() {
           </div>
         </div>
 
-        <ProductTrustSection />
+        <ProductTrustBadge />
 
         <ProductSpecifications product={activeItem} />
 
-        {attributes.length > 0 && (
+        <ProductTrustSection />
+
+        {/* {attributes.length > 0 && (
           <ProductAttributeList attributes={attributes} />
-        )}
+        )} */}
 
       </div>
 

@@ -64,7 +64,7 @@ function SpecCard({ icon, title, rows, info }) {
               {icon}
             </span>
           )}
-          <h3 className="text-xs font-bold uppercase tracking-wider text-stone-600">
+          <h3 className="font-heading text-base text-foreground">
             {title}
           </h3>
         </div>
@@ -86,34 +86,27 @@ function SpecCard({ icon, title, rows, info }) {
   );
 }
 
-// ── Inline SVG icons ──────────────────────────────────────────────────────────
+// ── Icon images ────────────────────────────────────────────────────────────────
+// Replaces the previous inline SVG components. Each icon is a small <img>
+// pointing at the hosted Shopify CDN asset.
 
-const MetalIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M12 3c-4.97 0-9 2.24-9 5s4.03 5 9 5 9-2.24 9-5-4.03-5-9-5z"/>
-    <path d="M3 8c0 2.76 4.03 5 9 5s9-2.24 9-5"/>
-    <path d="M3 13c0 2.76 4.03 5 9 5s9-2.24 9-5"/>
-  </svg>
-);
+const ICON_URLS = {
+  metal: 'https://cdn.shopify.com/s/files/1/0739/8516/3482/files/PDPIcons_metal.svg',
+  dimension: 'https://cdn.shopify.com/s/files/1/0739/8516/3482/files/PDPIcons_dimension.svg',
+  diamond: 'https://cdn.shopify.com/s/files/1/0739/8516/3482/files/PDPIcons_diamond.svg',
+  classification: 'https://cdn.shopify.com/s/files/1/0739/8516/3482/files/PDPIcons_diamond.svg',
+};
 
-const DimensionIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M3 7h18M3 12h10M3 17h10M17 12l4 5-4-5 4-5-4 5z"/>
-  </svg>
-);
+function SpecIcon({ src, alt }) {
+  return (
+    <img src={src} alt={alt} width={14} height={14} className="shrink-0" loading="lazy" />
+  );
+}
 
-const DiamondIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M2.7 10.3a2.41 2.41 0 0 0 0 3.41l7.59 7.57a2.41 2.41 0 0 0 3.41 0l7.59-7.57a2.41 2.41 0 0 0 0-3.41L13.7 2.71a2.41 2.41 0 0 0-3.41 0Z"/>
-  </svg>
-);
-
-const TagIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M12 2H2v10l9.29 9.29a1 1 0 0 0 1.41 0l7.3-7.3a1 1 0 0 0 0-1.41z"/>
-    <path d="M7 7h.01"/>
-  </svg>
-);
+const MetalIcon = () => <SpecIcon src={ICON_URLS.metal} alt="Metal" />;
+const DimensionIcon = () => <SpecIcon src={ICON_URLS.dimension} alt="Dimension" />;
+const DiamondIcon = () => <SpecIcon src={ICON_URLS.diamond} alt="Diamond" />;
+const TagIcon = () => <SpecIcon src={ICON_URLS.classification} alt="Classification" />;
 
 // ── ProductSpecifications ─────────────────────────────────────────────────────
 
@@ -125,23 +118,25 @@ export default function ProductSpecifications({ product }) {
     ?? (product.purity && product.purity !== 0 ? String(product.purity) : null);
   const metalColor  = val(product.metal_color_name);
   const metalType   = val(product.metal_name);
-  const hallmark    = val(product.hallmark ?? product.hallmark_no);
+  // const hallmark    = val(product.hallmark ?? product.hallmark_no);
   const netWeight   = formatWeight(product.net_weight);
 
   // ── Dimension / Weight ────────────────────────────────────────────────────
   const height        = formatDimension(product.height);
   const width         = formatDimension(product.width);
-  const length        = formatDimension(product.length);
+  const depth         = formatDimension(product.depth);
+  const length         = formatDimension(product.length);
   const grossWeight   = formatWeight(product.weight);
-  const stoneWeight   = formatWeight(product.stone_weight ?? product.color_stone_weight);
+  const stoneWeight   = formatWeight(product.stone_weight);
   const diamondWeight = formatWeight(product.diamond_weight);
   const pointerCt     = formatCarats(product.pointer_weight);
 
   // ── Diamond & Stone ───────────────────────────────────────────────────────
   const diamondPieces    = product.diamond_pieces      > 0 ? String(product.diamond_pieces)     : null;
-  const diamondQuality   = val(product.diamond_quality);
-  const diamondShape     = val(product.diamond_shape);
-  const diamondCarats    = formatCarats(product.diamond_carat ?? product.diamond_weight);
+  const diamondCarats    = formatCarats(product.diamond_weight);
+  // const diamondQuality   = val(product.diamond_quality);
+  // const diamondShape     = val(product.diamond_shape);
+  // const diamondCarats    = formatCarats(product.diamond_carat ?? product.diamond_weight);
   const stonePieces      = product.stone_pieces        > 0 ? String(product.stone_pieces)       : null;
   const colorStonePieces = product.color_stone_pieces  > 0 ? String(product.color_stone_pieces) : null;
   const colorStoneWeight = formatWeight(product.color_stone_weight);
@@ -162,7 +157,7 @@ export default function ProductSpecifications({ product }) {
     <div className="flex flex-col gap-3">
 
       {/* Row 1 — Metal + Dimension side by side on tablet */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <SpecCard
           icon={<MetalIcon />}
           title="Metal"
@@ -171,7 +166,7 @@ export default function ProductSpecifications({ product }) {
             { label: 'Color',      value: metalColor },
             { label: 'Metal Type', value: metalType },
             { label: 'Net Wt',     value: netWeight },
-            { label: 'Hallmark',   value: hallmark },
+            // { label: 'Hallmark',   value: hallmark },
           ]}
         />
 
@@ -182,30 +177,31 @@ export default function ProductSpecifications({ product }) {
             { label: 'Height',       value: height },
             { label: 'Width',        value: width },
             { label: 'Length',       value: length },
+            { label: 'Depth',        value: depth },
             { label: 'Gross Wt',     value: grossWeight },
             { label: 'Stone Wt',     value: stoneWeight },
             { label: 'Diamond Wt',   value: diamondWeight },
             { label: 'Diamond (ct)', value: pointerCt },
           ]}
         />
-      </div>
 
-      {/* Row 2 — Diamond & Stone full width */}
-      <SpecCard
-        icon={<DiamondIcon />}
-        title="Diamond"
-        rows={[
-          { label: 'Quality',             value: diamondQuality },
-          { label: 'Shape',               value: diamondShape },
-          { label: 'Quantity',            value: diamondPieces },
-          { label: 'Carat',               value: diamondCarats },
-          { label: 'Stone Pieces',        value: stonePieces },
-          { label: 'Colour Stone Pieces', value: colorStonePieces },
-          { label: 'Colour Stone Weight', value: colorStoneWeight },
-          { label: 'Other Pieces',        value: otherPieces },
-          { label: 'Other Weight',        value: otherWeight },
-        ]}
-      />
+        {/* Row 2 — Diamond & Stone full width */}
+        <SpecCard
+          icon={<DiamondIcon />}
+          title="Diamond"
+          rows={[
+            // { label: 'Quality',             value: diamondQuality },
+            // { label: 'Shape',               value: diamondShape },
+            { label: 'Quantity',            value: diamondPieces },
+            { label: 'Carat',               value: diamondCarats },
+            { label: 'Stone Pieces',        value: stonePieces },
+            { label: 'Colour Stone Pieces', value: colorStonePieces },
+            { label: 'Colour Stone Weight', value: colorStoneWeight },
+            { label: 'Other Pieces',        value: otherPieces },
+            { label: 'Other Weight',        value: otherWeight },
+          ]}
+        />
+      </div>
 
       {/* Row 3 — Classification full width */}
       <SpecCard

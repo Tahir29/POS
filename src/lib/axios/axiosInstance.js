@@ -21,7 +21,9 @@ if (!BASE_URL) {
 }
 
 // ── CREATE INSTANCE ───────────────────────────────────────────
+// baseURL: '/api',
 const axiosInstance = axios.create({
+  // baseURL: '/api',
   baseURL: BASE_URL,
   headers: {
     'Content-Type': 'application/json',
