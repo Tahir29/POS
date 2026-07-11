@@ -13,7 +13,7 @@
 //   4. canConfirm allows OOS and MTO variants.
 //   5. State resets cleanly on sheet close.
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import BottomSheet from '@/components/shared/BottomSheet';
 
 // ── Metal color gradient map ──────────────────────────────────────────────────
@@ -226,15 +226,27 @@ export default function CustomizeSheet({
   const [selectedKaratId,      setSelectedKaratId]      = useState(null);
   const [selectedSizeId,       setSelectedSizeId]       = useState(null);
 
-  // Seed from product defaults every time the sheet opens
-  useEffect(() => {
-    if (!isOpen) return;
-    const source = selectedVariant ?? product;
-    if (!source) return;
-    setSelectedMetalColorId(source.metal_color_id ?? null);
-    setSelectedKaratId(source.karat_id             ?? null);
-    setSelectedSizeId(source.item_size_id          ?? null);
-  }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Seed from product defaults every time the sheet opens.
+  // FIX: previously did this in a useEffect keyed on [isOpen], which React
+  // Compiler flags (setState-synchronously-in-effect risks a cascading
+  // render). This sheet stays mounted across open/close for its slide
+  // transition, so remounting via `key` (the fix used on the product
+  // detail page for the same class of problem) isn't an option here — it
+  // would break the close animation. Instead this uses React's documented
+  // "adjust state during render" pattern: track the previous isOpen in a
+  // plain useState and compare during render, calling setState only when
+  // the tracked value actually changes. This runs synchronously during
+  // render (not in an effect), so there's no extra render pass.
+  const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
+  if (isOpen !== prevIsOpen) {
+    setPrevIsOpen(isOpen);
+    if (isOpen) {
+      const source = selectedVariant ?? product;
+      setSelectedMetalColorId(source?.metal_color_id ?? null);
+      setSelectedKaratId(source?.karat_id             ?? null);
+      setSelectedSizeId(source?.item_size_id          ?? null);
+    }
+  }
 
   // ── Variant matching ──────────────────────────────────────────────────────
   // Try to find an exact variant first

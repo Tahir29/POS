@@ -90,6 +90,8 @@ const TOAST = {
   REFUNDS: {
     CREATED:      'Refund recorded successfully.',
     CREATE_FAILED:'Failed to record refund. Please try again.',
+    COMPLETED:    'Refund completed successfully.',
+    DELETED:      'Refund deleted.',
     LOAD_FAILED:  'Failed to load refunds. Please try again.',
   },
 

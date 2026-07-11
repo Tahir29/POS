@@ -59,7 +59,7 @@ function DashboardScreen() {
   };
 
   return (
-    <div className="flex flex-col gap-6 max-w-6xl mx-auto w-full">
+    <div className="flex flex-col gap-6 max-w-6xl mx-auto w-full px-4 md:px-6">
 
       {/* ── Manual refresh ─────────────────────────────────────── */}
       <div className="flex justify-end -mb-2">

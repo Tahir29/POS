@@ -26,7 +26,7 @@ export default function QuantitySelector({
   const canIncrement = quantity < maxQty;
 
   return (
-    <div className="flex items-center gap-1" aria-label="Quantity selector">
+    <div className="flex items-center gap-1 rounded-lg border border-stone-200 bg-white" aria-label="Quantity selector">
 
       {/* Decrement */}
       <button
@@ -36,8 +36,7 @@ export default function QuantitySelector({
         aria-label="Decrease quantity"
         className="
           flex items-center justify-center
-          min-w-[44px] min-h-[44px] rounded-xl
-          border border-stone-200 bg-white
+          min-w-[44px] min-h-[44px]
           text-stone-600
           hover:bg-stone-50 hover:border-stone-300
           disabled:opacity-40 disabled:cursor-not-allowed
@@ -56,7 +55,6 @@ export default function QuantitySelector({
           flex items-center justify-center
           min-w-[52px] min-h-[44px] px-3
           text-base font-semibold text-stone-800
-          border border-stone-200 rounded-xl bg-white
           select-none
         "
       >
@@ -71,8 +69,7 @@ export default function QuantitySelector({
         aria-label="Increase quantity"
         className="
           flex items-center justify-center
-          min-w-[44px] min-h-[44px] rounded-xl
-          border border-stone-200 bg-white
+          min-w-[44px] min-h-[44px]
           text-stone-600
           hover:bg-stone-50 hover:border-stone-300
           disabled:opacity-40 disabled:cursor-not-allowed

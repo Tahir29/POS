@@ -16,37 +16,38 @@ import {
   ShieldCheck, RefreshCw, Truck, Gem,
   Star, ChevronDown,
 } from 'lucide-react';
+import Image from 'next/image';
 
 // ── Trust badge strip ─────────────────────────────────────────────────────────
 
-const TRUST_BADGES = [
-  { icon: ShieldCheck, title: 'IGI Certified',       subtitle: 'Every diamond graded' },
-  { icon: RefreshCw,   title: 'Lifetime Exchange',   subtitle: '100% value back' },
-  { icon: Truck,       title: 'Free Insured Shipping', subtitle: 'Fully protected' },
-  { icon: Gem,         title: 'Lifetime Buyback',    subtitle: 'Transparent rates' },
-];
+// const TRUST_BADGES = [
+//   { icon: ShieldCheck, title: 'IGI Certified',       subtitle: 'Every diamond graded' },
+//   { icon: RefreshCw,   title: 'Lifetime Exchange',   subtitle: '100% value back' },
+//   { icon: Truck,       title: 'Free Insured Shipping', subtitle: 'Fully protected' },
+//   { icon: Gem,         title: 'Lifetime Buyback',    subtitle: 'Transparent rates' },
+// ];
 
-function TrustBadgeStrip() {
-  return (
-    <div className="rounded-2xl bg-primary px-4 py-5 md:px-6">
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        {TRUST_BADGES.map(({ icon: Icon, title, subtitle }) => (
-          <div key={title} className="flex items-center gap-2.5">
-            <Icon size={20} className="shrink-0 text-accent" aria-hidden="true" />
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-primary-foreground leading-tight truncate">
-                {title}
-              </p>
-              <p className="text-xs text-primary-foreground/60 leading-tight truncate">
-                {subtitle}
-              </p>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
+// function TrustBadgeStrip() {
+//   return (
+//     <div className="rounded-2xl bg-primary px-4 py-5 md:px-6">
+//       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+//         {TRUST_BADGES.map(({ icon: Icon, title, subtitle }) => (
+//           <div key={title} className="flex items-center gap-2.5">
+//             <Icon size={20} className="shrink-0 text-accent" aria-hidden="true" />
+//             <div className="min-w-0">
+//               <p className="text-sm font-semibold text-primary-foreground leading-tight truncate">
+//                 {title}
+//               </p>
+//               <p className="text-xs text-primary-foreground/60 leading-tight truncate">
+//                 {subtitle}
+//               </p>
+//             </div>
+//           </div>
+//         ))}
+//       </div>
+//     </div>
+//   );
+// }
 
 // ── Why Lucira ────────────────────────────────────────────────────────────────
 
@@ -70,13 +71,15 @@ const WHY_LUCIRA = [
 
 function WhyLuciraSection() {
   return (
-    <div className="rounded-2xl border border-border bg-card p-5 md:p-6">
-      <h2 className="font-heading text-lg text-foreground">Why Lucira</h2>
-      <p className="text-sm text-muted-foreground mt-0.5">Three promises behind every piece</p>
+    <div className="rounded-2xl border border-border bg-card/10 p-5 md:p-6">
+      <div className='flex items-center justify-start gap-2'>
+        <h2 className="font-heading text-lg text-foreground">Why Lucira</h2>
+        <p className="text-sm text-muted-foreground mt-0.5">Three promises behind every piece</p>
+      </div>
 
-      <div className="grid grid-cols-1 gap-5 mt-5 md:grid-cols-3">
+      <div className="grid grid-cols-1 gap-5 mt-4 md:grid-cols-3">
         {WHY_LUCIRA.map(({ num, title, body }) => (
-          <div key={num}>
+          <div key={num} className="relative after:absolute after:w-0.5 after:bg-primary/10 after:top-0 after:bottom-0 after:-right-2.5">
             <p className="font-heading text-2xl text-accent">{num}</p>
             <p className="text-sm font-semibold text-foreground mt-1">{title}</p>
             <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{body}</p>
@@ -89,24 +92,31 @@ function WhyLuciraSection() {
 
 // ── Certified quality + accordion ─────────────────────────────────────────────
 
-const CERT_BADGES = ['IGI', 'SGL', 'BIS Hallmark'];
+const CERT_BADGES = ['https://cdn.shopify.com/s/files/1/0739/8516/3482/files/IGI.png', 'https://cdn.shopify.com/s/files/1/0739/8516/3482/files/SGL_528e2e93-e563-40b6-a8a6-c098475a6de9.png', 'https://cdn.shopify.com/s/files/1/0739/8516/3482/files/BIS.png'];
 
 const ACCORDION_ITEMS = [
   {
     id: 'warranty',
     title: 'Warranty & Return Policy',
     body: 'Lucira offers lifetime exchange and a 15-day free return policy. All products come with certified quality assurance.',
+    image: [],
     defaultOpen: true,
   },
   {
     id: 'care',
     title: 'Care & Maintenance',
-    body: 'Store your jewellery in a dry place away from direct sunlight. Avoid contact with perfumes, lotions, and harsh chemicals. Clean gently with a soft cloth.',
+    image: [],
+    body: 'Clean your jewelry with a soft cloth and avoid chemicals or perfumes for long-lasting shine.',
   },
   {
     id: 'package',
     title: "What's In The Package",
-    body: 'Your piece arrives in a Lucira signature box with authenticity card, certification (where applicable), and a care guide.',
+    image: [
+      'https://cdn.shopify.com/s/files/1/0739/8516/3482/files/Box.jpg',
+      'https://cdn.shopify.com/s/files/1/0739/8516/3482/files/Selvet_a9064cb1-d29c-4bd2-a3b6-3f504dd02d9d.jpg',
+      'https://cdn.shopify.com/s/files/1/0739/8516/3482/files/Thank-You-Card_4d9152e7-daaa-4f9c-9183-3cfbd6620035.jpg'
+    ],
+    body: 'Your Lucira jewelry piece arrives in a premium jewelry box, accompanied by a soft velvet polishing cloth and a thank-you card, crafted to make every unboxing feel special.',
   },
 ];
 
@@ -127,9 +137,18 @@ function AccordionItem({ item }) {
         />
       </button>
       {isOpen && (
-        <p className="text-sm text-muted-foreground leading-relaxed pb-4">
-          {item.body}
-        </p>
+        <>
+          {item.image.length > 0 && (
+            <div className='flex items-center justify-start gap-3 mb-4'>
+              {item.image.map((index) => (
+                <Image key={index} src={index} alt={`Image ${index + 1}`} width={80} height={80} className="rounded-xl" />
+              ))}
+            </div>
+          )}
+          <p className="text-sm text-muted-foreground leading-relaxed pb-4">
+            {item.body}
+          </p>
+        </>
       )}
     </div>
   );
@@ -144,20 +163,19 @@ function CertifiedQualityBlock() {
         <div className="flex items-center justify-between">
           <h3 className="font-heading text-base text-foreground">Certified Quality Guaranteed</h3>
           <button type="button" className="text-xs font-medium text-accent hover:underline">
-            See Sample Certificate
+            <a href="/images/certificate/SampleCertificate.jpg" alt="Sample Certificate" download>
+              See Sample Certificate
+            </a>
           </button>
         </div>
-        <div className="flex items-center gap-6 mt-4">
-          {CERT_BADGES.map((label) => (
+        <div className="flex justify-center items-center gap-6 mt-4">
+          {CERT_BADGES.map((label ) => (
             <div key={label} className="flex flex-col items-center gap-1.5">
-              <span className="flex h-11 w-11 items-center justify-center rounded-full border border-accent/30 text-accent">
-                <Star size={18} aria-hidden="true" />
-              </span>
-              <span className="text-[11px] font-medium text-muted-foreground">{label}</span>
+              <Image src={label} alt={`Certificate ${label + 1}`} width={60} height={60} />
             </div>
           ))}
         </div>
-        <p className="text-xs text-muted-foreground mt-4 leading-relaxed">
+        <p className="text-xs text-muted-foreground mt-4 leading-relaxed text-center">
           <span className="font-semibold text-foreground">Note:</span> Handcrafted and personalized with care — slight variations in metal weight are natural across different sizes.
         </p>
       </div>
@@ -177,7 +195,7 @@ function CertifiedQualityBlock() {
 export default function ProductTrustSection() {
   return (
     <div className="flex flex-col gap-4">
-      <TrustBadgeStrip />
+      {/* <TrustBadgeStrip /> */}
       <WhyLuciraSection />
       <CertifiedQualityBlock />
     </div>
