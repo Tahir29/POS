@@ -20,34 +20,34 @@ import Image from 'next/image';
 
 // ── Trust badge strip ─────────────────────────────────────────────────────────
 
-const TRUST_BADGES = [
-  { icon: ShieldCheck, title: 'IGI Certified',       subtitle: 'Every diamond graded' },
-  { icon: RefreshCw,   title: 'Lifetime Exchange',   subtitle: '100% value back' },
-  { icon: Truck,       title: 'Free Insured Shipping', subtitle: 'Fully protected' },
-  { icon: Gem,         title: 'Lifetime Buyback',    subtitle: 'Transparent rates' },
-];
+// const TRUST_BADGES = [
+//   { icon: ShieldCheck, title: 'IGI Certified',       subtitle: 'Every diamond graded' },
+//   { icon: RefreshCw,   title: 'Lifetime Exchange',   subtitle: '100% value back' },
+//   { icon: Truck,       title: 'Free Insured Shipping', subtitle: 'Fully protected' },
+//   { icon: Gem,         title: 'Lifetime Buyback',    subtitle: 'Transparent rates' },
+// ];
 
-function TrustBadgeStrip() {
-  return (
-    <div className="rounded-2xl bg-primary px-4 py-5 md:px-6">
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        {TRUST_BADGES.map(({ icon: Icon, title, subtitle }) => (
-          <div key={title} className="flex items-center gap-2.5">
-            <Icon size={20} className="shrink-0 text-accent" aria-hidden="true" />
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-primary-foreground leading-tight truncate">
-                {title}
-              </p>
-              <p className="text-xs text-primary-foreground/60 leading-tight truncate">
-                {subtitle}
-              </p>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
+// function TrustBadgeStrip() {
+//   return (
+//     <div className="rounded-2xl bg-primary px-4 py-5 md:px-6">
+//       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+//         {TRUST_BADGES.map(({ icon: Icon, title, subtitle }) => (
+//           <div key={title} className="flex items-center gap-2.5">
+//             <Icon size={20} className="shrink-0 text-accent" aria-hidden="true" />
+//             <div className="min-w-0">
+//               <p className="text-sm font-semibold text-primary-foreground leading-tight truncate">
+//                 {title}
+//               </p>
+//               <p className="text-xs text-primary-foreground/60 leading-tight truncate">
+//                 {subtitle}
+//               </p>
+//             </div>
+//           </div>
+//         ))}
+//       </div>
+//     </div>
+//   );
+// }
 
 // ── Why Lucira ────────────────────────────────────────────────────────────────
 
@@ -79,7 +79,7 @@ function WhyLuciraSection() {
 
       <div className="grid grid-cols-1 gap-5 mt-4 md:grid-cols-3">
         {WHY_LUCIRA.map(({ num, title, body }) => (
-          <div key={num} className="relative after:absolute after:w-0.5 after:bg-primary/10 after:top-0 after:bottom-0 after:right-0">
+          <div key={num} className="relative after:absolute after:w-0.5 after:bg-primary/10 after:top-0 after:bottom-0 after:-right-2.5">
             <p className="font-heading text-2xl text-accent">{num}</p>
             <p className="text-sm font-semibold text-foreground mt-1">{title}</p>
             <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{body}</p>
@@ -141,7 +141,7 @@ function AccordionItem({ item }) {
           {item.image.length > 0 && (
             <div className='flex items-center justify-start gap-3 mb-4'>
               {item.image.map((index) => (
-                <Image key={index} src={index} alt={`Image ${index + 1}`} width={100} height={100} className="rounded-xl" />
+                <Image key={index} src={index} alt={`Image ${index + 1}`} width={80} height={80} className="rounded-xl" />
               ))}
             </div>
           )}
@@ -195,7 +195,7 @@ function CertifiedQualityBlock() {
 export default function ProductTrustSection() {
   return (
     <div className="flex flex-col gap-4">
-      <TrustBadgeStrip />
+      {/* <TrustBadgeStrip /> */}
       <WhyLuciraSection />
       <CertifiedQualityBlock />
     </div>

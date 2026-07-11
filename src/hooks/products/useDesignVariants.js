@@ -84,7 +84,13 @@ export function useDesignVariants(styleId) {
     select:    selectStyleData,
   });
 
-  const variants = data?.variants ?? [];
+  // FIX: `data?.variants ?? []` used to be computed inline below, which
+  // creates a brand-new [] array identity on every render whenever
+  // data?.variants is falsy — that defeated the point of the useMemo calls
+  // further down (their [variants] dep would "change" every render even
+  // with no real data change). Memoizing variants itself once fixes it.
+  const variants = useMemo(() => data?.variants ?? [], [data]);
+
   const externalProductId = data?.externalProductId ?? null;
 
   // Unique metal colour options — filter out NA values

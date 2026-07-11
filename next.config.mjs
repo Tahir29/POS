@@ -61,6 +61,14 @@ const nextConfig = {
       }
     ]
   }
+  // async rewrites() {
+  //   return [
+  //     {
+  //       source: '/api/:path*',
+  //       destination: 'https://lucira.uat.ornaverse.in/:path*',
+  //     },
+  //   ];
+  // }
 };
 
 export default nextConfig;

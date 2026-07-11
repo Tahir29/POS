@@ -148,7 +148,7 @@ export default function OrdersPage() {
   const currentPage = Math.floor(skip / take) + 1;
 
   return (
-    <div className="flex flex-col gap-3 max-w-3xl mx-auto w-full">
+    <div className="flex flex-col gap-3 max-w-3xl mx-auto w-full p-4 md:p-6">
       <div className="relative -mx-4 -mt-4 flex items-center justify-between bg-background px-4 pt-4 pb-2 md:-mx-6 md:-mt-6 md:px-6 md:pt-6">
         <h1 className="text-3xl font-bold text-stone-800">Orders</h1>
         {isAllFetching && !isAllLoading && (
