@@ -246,7 +246,7 @@ export default function ProductImageGallery({ product, shopifyImages = [], activ
               aria-label={`Image ${i + 1}`}
               onClick={() => setCurrentIndex(i)}
               className={`relative w-14 h-14 shrink-0 rounded-lg overflow-hidden border-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${
-                i === safeIndex ? 'border-amber-500' : 'border-transparent hover:border-stone-300'
+                i === safeIndex ? 'border-accent' : 'border-transparent hover:border-stone-300'
               }`}
             >
               {!imgErrors[i] ? (
