@@ -59,10 +59,10 @@ const nextConfig = {
         source: '/ornaverse-api/:path*',
         destination: 'https://lucira.uat.ornaverse.in/:path*',
       },
-      {
-        source: '/api/:path*',
-        destination: 'https://lucira.uat.ornaverse.in/:path*',
-      },
+      // {
+      //   source: '/api/:path*',
+      //   destination: 'https://lucira.uat.ornaverse.in/:path*',
+      // },
     ]
   }
 };

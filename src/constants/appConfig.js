@@ -50,6 +50,7 @@ const APP_CONFIG = {
     CATEGORIES_TAKE:    0,    // fetch all — small static dataset
     CUSTOMERS_TAKE:     50,   // paginated browse
     CUSTOMERS_ALL_TAKE: 5000, // one-off full fetch for name search
+    EMPLOYEES_ALL_TAKE: 5000, // one-off full fetch for name search
     ANALYTICS_TAKE:     12,   // months for revenue charts
     REPORTS_TAKE:       100,
   },

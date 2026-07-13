@@ -17,7 +17,7 @@ import { ChevronDown, ChevronLeft } from 'lucide-react';
 
 import { useSchemes }        from '@/hooks/schemes/useSchemes';
 import { useEnrollCustomer } from '@/hooks/schemes/useEnrollCustomer';
-import { useSalesPerson }    from '@/hooks/schemes/useSalesPerson';
+import { useSalesPersonOptions } from '@/hooks/schemes/useSalesPersonOptions';
 import { selectActiveStoreId }   from '@/store/slices/storeSlice';
 import {
   selectCartCustomerId,
@@ -39,12 +39,13 @@ import PageLoader from '@/components/shared/PageLoader';
 
 // ── Schema ────────────────────────────────────────────────────
 const enrollSchema = z.object({
-  scheme_id:     z.coerce.number().min(1, 'Select a scheme'),
-  scheme_amount: z.coerce.number().min(1, 'Enter monthly amount'),
-  tenure:        z.coerce.number().min(1, 'Enter tenure in months'),
-  document_date: z.string().min(1, 'Required'),
-  nominee:       z.string().optional(),
-  nominee_age:   z.coerce.number().optional(),
+  scheme_id:        z.coerce.number().min(1, 'Select a scheme'),
+  scheme_amount:    z.coerce.number().min(1, 'Enter monthly amount'),
+  tenure:           z.coerce.number().min(1, 'Enter tenure in months'),
+  document_date:    z.string().min(1, 'Required'),
+  sales_person_id:  z.coerce.number().min(1, 'Select a sales person'),
+  nominee:          z.string().optional(),
+  nominee_age:      z.coerce.number().optional(),
 });
 
 // ── Inner screen ──────────────────────────────────────────────
@@ -59,10 +60,10 @@ function EnrollScreen() {
   const enroll = useEnrollCustomer();
 
   // sales_person_id is a confirmed-required field on SchemeEnrollment/Create
-  // (per v1.json SchemeEnrollmentRow) but nothing in the app currently tracks
-  // the logged-in user's employee_id — resolved here via GetUserStores.user_id
-  // → HR/Employee/List. See useSalesPerson.js for caveats.
-  const { salesPersonId, isLoading: salesPersonLoading } = useSalesPerson();
+  // (per v1.json SchemeEnrollmentRow). Mirrors the vendor's own Scheme
+  // Enrollment screen: a store-scoped picker, not an auto-resolved value —
+  // confirmed via a real UAT response listing employees by company_id only.
+  const { salesPersons, isLoading: salesPersonsLoading } = useSalesPersonOptions(storeId);
 
   const today = new Date().toISOString().split('T')[0];
 
@@ -72,12 +73,13 @@ function EnrollScreen() {
   } = useForm({
     resolver: zodResolver(enrollSchema),
     defaultValues: {
-      scheme_id:     '',
-      scheme_amount: '',
-      tenure:        '',
-      document_date: today,
-      nominee:       '',
-      nominee_age:   '',
+      scheme_id:        '',
+      scheme_amount:    '',
+      tenure:           '',
+      document_date:    today,
+      sales_person_id:  '',
+      nominee:          '',
+      nominee_age:      '',
     },
   });
 
@@ -102,9 +104,10 @@ function EnrollScreen() {
       // Total principal committed over the full tenure — monthly amount × months.
       total_amount:  schemeAmount * tenure,
       document_date: data.document_date,
-      // Confirmed required on SchemeEnrollmentRow (v1.json) — resolved via
-      // GetUserStores.user_id → HR/Employee/List (see useSalesPerson.js).
-      sales_person_id: salesPersonId,
+      // Confirmed required on SchemeEnrollmentRow (v1.json) — picked from a
+      // store-scoped list (see useSalesPersonOptions.js), mirroring the
+      // vendor's own Scheme Enrollment screen.
+      sales_person_id: Number(data.sales_person_id),
       // Copied from the scheme's own definition (SchemesRow) rather than guessed —
       // these are enum/config values that belong to the scheme itself, not invented
       // per-enrollment. All confirmed present on SchemesRow in v1.json.
@@ -247,6 +250,41 @@ function EnrollScreen() {
           {errors.document_date && <p className="text-xs text-destructive">{errors.document_date.message}</p>}
         </div>
 
+        {/* Sales person */}
+        <div className="flex flex-col gap-1.5">
+          <Label>Sales Person <span className="text-destructive">*</span></Label>
+          <Controller
+            name="sales_person_id"
+            control={control}
+            render={({ field }) => {
+              const selected = salesPersons.find((p) => p.employee_id === Number(field.value));
+              return (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      className="flex h-11 w-full items-center justify-between rounded-lg border border-input bg-background px-3 text-sm"
+                    >
+                      <span className={selected ? 'text-foreground' : 'text-muted-foreground'}>
+                        {salesPersonsLoading ? 'Loading…' : selected ? selected.employee_name : 'Select sales person'}
+                      </span>
+                      <ChevronDown size={14} className="text-muted-foreground shrink-0" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width] max-h-56 overflow-y-auto">
+                    {salesPersons.map((p) => (
+                      <DropdownMenuItem key={p.employee_id} onSelect={() => field.onChange(p.employee_id)}>
+                        {p.employee_name}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              );
+            }}
+          />
+          {errors.sales_person_id && <p className="text-xs text-destructive">{errors.sales_person_id.message}</p>}
+        </div>
+
         {/* Nominee (optional) */}
         <div className="rounded-xl border border-stone-200 bg-stone-50 p-4 flex flex-col gap-4">
           <p className="text-xs font-medium text-stone-500 uppercase tracking-wide">Nominee (Optional)</p>
@@ -270,23 +308,12 @@ function EnrollScreen() {
           </div>
         </div>
 
-        {!salesPersonLoading && !salesPersonId && (
-          <p className="text-xs text-destructive -mt-2">
-            ⚠ Could not resolve your employee record (sales_person_id) — enrollment
-            is blocked until this is fixed. Contact support.
-          </p>
-        )}
-
         <Button
           type="submit"
-          disabled={enroll.isPending || !customerId || salesPersonLoading || !salesPersonId}
+          disabled={enroll.isPending || !customerId}
           className="h-12 mt-1"
         >
-          {enroll.isPending
-            ? 'Enrolling…'
-            : salesPersonLoading
-              ? 'Loading…'
-              : 'Confirm Enrollment'}
+          {enroll.isPending ? 'Enrolling…' : 'Confirm Enrollment'}
         </Button>
 
       </form>

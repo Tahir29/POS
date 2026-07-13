@@ -21,6 +21,7 @@ export const QUERY_KEYS = {
   // ── HR ───────────────────────────────────────────────────────────────────
   HR: {
     EMPLOYEE_BY_USER: (userId) => ['hr', 'employee-by-user', userId],
+    EMPLOYEES_BY_COMPANY: (companyId) => ['hr', 'employees-by-company', companyId],
   },
 
   // ── SETTINGS ─────────────────────────────────────────────────────────────
