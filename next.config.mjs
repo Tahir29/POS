@@ -53,22 +53,18 @@ const nextConfig = {
       },
     ];
   },
-  async rewrites() {
+ async rewrites() {
     return [
       {
         source: '/ornaverse-api/:path*',
         destination: 'https://lucira.uat.ornaverse.in/:path*',
-      }
+      },
+      {
+        source: '/api/:path*',
+        destination: 'https://lucira.uat.ornaverse.in/:path*',
+      },
     ]
   }
-  // async rewrites() {
-  //   return [
-  //     {
-  //       source: '/api/:path*',
-  //       destination: 'https://lucira.uat.ornaverse.in/:path*',
-  //     },
-  //   ];
-  // }
 };
 
 export default nextConfig;

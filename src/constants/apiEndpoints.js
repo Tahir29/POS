@@ -41,6 +41,16 @@ const API = {
   },
 
   // ─────────────────────────────────────────────────────────────────────────
+  // HR — EMPLOYEE
+  // EmployeeRow.user_id links back to UsersCompanyRow.user_id (from GetUserStores).
+  // Used to resolve the logged-in user's employee_id, which OrnaVerse expects
+  // as `sales_person_id` on SchemeEnrollment/Create (confirmed field name via v1.json).
+  // ─────────────────────────────────────────────────────────────────────────
+  HR: {
+    EMPLOYEE_LIST: 'Services/HR/Employee/List',
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
   // SETTINGS & CONFIGURATION
   // ─────────────────────────────────────────────────────────────────────────
   SETTINGS: {
