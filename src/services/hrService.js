@@ -1,29 +1,28 @@
 // src/services/hrService.js
 // HR / Employee lookups.
 // All functions are pure HTTP wrappers — no business logic.
-//
-// Used to resolve the logged-in user's employee_id, which OrnaVerse requires
-// as `sales_person_id` when creating a scheme enrollment (Services/POS/SchemeEnrollment/Create).
-// EmployeeRow.user_id links back to UsersCompanyRow.user_id (from GetUserStores).
 
 import axiosInstance from '@/lib/axios/axiosInstance';
 import API from '@/constants/apiEndpoints';
+import APP_CONFIG from '@/constants/appConfig';
 
 /**
- * Look up the employee record linked to a given OrnaVerse user_id.
+ * All employees at a given store — used to populate the "Sales Person"
+ * picker on scheme enrollment. Confirmed shape (real UAT response,
+ * 2026-07-13, via the OrnaVerse admin Scheme Enrollment screen):
+ *   [{ employee_id, employee_name, company_id }, ...]
+ * filtered by company_id — NOT by the logged-in user's user_id. Mirrors
+ * how the vendor's own Scheme Enrollment screen resolves this field.
  *
- * NOTE: GetUserStores confirmed returning this key as PascalCase `UserId` on
- * UAT despite v1.json documenting `user_id` (see storeSlice.js). Sending both
- * casings here defensively since Employee/List's actual filter key hasn't
- * been confirmed live — extra unrecognized keys are harmless no-ops on
- * Serenity List filters.
- * @param {number} userId
+ * Uses an explicit Take (not 0) — Take:0 on Serenity list endpoints is
+ * documented elsewhere in this app as returning zero records, not all.
+ * @param {number} companyId
  * @returns {Promise<object>} { Entities: EmployeeRow[] }
  */
-export async function getEmployeeByUserId(userId) {
+export async function getEmployeesByCompany(companyId) {
   const response = await axiosInstance.post(API.HR.EMPLOYEE_LIST, {
-    Take: 1,
-    UserId: userId,
+    Take: APP_CONFIG.PAGINATION.EMPLOYEES_ALL_TAKE,
+    company_id: companyId,
   });
   return response.data;
 }
