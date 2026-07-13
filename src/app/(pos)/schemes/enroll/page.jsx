@@ -17,8 +17,13 @@ import { ChevronDown, ChevronLeft } from 'lucide-react';
 
 import { useSchemes }        from '@/hooks/schemes/useSchemes';
 import { useEnrollCustomer } from '@/hooks/schemes/useEnrollCustomer';
+import { useSalesPerson }    from '@/hooks/schemes/useSalesPerson';
 import { selectActiveStoreId }   from '@/store/slices/storeSlice';
-import { selectCartCustomerId, selectCartCustomerName } from '@/store/slices/cartSlice';
+import {
+  selectCartCustomerId,
+  selectCartCustomerName,
+  selectCartCustomerMobile,
+} from '@/store/slices/cartSlice';
 import APP_CONFIG from '@/constants/appConfig';
 
 import { Button } from '@/components/ui/button';
@@ -44,13 +49,20 @@ const enrollSchema = z.object({
 
 // ── Inner screen ──────────────────────────────────────────────
 function EnrollScreen() {
-  const router       = useRouter();
-  const storeId      = useSelector(selectActiveStoreId);
-  const customerId   = useSelector(selectCartCustomerId);
-  const customerName = useSelector(selectCartCustomerName);
+  const router         = useRouter();
+  const storeId        = useSelector(selectActiveStoreId);
+  const customerId     = useSelector(selectCartCustomerId);
+  const customerName   = useSelector(selectCartCustomerName);
+  const customerMobile = useSelector(selectCartCustomerMobile);
 
   const { schemes, isLoading: schemesLoading } = useSchemes();
   const enroll = useEnrollCustomer();
+
+  // sales_person_id is a confirmed-required field on SchemeEnrollment/Create
+  // (per v1.json SchemeEnrollmentRow) but nothing in the app currently tracks
+  // the logged-in user's employee_id — resolved here via GetUserStores.user_id
+  // → HR/Employee/List. See useSalesPerson.js for caveats.
+  const { salesPersonId, isLoading: salesPersonLoading } = useSalesPerson();
 
   const today = new Date().toISOString().split('T')[0];
 
@@ -73,17 +85,44 @@ function EnrollScreen() {
   const selectedScheme  = schemes.find((s) => s.scheme_id === Number(watchedSchemeId));
 
   const onSubmit = async (data) => {
-    if (!customerId) return;
+    if (!customerId || !selectedScheme) return;
+
+    const schemeAmount = Number(data.scheme_amount);
+    const tenure        = Number(data.tenure);
 
     await enroll.mutateAsync({
       party_id:      customerId,
+      party_name:    customerName   ?? undefined,
+      mobile:        customerMobile ?? undefined,
       company_id:    storeId,
       scheme_id:     Number(data.scheme_id),
-      scheme_amount: Number(data.scheme_amount),
-      tenure:        Number(data.tenure),
+      scheme_amount: schemeAmount,
+      tenure:        tenure,
+      // Required by OrnaVerse (400: "Scheme Amount field is required!" / total_amount).
+      // Total principal committed over the full tenure — monthly amount × months.
+      total_amount:  schemeAmount * tenure,
       document_date: data.document_date,
+      // Confirmed required on SchemeEnrollmentRow (v1.json) — resolved via
+      // GetUserStores.user_id → HR/Employee/List (see useSalesPerson.js).
+      sales_person_id: salesPersonId,
+      // Copied from the scheme's own definition (SchemesRow) rather than guessed —
+      // these are enum/config values that belong to the scheme itself, not invented
+      // per-enrollment. All confirmed present on SchemesRow in v1.json.
+      scheme_type:   selectedScheme.scheme_type,
+      frequency:     selectedScheme.frequency,
+      bonus_type:    selectedScheme.bonus_type,
+      bonus_value:   selectedScheme.bonus_value,
+      use_rules:     selectedScheme.use_rules,
       ...(data.nominee    ? { nominee:     data.nominee }               : {}),
       ...(data.nominee_age ? { nominee_age: Number(data.nominee_age) } : {}),
+      // NOT sent — no reliable source yet, will not guess:
+      //   scheme_status       — enum 0-3, meaning undocumented anywhere (v1.json gives no labels)
+      //   scheme_unique_code  — generation format unknown
+      //   document_id         — meaning unclear ("document reference id"); spec shows a
+      //                         default of 125 but that looks like sample data, not a rule
+      //   email, party_code   — not captured anywhere in the customer session today
+      //   scheme_monthly_details[] — likely server-generated from scheme_amount/tenure/
+      //                         document_date; omit unless the next 400 says otherwise
     });
 
     router.push('/schemes');
@@ -204,7 +243,7 @@ function EnrollScreen() {
         {/* Enrollment date */}
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="enroll_date">Start Date <span className="text-destructive">*</span></Label>
-          <Input id="enroll_date" type="date" {...register('document_date')} className="h-11" />
+          <Input id="enroll_date" type="date" {...register('document_date')} className="h-11" max={new Date().toISOString().split('T')[0]} />
           {errors.document_date && <p className="text-xs text-destructive">{errors.document_date.message}</p>}
         </div>
 
@@ -231,12 +270,23 @@ function EnrollScreen() {
           </div>
         </div>
 
+        {!salesPersonLoading && !salesPersonId && (
+          <p className="text-xs text-destructive -mt-2">
+            ⚠ Could not resolve your employee record (sales_person_id) — enrollment
+            is blocked until this is fixed. Contact support.
+          </p>
+        )}
+
         <Button
           type="submit"
-          disabled={enroll.isPending || !customerId}
+          disabled={enroll.isPending || !customerId || salesPersonLoading || !salesPersonId}
           className="h-12 mt-1"
         >
-          {enroll.isPending ? 'Enrolling…' : 'Confirm Enrollment'}
+          {enroll.isPending
+            ? 'Enrolling…'
+            : salesPersonLoading
+              ? 'Loading…'
+              : 'Confirm Enrollment'}
         </Button>
 
       </form>

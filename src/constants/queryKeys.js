@@ -18,6 +18,11 @@ export const QUERY_KEYS = {
     USER_STORES: () => ['stores', 'user-stores'],
   },
 
+  // ── HR ───────────────────────────────────────────────────────────────────
+  HR: {
+    EMPLOYEE_BY_USER: (userId) => ['hr', 'employee-by-user', userId],
+  },
+
   // ── SETTINGS ─────────────────────────────────────────────────────────────
   SETTINGS: {
     PAYMENT_MODES:        () => ['settings', 'payment-modes'],
