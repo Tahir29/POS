@@ -7,9 +7,7 @@ import API from '@/constants/apiEndpoints';
  * @returns {Promise<Array>} Array of store objects from OrnaVerse
  */
 export async function getUserStores() {
-  const response = await axiosInstance.post(API.STORES.GET_USER_STORES, {
-    Take: 0,
-  });
+  const response = await axiosInstance.post(API.STORES.GET_USER_STORES, {});
 
   return response.data;
 }

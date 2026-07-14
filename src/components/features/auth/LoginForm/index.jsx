@@ -26,6 +26,8 @@ import { Button } from '@/components/ui/button';
 import { Input }  from '@/components/ui/input';
 import { Label }  from '@/components/ui/label';
 
+import { clearAllSiteData } from '@/lib/dev/clearSiteData';
+
 // Static build tag shown on the dark panel — matches package.json app version.
 // Update alongside releases; not wired to a dynamic source by design.
 
@@ -258,6 +260,16 @@ export default function LoginForm() {
                   </span>
                 )}
               </Button>
+
+              {process.env.NODE_ENV === 'development' && (
+                <button
+                  type="button"
+                  onClick={clearAllSiteData}
+                  className="mt-4 w-full text-center text-xs text-muted-foreground underline hover:text-destructive"
+                >
+                  Dev: Clear all site data &amp; reset
+                </button>
+              )}
 
               {/* SEC-004: Attempt counter hint (only after first failure) */}
               {failedAttempts > 0 && !isLockedOut && (
