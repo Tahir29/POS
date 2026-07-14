@@ -55,14 +55,14 @@ const nextConfig = {
   },
  async rewrites() {
     return [
-      {
-        source: '/ornaverse-api/:path*',
-        destination: 'https://lucira.uat.ornaverse.in/:path*',
-      },
       // {
-      //   source: '/api/:path*',
+      //   source: '/ornaverse-api/:path*',
       //   destination: 'https://lucira.uat.ornaverse.in/:path*',
       // },
+      {
+        source: '/api/:path*',
+        destination: 'https://lucira.uat.ornaverse.in/:path*',
+      },
     ]
   }
 };
