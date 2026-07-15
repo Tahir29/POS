@@ -26,6 +26,12 @@ const axiosInstance = axios.create({
   baseURL: BASE_URL,
   headers: {
     'Content-Type': 'application/json',
+    // Every call here is a stateful POST against live POS/auth data —
+    // never valid for the browser to serve a cached response instead of
+    // hitting the network, even if some intermediary ever sent caching
+    // hints back.
+    'Cache-Control': 'no-store',
+    'Pragma':        'no-cache',
   },
   // Timeout after 30 seconds — retail WiFi can be slow
   timeout: 30000,

@@ -335,7 +335,12 @@ const API = {
   // Promotions, gift vouchers
   // ─────────────────────────────────────────────────────────────────────────
   CRM: {
+    // NOTE: GetPromotion does NOT filter by the code you send it — confirmed
+    // 2026-07-15 by testing directly: it returns the same fixed record
+    // regardless of input. Use LIST + client-side matching for code
+    // validation instead (see promotionService.listPromotions).
     GET_PROMOTION:                'Services/CRM/Promotion/GetPromotion',
+    LIST:                         'Services/CRM/Promotion/List',
     APPLY_PROMOTIONS:             'Services/Helper/ApplyPromotions',
     REVERSE_PROMOTION:            'Services/Helper/ReversePromotion',
     GIFT_VOUCHER_CHECK_UTILIZATION: 'Services/CRM/GiftVoucherTransactions/CheckUtilization',
