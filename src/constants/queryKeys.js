@@ -74,6 +74,7 @@ export const QUERY_KEYS = {
   CATALOG: {
     PRODUCTS:              (params)  => ['catalog', 'products', params],
     ALL:                   (storeId) => ['catalog', 'all', storeId],
+    SKU_SEARCH:            (query, storeId) => ['catalog', 'sku-search', query, storeId],
     STOCK_BY_STORES:       (itemId)  => ['catalog', 'stock-by-stores', itemId],
     STOCK_BY_STORES_BATCH: (itemIds) => ['catalog', 'stock-by-stores-batch', itemIds],
   },
@@ -181,6 +182,7 @@ export const QUERY_KEYS = {
   // ── CRM ──────────────────────────────────────────────────────────────────
   CRM: {
     PROMOTION:              (promoCode)   => ['crm', 'promotion', promoCode],
+    PROMOTION_LIST:         ()            => ['crm', 'promotion-list'],
     GIFT_VOUCHER_CHECK:     (voucherCode) => ['crm', 'gift-voucher-check', voucherCode],
   },
 

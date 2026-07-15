@@ -380,8 +380,10 @@ export default function CustomizeSheet({
                 value={metalKaratValue}
               />
               <div className="grid grid-cols-3 gap-3">
-                {metalColors.flatMap((color) =>
-                  karats.map((karat) => {
+                {/* Karat-first ordering: all 14KT options (any colour)
+                    together, then all 18KT — not grouped by colour. */}
+                {karats.flatMap((karat) =>
+                  metalColors.map((color) => {
                     const isSelected =
                       selectedMetalColorId === color.id &&
                       selectedKaratId      === karat.id;
@@ -389,7 +391,7 @@ export default function CustomizeSheet({
 
                     return (
                       <MetalColorCard
-                        key={`${color.id}-${karat.id}`}
+                        key={`${karat.id}-${color.id}`}
                         color={color}
                         karat={karat}
                         isSelected={isSelected}

@@ -29,6 +29,7 @@ import {
 } from '@/store/slices/storeSlice';
 
 import { clearCart } from '@/store/slices/cartSlice';
+import { clearAllCookies } from '@/lib/cookies';
 
 import TOAST   from '@/constants/toastMessages';
 import tracker from '@/lib/analytics/tracker';
@@ -53,6 +54,16 @@ export function useAuth() {
         username,
       })
     );
+
+    // Store context is session-specific — never trust a store id persisted
+    // from a previous login. Without this, a stale activeStoreId survives
+    // in localStorage (store is in the persist whitelist) and passes
+    // StoreGuard's truthy check, so every store-scoped call (Order/List,
+    // BuyBack/List, Exchange/List, Return/List, ...) gets sent with an
+    // invalid company_id and the API rejects them with 400 — until the
+    // user manually clears site data. Reset here so it's always re-derived
+    // from this login's GetUserStores response.
+    dispatch(clearStore());
 
     const storesData = await getUserStores();
     const stores = Array.isArray(storesData)
@@ -118,6 +129,11 @@ export function useAuth() {
     dispatch(clearAuth());
     dispatch(clearStore());
     dispatch(clearCart());
+    // Any cookie the backend may have set (e.g. a load-balancer/session
+    // cookie) must not outlive the session it belongs to — previously only
+    // the dev-only "clear site data" button did this, so a stale cookie
+    // could persist across normal logins indefinitely.
+    clearAllCookies();
     toast.info(TOAST.AUTH.LOGOUT_SUCCESS);
     router.replace('/login');
   }, [dispatch, router]);

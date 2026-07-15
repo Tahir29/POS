@@ -8,12 +8,14 @@ import API from '@/constants/apiEndpoints';
 // ─── PROMOTIONS ───────────────────────────────────────────────────────────────
 
 /**
- * Validate a promo code and retrieve its discount rules.
- * @param {string} promoCode
- * @returns {Promise<import('axios').AxiosResponse>} PromotionRow with details[]
+ * Fetches every promotion record. GetPromotion does not filter by code
+ * (confirmed 2026-07-15 — it returns the same fixed record regardless of
+ * input), so code validation and the checkout promo picker both work off
+ * this full list, filtered/matched client-side.
+ * @returns {Promise<import('axios').AxiosResponse>} { Entities: PromotionRow[], TotalCount }
  */
-export function getPromotion(promoCode) {
-  return axiosInstance.post(API.CRM.GET_PROMOTION, { promo_code: promoCode });
+export function listPromotions() {
+  return axiosInstance.post(API.CRM.LIST, { Take: 0 });
 }
 
 /**
