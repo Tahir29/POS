@@ -380,8 +380,8 @@ function SchemesTab({ customerId }) {
               <p className="text-xs text-stone-500 mt-0.5">Paid: {fmt(e.investedAmount)}</p>
             )}
           </div>
-          <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${e.status === 1 ? 'bg-green-100 text-green-700' : 'bg-stone-100 text-stone-500'}`}>
-            {e.status === 1 ? 'Active' : 'Inactive'}
+          <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${e.hasPendingInstallment ? 'bg-green-100 text-green-700' : 'bg-stone-100 text-stone-500'}`}>
+            {e.hasPendingInstallment ? 'Active' : 'Completed'}
           </span>
         </div>
       ))}
@@ -390,27 +390,37 @@ function SchemesTab({ customerId }) {
 }
 
 // ── History Tab ───────────────────────────────────────────────────────────────
+// Rebuilt 2026-07-16 — see useCustomerHistory.js header: the real API only
+// gives an invoice list + a payment-mode breakdown, not a Credit Balance/
+// Exchange Value/Buy Back Value summary (no working data source for those).
 function HistoryTab({ customerId }) {
-  const { invoiceTotal, buybackTotal, exchangeTotal, creditBalance, invoices, isLoading, isError, refetch } = useCustomerHistory(customerId);
+  const { invoiceTotal, receiptModes, invoices, isLoading, isError, refetch } = useCustomerHistory(customerId);
 
   if (isLoading) return <TabLoading label="Loading history…" />;
   if (isError)   return <TabError label="Failed to load history." onRetry={refetch} />;
+  if (!invoices.length && !receiptModes.length) {
+    return <TabEmpty icon={<ClipboardList size={28} className="text-stone-300" />} label="No purchase history found." />;
+  }
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="grid grid-cols-2 gap-2">
-        {[
-          { label: 'Total Purchases', value: fmt(invoiceTotal) },
-          { label: 'Credit Balance',  value: fmt(creditBalance) },
-          { label: 'Exchange Value',  value: fmt(exchangeTotal) },
-          { label: 'Buy Back Value',  value: fmt(buybackTotal) },
-        ].map(({ label, value }) => (
-          <div key={label} className="rounded-lg border border-stone-100 p-3">
-            <p className="text-xs text-stone-400">{label}</p>
-            <p className="text-sm font-semibold text-stone-800 mt-0.5">{value}</p>
-          </div>
-        ))}
+      <div className="rounded-lg border border-stone-100 p-3">
+        <p className="text-xs text-stone-400">Total Purchases</p>
+        <p className="text-sm font-semibold text-stone-800 mt-0.5">{fmt(invoiceTotal)}</p>
       </div>
+
+      {receiptModes.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide">By Payment Mode</p>
+          {receiptModes.map((r, idx) => (
+            <div key={idx} className="flex justify-between items-center text-sm rounded-lg border border-stone-100 px-3 py-2">
+              <span className="text-stone-700">{r.mode}</span>
+              <span className="font-semibold text-stone-800">{fmt(r.amount)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
       {invoices.length > 0 && (
         <div className="flex flex-col gap-1.5 mt-1">
           <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Recent Invoices</p>
@@ -420,7 +430,7 @@ function HistoryTab({ customerId }) {
                 <p className="text-stone-700 font-medium">{inv.document_no ?? `Invoice #${idx + 1}`}</p>
                 {inv.document_date && <p className="text-xs text-stone-400">{fmtDate(inv.document_date)}</p>}
               </div>
-              <span className="font-semibold text-stone-800">{fmt(inv.net_amount ?? inv.sub_total)}</span>
+              <span className="font-semibold text-stone-800">{fmt(inv.net_amount)}</span>
             </div>
           ))}
         </div>

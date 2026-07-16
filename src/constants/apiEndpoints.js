@@ -41,6 +41,16 @@ const API = {
   },
 
   // ─────────────────────────────────────────────────────────────────────────
+  // HR — EMPLOYEE
+  // EmployeeRow.user_id links back to UsersCompanyRow.user_id (from GetUserStores).
+  // Used to resolve the logged-in user's employee_id, which OrnaVerse expects
+  // as `sales_person_id` on SchemeEnrollment/Create (confirmed field name via v1.json).
+  // ─────────────────────────────────────────────────────────────────────────
+  HR: {
+    EMPLOYEE_LIST: 'Services/HR/Employee/List',
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
   // SETTINGS & CONFIGURATION
   // ─────────────────────────────────────────────────────────────────────────
   SETTINGS: {
@@ -325,7 +335,12 @@ const API = {
   // Promotions, gift vouchers
   // ─────────────────────────────────────────────────────────────────────────
   CRM: {
+    // NOTE: GetPromotion does NOT filter by the code you send it — confirmed
+    // 2026-07-15 by testing directly: it returns the same fixed record
+    // regardless of input. Use LIST + client-side matching for code
+    // validation instead (see promotionService.listPromotions).
     GET_PROMOTION:                'Services/CRM/Promotion/GetPromotion',
+    LIST:                         'Services/CRM/Promotion/List',
     APPLY_PROMOTIONS:             'Services/Helper/ApplyPromotions',
     REVERSE_PROMOTION:            'Services/Helper/ReversePromotion',
     GIFT_VOUCHER_CHECK_UTILIZATION: 'Services/CRM/GiftVoucherTransactions/CheckUtilization',
@@ -367,6 +382,15 @@ const API = {
     MATURITY_BENEFIT:    'Services/Helper/GetSchemeMaturityBenefit',
     FORECLOSE_BENEFIT:   'Services/Helper/GetSchemeForcloseBenefit',
     CANCELLATION:        'Services/Helper/GetSchemeCancellation',
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // EXCHANGE RATE
+  // Required on Order/Invoice Create alongside currency_id — confirmed via
+  // direct UAT test 2026-07-16: currency_id 103 (INR) returns exchange_rate: 1.
+  // ─────────────────────────────────────────────────────────────────────────
+  EXCHANGE_RATE: {
+    GET: 'Services/Administration/ExchangeRate/GetExchangeRate',
   },
 
   // ─────────────────────────────────────────────────────────────────────────

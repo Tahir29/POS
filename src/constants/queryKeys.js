@@ -18,6 +18,12 @@ export const QUERY_KEYS = {
     USER_STORES: () => ['stores', 'user-stores'],
   },
 
+  // ── HR ───────────────────────────────────────────────────────────────────
+  HR: {
+    EMPLOYEE_BY_USER: (userId) => ['hr', 'employee-by-user', userId],
+    EMPLOYEES_BY_COMPANY: (companyId) => ['hr', 'employees-by-company', companyId],
+  },
+
   // ── SETTINGS ─────────────────────────────────────────────────────────────
   SETTINGS: {
     PAYMENT_MODES:        () => ['settings', 'payment-modes'],
@@ -27,6 +33,11 @@ export const QUERY_KEYS = {
     REASON_CODES:         () => ['settings', 'reason-codes'],
     METAL_RATE:           (metalTypeId) => ['settings', 'metal-rate', metalTypeId],
     ALL_RATES:            () => ['settings', 'all-rates'],
+  },
+
+  // ── EXCHANGE RATE ──────────────────────────────────────────────────────────
+  EXCHANGE_RATE: {
+    GET: (currencyId, companyId) => ['exchange-rate', currencyId, companyId],
   },
 
   // ── LOCATION ─────────────────────────────────────────────────────────────
@@ -52,6 +63,7 @@ export const QUERY_KEYS = {
     SIZES:           ()        => ['items', 'sizes'],
     ATTRIBUTES:      (typeId)  => ['items', 'attributes', typeId],
     DESIGN_VARIANTS: (styleId) => ['items', 'design-variants', styleId],
+    MASTER_SEARCH:   (query)   => ['items', 'master-search', query],
     SEARCH: (params) => ['items', 'search', {
       q:    params.item_search,
       grp:  params.item_group_ids,
@@ -68,6 +80,7 @@ export const QUERY_KEYS = {
   CATALOG: {
     PRODUCTS:              (params)  => ['catalog', 'products', params],
     ALL:                   (storeId) => ['catalog', 'all', storeId],
+    SKU_SEARCH:            (query, storeId) => ['catalog', 'sku-search', query, storeId],
     STOCK_BY_STORES:       (itemId)  => ['catalog', 'stock-by-stores', itemId],
     STOCK_BY_STORES_BATCH: (itemIds) => ['catalog', 'stock-by-stores-batch', itemIds],
   },
@@ -175,6 +188,7 @@ export const QUERY_KEYS = {
   // ── CRM ──────────────────────────────────────────────────────────────────
   CRM: {
     PROMOTION:              (promoCode)   => ['crm', 'promotion', promoCode],
+    PROMOTION_LIST:         ()            => ['crm', 'promotion-list'],
     GIFT_VOUCHER_CHECK:     (voucherCode) => ['crm', 'gift-voucher-check', voucherCode],
   },
 

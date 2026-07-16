@@ -107,7 +107,7 @@ function ProductDetailScreen() {
     findVariant,
     hasVariants,
     isLoading: variantsLoading,
-  } = useDesignVariants(product?.style_id ?? null);
+  } = useDesignVariants(product?.style_id ?? null, activeStoreId);
 
   // ── Shopify images ────────────────────────────────────────────────────────
     const { images: shopifyImages, primaryImage, isLoading: shopifyImagesLoading } = useShopifyProductImages(externalProductId);
@@ -233,8 +233,17 @@ function ProductDetailScreen() {
             {/* Price + discount */}
             <div>
               <div className="flex items-baseline gap-2">
-                {price && (
+                {price ? (
                   <p className="font-heading text-3xl text-foreground">{price}</p>
+                ) : (
+                  // item_rate === 0 means this specific variant was never
+                  // costed (common — usually only one representative SKU
+                  // per style gets a real rate) — say so explicitly rather
+                  // than leaving a blank where the price should be, since a
+                  // customized selection implies real purchase intent.
+                  <p className="text-sm font-medium text-amber-600">
+                    Price not available for this option — needs costing before it can be sold
+                  </p>
                 )}
                 {hasDiscount && (
                   <>

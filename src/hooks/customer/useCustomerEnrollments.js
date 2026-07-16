@@ -22,17 +22,30 @@ export function normalizeEnrollment(entity) {
   if (!entity) return null;
   const get = (key) => (!isEmptyValue(entity[key]) ? entity[key] : null);
 
+  // invested_amount / total_payable don't exist on the real
+  // SchemeEnrollment/List response, and scheme_status is a bare number
+  // with no documented enum mapping — same findings as
+  // useSchemeEnrollments.js (confirmed 2026-07-16). Deriving from
+  // scheme_monthly_details instead, which is unambiguous.
+  const monthlyDetails = entity.scheme_monthly_details ?? [];
+  const investedFromMonths = monthlyDetails
+    .filter((m) => m.payment_made)
+    .reduce((sum, m) => sum + (Number(m.month_amount) || 0), 0);
+  const hasPendingInstallment = monthlyDetails.length > 0
+    ? monthlyDetails.some((m) => !m.payment_made)
+    : true;
+
   return {
     enrollmentId:    get('scheme_enrollment_id'),
     schemeName:      get('scheme_display_name') ?? get('scheme_code'),
     schemeCode:      get('scheme_code'),
-    status:          get('scheme_status'),       // SchemeStatus enum
+    hasPendingInstallment,
     enrolledDate:    get('document_date'),
     schemeAmount:    get('scheme_amount'),
     tenure:          get('tenure'),
-    investedAmount:  get('invested_amount'),
+    investedAmount:  get('invested_amount') ?? investedFromMonths,
     benifitAmount:   get('benifit_amount'),       // ⚠️ preserve API typo
-    totalPayable:    get('total_payable'),
+    totalPayable:    get('total_amount') ?? get('total_payable'),
     maturityYear:    get('maturity_year'),
     maturityMonth:   get('maturity_month'),
     customerId:      get('party_id'),

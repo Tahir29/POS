@@ -50,6 +50,9 @@ export default function OrderConfirmationScreen({ transactionId, invoiceNo }) {
   const invoiceDate = invoice?.document_date ?? null;
   const receiptAmt  = invoice?.receipt_amount ?? null;
   const balanceAmt  = invoice?.balance_amount ?? null;
+  // Server-computed GST — see useCreateInvoice.js header (not calculated
+  // client-side; read back whatever the server computed per line item).
+  const taxAmount   = invoice?.tax_amount ?? null;
 
   const handleDownloadPDF = async () => {
     if (!transactionId) return;
@@ -111,6 +114,12 @@ export default function OrderConfirmationScreen({ transactionId, invoiceNo }) {
               <div className="flex justify-between">
                 <span className="text-stone-500">Customer</span>
                 <span className="font-medium text-stone-800">{customerName}</span>
+              </div>
+            )}
+            {taxAmount != null && taxAmount > 0 && (
+              <div className="flex justify-between">
+                <span className="text-stone-500">GST</span>
+                <span className="text-stone-700">{fmt(taxAmount)}</span>
               </div>
             )}
             {totalAmount != null && (

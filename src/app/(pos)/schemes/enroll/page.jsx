@@ -17,8 +17,13 @@ import { ChevronDown, ChevronLeft } from 'lucide-react';
 
 import { useSchemes }        from '@/hooks/schemes/useSchemes';
 import { useEnrollCustomer } from '@/hooks/schemes/useEnrollCustomer';
+import { useSalesPersonOptions } from '@/hooks/schemes/useSalesPersonOptions';
 import { selectActiveStoreId }   from '@/store/slices/storeSlice';
-import { selectCartCustomerId, selectCartCustomerName } from '@/store/slices/cartSlice';
+import {
+  selectCartCustomerId,
+  selectCartCustomerName,
+  selectCartCustomerMobile,
+} from '@/store/slices/cartSlice';
 import APP_CONFIG from '@/constants/appConfig';
 
 import { Button } from '@/components/ui/button';
@@ -34,23 +39,31 @@ import PageLoader from '@/components/shared/PageLoader';
 
 // ── Schema ────────────────────────────────────────────────────
 const enrollSchema = z.object({
-  scheme_id:     z.coerce.number().min(1, 'Select a scheme'),
-  scheme_amount: z.coerce.number().min(1, 'Enter monthly amount'),
-  tenure:        z.coerce.number().min(1, 'Enter tenure in months'),
-  document_date: z.string().min(1, 'Required'),
-  nominee:       z.string().optional(),
-  nominee_age:   z.coerce.number().optional(),
+  scheme_id:        z.coerce.number().min(1, 'Select a scheme'),
+  scheme_amount:    z.coerce.number().min(1, 'Enter monthly amount'),
+  tenure:           z.coerce.number().min(1, 'Enter tenure in months'),
+  document_date:    z.string().min(1, 'Required'),
+  sales_person_id:  z.coerce.number().min(1, 'Select a sales person'),
+  nominee:          z.string().optional(),
+  nominee_age:      z.coerce.number().optional(),
 });
 
 // ── Inner screen ──────────────────────────────────────────────
 function EnrollScreen() {
-  const router       = useRouter();
-  const storeId      = useSelector(selectActiveStoreId);
-  const customerId   = useSelector(selectCartCustomerId);
-  const customerName = useSelector(selectCartCustomerName);
+  const router         = useRouter();
+  const storeId        = useSelector(selectActiveStoreId);
+  const customerId     = useSelector(selectCartCustomerId);
+  const customerName   = useSelector(selectCartCustomerName);
+  const customerMobile = useSelector(selectCartCustomerMobile);
 
   const { schemes, isLoading: schemesLoading } = useSchemes();
   const enroll = useEnrollCustomer();
+
+  // sales_person_id is a confirmed-required field on SchemeEnrollment/Create
+  // (per v1.json SchemeEnrollmentRow). Mirrors the vendor's own Scheme
+  // Enrollment screen: a store-scoped picker, not an auto-resolved value —
+  // confirmed via a real UAT response listing employees by company_id only.
+  const { salesPersons, isLoading: salesPersonsLoading } = useSalesPersonOptions(storeId);
 
   const today = new Date().toISOString().split('T')[0];
 
@@ -60,12 +73,13 @@ function EnrollScreen() {
   } = useForm({
     resolver: zodResolver(enrollSchema),
     defaultValues: {
-      scheme_id:     '',
-      scheme_amount: '',
-      tenure:        '',
-      document_date: today,
-      nominee:       '',
-      nominee_age:   '',
+      scheme_id:        '',
+      scheme_amount:    '',
+      tenure:           '',
+      document_date:    today,
+      sales_person_id:  '',
+      nominee:          '',
+      nominee_age:      '',
     },
   });
 
@@ -73,17 +87,45 @@ function EnrollScreen() {
   const selectedScheme  = schemes.find((s) => s.scheme_id === Number(watchedSchemeId));
 
   const onSubmit = async (data) => {
-    if (!customerId) return;
+    if (!customerId || !selectedScheme) return;
+
+    const schemeAmount = Number(data.scheme_amount);
+    const tenure        = Number(data.tenure);
 
     await enroll.mutateAsync({
       party_id:      customerId,
+      party_name:    customerName   ?? undefined,
+      mobile:        customerMobile ?? undefined,
       company_id:    storeId,
       scheme_id:     Number(data.scheme_id),
-      scheme_amount: Number(data.scheme_amount),
-      tenure:        Number(data.tenure),
+      scheme_amount: schemeAmount,
+      tenure:        tenure,
+      // Required by OrnaVerse (400: "Scheme Amount field is required!" / total_amount).
+      // Total principal committed over the full tenure — monthly amount × months.
+      total_amount:  schemeAmount * tenure,
       document_date: data.document_date,
+      // Confirmed required on SchemeEnrollmentRow (v1.json) — picked from a
+      // store-scoped list (see useSalesPersonOptions.js), mirroring the
+      // vendor's own Scheme Enrollment screen.
+      sales_person_id: Number(data.sales_person_id),
+      // Copied from the scheme's own definition (SchemesRow) rather than guessed —
+      // these are enum/config values that belong to the scheme itself, not invented
+      // per-enrollment. All confirmed present on SchemesRow in v1.json.
+      scheme_type:   selectedScheme.scheme_type,
+      frequency:     selectedScheme.frequency,
+      bonus_type:    selectedScheme.bonus_type,
+      bonus_value:   selectedScheme.bonus_value,
+      use_rules:     selectedScheme.use_rules,
       ...(data.nominee    ? { nominee:     data.nominee }               : {}),
       ...(data.nominee_age ? { nominee_age: Number(data.nominee_age) } : {}),
+      // NOT sent — no reliable source yet, will not guess:
+      //   scheme_status       — enum 0-3, meaning undocumented anywhere (v1.json gives no labels)
+      //   scheme_unique_code  — generation format unknown
+      //   document_id         — meaning unclear ("document reference id"); spec shows a
+      //                         default of 125 but that looks like sample data, not a rule
+      //   email, party_code   — not captured anywhere in the customer session today
+      //   scheme_monthly_details[] — likely server-generated from scheme_amount/tenure/
+      //                         document_date; omit unless the next 400 says otherwise
     });
 
     router.push('/schemes');
@@ -204,8 +246,43 @@ function EnrollScreen() {
         {/* Enrollment date */}
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="enroll_date">Start Date <span className="text-destructive">*</span></Label>
-          <Input id="enroll_date" type="date" {...register('document_date')} className="h-11" />
+          <Input id="enroll_date" type="date" {...register('document_date')} className="h-11" max={new Date().toISOString().split('T')[0]} />
           {errors.document_date && <p className="text-xs text-destructive">{errors.document_date.message}</p>}
+        </div>
+
+        {/* Sales person */}
+        <div className="flex flex-col gap-1.5">
+          <Label>Sales Person <span className="text-destructive">*</span></Label>
+          <Controller
+            name="sales_person_id"
+            control={control}
+            render={({ field }) => {
+              const selected = salesPersons.find((p) => p.employee_id === Number(field.value));
+              return (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      className="flex h-11 w-full items-center justify-between rounded-lg border border-input bg-background px-3 text-sm"
+                    >
+                      <span className={selected ? 'text-foreground' : 'text-muted-foreground'}>
+                        {salesPersonsLoading ? 'Loading…' : selected ? selected.employee_name : 'Select sales person'}
+                      </span>
+                      <ChevronDown size={14} className="text-muted-foreground shrink-0" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width] max-h-56 overflow-y-auto">
+                    {salesPersons.map((p) => (
+                      <DropdownMenuItem key={p.employee_id} onSelect={() => field.onChange(p.employee_id)}>
+                        {p.employee_name}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              );
+            }}
+          />
+          {errors.sales_person_id && <p className="text-xs text-destructive">{errors.sales_person_id.message}</p>}
         </div>
 
         {/* Nominee (optional) */}

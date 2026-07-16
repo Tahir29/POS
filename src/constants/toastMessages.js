@@ -141,13 +141,21 @@ const TOAST = {
 
   // ── REPAIR ────────────────────────────────────────────────────────────────
   REPAIR: {
-    INTAKE_CREATED:    'Repair intake recorded successfully.',
-    INTAKE_FAILED:     'Failed to record repair intake. Please try again.',
-    INVOICE_CREATED:   'Repair invoice created successfully.',
-    INVOICE_FAILED:    'Failed to create repair invoice. Please try again.',
-    INVOICE_POSTED:    'Repair invoice posted — item ready for customer.',
-    INVOICE_POST_FAILED:'Failed to post repair invoice. Please try again.',
-    LOAD_FAILED:       'Failed to load repair records. Please try again.',
+    INTAKE_CREATED:      'Repair intake recorded successfully.',
+    INTAKE_FAILED:       'Failed to record repair intake. Please try again.',
+    INTAKE_POSTED:       'Repair intake posted successfully.',
+    INTAKE_POST_FAILED:  'Failed to post repair intake. Please try again.',
+    OUT_CREATED:         'Item sent to craftsman successfully.',
+    OUT_FAILED:          'Failed to record repair-out. Please try again.',
+    OUT_POSTED:          'Repair-out posted successfully.',
+    OUT_POST_FAILED:     'Failed to post repair-out. Please try again.',
+    INVOICE_CREATED:     'Repair invoice created successfully.',
+    INVOICE_FAILED:      'Failed to create repair invoice. Please try again.',
+    INVOICE_POSTED:      'Repair invoice posted — item ready for customer.',
+    INVOICE_POST_FAILED: 'Failed to post repair invoice. Please try again.',
+    RECEIPT_CREATED:     'Payment recorded against repair invoice.',
+    RECEIPT_FAILED:      'Failed to record payment. Please try again.',
+    LOAD_FAILED:         'Failed to load repair records. Please try again.',
   },
 
   // ── ESTIMATION / QUOTATION ────────────────────────────────────────────────

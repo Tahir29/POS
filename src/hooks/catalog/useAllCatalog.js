@@ -1,16 +1,25 @@
 // src/hooks/catalog/useAllCatalog.js
-// Fetches the complete product catalog for a given store in one request (Take: 0).
-// All filtering, searching, sorting, and barcode lookup happen client-side —
-// identical pattern to useAllOrders / useAllCustomers.
+// Fetches the complete product catalog for a given store, for client-side
+// search, filter, and barcode lookup on the catalog page.
 //
-// Response shape (confirmed OrnaVerse pattern):
-//   response.data.Entities[]  — array of catalog product objects
+// getAllProducts paginates the store's real inventory in chunks of 24 (the
+// server's real hard cap on ProductCatalog/List — confirmed 2026-07-15 that
+// Take is silently capped at 24 no matter what's requested), fetched with
+// concurrency for speed. See catalogService.fetchEntireStoreCatalog for why
+// this has to paginate rather than trust a single large Take, and why a
+// global full-text search (Items/List ContainsText) can't reliably replace
+// this — its result ordering has no awareness of which company stocks what.
+//
+// A store's real catalog can run into the thousands, so this can take a
+// while on first load — exposes `loadedCount` (updated as pages come in)
+// so the UI can show visible progress instead of a plain spinner.
 
-import { useQuery }    from '@tanstack/react-query';
-import { useSelector } from 'react-redux';
+import { useQuery }      from '@tanstack/react-query';
+import { useSelector }   from 'react-redux';
+import { useCallback, useRef, useState } from 'react';
 
-import { QUERY_KEYS }   from '@/constants/queryKeys';
-import APP_CONFIG       from '@/constants/appConfig';
+import { QUERY_KEYS }     from '@/constants/queryKeys';
+import APP_CONFIG         from '@/constants/appConfig';
 import { getAllProducts } from '@/services/catalogService';
 
 const selectIsAuthenticated = (state) => state.auth.isAuthenticated;
@@ -22,16 +31,24 @@ const selectIsAuthenticated = (state) => state.auth.isAuthenticated;
  */
 export function useAllCatalog(storeId) {
   const isAuthenticated = useSelector(selectIsAuthenticated);
+  const [loadedCount, setLoadedCount] = useState(0);
+  const storeIdRef = useRef(storeId);
 
-  return useQuery({
-    queryKey: QUERY_KEYS.CATALOG.ALL(storeId),
-    queryFn:  () => getAllProducts(storeId),
-    enabled:  isAuthenticated && !!storeId,
+  const queryFn = useCallback(() => {
+    // Reset the counter for a fresh fetch (new store, or refetch)
+    if (storeIdRef.current !== storeId) {
+      storeIdRef.current = storeId;
+    }
+    setLoadedCount(0);
+    return getAllProducts(storeId, setLoadedCount);
+  }, [storeId]);
+
+  const query = useQuery({
+    queryKey:  QUERY_KEYS.CATALOG.ALL(storeId),
+    queryFn,
+    enabled:   isAuthenticated && !!storeId,
     staleTime: APP_CONFIG.STALE_TIME.STOCK,
-    select: (response) => {
-      const entities = response?.Entities;
-      if (!Array.isArray(entities)) return [];
-      return entities;
-    },
   });
+
+  return { ...query, loadedCount };
 }

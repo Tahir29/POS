@@ -189,9 +189,13 @@ const refreshAccessToken = async (instance, refreshToken, store) => {
 const handleLogout = (store) => {
   const { clearAuth }  = require('@/store/slices/authSlice');
   const { clearStore } = require('@/store/slices/storeSlice');
+  const { clearAllCookies } = require('@/lib/cookies');
 
   store.dispatch(clearAuth());
   store.dispatch(clearStore());
+  // Match normal logout — don't let a stale backend cookie survive
+  // a forced logout any more than a manual one.
+  clearAllCookies();
 
   // Redirect to login — works in both browser and Next.js context
   if (typeof window !== 'undefined') {

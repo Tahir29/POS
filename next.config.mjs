@@ -53,22 +53,12 @@ const nextConfig = {
       },
     ];
   },
-  async rewrites() {
-    return [
-      {
-        source: '/ornaverse-api/:path*',
-        destination: 'https://lucira.uat.ornaverse.in/:path*',
-      }
-    ]
-  }
-  // async rewrites() {
-  //   return [
-  //     {
-  //       source: '/api/:path*',
-  //       destination: 'https://lucira.uat.ornaverse.in/:path*',
-  //     },
-  //   ];
-  // }
+  // NOTE: '/api/:path*' used to be proxied here via rewrites(). That
+  // mechanism returned empty-body 400s from nginx on business-data
+  // endpoints even with a valid bearer token — see
+  // src/app/api/[...path]/route.js, which replaces it with an explicit
+  // server-side fetch we fully control. A filesystem route always wins
+  // over a rewrite for the same path, so this config needs nothing here.
 };
 
 export default nextConfig;
