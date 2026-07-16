@@ -36,6 +36,8 @@ import { useBackGuard } from '@/contexts/NavigationGuardContext';
 import { useSmartBack }  from '@/hooks/navigation/useSmartBack';
 import { checkoutSchema }             from '@/validators/checkoutSchema';
 import { selectActiveStoreId } from '@/store/slices/storeSlice';
+import tracker from '@/lib/analytics/tracker';
+import EVENTS, { GA_ECOMMERCE_EVENTS } from '@/lib/analytics/events';
 
 function CheckoutScreen() {
   const router  = useRouter();
@@ -89,6 +91,23 @@ function CheckoutScreen() {
       router.replace('/cart');
     }
   }, [isEmpty, isConfirmed, router]);
+
+  // Fire begin_checkout once per visit to this screen with items in cart
+  useEffect(() => {
+    if (isEmpty) return;
+    tracker.trackEcommerce(GA_ECOMMERCE_EVENTS.BEGIN_CHECKOUT, EVENTS.CHECKOUT_STARTED, {
+      value:    total,
+      currency: 'INR',
+      items:    items.map((item) => ({
+        item_id:   String(item.itemId),
+        item_name: item.itemName,
+        item_sku:  item.sku,
+        price:     item.unitPrice,
+        quantity:  item.quantity,
+      })),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Warn on tab close / page refresh while cart has items and sale not done
   useEffect(() => {

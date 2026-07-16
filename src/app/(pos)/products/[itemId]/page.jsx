@@ -47,6 +47,8 @@ import StockStatusBadge, {
 
 import APP_CONFIG from '@/constants/appConfig';
 import TOAST      from '@/constants/toastMessages';
+import tracker from '@/lib/analytics/tracker';
+import EVENTS, { GA_ECOMMERCE_EVENTS } from '@/lib/analytics/events';
 import { Settings2, CheckCircle2 } from 'lucide-react';
 
 const selectActiveStoreId   = (s) => s.store.activeStoreId;
@@ -134,6 +136,30 @@ function ProductDetailScreen() {
   useEffect(() => {
     if (detailError) toast.error(TOAST.GENERIC.SOMETHING_WRONG);
   }, [detailError]);
+
+  // view_item — fires once per product once its detail has actually loaded
+  useEffect(() => {
+    if (!product) return;
+    const unitPrice =
+      product.item_rate  ||
+      product.sale_price ||
+      product.price      ||
+      product.mrp        ||
+      product.rate       ||
+      null;
+
+    tracker.trackEcommerce(GA_ECOMMERCE_EVENTS.VIEW_ITEM, EVENTS.PRODUCT_VIEWED, {
+      currency: 'INR',
+      value:    unitPrice ?? undefined,
+      items: [{
+        item_id:   String(product.item_id),
+        item_name: product.item_name ?? 'Unknown Product',
+        item_sku:  product.item_code ?? '',
+        price:     unitPrice,
+      }],
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [product?.item_id]);
 
   // ── Derived ───────────────────────────────────────────────────────────────
   // Two async sources feed this: `product` (fast, but IsInStockJournal is a

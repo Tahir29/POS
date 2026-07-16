@@ -26,6 +26,8 @@ import { selectActiveStoreId } from '@/store/slices/storeSlice';
 import PaymentModeSelector from '../PaymentModeSelector';
 import PaymentAmountInput from '../PaymentAmountInput';
 import APP_CONFIG from '@/constants/appConfig';
+import tracker from '@/lib/analytics/tracker';
+import EVENTS from '@/lib/analytics/events';
 
 // ── Invoice Helper Balance Row — toggle switch style ─────────────────────────
 
@@ -98,6 +100,12 @@ export default function CheckoutPaymentSection({ onChange }) {
         .reduce((s, p) => s + (Number(p.amount) || 0), 0);
       const remaining = Math.max(0, total - helperPaid - nonHelperPaid);
       const isFirst   = prev.filter((p) => !p.isHelper).length === 0;
+
+      tracker.track(EVENTS.PAYMENT_SELECTED, {
+        modeId,
+        modeCode: mode?.modeCode ?? null,
+        modeName: mode?.modeName ?? null,
+      });
 
       return [
         ...prev,

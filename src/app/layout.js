@@ -7,9 +7,12 @@
 //          all authenticated sessions.
 
 import { Geist, Geist_Mono } from "next/font/google";
+import Script from "next/script";
 import Providers from '@/components/shared/Providers';
 import RehydrationGuard from '@/components/shared/RehydrationGuard';
 import "./globals.css";
+
+const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -37,6 +40,28 @@ export default function RootLayout({ children }) {
       className={`${geistSans.variable} ${geistMono.variable} font-figtree h-full antialiased`}
     >
       <body className="min-h-full flex flex-col antialiased">
+        {/*
+          GA4 — only rendered when NEXT_PUBLIC_GA_MEASUREMENT_ID is set
+          (e.g. missing in a bare dev checkout), so analytics being
+          unconfigured never breaks the app. See src/lib/analytics/gtag.js
+          for the dispatch helper every event goes through.
+        */}
+        {GA_MEASUREMENT_ID && (
+          <>
+            <Script
+              src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`}
+              strategy="afterInteractive"
+            />
+            <Script id="ga4-init" strategy="afterInteractive">
+              {`
+                window.dataLayer = window.dataLayer || [];
+                function gtag(){dataLayer.push(arguments);}
+                gtag('js', new Date());
+                gtag('config', '${GA_MEASUREMENT_ID}');
+              `}
+            </Script>
+          </>
+        )}
         <Providers>
           {/*
             RehydrationGuard runs two jobs on mount (client-side only):

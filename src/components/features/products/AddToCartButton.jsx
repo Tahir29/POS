@@ -17,6 +17,8 @@ import { ShoppingCart } from 'lucide-react';
 import { addItem } from '@/store/slices/cartSlice';
 import { resolveImageSrc } from '@/lib/resolveImageSrc';
 import TOAST from '@/constants/toastMessages';
+import tracker from '@/lib/analytics/tracker';
+import EVENTS, { GA_ECOMMERCE_EVENTS } from '@/lib/analytics/events';
 
 /**
  * @param {{
@@ -80,6 +82,18 @@ export default function AddToCartButton({
         metalColor: product.metal_color_name ?? null,
       },
     }));
+
+    tracker.trackEcommerce(GA_ECOMMERCE_EVENTS.ADD_TO_CART, EVENTS.CART_ITEM_ADDED, {
+      currency: 'INR',
+      value:    unitPrice * quantity,
+      items: [{
+        item_id:   String(product.item_id),
+        item_name: product.item_name ?? 'Unknown Product',
+        item_sku:  product.item_code ?? '',
+        price:     unitPrice,
+        quantity,
+      }],
+    });
 
     toast.success(TOAST.CART.ITEM_ADDED(product.item_name ?? 'Item'));
   };

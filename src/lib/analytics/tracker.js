@@ -9,11 +9,30 @@
 //   tracker.track(event, props)                    → during session
 //   tracker.endSession(reason)                     → customer detached / idle
 //
-// Storage:
-//   sessionStorage['lucira_session'] → session metadata
-//   sessionStorage['lucira_events']  → event buffer (max 500)
+// Every event goes to two places:
+//   1. sessionStorage (local buffer, useful for debugging/QA — see
+//      getEvents()/getAgentEvents(), unaffected by GA being configured or not)
+//   2. GA4, via sendToGA() — a no-op if NEXT_PUBLIC_GA_MEASUREMENT_ID isn't
+//      set, so analytics can never break the app.
 //
-// Future: tracker.flush() returns events for WebEngage / GA batch send.
+// trackEcommerce() is for the checkout funnel specifically — it fires the
+// event under BOTH its GA4-reserved name (view_item/add_to_cart/
+// begin_checkout/purchase/...) so GA4's automatic Monetization/Ecommerce
+// reports populate, AND its POS_-prefixed equivalent for your own
+// clickstream analysis. See events.js for the full rationale.
+//
+// PII — Google's GA4 terms prohibit sending personally identifiable
+// information (name, email, full phone number) as event data; doing so
+// risks Google suspending the property. The full customerName/customerMobile
+// are kept in the LOCAL sessionStorage session object (never leaves this
+// browser) for on-device debugging, but anything handed to sendToGA() is
+// scrubbed down to the internal customerId (an opaque POS-internal number,
+// not identifying on its own) plus a masked mobile (last 4 digits only,
+// matching the masking style already used elsewhere in this app's UI).
+// Never add customerName/customerEmail to a sendToGA() payload.
+
+import { sendToGA } from './gtag';
+import EVENTS from './events';
 
 const SESSION_KEY = 'lucira_session';
 const EVENTS_KEY  = 'lucira_events';
@@ -31,6 +50,15 @@ function safeGet(key) {
 function safeSet(key, value) {
   try { sessionStorage.setItem(key, JSON.stringify(value)); }
   catch {} // sessionStorage full — silently drop
+}
+
+// Last 4 digits only — e.g. "8149639991" → "******9991". Never send the
+// full number to GA.
+function maskMobile(mobile) {
+  if (!mobile) return null;
+  const digits = String(mobile).replace(/\D/g, '');
+  if (digits.length <= 4) return digits;
+  return `${'*'.repeat(digits.length - 4)}${digits.slice(-4)}`;
 }
 
 // ── Tracker ───────────────────────────────────────────────────────────────────
@@ -61,26 +89,30 @@ const tracker = {
     safeSet(SESSION_KEY, session);
     safeSet(EVENTS_KEY, []);
 
-    this.track('session_start', {
+    this.track(EVENTS.SESSION_START, {
       customerId,
-      customerName,
-      customerMobile,
+      customerMobileMasked: maskMobile(customerMobile),
       storeId,
       storeName,
     });
   },
 
   /**
-   * Log an event. Only logs if a customer session is active.
-   * Agent-level events (login/logout) bypass this check via trackAgent().
+   * Log an event — buffered locally AND sent to GA4.
+   * Includes session context (customer/store) when one is active; still
+   * logs with nulls when it isn't, since tracking now runs from login
+   * onward, not just during an attached customer session.
    */
   track(eventName, properties = {}) {
     if (typeof window === 'undefined') return;
 
     const session = this.getSession();
+    const timestamp = new Date().toISOString();
+    // Full customerName is kept in this local, on-device event log only —
+    // it never reaches sendToGA() below.
     const event = {
       event:          eventName,
-      timestamp:      new Date().toISOString(),
+      timestamp,
       sessionId:      session?.sessionId ?? null,
       customerName:   session?.customerName ?? null,
       customerId:     session?.customerId ?? null,
@@ -93,6 +125,14 @@ const tracker = {
     }
     events.push(event);
     safeSet(EVENTS_KEY, events);
+
+    sendToGA(eventName, {
+      timestamp,
+      session_id:            session?.sessionId ?? undefined,
+      customer_id:            session?.customerId ?? undefined,
+      customer_mobile_masked: maskMobile(session?.customerMobile) ?? undefined,
+      ...properties,
+    });
   },
 
   /**
@@ -102,15 +142,37 @@ const tracker = {
   trackAgent(eventName, properties = {}) {
     if (typeof window === 'undefined') return;
     const AGENT_KEY = 'lucira_agent_events';
+    const timestamp = new Date().toISOString();
     const event = {
       event:     eventName,
-      timestamp: new Date().toISOString(),
+      timestamp,
       properties,
     };
     const events = safeGet(AGENT_KEY) ?? [];
     if (events.length >= MAX_EVENTS) events.splice(0, 1);
     events.push(event);
     safeSet(AGENT_KEY, events);
+
+    sendToGA(eventName, { timestamp, ...properties });
+  },
+
+  /**
+   * Checkout-funnel events — fires under BOTH the GA4-reserved ecommerce
+   * name (so GA4's built-in Monetization/Ecommerce reports work) and the
+   * POS_-prefixed custom name (so it's identifiable as POS traffic in your
+   * own Explore reports). Use for view_item/add_to_cart/begin_checkout/
+   * add_payment_info/purchase — see GA_ECOMMERCE_EVENTS in events.js.
+   *
+   * @param {string} gaEventName  — exact GA4 reserved name, e.g. 'purchase'
+   * @param {string} posEventName — POS_-prefixed equivalent, e.g. EVENTS.ORDER_PLACED
+   * @param {object} params — GA4 ecommerce params (items[], value, currency, ...)
+   */
+  trackEcommerce(gaEventName, posEventName, params = {}) {
+    this.track(posEventName, params);
+    sendToGA(gaEventName, {
+      timestamp: new Date().toISOString(),
+      ...params,
+    });
   },
 
   /**
@@ -150,13 +212,12 @@ const tracker = {
     const session = this.getSession();
     if (session) {
       const duration = Date.now() - new Date(session.startedAt).getTime();
-      this.track('session_end', {
+      this.track(EVENTS.SESSION_END, {
         reason,
-        durationMs:   duration,
-        durationMin:  Math.round(duration / 60000),
-        totalEvents:  this.getEvents().length,
-        customerName: session.customerName,
-        customerId:   session.customerId,
+        durationMs:  duration,
+        durationMin: Math.round(duration / 60000),
+        totalEvents: this.getEvents().length,
+        customerId:  session.customerId,
       });
     }
   },
