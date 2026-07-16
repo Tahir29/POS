@@ -35,6 +35,11 @@ export const QUERY_KEYS = {
     ALL_RATES:            () => ['settings', 'all-rates'],
   },
 
+  // ── EXCHANGE RATE ──────────────────────────────────────────────────────────
+  EXCHANGE_RATE: {
+    GET: (currencyId, companyId) => ['exchange-rate', currencyId, companyId],
+  },
+
   // ── LOCATION ─────────────────────────────────────────────────────────────
   LOCATION: {
     COUNTRIES: ()            => ['location', 'countries'],
@@ -58,6 +63,7 @@ export const QUERY_KEYS = {
     SIZES:           ()        => ['items', 'sizes'],
     ATTRIBUTES:      (typeId)  => ['items', 'attributes', typeId],
     DESIGN_VARIANTS: (styleId) => ['items', 'design-variants', styleId],
+    MASTER_SEARCH:   (query)   => ['items', 'master-search', query],
     SEARCH: (params) => ['items', 'search', {
       q:    params.item_search,
       grp:  params.item_group_ids,

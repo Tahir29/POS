@@ -40,3 +40,24 @@ export const getDesignVariants = (styleId) =>
   axiosInstance.post(API.ITEMS.DESIGN_DETAIL, {
     EntityId: styleId,
   });
+
+/**
+ * Search the master item catalogue by SKU/code substring — NOT scoped to
+ * current-store stock (unlike catalogService's searchBySku). Used by
+ * Exchange/Buyback, where the item being handed in by the customer isn't
+ * necessarily in this store's live stock; only its master record (weight,
+ * purity, item_rate) matters for valuation.
+ *
+ * item_search matches item_code substrings only (confirmed elsewhere in
+ * this app) — not item_name.
+ * @param {string} query
+ * @returns {Promise<object>} { Entities: ItemRow[] }
+ */
+export async function searchMasterItems(query) {
+  if (!query || query.trim().length < 2) return { Entities: [] };
+  const response = await axiosInstance.post(API.ITEMS.LIST, {
+    item_search: query.trim(),
+    Take: 20,
+  });
+  return response.data;
+}

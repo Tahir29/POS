@@ -61,10 +61,14 @@ function InvoiceContent({ raw }) {
         </div>
       )}
 
-      <Row label="Subtotal" value={formatCurrency(raw.net_amount)} border />
+      {/* sub_total / net_amount confirmed 2026-07-16 via real Invoice/List
+          data — sub_total is the pre-tax amount, net_amount is the actual
+          final total. gross_amount doesn't exist anywhere on InvoiceRow —
+          this row previously always rendered blank because of it. */}
+      <Row label="Subtotal" value={formatCurrency(raw.sub_total)} border />
       <Row label="Discount" value={raw.discount ? `– ${formatCurrency(raw.discount)}` : null} />
       <Row label="Tax"      value={formatCurrency(raw.tax_amount)} />
-      <Row label="Total"    value={formatCurrency(raw.gross_amount)} bold border />
+      <Row label="Total"    value={formatCurrency(raw.net_amount)} bold border />
 
       {payments.length > 0 && (
         <div className="border-t border-stone-100 pt-2 flex flex-col gap-1.5">

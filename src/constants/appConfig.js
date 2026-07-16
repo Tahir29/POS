@@ -22,6 +22,21 @@ const APP_CONFIG = {
     ALLOY:     111,
   },
 
+  // ── URD PURCHASE MASTER ITEMS ─────────────────────────────────────────────
+  // Generic "unregistered dealer" gold placeholder item used as the line
+  // item on every URD Purchase — confirmed 2026-07-16 via a real URD
+  // Purchase's line item (item_id 46875, item_code "URD GOLD", is_urd: true).
+  // Hardcoded rather than searched: Items/List silently excludes is_urd
+  // items from EVERY query (item_search, item_ids, is_urd filter all
+  // return zero rows for this exact item_id) even though Items/Retrieve
+  // returns it fine — the same "filter silently ignored" pattern seen
+  // elsewhere in this API. Only Gold is confirmed; if the store buys old
+  // silver/platinum too, get those item_ids the same way (Retrieve by ID,
+  // not List) and add them here.
+  URD_MASTER_ITEMS: {
+    GOLD: 46875,
+  },
+
   // ── CURRENCY ──────────────────────────────────────────────────────────────
   CURRENCY: {
     INR_ID:     103,

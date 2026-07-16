@@ -27,6 +27,15 @@ export const checkoutSchema = z
         message: 'A customer must be attached before placing the order',
       }),
 
+    // Confirmed 2026-07-16 — the vendor's own POS Sale screen requires
+    // selecting an employee before placing the order.
+    salesPersonId: z
+      .number({ message: 'Select a sales person before placing the order' })
+      .nullable()
+      .refine((val) => val !== null, {
+        message: 'Select a sales person before placing the order',
+      }),
+
     paymentModes: z
       .array(paymentModeSchema)
       .min(1, { message: 'Select at least one payment mode' }),

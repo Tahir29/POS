@@ -30,6 +30,7 @@ import { createOrder, postOrder } from '@/services/orderService';
 import { useCart } from '@/hooks/cart/useCart';
 import { useCartTotals } from '@/hooks/cart/useCartTotals';
 import { useCustomerSession } from '@/hooks/customer/useCustomerSession';
+import { useExchangeRate } from '@/hooks/checkout/useExchangeRate';
 import { selectActiveStoreId } from '@/store/slices/storeSlice';
 import { QUERY_KEYS } from '@/constants/queryKeys';
 import APP_CONFIG from '@/constants/appConfig';
@@ -38,8 +39,14 @@ import TOAST from '@/constants/toastMessages';
 /**
  * Builds the OrderRow Entity payload from cart state.
  * All field names confirmed against OrnaVerse.POS.InvoiceItemsRow schema.
+ *
+ * employee_id/sales_person_id + exchange_rate — see useCreateInvoice.js
+ * header for the full rationale (same schema, same findings 2026-07-16).
  */
-function buildOrderEntity({ items, subtotal, discount, total, customerId, activeStoreId, paymentModes }) {
+function buildOrderEntity({
+  items, subtotal, discount, total, customerId, activeStoreId, paymentModes,
+  salesPersonId, exchangeRate,
+}) {
   const today = new Date().toISOString();
 
   const line_items = items.map((item, idx) => ({
@@ -68,6 +75,9 @@ function buildOrderEntity({ items, subtotal, discount, total, customerId, active
     company_id:    activeStoreId,
     document_date: today,
     currency_id:   APP_CONFIG.CURRENCY.INR_ID,
+    exchange_rate: exchangeRate,
+    employee_id:      salesPersonId,
+    sales_person_id:  salesPersonId,
     sub_total:     subtotal,
     discount:      discount ?? 0,
     net_amount:    total,
@@ -82,15 +92,17 @@ export function useCreateOrder() {
   const { subtotal, discount, total } = useCartTotals();
   const { customerId } = useCustomerSession();
   const activeStoreId = useSelector(selectActiveStoreId);
+  const { exchangeRate } = useExchangeRate();
 
   const mutation = useMutation({
     /**
-     * @param {{ modeId, modeCode, modeName, amount }[]} paymentModes
+     * @param {{ paymentModes: {modeId, modeCode, modeName, amount}[], salesPersonId: number }} params
      */
-    mutationFn: async (paymentModes) => {
+    mutationFn: async ({ paymentModes, salesPersonId }) => {
       const entity = buildOrderEntity({
         items, subtotal, discount, total,
         customerId, activeStoreId, paymentModes,
+        salesPersonId, exchangeRate,
       });
 
       // Step 1: Create draft order

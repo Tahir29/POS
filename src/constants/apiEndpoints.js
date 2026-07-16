@@ -385,6 +385,15 @@ const API = {
   },
 
   // ─────────────────────────────────────────────────────────────────────────
+  // EXCHANGE RATE
+  // Required on Order/Invoice Create alongside currency_id — confirmed via
+  // direct UAT test 2026-07-16: currency_id 103 (INR) returns exchange_rate: 1.
+  // ─────────────────────────────────────────────────────────────────────────
+  EXCHANGE_RATE: {
+    GET: 'Services/Administration/ExchangeRate/GetExchangeRate',
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
   // COSTING / METAL RATES
   // Daily gold/silver/platinum rate updates
   // ─────────────────────────────────────────────────────────────────────────

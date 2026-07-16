@@ -24,6 +24,10 @@ function normalizeMode(entity) {
     allowSelection:entity.allow_selection ?? true,
     isPosMachine: entity.is_pos_machine  ?? false,  // bank POS terminal
     isDisabled:   entity.is_disabled     ?? false,
+    // Confirmed 2026-07-16 via real Refund/List and Invoice/List data — every
+    // PaymentReceiptModeRow carries its own ledger_id, and RefundDetailsRow
+    // genuinely requires one. Use the mode's own value rather than inventing one.
+    ledgerId:     entity.ledger_id ?? null,
     raw:          entity,
   };
 }
