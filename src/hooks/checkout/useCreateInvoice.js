@@ -53,6 +53,18 @@ import { selectActiveStoreId } from '@/store/slices/storeSlice';
 import { QUERY_KEYS } from '@/constants/queryKeys';
 import APP_CONFIG from '@/constants/appConfig';
 import TOAST from '@/constants/toastMessages';
+import tracker from '@/lib/analytics/tracker';
+import EVENTS, { GA_ECOMMERCE_EVENTS } from '@/lib/analytics/events';
+
+function toGAItems(items) {
+  return items.map((item) => ({
+    item_id:   String(item.itemId),
+    item_name: item.itemName,
+    item_sku:  item.sku,
+    price:     item.unitPrice,
+    quantity:  item.quantity,
+  }));
+}
 
 /**
  * Builds InvoiceRow Entity from cart + session state.
@@ -167,6 +179,14 @@ export function useCreateInvoice() {
 
     onSuccess: ({ transactionId }) => {
       toast.success(TOAST.INVOICES.CREATED(transactionId));
+
+      tracker.trackEcommerce(GA_ECOMMERCE_EVENTS.PURCHASE, EVENTS.ORDER_PLACED, {
+        transaction_id: transactionId,
+        value:          total,
+        currency:       APP_CONFIG.CURRENCY.INR_CODE,
+        items:          toGAItems(items),
+      });
+
       clearCart();
       // Invalidate invoice + order list caches5
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
@@ -175,9 +195,17 @@ export function useCreateInvoice() {
 
     onError: (error) => {
       console.error('[useCreateInvoice]', error);
+
+      const failedAtPost = error?.message?.includes('post');
+      tracker.track(EVENTS.ORDER_FAILED, {
+        stage: failedAtPost ? 'post' : 'create',
+        value: total,
+        error: error?.response?.data?.Error?.Message ?? error?.message ?? 'unknown',
+      });
+
       // If create succeeded but post failed, the draft sits on the server.
       // The user can re-attempt posting from the invoices list.
-      if (error?.message?.includes('post')) {
+      if (failedAtPost) {
         toast.error(TOAST.INVOICES.POST_FAILED);
       } else {
         toast.error(TOAST.INVOICES.CREATE_FAILED);
