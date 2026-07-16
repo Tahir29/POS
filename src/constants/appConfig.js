@@ -83,10 +83,13 @@ const APP_CONFIG = {
   },
 
   // ── SESSION ───────────────────────────────────────────────────────────────
+  // IDLE_TIMEOUT_MS       — customer detached from cart after this long idle
+  // STAFF_IDLE_TIMEOUT_MS — agent fully logged out after this long idle
   SESSION: {
-    IDLE_TIMEOUT_MS: 5 * 60 * 1000,
-    WARNING_BEFORE:  30 * 1000,
-    CLICK_DEBOUNCE:  300,
+    IDLE_TIMEOUT_MS:       10 * 60 * 1000,
+    STAFF_IDLE_TIMEOUT_MS: 20 * 60 * 1000,
+    WARNING_BEFORE:        30 * 1000,
+    CLICK_DEBOUNCE:        300,
   },
 
   // ── SEARCH ────────────────────────────────────────────────────────────────

@@ -23,6 +23,8 @@ import OutOfStockToggle      from '@/components/features/catalog/OutOfStockToggl
 import CatalogSkeleton       from '@/components/features/catalog/CatalogSkeleton';
 
 import APP_CONFIG from '@/constants/appConfig';
+import tracker from '@/lib/analytics/tracker';
+import EVENTS from '@/lib/analytics/events';
 import TOAST from '@/constants/toastMessages';
 
 const { SEARCH } = APP_CONFIG;
@@ -284,9 +286,11 @@ function CatalogScreen() {
         (p) => p.item_code?.toLowerCase() === trimmed.toLowerCase(),
       );
       if (match?.item_id) {
+        tracker.track(EVENTS.BARCODE_SCANNED, { code: trimmed, itemId: match.item_id });
         router.push(`/products/${match.item_id}`);
         return;
       }
+      tracker.track(EVENTS.BARCODE_SCAN_FAILED, { code: trimmed });
       actions.setSearch(trimmed);
       return;
     }
@@ -298,8 +302,10 @@ function CatalogScreen() {
       (p) => p.item_code?.toLowerCase() === trimmed.toLowerCase(),
     );
     if (match?.item_id) {
+      tracker.track(EVENTS.BARCODE_SCANNED, { code: trimmed, itemId: match.item_id });
       router.push(`/products/${match.item_id}`);
     } else {
+      tracker.track(EVENTS.BARCODE_SCAN_FAILED, { code: trimmed });
       actions.setSearch(trimmed);
     }
   }, [allReady, allProducts, effectiveStoreId, router, actions]);
@@ -308,6 +314,7 @@ function CatalogScreen() {
   const handleSearch = useCallback((q) => {
     actions.setSearch(q);
     if (q.trim().length >= SEARCH.MIN_QUERY_LENGTH) {
+      tracker.track(EVENTS.PRODUCT_SEARCHED, { query: q.trim() });
       setRecentSearches((prev) => {
         const deduped = [q, ...prev.filter((s) => s !== q)];
         return deduped.slice(0, MAX_RECENT);

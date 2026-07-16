@@ -10,6 +10,7 @@ import authReducer    from './slices/authSlice';
 import cartReducer    from './slices/cartSlice';
 import storeReducer   from './slices/storeSlice';
 import uiReducer      from './slices/uiSlice';
+import { analyticsMiddleware } from './analyticsMiddleware';
 
 // ── COMBINE ALL REDUCERS ──────────────────────────────────────
 const rootReducer = combineReducers({
@@ -31,7 +32,7 @@ export const store = configureStore({
         // Required by Redux Persist — ignore its internal action types
         ignoredActions: [FLUSH, REHYDRATE, PAUSE, PERSIST, PURGE, REGISTER],
       },
-    }),
+    }).concat(analyticsMiddleware),
   devTools: process.env.NODE_ENV !== 'production',
 });
 
