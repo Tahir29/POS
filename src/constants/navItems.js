@@ -12,11 +12,13 @@ import {
   Users,
   ClipboardList,
   FileText,
+  FileSpreadsheet,
   BookOpen,
   ArrowLeftRight,
   Bookmark,
   Settings,
   BarChart2,
+  Wrench,
 } from 'lucide-react';
 
 export const NAV_ITEMS = [
@@ -26,6 +28,8 @@ export const NAV_ITEMS = [
   { label: 'Orders',       href: '/orders',       icon: ClipboardList   },
   { label: 'Invoices',     href: '/invoices',     icon: FileText        },
   { label: 'Transactions', href: '/transactions', icon: ArrowLeftRight  },
+  { label: 'Repair',       href: '/repair',       icon: Wrench          },
+  { label: 'Estimation',   href: '/estimation',   icon: FileSpreadsheet },
   { label: 'Customers',    href: '/customers',    icon: Users           },
   { label: 'Schemes',      href: '/schemes',      icon: BookOpen        },
   // { label: 'Transfers',    href: '/transfers',    icon: ArrowLeftRight  },

@@ -7,6 +7,7 @@ import { useCart } from '@/hooks/cart/useCart';
 import { useCartTotals } from '@/hooks/cart/useCartTotals';
 import { usePromoValidation } from '@/hooks/checkout/usePromoValidation';
 import PromoCodeInput from '@/components/features/checkout/PromoCodeInput';
+import PromoCodeSheet from '@/components/features/checkout/PromoCodeSheet';
 import PromoAppliedBadge from '@/components/features/checkout/PromoAppliedBadge';
 
 export default function CheckoutDiscountSection() {
@@ -25,7 +26,10 @@ export default function CheckoutDiscountSection() {
           onRemove={removePromo}
         />
       ) : (
-        <PromoCodeInput onApply={validatePromo} isValidating={isValidating} />
+        <>
+          <PromoCodeInput onApply={validatePromo} isValidating={isValidating} />
+          <PromoCodeSheet onApply={validatePromo} isApplying={isValidating} />
+        </>
       )}
     </section>
   );

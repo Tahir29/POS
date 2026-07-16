@@ -74,7 +74,9 @@ export default function ProductStickyActionBar({
               Total
             </p>
             <p className="font-heading text-xl text-foreground leading-tight">
-              {total != null ? formatINR(total) : '—'}
+              {total != null ? formatINR(total) : (
+                <span className="text-sm font-medium text-amber-600">Not priced</span>
+              )}
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -85,7 +87,10 @@ export default function ProductStickyActionBar({
               maxQty={QUANTITY_CEILING}
             />
 
-            {/* Add to Cart — always enabled regardless of stock vs quantity */}
+            {/* Add to Cart — always enabled regardless of stock vs quantity,
+                EXCEPT when there's no price: item_rate === 0 means this
+                variant was never costed, and adding it would silently put a
+                ₹0 line item into a real sale. */}
             <AddToCartButton
               product={product}
               quantity={quantity}
@@ -93,6 +98,7 @@ export default function ProductStickyActionBar({
               selectedSizeName={selectedSizeName}
               stockStatus={stockStatus}
               primaryImage={primaryImage}
+              disabled={unitPrice == null}
             />
           </div>
         </div>

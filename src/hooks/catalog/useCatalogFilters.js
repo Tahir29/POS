@@ -10,12 +10,20 @@ import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 /**
  * Sort options available in the catalog.
  * Value is used in URL params and matched client-side.
+ *
+ * NOTE: 'price_asc'/'price_desc' used to mean weight (mislabeled — the
+ * options read "Weight Low → High" but sorted by net_weight, not price).
+ * Renamed to weight_asc/weight_desc and given real price_asc/price_desc
+ * options now that ProductCatalogRow is enriched with a real price
+ * (see catalogService.enrichWithPrice).
  */
 export const SORT_OPTIONS = [
-  { value: 'name_asc',   label: 'Name A → Z' },
-  { value: 'name_desc',  label: 'Name Z → A' },
-  { value: 'price_asc',  label: 'Weight Low → High' },
-  { value: 'price_desc', label: 'Weight High → Low' },
+  { value: 'name_asc',    label: 'Name A → Z' },
+  { value: 'name_desc',   label: 'Name Z → A' },
+  { value: 'price_asc',   label: 'Price Low → High' },
+  { value: 'price_desc',  label: 'Price High → Low' },
+  { value: 'weight_asc',  label: 'Weight Low → High' },
+  { value: 'weight_desc', label: 'Weight High → Low' },
 ];
 
 export const DEFAULT_SORT = 'name_asc';

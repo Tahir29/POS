@@ -2,19 +2,23 @@
 
 // src/components/features/catalog/ProductCard/index.jsx
 //
-// SCHEMA (confirmed v1.json, see catalogService.js header comment):
-//   ProductCatalogRow already includes price + compare_price directly —
-//   no per-card detail fetch needed. The older note claiming price wasn't
-//   available on this endpoint was stale (pre-rewire) and has been
-//   corrected here.
+// SCHEMA: ProductCatalogRow doesn't reliably return a price field at all on
+// this environment — catalogService.enrichWithPrice fills it in from
+// Items/List's item_rate (see that file for details). `price` here is
+// always that real, single offer price.
 //
 // Fields used: item_id, item_code, item_name, has_stock, weight, net_weight,
-// metal_id, karat_id, image/image_1, price, compare_price.
+// metal_id, karat_id, image/image_1, price.
 //
-// NOT rendered (no data source at this endpoint, confirmed during audit):
-//   - Bestseller / Fast Shipping / New Arrival tags — skipped per decision
-//   - Diamond weight (ct) — not a confirmed ProductCatalogRow field
-//   - Multiple variant/color dots — only ONE dot for the item's own metal_id
+// NOT rendered — confirmed 2026-07-15 there's no backing data for any of
+// these anywhere in the API (checked directly, not assumed):
+//   - Slashed "original price" / % off badge — no compare_price, mrp, or
+//     any "original price" field exists on any item/catalog endpoint
+//   - Tags (e.g. "Fast Shipping") — no tags field exists at all
+//   - Similar products — the field exists (similar_items) but is empty on
+//     every product in this catalog
+//   - Wishlist, video icon, star ratings, variant colour swatches — by
+//     product decision, not a data gap
 
 import { useState }        from 'react';
 import Image               from 'next/image';
@@ -110,7 +114,6 @@ export default function ProductCard({ product, showStockBadge = false }) {
     image_url,
     image_1,
     price,
-    compare_price,
   } = product;
 
   const inStock      = has_stock === true;
@@ -118,9 +121,6 @@ export default function ProductCard({ product, showStockBadge = false }) {
   const weightLabel  = formatWeight(net_weight ?? weight ?? null);
 
   const infoLine = [metalLabel, weightLabel].filter(Boolean).join(' · ') || null;
-
-  const hasDiscount = compare_price != null && price != null && compare_price > price;
-  const discountPct = hasDiscount ? Math.round((1 - price / compare_price) * 100) : null;
 
   const rawSrc  = image ?? image_url ?? image_1 ?? null;
   const imageSrc = !imgError ? resolveImageSrc(rawSrc) : null;
@@ -169,22 +169,11 @@ export default function ProductCard({ product, showStockBadge = false }) {
       {/* ── Info ──────────────────────────────────────────── */}
       <div className="flex flex-1 flex-col gap-1 p-3">
 
-        {/* Price row — real price/compare_price from ProductCatalogRow */}
+        {/* Price — real offer price, no slashed/original price (no such
+            field exists anywhere in the API — see header note) */}
         {price != null && (
-          <p className="flex items-baseline gap-1.5">
-            <span className="font-heading text-base font-semibold text-foreground">
-              {formatINR(price)}
-            </span>
-            {hasDiscount && (
-              <>
-                <span className="text-xs text-muted-foreground line-through">
-                  {formatINR(compare_price)}
-                </span>
-                <span className="text-xs font-semibold text-status-in-stock">
-                  {discountPct}% off
-                </span>
-              </>
-            )}
+          <p className="font-heading text-base font-semibold text-foreground">
+            {formatINR(price)}
           </p>
         )}
 

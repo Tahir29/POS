@@ -17,10 +17,12 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useSelector } from 'react-redux';
 import ConfirmDialog    from '@/components/shared/ConfirmDialog';
 import CheckoutCustomerSummary  from '@/components/features/checkout/CheckoutCustomerSummary';
 import CheckoutDiscountSection  from '@/components/features/checkout/CheckoutDiscountSection';
 import CheckoutPaymentSection   from '@/components/features/checkout/CheckoutPaymentSection';
+import SalesPersonSelect        from '@/components/features/checkout/SalesPersonSelect';
 import CartItemRow              from '@/components/features/cart/CartItemRow';
 import CartSummary              from '@/components/features/cart/CartSummary';
 import PlaceOrderButton         from '@/components/features/checkout/PlaceOrderButton';
@@ -33,12 +35,14 @@ import { useCreateInvoice }           from '@/hooks/checkout/useCreateInvoice';
 import { useBackGuard } from '@/contexts/NavigationGuardContext';
 import { useSmartBack }  from '@/hooks/navigation/useSmartBack';
 import { checkoutSchema }             from '@/validators/checkoutSchema';
+import { selectActiveStoreId } from '@/store/slices/storeSlice';
 
 function CheckoutScreen() {
   const router  = useRouter();
   const { items, isEmpty } = useCart();
   const { total }          = useCartTotals();
   const { customerId }     = useCustomerSession();
+  const activeStoreId      = useSelector(selectActiveStoreId);
   const { goBack, clearGuard } = useSmartBack();
 
   const {
@@ -49,6 +53,7 @@ function CheckoutScreen() {
   } = useCreateInvoice();
 
   const [payments, setPayments]     = useState([]);
+  const [salesPersonId, setSalesPersonId] = useState(null);
   const [isBackConfirmOpen, setIsBackConfirmOpen] = useState(false);
 
   // Track whether a sale has been successfully completed
@@ -101,6 +106,7 @@ function CheckoutScreen() {
   // Validate checkout state before allowing submission
   const validation = checkoutSchema.safeParse({
     customerId,
+    salesPersonId,
     paymentModes: payments,
     totalAmount:  total,
     cartTotal:    total,
@@ -109,7 +115,7 @@ function CheckoutScreen() {
 
   const handlePlaceOrder = async () => {
     if (!isValid || isPlacingInvoice) return;
-    await placeInvoice({ paymentModes: payments });
+    await placeInvoice({ paymentModes: payments, salesPersonId });
   };
 
   // ── Confirmation screen ────────────────────────────────────────────────────
@@ -154,6 +160,18 @@ function CheckoutScreen() {
           </section>
         </div>
         <div className="flex flex-col gap-4 w-full">
+          {/* Sales person — required, mirrors the vendor's own POS Sale screen */}
+          <section className="rounded-xl border border-stone-200 bg-white p-4">
+            <h2 className="text-sm font-bold text-stone-800 mb-2">
+              Sales Person <span className="text-destructive">*</span>
+            </h2>
+            <SalesPersonSelect
+              companyId={activeStoreId}
+              value={salesPersonId}
+              onChange={setSalesPersonId}
+            />
+          </section>
+
           {/* Promo code / discount */}
           <CheckoutDiscountSection />
 

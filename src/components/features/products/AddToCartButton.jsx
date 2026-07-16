@@ -5,8 +5,11 @@
 // Dispatches cart/addItem Redux action.
 // Shows TOAST.CART.ITEM_ADDED(itemName) on success.
 //
-// Always enabled — out of stock items can be added as made-to-order.
+// Enabled by default — out of stock items can be added as made-to-order.
 // Stock status display is handled separately by StockStatusBadge.
+// Disabled when there's no valid price (item_rate === 0 means this variant
+// was never costed) — adding it would silently put a ₹0 line item into a
+// real sale, which only gets caught much later at checkout.
 
 import { useDispatch } from 'react-redux';
 import { toast } from 'react-toastify';
@@ -22,6 +25,7 @@ import TOAST from '@/constants/toastMessages';
  *   selectedSizeId:   number | null,
  *   selectedSizeName: string | null,
  *   primaryImage:     { src: string, alt: string|null } | null,
+ *   disabled?:        boolean,
  * }} props
  */
 export default function AddToCartButton({
@@ -30,19 +34,22 @@ export default function AddToCartButton({
   selectedSizeId,
   selectedSizeName,
   primaryImage = null,
+  disabled = false,
 }) {
   const dispatch = useDispatch();
 
-  const isDisabled = !product;
-
   // ── Resolve price ─────────────────────────────────────────────────────────
+  // A real jewellery item is never actually free — treat 0 the same as
+  // missing (see catalogService.enrichWithPrice for the same rule elsewhere).
   const unitPrice =
-    product?.item_rate  ??
-    product?.sale_price ??
-    product?.price      ??
-    product?.mrp        ??
-    product?.rate       ??
-    0;
+    product?.item_rate  ||
+    product?.sale_price ||
+    product?.price      ||
+    product?.mrp        ||
+    product?.rate       ||
+    null;
+
+  const isDisabled = !product || disabled || unitPrice == null;
 
   // ── Resolve image ─────────────────────────────────────────────────────────
   // Priority 1: Shopify image (src is already an absolute URL)

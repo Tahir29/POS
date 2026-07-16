@@ -103,6 +103,23 @@ export async function getAllRates({ company_id } = {}) {
   return response.data;
 }
 
+// ─── EXCHANGE RATE ────────────────────────────────────────────────────────────
+
+/**
+ * Currency exchange rate — required on Order/Invoice Create alongside
+ * currency_id. Confirmed via direct UAT test 2026-07-16: currency_id 103
+ * (INR) returns exchange_rate: 1.
+ * @param {{ currency_id: number, company_id?: number }} params
+ * @returns {Promise<object>} { Entity: { exchange_rate, currency_id, ... } }
+ */
+export async function getExchangeRate({ currency_id, company_id } = {}) {
+  const response = await axiosInstance.post(API.EXCHANGE_RATE.GET, {
+    currency_id,
+    company_id,
+  });
+  return response.data;
+}
+
 // ─── REASON CODES ─────────────────────────────────────────────────────────────
 
 /**

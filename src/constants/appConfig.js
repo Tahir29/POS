@@ -22,6 +22,21 @@ const APP_CONFIG = {
     ALLOY:     111,
   },
 
+  // ── URD PURCHASE MASTER ITEMS ─────────────────────────────────────────────
+  // Generic "unregistered dealer" gold placeholder item used as the line
+  // item on every URD Purchase — confirmed 2026-07-16 via a real URD
+  // Purchase's line item (item_id 46875, item_code "URD GOLD", is_urd: true).
+  // Hardcoded rather than searched: Items/List silently excludes is_urd
+  // items from EVERY query (item_search, item_ids, is_urd filter all
+  // return zero rows for this exact item_id) even though Items/Retrieve
+  // returns it fine — the same "filter silently ignored" pattern seen
+  // elsewhere in this API. Only Gold is confirmed; if the store buys old
+  // silver/platinum too, get those item_ids the same way (Retrieve by ID,
+  // not List) and add them here.
+  URD_MASTER_ITEMS: {
+    GOLD: 46875,
+  },
+
   // ── CURRENCY ──────────────────────────────────────────────────────────────
   CURRENCY: {
     INR_ID:     103,
@@ -36,6 +51,7 @@ const APP_CONFIG = {
     GRANT_TYPE_PASSWORD:       'password',
     GRANT_TYPE_REFRESH:        'refresh_token',
     TOKEN_REFRESH_THRESHOLD_MS: 5 * 60 * 1000, // refresh proactively 5 min before expiry
+    // CLIENT_ID: '65948cb671ae46e1a04653f505e29332',
   },
 
   // ── PAGINATION ────────────────────────────────────────────────────────────
@@ -50,6 +66,7 @@ const APP_CONFIG = {
     CATEGORIES_TAKE:    0,    // fetch all — small static dataset
     CUSTOMERS_TAKE:     50,   // paginated browse
     CUSTOMERS_ALL_TAKE: 5000, // one-off full fetch for name search
+    EMPLOYEES_ALL_TAKE: 5000, // one-off full fetch for name search
     ANALYTICS_TAKE:     12,   // months for revenue charts
     REPORTS_TAKE:       100,
   },

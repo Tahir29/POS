@@ -29,12 +29,15 @@
 //     Inventory/ProductCatalog-specific convention, confirmed fixed in
 //     transactionService.js as part of this consolidation.
 //
-// KNOWN GAP (flagged, not guessed):
-//   RefundDetailsRow carries a `ledger_id` field in the OrnaVerse schema.
-//   No ledger-picker UI exists anywhere in this app yet, so the Refund
-//   form below omits it (left undefined) rather than inventing a value.
-//   If OrnaVerse rejects a refund detail for missing ledger_id, this is
-//   the first place to look — needs a live Postman/UAT check.
+// RESOLVED 2026-07-16: RefundDetailsRow's ledger_id is now sourced from the
+// selected payment mode's own ledger_id (confirmed real field via
+// PaymentReceiptMode/List and Refund/List) — see RefundNewForm below.
+//
+// STILL BLOCKED (all 6 types, confirmed via direct API test 2026-07-16):
+// every Create endpoint here (Return/Refund/CreditNote/Exchange/Buyback/
+// URDPurchase) returns the same AccessDenied as POS/Order/Create and
+// POS/Invoice/Create — a systemic OAuth-client scope gap on OrnaVerse's
+// side, not a payload issue. See useCreateInvoice.js for the full history.
 
 import { Suspense, useState, useCallback } from 'react';
 import { useSelector }                     from 'react-redux';
@@ -80,6 +83,8 @@ import {
   useCreateURDPurchase,usePostURDPurchase,
 }                                          from '@/hooks/transactions/useTransactionMutations';
 import { usePaymentModes }                from '@/hooks/checkout/usePaymentModes';
+import { useURDMasterItem }                from '@/hooks/transactions/useURDMasterItem';
+import ItemSearchPicker                    from '@/components/features/transactions/ItemSearchPicker';
 import { selectActiveStoreId }            from '@/store/slices/storeSlice';
 import { selectCartCustomerId, selectCartCustomerName } from '@/store/slices/cartSlice';
 import APP_CONFIG                         from '@/constants/appConfig';
@@ -314,15 +319,26 @@ function ReturnNewForm({ onDone }) {
 }
 
 // ─── Exchange / Buyback / URD Purchase — shared metal line-item form ───────────
-// All three share the same weight/purity/rate shape, differing only in
-// whether an item_name description field and a receipt (payout) section
-// are shown. Configured per type rather than duplicated three times.
+// All three share the same weight/purity/rate shape, differing in how the
+// line item's `item_id` is resolved and whether a receipt (payout) section
+// is shown. Configured per type rather than duplicated three times.
+//
+// REBUILT 2026-07-16 — the original version invented `metal_type_id` +
+// freeform `item_name` fields that don't match OrnaVerse's real schema.
+// Confirmed via real Exchange/Buyback/URD Retrieve data: line items
+// reference a genuine master `item_id` (Exchange/Buyback: the actual piece
+// the customer is handing in, found by SKU search — see ItemSearchPicker;
+// URD: a fixed generic "URD GOLD" master item, see useURDMasterItem and
+// appConfig.js URD_MASTER_ITEMS for why it can't be searched). weight/
+// purity/item_rate are pre-filled from the resolved item but stay editable,
+// since a buyback/exchange appraisal rate can legitimately differ from the
+// item's original sale rate.
 
 const METAL_TYPE_CONFIGS = {
   exchange: {
     amountField: 'exchange_value',
     hasReceipt:  false, // exchange value is applied as invoice credit, not paid out directly
-    hasItemName: true,
+    pickerMode:  'search',
     createHook:  useCreateExchange,
     postHook:    usePostExchange,
     submitLabel: 'Submit Exchange',
@@ -331,7 +347,7 @@ const METAL_TYPE_CONFIGS = {
   buyback: {
     amountField: 'amount',
     hasReceipt:  true,
-    hasItemName: true,
+    pickerMode:  'search',
     createHook:  useCreateBuyback,
     postHook:    usePostBuyback,
     submitLabel: 'Submit Buyback',
@@ -340,7 +356,7 @@ const METAL_TYPE_CONFIGS = {
   urd: {
     amountField: 'amount',
     hasReceipt:  true,
-    hasItemName: false,
+    pickerMode:  'fixed',
     createHook:  useCreateURDPurchase,
     postHook:    usePostURDPurchase,
     submitLabel: 'Submit URD Purchase',
@@ -350,13 +366,15 @@ const METAL_TYPE_CONFIGS = {
 
 function buildMetalLineItemSchema(config) {
   const shape = {
-    metal_type_id: z.coerce.number().min(1, 'Required'),
-    weight:        z.coerce.number().min(0.001, 'Required'),
-    purity:        z.coerce.number().min(1, 'Required'),
-    rate:          z.coerce.number().min(0, 'Required'),
+    weight:     z.coerce.number().min(0.001, 'Required'),
+    purity:     z.coerce.number().min(0, 'Required'),
+    item_rate:  z.coerce.number().min(0, 'Required'),
     [config.amountField]: z.coerce.number().min(0, 'Required'),
   };
-  if (config.hasItemName) shape.item_name = z.string().min(1, 'Required');
+  if (config.pickerMode === 'search') {
+    shape.item = z.object({ item_id: z.number() }).nullable()
+      .refine((v) => v !== null, { message: 'Select an item' });
+  }
   return z.object(shape);
 }
 
@@ -370,8 +388,8 @@ function buildMetalFormSchema(config) {
 }
 
 function emptyMetalLineItem(config) {
-  const item = { metal_type_id: '', weight: '', purity: '', rate: '', [config.amountField]: '' };
-  if (config.hasItemName) item.item_name = '';
+  const item = { weight: '', purity: '', item_rate: '', [config.amountField]: '' };
+  if (config.pickerMode === 'search') item.item = null;
   return item;
 }
 
@@ -381,13 +399,14 @@ function MetalLineItemForm({ type, onDone }) {
   const customerId   = useSelector(selectCartCustomerId);
   const customerName = useSelector(selectCartCustomerName);
   const { paymentModes, isLoading: modesLoading } = usePaymentModes();
+  const { item: urdItem, isLoading: urdItemLoading } = useURDMasterItem('GOLD');
 
   const create = config.createHook({ onSuccess: () => {} });
   const post   = config.postHook({ onSuccess: () => onDone() });
 
   const schema = buildMetalFormSchema(config);
 
-  const { register, handleSubmit, control, watch, reset, formState: { errors } } = useForm({
+  const { register, handleSubmit, control, watch, setValue, reset, formState: { errors } } = useForm({
     resolver: zodResolver(schema),
     defaultValues: {
       document_date: todayISO(),
@@ -399,22 +418,35 @@ function MetalLineItemForm({ type, onDone }) {
   const watchedItems = watch('line_items');
   const total = watchedItems.reduce((sum, i) => sum + (Number(i[config.amountField]) || 0), 0);
 
+  // Pre-fill weight/purity/item_rate from the picked item — still editable
+  // afterwards, since the appraised rate can differ from the item's own rate.
+  const handleItemSelect = (index, item) => {
+    setValue(`line_items.${index}.item`, item);
+    setValue(`line_items.${index}.weight`, item.weight ?? item.net_weight ?? '');
+    setValue(`line_items.${index}.purity`, item.purity ?? '');
+    setValue(`line_items.${index}.item_rate`, item.item_rate ?? '');
+  };
+
   const onSubmit = async (data) => {
     if (!customerId) return toast.error('Attach a customer to the session before submitting.');
+    if (config.pickerMode === 'fixed' && !urdItem) {
+      return toast.error('URD Gold master item is still loading — try again in a moment.');
+    }
     try {
       const payload = {
         party_id: customerId, company_id: storeId,
         document_date: data.document_date, currency_id: APP_CONFIG.CURRENCY.INR_ID,
         line_items: data.line_items.map((i) => {
-          const line = {
-            metal_type_id: Number(i.metal_type_id),
-            weight:        Number(i.weight),
-            purity:        Number(i.purity),
-            rate:          Number(i.rate),
+          const resolvedItem = config.pickerMode === 'fixed' ? urdItem : i.item;
+          return {
+            item_id:   resolvedItem.item_id,
+            item_code: resolvedItem.item_code,
+            item_name: resolvedItem.item_name,
+            weight:    Number(i.weight),
+            purity:    Number(i.purity),
+            item_rate: Number(i.item_rate),
             [config.amountField]: Number(i[config.amountField]),
           };
-          if (config.hasItemName) line.item_name = i.item_name;
-          return line;
         }),
       };
       if (config.hasReceipt) {
@@ -458,25 +490,49 @@ function MetalLineItemForm({ type, onDone }) {
                 </button>
               )}
             </div>
-            {config.hasItemName && (
-              <FormField label="Description" required error={errors.line_items?.[index]?.item_name}>
-                <Input placeholder="e.g. 22k gold chain, worn" {...register(`line_items.${index}.item_name`)} className="h-9 text-sm" />
+
+            {config.pickerMode === 'search' && (
+              <FormField label="Item" required error={errors.line_items?.[index]?.item}>
+                <Controller
+                  name={`line_items.${index}.item`}
+                  control={control}
+                  render={({ field: itemField }) => (
+                    <ItemSearchPicker
+                      selectedItem={itemField.value}
+                      onSelect={(item) => handleItemSelect(index, item)}
+                      onClear={() => setValue(`line_items.${index}.item`, null)}
+                    />
+                  )}
+                />
               </FormField>
             )}
+
+            {config.pickerMode === 'fixed' && (
+              <div className="rounded-lg border border-input bg-muted/30 px-3 py-2.5 text-sm">
+                {urdItemLoading ? (
+                  <p className="text-muted-foreground">Loading URD Gold item…</p>
+                ) : urdItem ? (
+                  <>
+                    <p className="font-medium text-foreground">{urdItem.item_name}</p>
+                    <p className="text-xs text-muted-foreground">{urdItem.item_code} · fixed item used for every old-gold purchase</p>
+                  </>
+                ) : (
+                  <p className="text-destructive">Could not load the URD Gold master item.</p>
+                )}
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-2">
-              <FormField label="Metal Type ID" required error={errors.line_items?.[index]?.metal_type_id}>
-                <Input type="number" inputMode="numeric" {...register(`line_items.${index}.metal_type_id`)} className="h-9 text-sm" />
-              </FormField>
-              <FormField label="Weight (g)" required>
+              <FormField label="Weight (g)" required error={errors.line_items?.[index]?.weight}>
                 <Input type="number" inputMode="decimal" step="0.001" {...register(`line_items.${index}.weight`)} className="h-9 text-sm" />
               </FormField>
-              <FormField label="Purity" required>
-                <Input type="number" inputMode="numeric" placeholder="e.g. 750" {...register(`line_items.${index}.purity`)} className="h-9 text-sm" />
+              <FormField label="Purity" required error={errors.line_items?.[index]?.purity}>
+                <Input type="number" inputMode="decimal" step="0.01" placeholder="e.g. 0.75" {...register(`line_items.${index}.purity`)} className="h-9 text-sm" />
               </FormField>
-              <FormField label="Rate (₹/g)" required>
-                <Input type="number" inputMode="decimal" {...register(`line_items.${index}.rate`)} className="h-9 text-sm" />
+              <FormField label="Rate (₹/g)" required error={errors.line_items?.[index]?.item_rate}>
+                <Input type="number" inputMode="decimal" {...register(`line_items.${index}.item_rate`)} className="h-9 text-sm" />
               </FormField>
-              <FormField label={config.amountField === 'exchange_value' ? 'Exchange Value (₹)' : 'Amount (₹)'} required>
+              <FormField label={config.amountField === 'exchange_value' ? 'Exchange Value (₹)' : 'Amount (₹)'} required error={errors.line_items?.[index]?.[config.amountField]}>
                 <Input type="number" inputMode="decimal" {...register(`line_items.${index}.${config.amountField}`)} className="h-9 text-sm" />
               </FormField>
             </div>
@@ -582,7 +638,9 @@ function CreditNoteNewForm({ onDone }) {
 // addRefundReceipt() payment mode (this last call finalises the refund,
 // there is no separate Post step for refunds).
 //
-// ledger_id on RefundDetailsRow is intentionally omitted — see file header note.
+// ledger_id on RefundDetailsRow — confirmed required 2026-07-16 via real
+// Refund/List data, sourced from the selected payment mode's own ledger_id
+// field (see usePaymentModes.js normalizeMode).
 
 const refundSchema = z.object({
   document_date: z.string().min(1, 'Required'),
@@ -618,10 +676,16 @@ function RefundNewForm({ onDone }) {
       const transactionId = createRes?.EntityId;
       if (!transactionId) throw new Error('Refund creation failed — no EntityId returned.');
 
+      // ledger_id — confirmed 2026-07-16 via real Refund/List data that
+      // RefundDetailsRow genuinely carries this field. Sourced from the
+      // selected payment mode's own ledger_id (see usePaymentModes.js).
+      const selectedMode = paymentModes.find((m) => m.modeId === Number(data.mode_id));
+
       await addDetail.mutateAsync({
         transaction_id: transactionId,
         amount:         Number(data.amount),
         mode_id:        data.mode_id,
+        ledger_id:      selectedMode?.ledgerId ?? undefined,
       });
 
       await addReceipt.mutateAsync({
@@ -630,6 +694,7 @@ function RefundNewForm({ onDone }) {
         company_id:     storeId,
         amount:         Number(data.amount),
         mode_id:        data.mode_id,
+        ledger_id:      selectedMode?.ledgerId ?? undefined,
       });
 
       reset();

@@ -12,10 +12,15 @@
 // physical cash count + card/UPI totals from the day). OrnaVerse stores
 // this as the official EOD record.
 //
-// Field note: the exact DailyClosingRow schema is not confirmed from a
-// live Postman response. The fields used here match the API endpoint
-// comment in apiEndpoints.js. If OrnaVerse returns a validation error,
-// check the response body for the correct field names.
+// SCHEMA — corrected 2026-07-16 via direct API testing (see
+// dailyClosingService.js header for the full story): the API field is
+// document_date, not closing_date (the form's internal field name stays
+// closing_date for clarity in this component — only the outgoing payload
+// key changed). Also confirmed: DailyClosing/Create and /List both crash
+// with a 500 the moment any field beyond the bare minimum is sent — likely
+// a missing DocumentNumbering config on OrnaVerse's side, not a payload
+// issue. Submitting this form will currently fail; that's expected until
+// OrnaVerse resolves it.
 
 import { Suspense, useState } from 'react';
 import { useSelector } from 'react-redux';
@@ -183,7 +188,7 @@ function NewClosingTab() {
 
     await createClosing.mutateAsync({
       company_id:      storeId,
-      closing_date:    data.closing_date,
+      document_date:   data.closing_date,
       opening_balance: Number(data.opening_balance),
       cash_sales:      Number(data.cash_sales),
       card_sales:      Number(data.card_sales),

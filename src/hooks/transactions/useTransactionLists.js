@@ -50,7 +50,10 @@ export function normalizeTransaction(entity) {
     documentDate:  get(entity, 'document_date'),
     customerId:    get(entity, 'party_id'),
     customerName:  get(entity, 'party_name'),
-    amount:        get(entity, 'net_amount'),
+    // RefundRow is the one outlier here — confirmed 2026-07-16 via real
+    // Refund/List data: it has no net_amount field at all, using
+    // total_amount instead. Every other transaction type uses net_amount.
+    amount:        get(entity, 'net_amount') ?? get(entity, 'total_amount'),
     companyId:     get(entity, 'company_id') ?? get(entity, 'current_company_id'),
     raw: entity,
   };
