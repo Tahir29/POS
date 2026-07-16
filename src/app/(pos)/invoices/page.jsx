@@ -234,7 +234,7 @@ export default function InvoicesPage() {
         ) : (
           displayInvoices.map((invoice, idx) => (
             <InvoiceListItem
-              key={invoice.raw?.transaction_item_id ?? idx}
+              key={invoice.invoiceId ?? idx}
               invoice={invoice}
               onSelect={() => setSelectedInvoice(invoice)}
             />

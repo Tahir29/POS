@@ -3,7 +3,7 @@
 
 // PHASE 21 — Reports Module
 //
-// Four report cards, all derived from existing list endpoints.
+// Report cards, all derived from existing list endpoints.
 // No dedicated reporting endpoints exist in the API — reports are
 // aggregated client-side from the same list APIs used elsewhere.
 //
@@ -11,14 +11,22 @@
 //   1. Orders Summary      — useAllOrders (ORDERS.LIST Take:0 cache)
 //   2. Invoice Report      — axiosInstance → INVOICES.LIST (safe Take:300)
 //   3. POS Receipts        — reportsService.getPOSReceiptsReport (real endpoint)
-//   4. Sales (Weekly)      — reportsService.getWeeklySales (real endpoint)
+//   4. Sales (Monthly)     — reportsService.getMonthlySales (real endpoint)
+//   5. Scheme Enrollment   — useSchemeEnrollments (confirmed working
+//                            2026-07-16 — SchemeEnrollment/List returns
+//                            real data; the old "unavailable" note here was
+//                            stale/wrong, not re-verified before)
 //
-// REPORTS NOT AVAILABLE (no endpoint):
+// REPORTS NOT AVAILABLE (no working endpoint):
 //   - Metal Rate History   (no list/history endpoint in v1.json)
 //   - Sales by Category    (no breakdown endpoint in v1.json)
 //   - Stock Summary        (ProductCatalog/List works but Take:0 = 0 records
 //                           on Serenity; large Take needed — deferred)
-//   - Scheme Enrollment    (SchemeEnrollment/List 500 on UAT — known blocker)
+//   - Sales (Weekly)       — SalesFilters/WeeklySales confirmed 2026-07-16 to
+//                           return a hard 500 unconditionally (even a bare {}
+//                           body crashes it) — a genuine dead endpoint on
+//                           OrnaVerse's side, not a payload issue. Swapped
+//                           for the working Monthly Sales report instead.
 //
 // SCHEMA FACTS (never assume):
 //   - OrderRow:   status DERIVED from balance_amount + receipt_amount
@@ -45,10 +53,11 @@ import {
 } from 'lucide-react';
 
 import { useAllOrders }                from '@/hooks/orders/useAllOrders';
+import { useSchemeEnrollments }        from '@/hooks/schemes/useSchemeEnrollments';
 import axiosInstance                   from '@/lib/axios/axiosInstance';
 import {
   getPOSReceiptsReport,
-  getWeeklySales,
+  getMonthlySales,
 }                                      from '@/services/reportsService';
 import API                             from '@/constants/apiEndpoints';
 import { QUERY_KEYS }                  from '@/constants/queryKeys';
@@ -242,21 +251,26 @@ function POSReceiptsReport({ storeId }) {
   );
 }
 
-// ─── Weekly Sales Report ──────────────────────────────────────────────────────
-// Real endpoint: Services/POS/SalesFilters/WeeklySales
-// No date params — API returns current week server-side.
+// ─── Monthly Sales Report ─────────────────────────────────────────────────────
+// Real endpoint: Services/POS/SalesFilters/MonthlySales — a 12-month grid
+// (Jan-Dec) with per-week pieces/sales breakdown. Swapped in for Weekly
+// Sales — see file header for why WeeklySales was dropped.
 
-function WeeklySalesReport({ storeId }) {
+function MonthlySalesReport({ storeId }) {
   const query = useQuery({
-    queryKey: QUERY_KEYS.REPORTS.SALES_WEEKLY(storeId),
+    queryKey: QUERY_KEYS.REPORTS.SALES_MONTHLY(storeId),
     queryFn: async () => {
-      const data     = await getWeeklySales({ company_id: storeId });
+      const data     = await getMonthlySales({ company_id: storeId });
       const entities = data?.Entities ?? [];
-      const total    = entities.reduce(
-        (sum, e) => sum + (Number(e.net_amount ?? e.sales_amount ?? e.amount) || 0),
-        0
-      );
-      return { count: data?.TotalCount ?? entities.length, total };
+      const withSales = entities
+        .map((e) => ({
+          month: e.month,
+          total: (Number(e.week1_sales) || 0) + (Number(e.week2_sales) || 0)
+               + (Number(e.week3_sales) || 0) + (Number(e.week4_sales) || 0),
+        }))
+        .filter((m) => m.total > 0);
+      const yearTotal = withSales.reduce((sum, m) => sum + m.total, 0);
+      return { months: withSales, yearTotal };
     },
     enabled:   !!storeId,
     staleTime: APP_CONFIG.STALE_TIME.ORDERS,
@@ -265,25 +279,49 @@ function WeeklySalesReport({ storeId }) {
   if (!storeId)        return <ReportEmpty message="No store selected." />;
   if (query.isLoading) return <ReportSkeleton />;
   if (query.isError)   return (
-    <ReportError message="Weekly sales report unavailable for this store." onRetry={query.refetch} />
+    <ReportError message="Monthly sales report unavailable for this store." onRetry={query.refetch} />
   );
 
   const d = query.data;
-  if (!d || d.count === 0) return <ReportEmpty message="No sales this week." />;
+  if (!d || d.months.length === 0) return <ReportEmpty message="No sales recorded this year." />;
 
   return (
     <div className="flex flex-col gap-3">
       <StatRow
-        icon={<TrendingUp className="w-4 h-4" />}
-        label="Transactions"
-        value={d.count}
-      />
-      <StatRow
         icon={<IndianRupee className="w-4 h-4" />}
-        label="This Week"
-        value={formatINR(d.total)}
+        label="Year Total"
+        value={formatINR(d.yearTotal)}
         highlight
       />
+      <div className="border-t border-border pt-3 flex flex-col gap-2">
+        {d.months.map((m) => (
+          <StatRow key={m.month} icon={<TrendingUp className="w-4 h-4" />} label={m.month} value={formatINR(m.total)} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Scheme Enrollment Report ─────────────────────────────────────────────────
+// Confirmed working 2026-07-16 — reuses useSchemeEnrollments (no partyId =
+// all store enrollments) and the same invested-amount derivation fixed
+// earlier on the Schemes page.
+
+function SchemeEnrollmentReport() {
+  const { data: enrollments = [], isLoading, isError, refetch } = useSchemeEnrollments({});
+
+  if (isLoading) return <ReportSkeleton />;
+  if (isError)   return <ReportError message="Failed to load scheme enrollments." onRetry={refetch} />;
+  if (enrollments.length === 0) return <ReportEmpty message="No scheme enrollments found." />;
+
+  const totalInvested = enrollments.reduce((sum, e) => sum + (e.investedAmount || 0), 0);
+  const activeCount = enrollments.filter((e) => e.hasPendingInstallment).length;
+
+  return (
+    <div className="flex flex-col gap-3">
+      <StatRow icon={<FileText className="w-4 h-4" />} label="Total Enrollments" value={enrollments.length} />
+      <StatRow icon={<CheckCircle className="w-4 h-4 text-green-600" />} label="Active (pending instalments)" value={activeCount} />
+      <StatRow icon={<IndianRupee className="w-4 h-4" />} label="Total Invested" value={formatINR(totalInvested)} highlight />
     </div>
   );
 }
@@ -414,20 +452,21 @@ function ReportsScreen() {
           <POSReceiptsReport storeId={storeId} />
         </ReportCard>
 
-        {/* 4 — Weekly Sales (real report endpoint) */}
+        {/* 4 — Monthly Sales (real report endpoint — swapped in for the
+            permanently-broken Weekly Sales, see file header) */}
         <ReportCard
           icon={<TrendingUp className="w-4 h-4" />}
-          title="Weekly Sales"
+          title="Monthly Sales"
         >
-          <WeeklySalesReport storeId={storeId} />
+          <MonthlySalesReport storeId={storeId} />
         </ReportCard>
 
-        {/* 5 — Scheme Enrollment: known blocker */}
+        {/* 5 — Scheme Enrollment (confirmed working 2026-07-16) */}
         <ReportCard
           icon={<FileText className="w-4 h-4" />}
           title="Scheme Enrollment Report"
         >
-          <NotAvailableReport reason="Scheme enrollment report is unavailable — SchemeEnrollment/List endpoint returning errors on UAT." />
+          <SchemeEnrollmentReport />
         </ReportCard>
 
         {/* 6 — Stock Summary: deferred (Take:0 = 0 records on Serenity; large-take fetch not suitable here) */}

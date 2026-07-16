@@ -45,10 +45,11 @@ function formatDate(d) {
 }
 
 const STATUS_STYLES = {
-  active:   'bg-emerald-50 text-emerald-700',
-  inactive: 'bg-stone-100  text-stone-500',
-  matured:  'bg-blue-50    text-blue-700',
-  default:  'bg-stone-100  text-stone-500',
+  active:    'bg-emerald-50 text-emerald-700',
+  completed: 'bg-blue-50    text-blue-700',
+  inactive:  'bg-stone-100  text-stone-500',
+  matured:   'bg-blue-50    text-blue-700',
+  default:   'bg-stone-100  text-stone-500',
 };
 
 // ── Receipt payment schema ────────────────────────────────────
@@ -81,12 +82,24 @@ function ReceiptSheet({ enrollment, isOpen, onClose }) {
   });
 
   const onSubmit = async (data) => {
+    const amount = Number(data.amount);
+    // ledger_id — confirmed 2026-07-16 via real SchemeReceipt/List data,
+    // sourced from the selected mode's own ledger_id (see usePaymentModes.js).
+    const selectedMode = paymentModes.find((m) => m.modeId === Number(data.mode_id));
+
     await createReceipt.mutateAsync({
       scheme_enrollment_id: enrollment.enrollmentId,
-      amount:               Number(data.amount),
-      mode_id:              Number(data.mode_id),
-      document_date:        data.document_date,
+      party_id:             enrollment.partyId,
       company_id:           storeId,
+      document_date:        data.document_date,
+      currency_id:          APP_CONFIG.CURRENCY.INR_ID,
+      exchange_rate:        1,
+      amount,
+      scheme_receipt_details: [{
+        mode_id:   Number(data.mode_id),
+        amount,
+        ledger_id: selectedMode?.ledgerId ?? undefined,
+      }],
     });
     reset();
     onClose();
@@ -322,7 +335,7 @@ function EnrollmentsTab() {
               </span>
             </div>
 
-            {enrollment.status === 'active' && (
+            {enrollment.hasPendingInstallment && (
               <Button
                 variant="outline"
                 size="sm"

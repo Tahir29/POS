@@ -10,12 +10,36 @@
 //   4. On success: clear cart, invalidate caches, show confirmation
 //
 // PAYLOAD — InvoiceRow confirmed fields (v1.json):
-//   party_id, company_id, document_date, currency_id
+//   party_id, company_id, document_date, currency_id, exchange_rate
 //   sub_total, discount, net_amount, tax_amount
 //   line_items[]   → InvoiceItemsRow (item_id, sku, pieces, item_rate, net_amount, ...)
 //   receipt_details[] → InvoiceReceiptRow (mode_id, mode_code, mode_name, amount)
 //
+// employee_id / sales_person_id — confirmed 2026-07-16 the vendor's own POS
+// Sale screen requires selecting an employee before placing the order.
+// Exact field name InvoiceRow expects isn't confirmed (only SchemeEnrollmentRow
+// is confirmed to use `sales_person_id`) — sending both is harmless if one is
+// unrecognized, and cheap insurance against a required-field rejection.
+//
+// exchange_rate — confirmed 2026-07-16 via direct API test that
+// ExchangeRate/GetExchangeRate is a distinct required lookup alongside
+// currency_id (not implied by it) — see useExchangeRate.
+//
+// tax_amount — NOT hardcoded to 0 anymore. Confirmed 2026-07-16: our POS
+// invoice document type (DocumentNumbering document_id 54) has
+// is_tax_applicable: true, and every Item entity carries its own
+// tax_template_id/is_tax_applicable/is_tax_inclusive — so GST is computed
+// server-side per line item, not something we calculate client-side. Omit
+// the field and read back whatever the server computes via Invoice/Retrieve.
+//
 // STATUS is DERIVED after posting (balance_amount + receipt_amount) — never sent.
+//
+// STILL BLOCKED: Invoice/Create itself returns AccessDenied regardless of
+// payload correctness — confirmed via a direct test with a fully-formed
+// payload (2026-07-16). That's an OAuth-client scope gap on OrnaVerse's
+// side (their team needs to grant `api_access` permission on Order/Create,
+// Invoice/Create, Common/GetTaxes), not something fixable here. This payload
+// is correct and ready for the moment that's resolved.
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSelector } from 'react-redux';
@@ -24,6 +48,7 @@ import { createInvoice, postInvoice } from '@/services/orderService';
 import { useCart } from '@/hooks/cart/useCart';
 import { useCartTotals } from '@/hooks/cart/useCartTotals';
 import { useCustomerSession } from '@/hooks/customer/useCustomerSession';
+import { useExchangeRate } from '@/hooks/checkout/useExchangeRate';
 import { selectActiveStoreId } from '@/store/slices/storeSlice';
 import { QUERY_KEYS } from '@/constants/queryKeys';
 import APP_CONFIG from '@/constants/appConfig';
@@ -43,12 +68,15 @@ import TOAST from '@/constants/toastMessages';
  *   activeStoreId:  number,
  *   paymentModes:   { modeId, modeCode, modeName, amount }[],
  *   narration?:     string,
+ *   salesPersonId:  number,
+ *   exchangeRate:   number,
  * }} params
  */
 function buildInvoiceEntity({
   items, subtotal, discount, total,
   customerId, activeStoreId,
   paymentModes, narration,
+  salesPersonId, exchangeRate,
 }) {
   const today = new Date().toISOString();
 
@@ -84,15 +112,15 @@ function buildInvoiceEntity({
     company_id:    activeStoreId,
     document_date: today,
     currency_id:   APP_CONFIG.CURRENCY.INR_ID,
+    exchange_rate: exchangeRate,
+    employee_id:      salesPersonId,
+    sales_person_id:  salesPersonId,
     sub_total:     subtotal,
     discount:      discount ?? 0,
     net_amount:    total,
-    // Confirmed InvoiceRow field (see file header) — was previously omitted
-    // entirely. No client-side GST calculation exists yet (decided to skip
-    // that breakdown for now), so sending 0 rather than leaving the field
-    // out, in case the server's Create logic does arithmetic against it
-    // without null-guarding.
-    tax_amount:    0,
+    // NOT sent — see file header: server computes this per line item from
+    // each item's own tax_template_id. Read it back via Invoice/Retrieve
+    // rather than pre-calculating it here.
     narration:     narration ?? undefined,
     line_items,
     receipt_details,
@@ -105,19 +133,22 @@ export function useCreateInvoice() {
   const { subtotal, discount, total } = useCartTotals();
   const { customerId } = useCustomerSession();
   const activeStoreId = useSelector(selectActiveStoreId);
+  const { exchangeRate } = useExchangeRate();
 
   const mutation = useMutation({
     /**
      * @param {{
-     *   paymentModes: { modeId, modeCode, modeName, amount }[],
-     *   narration?:   string,
+     *   paymentModes:  { modeId, modeCode, modeName, amount }[],
+     *   narration?:    string,
+     *   salesPersonId: number,
      * }} params
      */
-    mutationFn: async ({ paymentModes, narration }) => {
+    mutationFn: async ({ paymentModes, narration, salesPersonId }) => {
       const entity = buildInvoiceEntity({
         items, subtotal, discount, total,
         customerId, activeStoreId,
         paymentModes, narration,
+        salesPersonId, exchangeRate,
       });
 
       // Step 1: Create draft invoice

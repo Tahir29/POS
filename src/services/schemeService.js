@@ -101,12 +101,22 @@ export async function getSchemeReceipts({ scheme_enrollment_id, take = 0 } = {})
 
 /**
  * Record a monthly scheme payment from a customer.
+ *
+ * Payload shape confirmed 2026-07-16 via a real SchemeReceipt/List row —
+ * mode_id/ledger_id live nested in scheme_receipt_details[], NOT flat on
+ * the header (the original version sent mode_id flat, which doesn't match
+ * the real schema). ledger_id comes from the selected payment mode's own
+ * ledger_id (see usePaymentModes.js), same pattern as Refund details.
+ *
  * @param {{
  *   scheme_enrollment_id: number,
- *   amount:               number,
- *   mode_id:              number,
+ *   party_id:             number,
+ *   company_id:           number,
  *   document_date:        string,
- *   company_id:           number
+ *   currency_id:          number,
+ *   exchange_rate:        number,
+ *   amount:               number,
+ *   scheme_receipt_details: { mode_id: number, amount: number, ledger_id?: number }[],
  * }} payload
  * @returns {Promise<object>} SaveResponse { EntityId }
  */
