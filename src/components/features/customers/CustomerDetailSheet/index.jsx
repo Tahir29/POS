@@ -102,6 +102,18 @@ function ProfileTab({ customer, onAttach, isAttached, onClose }) {
   );
 }
 
+// OrnaVerse pre-masks mobile/email/address on List/Retrieve (e.g.
+// "******3030", "c***@yahoo.com", "Chakrava***") — confirmed live against
+// UAT 2026-07-19. A masked string fails mobile's format check, but email/
+// address have no such guard, so pre-filling them as editable text risks
+// silently round-tripping the masked placeholder back as the "new" value
+// on save (Update requires the full record). Never pre-fill a masked-looking
+// value into an editable input — leave it blank and show it as a read-only
+// hint instead.
+function looksMasked(value) {
+  return typeof value === 'string' && value.includes('*');
+}
+
 // ── Edit Tab ──────────────────────────────────────────────────────────────────
 function EditTab({ customer }) {
   // Fetch full record for the update payload merge
@@ -110,6 +122,15 @@ function EditTab({ customer }) {
 
   const raw = fullCustomer?.raw ?? customer.raw;
 
+  // Masked display values — shown as a read-only hint next to the (blank)
+  // editable input for whichever fields OrnaVerse actually masked. Sourced
+  // from `raw` (not the top-level normalized customer.customerMobile etc.)
+  // so this stays in sync with what the reset() effect below does once the
+  // fuller Retrieve record replaces the initial List-sourced one.
+  const maskedMobile  = looksMasked(raw?.mobile)  ? raw.mobile  : null;
+  const maskedEmail   = looksMasked(raw?.email)   ? raw.email   : null;
+  const maskedAddress = looksMasked(raw?.address) ? raw.address : null;
+
   const {
     register, handleSubmit, control, watch, setValue, reset,
     formState: { errors, isDirty },
@@ -117,10 +138,10 @@ function EditTab({ customer }) {
     resolver: zodResolver(updateCustomerSchema),
     defaultValues: {
       party_name: customer.customerName ?? '',
-      mobile:     customer.customerMobile ?? '',
-      email:      customer.customerEmail ?? '',
+      mobile:     maskedMobile ? '' : customer.customerMobile ?? '',
+      email:      maskedEmail  ? '' : customer.customerEmail  ?? '',
       pan_no:     customer.customerPan ?? '',
-      address:    customer.customerAddress?.address ?? '',
+      address:    maskedAddress ? '' : customer.customerAddress?.address ?? '',
       address_1:  customer.customerAddress?.address1 ?? '',
       country_id: customer.customerAddress?.country_id ?? null,
       state_id:   customer.customerAddress?.state_id ?? null,
@@ -135,10 +156,10 @@ function EditTab({ customer }) {
     const r = fullCustomer.raw;
     reset({
       party_name: r.party_name  ?? '',
-      mobile:     r.mobile      ?? '',
-      email:      r.email && r.email !== 'NA' ? r.email : '',
+      mobile:     looksMasked(r.mobile) ? '' : r.mobile ?? '',
+      email:      looksMasked(r.email)  ? '' : (r.email && r.email !== 'NA' ? r.email : ''),
       pan_no:     r.pan_no && r.pan_no !== 'NA' ? r.pan_no : '',
-      address:    r.address     ?? '',
+      address:    looksMasked(r.address) ? '' : r.address ?? '',
       address_1:  r.address_1   ?? '',
       country_id: r.country_id  ?? null,
       state_id:   r.state_id    ?? null,
@@ -171,10 +192,19 @@ function EditTab({ customer }) {
 
   const onSubmit = async (formChanges) => {
     if (!raw) return;
+    // Blank mobile/email/address means "not touched" (they were left blank
+    // deliberately — see looksMasked above) — fall back to the original raw
+    // value rather than submitting an empty string, since Update requires
+    // the full record.
     await updateCustomer.mutateAsync({
       partyId:     customer.customerId,
       originalRaw: raw,
-      formChanges,
+      formChanges: {
+        ...formChanges,
+        mobile:  formChanges.mobile  || raw.mobile,
+        email:   formChanges.email   || raw.email,
+        address: formChanges.address || raw.address,
+      },
     });
   };
 
@@ -235,14 +265,26 @@ function EditTab({ customer }) {
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="ds_mobile">Mobile <span className="text-destructive">*</span></Label>
-          <Input id="ds_mobile" type="tel" inputMode="numeric" {...register('mobile')} className="h-11" />
+          <Label htmlFor="ds_mobile">Mobile</Label>
+          {maskedMobile && (
+            <p className="text-xs text-stone-400">Current: {maskedMobile} (masked for privacy)</p>
+          )}
+          <Input
+            id="ds_mobile" type="tel" inputMode="numeric" {...register('mobile')} className="h-11"
+            placeholder={maskedMobile ? 'Enter new mobile to change' : undefined}
+          />
           {errors.mobile && <p className="text-sm text-destructive">{errors.mobile.message}</p>}
         </div>
 
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="ds_email">Email</Label>
-          <Input id="ds_email" type="email" {...register('email')} className="h-11" />
+          {maskedEmail && (
+            <p className="text-xs text-stone-400">Current: {maskedEmail} (masked for privacy)</p>
+          )}
+          <Input
+            id="ds_email" type="email" {...register('email')} className="h-11"
+            placeholder={maskedEmail ? 'Enter new email to change' : undefined}
+          />
           {errors.email && <p className="text-sm text-destructive">{errors.email.message}</p>}
         </div>
 
@@ -254,7 +296,13 @@ function EditTab({ customer }) {
 
         <div className="flex flex-col gap-1.5">
           <Label>Address</Label>
-          <Input {...register('address')} className="h-11" placeholder="Address line 1" />
+          {maskedAddress && (
+            <p className="text-xs text-stone-400">Current: {maskedAddress} (masked for privacy)</p>
+          )}
+          <Input
+            {...register('address')} className="h-11"
+            placeholder={maskedAddress ? 'Enter new address line 1 to change' : 'Address line 1'}
+          />
           <Input {...register('address_1')} className="h-11" placeholder="Address line 2 (optional)" />
         </div>
 

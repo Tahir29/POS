@@ -55,3 +55,17 @@ export function describePromotionDiscount(promotion) {
   if (amt > 0) return `₹${amt.toLocaleString('en-IN')} off`;
   return null;
 }
+
+/**
+ * Groups a promotion by discount mechanism — used to decide which promos
+ * are "similar" and therefore mutually exclusive at checkout. Multiple
+ * promos can be applied at once, but only one 'percentage' promo and only
+ * one 'flat' promo can be active simultaneously (same priority order as
+ * computePromotionDiscount: percentage wins when both are set).
+ * @param {object} promotion — PromotionRow
+ * @returns {'percentage'|'flat'}
+ */
+export function getPromotionDiscountType(promotion) {
+  const pct = Number(promotion?.discount_percentage) || 0;
+  return pct > 0 ? 'percentage' : 'flat';
+}

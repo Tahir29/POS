@@ -14,6 +14,7 @@
 //   5. State resets cleanly on sheet close.
 
 import { useState, useCallback, useMemo } from 'react';
+import { Store } from 'lucide-react';
 import BottomSheet from '@/components/shared/BottomSheet';
 
 // ── Metal color gradient map ──────────────────────────────────────────────────
@@ -218,6 +219,7 @@ export default function CustomizeSheet({
   karats          = [],
   sizes           = [],
   variantStock    = new Map(),
+  storesByItemId  = new Map(),
   findVariant,
   onConfirm,
   isLoading,
@@ -291,6 +293,16 @@ export default function CustomizeSheet({
   // Use exact variant when available, MTO fallback otherwise
   const matchedVariant = exactVariant ?? mtoFallback;
   const canConfirm     = allSelected && !!matchedVariant;
+
+  // ── In-stock store list for the currently matched variant ────────────────
+  // MTO (no real exact-variant match, or zero stock everywhere) always hides
+  // this — there's no store to point to. Recomputes on every selection
+  // change, so switching to a different variant updates/hides it live.
+  const matchedVariantStores = useMemo(() => {
+    if (!matchedVariant || matchedVariant._isMTO || matchedVariant.item_id == null) return [];
+    const stores = storesByItemId.get(matchedVariant.item_id) ?? [];
+    return stores.filter((s) => (s.pieces ?? 0) > 0);
+  }, [matchedVariant, storesByItemId]);
 
   // ── Stock helpers — use raw variants array ────────────────────────────────
 
@@ -527,6 +539,21 @@ export default function CustomizeSheet({
                   : <>SKU: {matchedVariant.item_code}{(matchedVariant.pieces ?? 0) > 0 && ` · ${matchedVariant.pieces} pc${matchedVariant.pieces !== 1 ? 's' : ''}`}</>
                 }
               </p>
+
+              {/* In-stock store list — hidden entirely for MTO/no-stock
+                  variants, shown when this exact variant has real stock
+                  somewhere. Updates live as the selection changes above. */}
+              {matchedVariantStores.length > 0 && (
+                <div className="flex items-start gap-1.5 mt-2 pt-2 border-t border-emerald-200/60">
+                  <Store size={13} className="shrink-0 text-emerald-600 mt-0.5" aria-hidden="true" />
+                  <p className="text-xs text-emerald-700">
+                    In stock at{' '}
+                    <span className="font-medium">
+                      {matchedVariantStores.map((s) => s.companyname).join(', ')}
+                    </span>
+                  </p>
+                </div>
+              )}
             </div>
           )}
 

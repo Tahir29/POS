@@ -44,6 +44,7 @@ import ItemSearchPicker        from '@/components/features/transactions/ItemSear
 import { selectActiveStoreId } from '@/store/slices/storeSlice';
 import { selectCartCustomerId, selectCartCustomerName } from '@/store/slices/cartSlice';
 import APP_CONFIG               from '@/constants/appConfig';
+import { todayDateString } from '@/lib/dateUtils';
 
 import PageLoader from '@/components/shared/PageLoader';
 import { Button }  from '@/components/ui/button';
@@ -65,10 +66,6 @@ function formatDate(iso) {
   const d = new Date(iso);
   if (isNaN(d.getTime())) return iso;
   return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-}
-
-function todayISO() {
-  return new Date().toISOString().split('T')[0];
 }
 
 function getErrorMessage(error) {
@@ -199,7 +196,7 @@ function RepairInNewForm({ onDone }) {
   const { register, handleSubmit, control, setValue, reset, formState: { errors } } = useForm({
     resolver: zodResolver(repairInSchema),
     defaultValues: {
-      document_date: todayISO(), item: null, pieces: 1, weight: '',
+      document_date: todayDateString(), item: null, pieces: 1, weight: '',
       bag_no: '', certificate_no: '', huid: '', narration: '',
     },
   });
@@ -243,7 +240,7 @@ function RepairInNewForm({ onDone }) {
       <CustomerBanner customerId={customerId} customerName={customerName} />
 
       <FormField label="Date" required error={errors.document_date}>
-        <Input type="date" {...register('document_date')} className="h-11" />
+        <Input type="date" max={todayDateString()} {...register('document_date')} className="h-11" />
       </FormField>
 
       <FormField label="Item" required error={errors.item}>
@@ -314,7 +311,7 @@ function RepairOutNewForm({ onDone }) {
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm({
     resolver: zodResolver(repairOutSchema),
-    defaultValues: { document_date: todayISO(), location_id: '', item_rate: '' },
+    defaultValues: { document_date: todayDateString(), location_id: '', item_rate: '' },
   });
 
   const onSubmit = async (data) => {
@@ -361,7 +358,7 @@ function RepairOutNewForm({ onDone }) {
       </FormField>
 
       <FormField label="Date" required error={errors.document_date}>
-        <Input type="date" {...register('document_date')} className="h-11" />
+        <Input type="date" max={todayDateString()} {...register('document_date')} className="h-11" />
       </FormField>
 
       {/* No confirmed location/workshop master list exists in this app yet —
@@ -403,7 +400,7 @@ function RepairInvoiceNewForm({ onDone }) {
 
   const { register, handleSubmit, control, reset, formState: { errors } } = useForm({
     resolver: zodResolver(repairInvoiceSchema),
-    defaultValues: { document_date: todayISO(), item_rate: '', mode_id: '' },
+    defaultValues: { document_date: todayDateString(), item_rate: '', mode_id: '' },
   });
 
   const onSubmit = async (data) => {
@@ -467,7 +464,7 @@ function RepairInvoiceNewForm({ onDone }) {
       </FormField>
 
       <FormField label="Date" required error={errors.document_date}>
-        <Input type="date" {...register('document_date')} className="h-11" />
+        <Input type="date" max={todayDateString()} {...register('document_date')} className="h-11" />
       </FormField>
 
       <FormField label="Labour Charge (₹)" required error={errors.item_rate}>

@@ -27,7 +27,7 @@ export default function CartPage() {
     items,
     customerName,
     customerMobile,
-    appliedPromoCode,
+    appliedPromos,
     isEmpty,
     removeItem,
     updateQuantity,
@@ -48,10 +48,13 @@ export default function CartPage() {
               customerMobile={customerMobile}
               onDetach={detachCustomer}
             /> */}
-            <AppliedPromoTag
-              promoCode={appliedPromoCode}
-              onRemove={removePromo}
-            />
+            {appliedPromos.map((promo) => (
+              <AppliedPromoTag
+                key={promo.promoCode}
+                promoCode={promo.promoCode}
+                onRemove={() => removePromo(promo.promoCode)}
+              />
+            ))}
           </div>
 
           <div className="rounded-xl border border-stone-200 bg-white px-4">

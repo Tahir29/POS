@@ -28,6 +28,7 @@ import { useSelector as useReduxSelector } from 'react-redux';
 import { selectActiveStoreId } from '@/store/slices/storeSlice';
 import { selectCartCustomerId, selectCartCustomerName } from '@/store/slices/cartSlice';
 import APP_CONFIG from '@/constants/appConfig';
+import { todayDateString } from '@/lib/dateUtils';
 
 import { Button }   from '@/components/ui/button';
 import { Input }    from '@/components/ui/input';
@@ -158,7 +159,7 @@ function NewReturnTab() {
   const createReturn = useCreateReturn();
   const { paymentModes, isLoading: modesLoading } = usePaymentModes();
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = todayDateString();
 
   const {
     register, handleSubmit, control, watch, setValue, reset,
@@ -247,7 +248,7 @@ function NewReturnTab() {
       {/* Return date */}
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="ret_date">Return Date <span className="text-destructive">*</span></Label>
-        <Input id="ret_date" type="date" {...register('document_date')} className="h-11" />
+        <Input id="ret_date" type="date" max={today} {...register('document_date')} className="h-11" />
         {errors.document_date && (
           <p className="text-xs text-destructive">{errors.document_date.message}</p>
         )}

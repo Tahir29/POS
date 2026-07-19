@@ -19,6 +19,7 @@ import InvoiceDetailSheet from '@/components/features/invoices/InvoiceDetailShee
 import { useInvoiceList } from '@/hooks/invoices/useInvoiceList';
 import { useAllInvoices } from '@/hooks/invoices/useAllInvoices';
 import APP_CONFIG from '@/constants/appConfig';
+import { todayDateString } from '@/lib/dateUtils';
 
 export default function InvoicesPage() {
   const [skip, setSkip] = useState(0);
@@ -170,7 +171,7 @@ export default function InvoicesPage() {
             <Input
               type="date"
               value={fromDate}
-              max={new Date().toISOString().split('T')[0]}
+              max={todayDateString()}
               onChange={(e) => setFromDate(e.target.value)}
               aria-label="From date"
               className="flex-1 min-w-0"
@@ -179,7 +180,7 @@ export default function InvoicesPage() {
             <Input
               type="date"
               value={toDate}
-              max={new Date().toISOString().split('T')[0]}
+              max={todayDateString()}
               onChange={(e) => setToDate(e.target.value)}
               aria-label="To date"
               className="flex-1 min-w-0"

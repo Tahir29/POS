@@ -48,6 +48,7 @@ const EVENTS = {
   PAYMENT_SELECTED:      'POS_payment_selected',
   PROMO_APPLIED:         'POS_promo_applied',
   PROMO_FAILED:          'POS_promo_failed',
+  PROMO_SIMILAR_BLOCKED: 'POS_promo_similar_blocked',
   ORDER_PLACED:          'POS_order_placed',
   ORDER_FAILED:          'POS_order_failed',
 

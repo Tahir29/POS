@@ -28,6 +28,7 @@ import OrderDetailSheet from '@/components/features/orders/OrderDetailSheet';
 import { useOrders } from '@/hooks/orders/useOrders';
 import { useAllOrders } from '@/hooks/orders/useAllOrders';
 import APP_CONFIG from '@/constants/appConfig';
+import { todayDateString } from '@/lib/dateUtils';
 
 const STATUS_OPTIONS = [
   { value: 'paid',    label: 'Paid' },
@@ -196,7 +197,7 @@ export default function OrdersPage() {
             <Input
               type="date"
               value={fromDate}
-              max={new Date().toISOString().split('T')[0]}
+              max={todayDateString()}
               onChange={(e) => setFromDate(e.target.value)}
               aria-label="From date"
               className="flex-1 min-w-0"
@@ -205,7 +206,7 @@ export default function OrdersPage() {
             <Input
               type="date"
               value={toDate}
-              max={new Date().toISOString().split('T')[0]}
+              max={todayDateString()}
               onChange={(e) => setToDate(e.target.value)}
               aria-label="To date"
               className="flex-1 min-w-0"

@@ -95,8 +95,23 @@ function ProductDetailScreen() {
   } = useProductDetail(itemId);
 
   const { data: stockData, isLoading: stockLoading, isFetching: stockFetching } = useProductStock(product?.item_code);
-  const { data: storeStocks = [], isLoading: storeStocksLoading } = useStockByStores(product?.item_id);
   const { data: attributes = [] } = useProductAttributes(null);
+
+  // ── UI state ──────────────────────────────────────────────────────────────
+  // Declared before useStockByStores below so the "Stock Across Stores"
+  // panel can be scoped to whichever variant is currently confirmed, not
+  // always the base product.
+  const [customizeOpen, setCustomizeOpen] = useState(false);
+  const [selectedVariant, setSelectedVariant] = useState(null);
+  const [quantity, setQuantity] = useState(1);
+
+  // Cross-store stock for the confirmed variant when one is selected,
+  // otherwise the base product. MTO variants have no real item_id to check
+  // (see CrossStoreStockPanel's hide condition below) — falls back to the
+  // product's own id, which is fine since the panel is hidden in that case.
+  const { data: storeStocks = [], isLoading: storeStocksLoading } = useStockByStores(
+    selectedVariant?.item_id ?? product?.item_id
+  );
 
   // ── Variants ──────────────────────────────────────────────────────────────
   const {
@@ -104,6 +119,7 @@ function ProductDetailScreen() {
     externalProductId,
     metalColors,
     variantStock,
+    storesByItemId,
     karats,
     sizes,
     findVariant,
@@ -120,11 +136,6 @@ function ProductDetailScreen() {
   // avoids the gallery flashing a hard "no image" state before either has
   // had a chance to return data.
   const imagesLoading = variantsLoading || shopifyImagesLoading;
-
-  // ── UI state ──────────────────────────────────────────────────────────────
-  const [customizeOpen, setCustomizeOpen] = useState(false);
-  const [selectedVariant, setSelectedVariant] = useState(null);
-  const [quantity, setQuantity] = useState(1);
 
   // Reset when navigating to a different product
   // useEffect(() => {
@@ -214,6 +225,14 @@ function ProductDetailScreen() {
 
   // Show Customize button when product has a style_id
   const hasCustomization = !!product?.style_id;
+
+  // A confirmed variant counts as Made to Order either because it's the
+  // pseudo-fallback (_isMTO — no real SKU exists for that combo) or because
+  // it's a real SKU with zero stock everywhere — same condition CustomizeSheet
+  // itself uses for the "Made to Order" badge, kept in sync here so "Stock
+  // Across Stores" hides in both cases, not just the fallback one.
+  const isSelectedVariantMTO = !!selectedVariant &&
+    (selectedVariant._isMTO || (selectedVariant.pieces ?? 0) === 0);
 
   // ── Callbacks ─────────────────────────────────────────────────────────────
   const handleCustomizeConfirm = useCallback((variant) => {
@@ -350,11 +369,15 @@ function ProductDetailScreen() {
               </p>
             )}
 
-            {/* Availability at other stores */}
-            <CrossStoreStockPanel
-              storeStocks={storeStocks}
-              isLoading={storeStocksLoading}
-            />
+            {/* Availability at other stores — hidden once the confirmed
+                customization is Made to Order (no real stock anywhere to
+                report), shown for the base product or any in-stock variant */}
+            {!isSelectedVariantMTO && (
+              <CrossStoreStockPanel
+                storeStocks={storeStocks}
+                isLoading={storeStocksLoading}
+              />
+            )}
 
           </div>
         </div>
@@ -396,6 +419,7 @@ function ProductDetailScreen() {
         karats={karats}
         sizes={sizes}
         variantStock={variantStock}
+        storesByItemId={storesByItemId}
         findVariant={findVariant}
         onConfirm={handleCustomizeConfirm}
         isLoading={variantsLoading}
