@@ -40,6 +40,7 @@ import ProductTrustBadge     from '@/components/features/products/ProductTrustBa
 import CustomizeSheet        from '@/components/features/products/CustomizeSheet';
 import ProductStickyActionBar from '@/components/features/products/ProductStickyActionBar';
 import ProductTrustSection   from '@/components/features/products/ProductTrustSection';
+import ProductReviewsList    from '@/components/features/products/ProductReviewsList';
 import StockStatusBadge, {
   deriveStockStatus,
   deriveStockStatusFromProduct,
@@ -391,6 +392,11 @@ function ProductDetailScreen() {
         {/* {attributes.length > 0 && (
           <ProductAttributeList attributes={attributes} />
         )} */}
+
+        {/* Customer reviews — infinite scroll, bottom of page. Uses the
+            same externalProductId already resolved above for Shopify
+            images, so this adds zero extra OrnaVerse calls. */}
+        <ProductReviewsList shopifyProductId={externalProductId} />
 
       </div>
 

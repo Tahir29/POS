@@ -17,14 +17,26 @@
 //   - Tags (e.g. "Fast Shipping") — no tags field exists at all
 //   - Similar products — the field exists (similar_items) but is empty on
 //     every product in this catalog
-//   - Wishlist, video icon, star ratings, variant colour swatches — by
-//     product decision, not a data gap
+//   - Wishlist, video icon, variant colour swatches — by product decision,
+//     not a data gap
+//
+// Star ratings (added 2026-07-19, Nector integration) — ONLY shown for
+// products with a style_id. Nector indexes reviews by Shopify product ID,
+// which this app can only resolve via style_id → Style/Retrieve →
+// external_product_id; plain (non-variant) items have no such link and a
+// 100-item sample showed 0/100 carry a style_id at all, so most cards will
+// never show a rating row — that's expected, not a bug. See
+// useStyleExternalProductId.js for why this doesn't add a second network
+// call when the product detail page has already resolved the same style.
 
 import { useState }        from 'react';
 import Image               from 'next/image';
 import { useRouter }       from 'next/navigation';
 import { resolveImageSrc } from '@/lib/resolveImageSrc';
 import APP_CONFIG          from '@/constants/appConfig';
+import StarRating          from '@/components/shared/StarRating';
+import { useStyleExternalProductId } from '@/hooks/products/useStyleExternalProductId';
+import { useProductReviewSummary }   from '@/hooks/products/useProductReviewSummary';
 
 // ── Metal type label + swatch color ───────────────────────────────────────────
 // Swatch colors are a presentation mapping (not fabricated data) — the
@@ -114,7 +126,11 @@ export default function ProductCard({ product, showStockBadge = false }) {
     image_url,
     image_1,
     price,
+    style_id,
   } = product;
+
+  const { externalProductId } = useStyleExternalProductId(style_id ?? null);
+  const { average: ratingAverage, count: ratingCount } = useProductReviewSummary(externalProductId);
 
   const inStock      = has_stock === true;
   const metalLabel   = getMetalLabel(metal_id);
@@ -190,7 +206,13 @@ export default function ProductCard({ product, showStockBadge = false }) {
             {infoLine}
           </p>
         )}
-        
+
+        {/* Star rating — only ever renders for products with real review
+            data (see header note on why most cards won't have one) */}
+        {ratingCount > 0 && (
+          <StarRating rating={ratingAverage} count={ratingCount} size="sm" />
+        )}
+
       </div>
     </button>
   );
