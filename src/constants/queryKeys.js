@@ -254,4 +254,12 @@ export const QUERY_KEYS = {
     PRODUCT_IMAGES: (externalProductId) => ['shopify', 'product-images', externalProductId],
   },
 
+  // ── REVIEWS (Nector) ─────────────────────────────────────────────────────
+  // Keyed by Shopify product id (external_product_id) — reviews are indexed
+  // by Shopify's catalog, not OrnaVerse's item_id.
+  REVIEWS: {
+    SUMMARY: (shopifyProductId) => ['reviews', 'summary', shopifyProductId],
+    LIST:    (shopifyProductId) => ['reviews', 'list', shopifyProductId],
+  },
+
 };
