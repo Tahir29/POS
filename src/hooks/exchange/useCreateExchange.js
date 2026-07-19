@@ -23,6 +23,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-toastify';
 import { createExchange, postExchange } from '@/services/exchangeService';
 import TOAST from '@/constants/toastMessages';
+import tracker from '@/lib/analytics/tracker';
+import EVENTS from '@/lib/analytics/events';
 
 export function useCreateExchange() {
   const queryClient = useQueryClient();
@@ -36,15 +38,17 @@ export function useCreateExchange() {
       return { transactionId };
     },
 
-    onSuccess: () => {
+    onSuccess: (data) => {
       toast.success(TOAST.EXCHANGE.POSTED);
+      tracker.track(EVENTS.EXCHANGE_POSTED, { transactionId: data?.transactionId });
       queryClient.invalidateQueries({ queryKey: ['exchange'] });
       // Exchange value feeds into invoice helpers — bust invoice helper cache too
       queryClient.invalidateQueries({ queryKey: ['invoice-helpers'] });
     },
 
-    onError: () => {
+    onError: (error) => {
       toast.error(TOAST.EXCHANGE.CREATE_FAILED);
+      tracker.track(EVENTS.EXCHANGE_FAILED, { error: error?.message ?? 'unknown' });
     },
   });
 }

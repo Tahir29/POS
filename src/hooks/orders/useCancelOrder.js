@@ -7,6 +7,8 @@ import { toast } from 'react-toastify';
 import { cancelOrder } from '@/services/orderService';
 import { QUERY_KEYS } from '@/constants/queryKeys';
 import TOAST from '@/constants/toastMessages';
+import tracker from '@/lib/analytics/tracker';
+import EVENTS from '@/lib/analytics/events';
 
 export function useCancelOrder() {
   const queryClient = useQueryClient();
@@ -14,14 +16,19 @@ export function useCancelOrder() {
   return useMutation({
     mutationFn: (transactionId) => cancelOrder(transactionId),
 
-    onSuccess: () => {
+    onSuccess: (_data, transactionId) => {
       toast.success(TOAST.ORDERS.CANCELLED);
+      tracker.track(EVENTS.ORDER_CANCELLED, { transactionId });
       // Invalidate orders list — use the base key to bust all parameterised variants
       queryClient.invalidateQueries({ queryKey: ['orders'] });
     },
 
-    onError: () => {
+    onError: (error, transactionId) => {
       toast.error(TOAST.ORDERS.CANCEL_FAILED);
+      tracker.track(EVENTS.ORDER_CANCEL_FAILED, {
+        transactionId,
+        error: error?.message ?? 'unknown',
+      });
     },
   });
 }

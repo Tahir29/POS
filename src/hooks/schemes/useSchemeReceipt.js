@@ -6,6 +6,8 @@ import { toast } from 'react-toastify';
 import { createSchemeReceipt } from '@/services/schemeService';
 import { QUERY_KEYS } from '@/constants/queryKeys';
 import TOAST from '@/constants/toastMessages';
+import tracker from '@/lib/analytics/tracker';
+import EVENTS from '@/lib/analytics/events';
 
 export function useSchemeReceipt() {
   const queryClient = useQueryClient();
@@ -15,6 +17,10 @@ export function useSchemeReceipt() {
 
     onSuccess: (_, variables) => {
       toast.success(TOAST.SCHEMES.RECEIPT_SUCCESS);
+      tracker.track(EVENTS.SCHEME_PAYMENT_RECORDED, {
+        schemeEnrollmentId: variables?.scheme_enrollment_id,
+        amount:             variables?.amount,
+      });
       // Bust receipts for this enrollment + enrollment list
       queryClient.invalidateQueries({
         queryKey: QUERY_KEYS.SCHEMES.RECEIPT_LIST(variables.scheme_enrollment_id),
@@ -22,8 +28,9 @@ export function useSchemeReceipt() {
       queryClient.invalidateQueries({ queryKey: ['schemes'] });
     },
 
-    onError: () => {
+    onError: (error) => {
       toast.error(TOAST.SCHEMES.RECEIPT_FAILED);
+      tracker.track(EVENTS.SCHEME_PAYMENT_FAILED, { error: error?.message ?? 'unknown' });
     },
   });
 }

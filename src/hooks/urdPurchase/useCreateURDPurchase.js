@@ -24,6 +24,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-toastify';
 import { createURDPurchase, postURDPurchase } from '@/services/urdPurchaseService';
 import TOAST from '@/constants/toastMessages';
+import tracker from '@/lib/analytics/tracker';
+import EVENTS from '@/lib/analytics/events';
 
 export function useCreateURDPurchase() {
   const queryClient = useQueryClient();
@@ -37,13 +39,15 @@ export function useCreateURDPurchase() {
       return { transactionId };
     },
 
-    onSuccess: () => {
+    onSuccess: (data) => {
       toast.success(TOAST.URD_PURCHASE.POSTED);
+      tracker.track(EVENTS.URD_PURCHASE_POSTED, { transactionId: data?.transactionId });
       queryClient.invalidateQueries({ queryKey: ['urd-purchase'] });
     },
 
-    onError: () => {
+    onError: (error) => {
       toast.error(TOAST.URD_PURCHASE.CREATE_FAILED);
+      tracker.track(EVENTS.URD_PURCHASE_FAILED, { error: error?.message ?? 'unknown' });
     },
   });
 }
