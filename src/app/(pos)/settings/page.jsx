@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { useAddMetalRate } from '@/hooks/settings/useAddMetalRate';
 import APP_CONFIG from '@/constants/appConfig';
 import PageLoader from '@/components/shared/PageLoader';
+import { todayDateString } from '@/lib/dateUtils';
 
 // ─── Zod schema ───────────────────────────────────────────────────────────────
 
@@ -36,16 +37,6 @@ const METAL_OPTIONS = [
   { label: 'Palladium', value: APP_CONFIG.METAL_TYPES.PALLADIUM },
   { label: 'Alloy',     value: APP_CONFIG.METAL_TYPES.ALLOY },
 ];
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function todayDateString() {
-  const d    = new Date();
-  const yyyy = d.getFullYear();
-  const mm   = String(d.getMonth() + 1).padStart(2, '0');
-  const dd   = String(d.getDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}`;
-}
 
 // ─── Metal Rate Form ──────────────────────────────────────────────────────────
 
@@ -152,6 +143,7 @@ function MetalRateForm() {
         <input
           {...register('from_date')}
           type="date"
+          max={todayDateString()}
           className="w-full h-11 rounded-lg border border-input bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
         />
         {errors.from_date && (

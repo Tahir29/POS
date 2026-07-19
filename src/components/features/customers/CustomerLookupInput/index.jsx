@@ -1,51 +1,55 @@
 'use client';
 
 // src/components/features/customer/CustomerLookupInput/index.jsx
-// Mobile number input + search button for customer lookup.
-// Validates via mobileSchema before triggering the lookup query.
+// Free-text search + button for customer lookup: a 10-digit number
+// triggers an exact mobile lookup, any other text (2+ chars) triggers a
+// name search across the customer directory. Mirrors the search behavior
+// already used on the /customers directory page.
 
 import { useState } from 'react';
 import { Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { mobileSchema } from '@/validators/customerSchema';
+import APP_CONFIG from '@/constants/appConfig';
+
+const MOBILE_REGEX = /^\d{10}$/;
 
 /**
  * @param {{
- *   onSearch: (mobile: string) => void,
+ *   onSearch: (query: string) => void,
  *   isLoading?: boolean,
  * }} props
  */
 export default function CustomerLookupInput({ onSearch, isLoading = false }) {
-  const [mobile, setMobile] = useState('');
+  const [value, setValue] = useState('');
   const [error, setError] = useState(null);
 
   const handleChange = (e) => {
-    const value = e.target.value.replace(/\D/g, '').slice(0, 10);
-    setMobile(value);
+    setValue(e.target.value);
     if (error) setError(null);
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    const result = mobileSchema.safeParse(mobile);
-    if (!result.success) {
-      setError(result.error.issues[0]?.message ?? 'Invalid mobile number');
+    const trimmed = value.trim();
+    const isMobile = MOBILE_REGEX.test(trimmed);
+    if (!isMobile && trimmed.length < APP_CONFIG.SEARCH.MIN_QUERY_LENGTH) {
+      setError('Enter a 10-digit mobile number or at least 2 characters of a name');
       return;
     }
-    onSearch(mobile);
+    onSearch(trimmed);
   };
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-2">
       <div className="flex items-center gap-2">
         <Input
-          type="tel"
-          inputMode="numeric"
-          placeholder="Enter 10-digit mobile number"
-          value={mobile}
+          type="text"
+          inputMode="search"
+          placeholder="Search by name or mobile number"
+          value={value}
           onChange={handleChange}
-          aria-label="Customer mobile number"
+          aria-label="Customer name or mobile number"
           aria-invalid={!!error}
           className="h-11"
         />

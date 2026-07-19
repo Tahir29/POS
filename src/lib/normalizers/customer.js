@@ -221,3 +221,41 @@ export function buildCustomerUpdatePayload(originalRaw, formChanges) {
     party_id: originalRaw.party_id,
   };
 }
+
+// ─── WALK-IN NORMALIZER ────────────────────────────────────────────────────────
+
+/**
+ * Normalises the `Customer` object from Services/POS/WalkIn/Lookup.
+ *
+ * IMPORTANT: this is a DIFFERENT identity space from POS.CustomerRow —
+ * `customer_id` here is a CRM-level walk-in profile id, NOT a party_id.
+ * Confirmed live 2026-07-19: a mobile with a WalkIn/Lookup match can still
+ * return zero results from Customer/GetCustomer (customer_id 787 has no
+ * matching party — they visited but were never onboarded as a billing
+ * customer). Never pass walkInCustomerId anywhere a party_id is expected
+ * (cart.attachCustomer, Order/Invoice Create, etc.) — use it only for
+ * display ("welcome back") and to pre-fill the signup form.
+ *
+ * @param {object|null} entity — raw WalkIn/Lookup `Customer` object
+ * @returns {{
+ *   walkInCustomerId: number,
+ *   name:             string,
+ *   mobileMasked:     string|null,
+ *   visitCount:       number,
+ * }|null}
+ */
+export function normalizeWalkInCustomer(entity) {
+  if (!entity) return null;
+
+  const name = [entity.first_name, entity.last_name]
+    .filter(Boolean)
+    .join(' ')
+    .trim();
+
+  return {
+    walkInCustomerId: entity.customer_id,
+    name:             name || null,
+    mobileMasked:     entity.mobile ?? null,
+    visitCount:       Array.isArray(entity.customer_visits) ? entity.customer_visits.length : 0,
+  };
+}

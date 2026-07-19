@@ -17,6 +17,7 @@ import { usePaymentModes }  from '@/hooks/checkout/usePaymentModes';
 import { selectActiveStoreId }   from '@/store/slices/storeSlice';
 import { selectCartCustomerId, selectCartCustomerName } from '@/store/slices/cartSlice';
 import APP_CONFIG from '@/constants/appConfig';
+import { todayDateString } from '@/lib/dateUtils';
 
 import { Button } from '@/components/ui/button';
 import { Input }  from '@/components/ui/input';
@@ -119,7 +120,7 @@ function NewBuybackTab() {
   const customerName = useSelector(selectCartCustomerName);
   const createBuyback = useCreateBuyback();
   const { paymentModes, isLoading: modesLoading } = usePaymentModes();
-  const today = new Date().toISOString().split('T')[0];
+  const today = todayDateString();
 
   const {
     register, handleSubmit, control, watch, setValue, reset,
@@ -182,7 +183,7 @@ function NewBuybackTab() {
       {/* Date */}
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="bb_date">Buyback Date <span className="text-destructive">*</span></Label>
-        <Input id="bb_date" type="date" {...register('document_date')} className="h-11" />
+        <Input id="bb_date" type="date" max={today} {...register('document_date')} className="h-11" />
         {errors.document_date && <p className="text-xs text-destructive">{errors.document_date.message}</p>}
       </div>
 

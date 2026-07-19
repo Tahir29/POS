@@ -21,6 +21,15 @@ export function retrieveCustomer(partyId) {
   return axiosInstance.post(API.CUSTOMERS.RETRIEVE, { EntityId: partyId });
 }
 
+// ─── WALK-IN ──────────────────────────────────────────────────────────────────
+// NOT a pure read — every call also records a customer_visits row against the
+// active store (resolved server-side from the token). Only call this once per
+// staff-initiated mobile search, never speculatively. See apiEndpoints.js
+// WALKIN.LOOKUP for the full confirmed contract.
+export function walkInLookup(mobile) {
+  return axiosInstance.post(API.WALKIN.LOOKUP, { mobile });
+}
+
 /**
  * Returns response.data — hooks read .Entities directly.
  */

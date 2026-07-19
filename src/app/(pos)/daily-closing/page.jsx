@@ -32,6 +32,7 @@ import { ClipboardCheck, AlertCircle, ChevronDown } from 'lucide-react';
 import { useDailyClosing }       from '@/hooks/dailyClosing/useDailyClosing';
 import { useCreateDailyClosing } from '@/hooks/dailyClosing/useCreateDailyClosing';
 import { selectActiveStoreId }   from '@/store/slices/storeSlice';
+import { todayDateString } from '@/lib/dateUtils';
 
 import { Button } from '@/components/ui/button';
 import { Input }  from '@/components/ui/input';
@@ -157,7 +158,7 @@ function NewClosingTab() {
   const storeId      = useSelector(selectActiveStoreId);
   const createClosing = useCreateDailyClosing();
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = todayDateString();
 
   const {
     register, handleSubmit, watch, reset,
@@ -237,7 +238,7 @@ function NewClosingTab() {
       {/* Date */}
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="dc_date">Closing Date <span className="text-destructive">*</span></Label>
-        <Input id="dc_date" type="date" {...register('closing_date')} className="h-11" />
+        <Input id="dc_date" type="date" max={today} {...register('closing_date')} className="h-11" />
         {errors.closing_date && <p className="text-xs text-destructive">{errors.closing_date.message}</p>}
       </div>
 

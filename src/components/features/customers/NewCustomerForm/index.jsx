@@ -20,8 +20,22 @@ import {
 import { customerSchema } from '@/validators/customerSchema';
 import { useCreateCustomer } from '@/hooks/customer/useCreateCustomer';
 import { useCountries, useStates, useCities } from '@/hooks/settings/useLocation';
+import { todayDateString } from '@/lib/dateUtils';
 
-export default function NewCustomerForm({ defaultMobile = '', onCreated }) {
+// OrnaVerse enums (see customerSchema.js) — no master-data endpoint for
+// these, they're fixed values.
+const GENDER_OPTIONS = [
+  { value: 1, label: 'Male' },
+  { value: 2, label: 'Female' },
+  { value: 3, label: 'Other' },
+];
+
+const MARITAL_STATUS_OPTIONS = [
+  { value: 1, label: 'Single' },
+  { value: 2, label: 'Married' },
+];
+
+export default function NewCustomerForm({ defaultMobile = '', defaultName = '', onCreated }) {
   const {
     register,
     handleSubmit,
@@ -32,7 +46,7 @@ export default function NewCustomerForm({ defaultMobile = '', onCreated }) {
   } = useForm({
     resolver: zodResolver(customerSchema),
     defaultValues: {
-      party_name:     '',
+      party_name:     defaultName,
       mobile:         defaultMobile,
       email:          '',
       pan_no:         '',
@@ -42,6 +56,10 @@ export default function NewCustomerForm({ defaultMobile = '', onCreated }) {
       state_id:       null,
       city_id:        null,
       pin_code:       '',
+      birth_date:     '',
+      anniversary:    '',
+      gender:         null,
+      marital_status: null,
     },
   });
 
@@ -80,6 +98,8 @@ export default function NewCustomerForm({ defaultMobile = '', onCreated }) {
   const selectedCountry = countries.find((c) => c.country_id === countryId);
   const selectedState   = states.find((s) => s.state_id === stateId);
   const selectedCity    = cities.find((c) => c.city_id === watch('city_id'));
+  const selectedGender  = GENDER_OPTIONS.find((g) => g.value === watch('gender'));
+  const selectedMarital = MARITAL_STATUS_OPTIONS.find((m) => m.value === watch('marital_status'));
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
@@ -150,6 +170,106 @@ export default function NewCustomerForm({ defaultMobile = '', onCreated }) {
         {errors.pan_no && (
           <p className="text-sm text-destructive">{errors.pan_no.message}</p>
         )}
+      </div>
+
+      {/* Birth date */}
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="birth_date">
+          Date of birth <span className="text-muted-foreground text-xs">(optional)</span>
+        </Label>
+        <Input
+          id="birth_date"
+          type="date"
+          max={todayDateString()}
+          {...register('birth_date')}
+          className="h-11"
+        />
+        {errors.birth_date && (
+          <p className="text-sm text-destructive">{errors.birth_date.message}</p>
+        )}
+      </div>
+
+      {/* Anniversary */}
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="anniversary">
+          Anniversary <span className="text-muted-foreground text-xs">(optional)</span>
+        </Label>
+        <Input
+          id="anniversary"
+          type="date"
+          max={todayDateString()}
+          {...register('anniversary')}
+          className="h-11"
+        />
+        {errors.anniversary && (
+          <p className="text-sm text-destructive">{errors.anniversary.message}</p>
+        )}
+      </div>
+
+      {/* Gender */}
+      <div className="flex flex-col gap-1.5">
+        <Label>
+          Gender <span className="text-muted-foreground text-xs">(optional)</span>
+        </Label>
+        <Controller
+          name="gender"
+          control={control}
+          render={({ field }) => (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="flex h-11 w-full items-center justify-between rounded-lg border border-input bg-background px-3 text-sm"
+                >
+                  <span className={selectedGender ? 'text-foreground' : 'text-muted-foreground'}>
+                    {selectedGender?.label ?? 'Select gender'}
+                  </span>
+                  <ChevronDown size={14} className="text-muted-foreground shrink-0" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]">
+                {GENDER_OPTIONS.map((g) => (
+                  <DropdownMenuItem key={g.value} onSelect={() => field.onChange(g.value)}>
+                    {g.label}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        />
+      </div>
+
+      {/* Marital status */}
+      <div className="flex flex-col gap-1.5">
+        <Label>
+          Marital status <span className="text-muted-foreground text-xs">(optional)</span>
+        </Label>
+        <Controller
+          name="marital_status"
+          control={control}
+          render={({ field }) => (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="flex h-11 w-full items-center justify-between rounded-lg border border-input bg-background px-3 text-sm"
+                >
+                  <span className={selectedMarital ? 'text-foreground' : 'text-muted-foreground'}>
+                    {selectedMarital?.label ?? 'Select marital status'}
+                  </span>
+                  <ChevronDown size={14} className="text-muted-foreground shrink-0" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]">
+                {MARITAL_STATUS_OPTIONS.map((m) => (
+                  <DropdownMenuItem key={m.value} onSelect={() => field.onChange(m.value)}>
+                    {m.label}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        />
       </div>
 
       {/* Address */}

@@ -20,6 +20,7 @@ import { usePaymentModes }       from '@/hooks/checkout/usePaymentModes';
 import { selectActiveStoreId }   from '@/store/slices/storeSlice';
 import { selectCartCustomerId, selectCartCustomerName } from '@/store/slices/cartSlice';
 import APP_CONFIG from '@/constants/appConfig';
+import { todayDateString } from '@/lib/dateUtils';
 
 import SchemeCard  from '@/components/features/schemes/SchemeCard';
 import PageLoader  from '@/components/shared/PageLoader';
@@ -66,7 +67,7 @@ function ReceiptSheet({ enrollment, isOpen, onClose }) {
   const { paymentModes, isLoading: modesLoading } = usePaymentModes();
   const createReceipt = useSchemeReceipt();
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = todayDateString();
 
   const {
     register, handleSubmit, control, setValue, reset,
@@ -184,7 +185,7 @@ function ReceiptSheet({ enrollment, isOpen, onClose }) {
           {/* Date */}
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="rcpt_date">Payment Date <span className="text-destructive">*</span></Label>
-            <Input id="rcpt_date" type="date" {...register('document_date')} className="h-11" />
+            <Input id="rcpt_date" type="date" max={today} {...register('document_date')} className="h-11" />
             {errors.document_date && <p className="text-xs text-destructive">{errors.document_date.message}</p>}
           </div>
 

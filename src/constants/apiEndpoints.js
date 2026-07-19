@@ -131,6 +131,24 @@ const API = {
   },
 
   // ─────────────────────────────────────────────────────────────────────────
+  // WALK-IN
+  // Store-entry customer check: staff enters mobile; if registered, returns
+  // Customer + WalkInRecorded:true (also WRITES a customer_visits row against
+  // the active store, resolved server-side from the token — NOT a pure read).
+  // If unregistered, returns { WalkInRecorded: false } with no Customer —
+  // caller opens the New Customer signup form.
+  // Confirmed via live UAT test 2026-07-19. Request: { mobile }. Only sending
+  // `mobile` works — adding company_id/current_company_id causes a 500.
+  // Response.Customer.mobile is pre-masked by the API (******9999); the
+  // per-visit rows under customer_visits[].mobile come back unmasked.
+  // Because every call records a visit, only fire this once per staff
+  // submission — never speculatively (e.g. on keystroke).
+  // ─────────────────────────────────────────────────────────────────────────
+  WALKIN: {
+    LOOKUP: 'Services/POS/WalkIn/Lookup',
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
   // PARTY ADDRESS
   // Customer address book CRUD
   // ─────────────────────────────────────────────────────────────────────────

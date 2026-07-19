@@ -32,6 +32,7 @@ import ItemSearchPicker        from '@/components/features/transactions/ItemSear
 import { selectActiveStoreId } from '@/store/slices/storeSlice';
 import { selectCartCustomerId, selectCartCustomerName } from '@/store/slices/cartSlice';
 import APP_CONFIG from '@/constants/appConfig';
+import { todayDateString } from '@/lib/dateUtils';
 
 import PageLoader from '@/components/shared/PageLoader';
 import { Button }  from '@/components/ui/button';
@@ -50,10 +51,6 @@ function formatDate(iso) {
   const d = new Date(iso);
   if (isNaN(d.getTime())) return iso;
   return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-}
-
-function todayISO() {
-  return new Date().toISOString().split('T')[0];
 }
 
 function getErrorMessage(error) {
@@ -103,7 +100,7 @@ function EstimationNewForm({ onDone }) {
 
   const { register, handleSubmit, control, setValue, reset, formState: { errors } } = useForm({
     resolver: zodResolver(estimationSchema),
-    defaultValues: { document_date: todayISO(), item: null, pieces: 1, item_rate: '' },
+    defaultValues: { document_date: todayDateString(), item: null, pieces: 1, item_rate: '' },
   });
 
   const handleItemSelect = (item) => {
@@ -141,7 +138,7 @@ function EstimationNewForm({ onDone }) {
       <CustomerBanner customerId={customerId} customerName={customerName} />
 
       <FormField label="Date" required error={errors.document_date}>
-        <Input type="date" {...register('document_date')} className="h-11" />
+        <Input type="date" max={todayDateString()} {...register('document_date')} className="h-11" />
       </FormField>
 
       <FormField label="Item" required error={errors.item}>

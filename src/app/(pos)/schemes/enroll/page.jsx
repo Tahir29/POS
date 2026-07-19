@@ -25,6 +25,7 @@ import {
   selectCartCustomerMobile,
 } from '@/store/slices/cartSlice';
 import APP_CONFIG from '@/constants/appConfig';
+import { todayDateString } from '@/lib/dateUtils';
 
 import { Button } from '@/components/ui/button';
 import { Input }  from '@/components/ui/input';
@@ -65,7 +66,7 @@ function EnrollScreen() {
   // confirmed via a real UAT response listing employees by company_id only.
   const { salesPersons, isLoading: salesPersonsLoading } = useSalesPersonOptions(storeId);
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = todayDateString();
 
   const {
     register, handleSubmit, control, watch,
@@ -246,7 +247,7 @@ function EnrollScreen() {
         {/* Enrollment date */}
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="enroll_date">Start Date <span className="text-destructive">*</span></Label>
-          <Input id="enroll_date" type="date" {...register('document_date')} className="h-11" max={new Date().toISOString().split('T')[0]} />
+          <Input id="enroll_date" type="date" {...register('document_date')} className="h-11" max={today} />
           {errors.document_date && <p className="text-xs text-destructive">{errors.document_date.message}</p>}
         </div>
 

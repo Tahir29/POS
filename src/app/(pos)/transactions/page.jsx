@@ -88,6 +88,7 @@ import ItemSearchPicker                    from '@/components/features/transacti
 import { selectActiveStoreId }            from '@/store/slices/storeSlice';
 import { selectCartCustomerId, selectCartCustomerName } from '@/store/slices/cartSlice';
 import APP_CONFIG                         from '@/constants/appConfig';
+import { todayDateString }                 from '@/lib/dateUtils';
 
 import PageLoader                          from '@/components/shared/PageLoader';
 import { Button }                          from '@/components/ui/button';
@@ -112,10 +113,6 @@ function formatDate(iso) {
   const d = new Date(iso);
   if (isNaN(d.getTime())) return iso;
   return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-}
-
-function todayISO() {
-  return new Date().toISOString().split('T')[0];
 }
 
 function getErrorMessage(error) {
@@ -218,7 +215,7 @@ function ReturnNewForm({ onDone }) {
     resolver: zodResolver(returnSchema),
     defaultValues: {
       ref_transaction_id: '',
-      document_date:      todayISO(),
+      document_date:      todayDateString(),
       line_items: [{ item_id: '', pieces: 1, item_rate: '', net_amount: '' }],
       refund_mode_id: '',
     },
@@ -261,7 +258,7 @@ function ReturnNewForm({ onDone }) {
       </FormField>
 
       <FormField label="Return Date" required error={errors.document_date}>
-        <Input type="date" {...register('document_date')} className="h-11" />
+        <Input type="date" max={todayDateString()} {...register('document_date')} className="h-11" />
       </FormField>
 
       <div className="flex flex-col gap-2">
@@ -409,7 +406,7 @@ function MetalLineItemForm({ type, onDone }) {
   const { register, handleSubmit, control, watch, setValue, reset, formState: { errors } } = useForm({
     resolver: zodResolver(schema),
     defaultValues: {
-      document_date: todayISO(),
+      document_date: todayDateString(),
       line_items: [emptyMetalLineItem(config)],
       ...(config.hasReceipt ? { payout_mode_id: '' } : {}),
     },
@@ -469,7 +466,7 @@ function MetalLineItemForm({ type, onDone }) {
       <CustomerBanner customerId={customerId} customerName={customerName} />
 
       <FormField label="Date" required error={errors.document_date}>
-        <Input type="date" {...register('document_date')} className="h-11" />
+        <Input type="date" max={todayDateString()} {...register('document_date')} className="h-11" />
       </FormField>
 
       <div className="flex flex-col gap-2">
@@ -582,7 +579,7 @@ function CreditNoteNewForm({ onDone }) {
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm({
     resolver: zodResolver(creditNoteSchema),
-    defaultValues: { document_date: todayISO(), net_amount: '', ref_transaction_id: '', narration: '' },
+    defaultValues: { document_date: todayDateString(), net_amount: '', ref_transaction_id: '', narration: '' },
   });
 
   const onSubmit = async (data) => {
@@ -611,7 +608,7 @@ function CreditNoteNewForm({ onDone }) {
       <CustomerBanner customerId={customerId} customerName={customerName} />
 
       <FormField label="Date" required error={errors.document_date}>
-        <Input type="date" {...register('document_date')} className="h-11" />
+        <Input type="date" max={todayDateString()} {...register('document_date')} className="h-11" />
       </FormField>
 
       <FormField label="Credit Amount (₹)" required error={errors.net_amount}>
@@ -661,7 +658,7 @@ function RefundNewForm({ onDone }) {
 
   const { register, handleSubmit, control, reset, formState: { errors } } = useForm({
     resolver: zodResolver(refundSchema),
-    defaultValues: { document_date: todayISO(), amount: '', mode_id: '', narration: '' },
+    defaultValues: { document_date: todayDateString(), amount: '', mode_id: '', narration: '' },
   });
 
   const onSubmit = async (data) => {
@@ -710,7 +707,7 @@ function RefundNewForm({ onDone }) {
       <CustomerBanner customerId={customerId} customerName={customerName} />
 
       <FormField label="Date" required error={errors.document_date}>
-        <Input type="date" {...register('document_date')} className="h-11" />
+        <Input type="date" max={todayDateString()} {...register('document_date')} className="h-11" />
       </FormField>
 
       <FormField label="Refund Amount (₹)" required error={errors.amount}>

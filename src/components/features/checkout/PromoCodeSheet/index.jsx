@@ -5,7 +5,7 @@
 // applies it immediately, same as typing it into PromoCodeInput.
 
 import { useState } from 'react';
-import { Loader2, Tag, ChevronRight } from 'lucide-react';
+import { Loader2, Tag, ChevronRight, Check } from 'lucide-react';
 import {
   Sheet,
   SheetContent,
@@ -26,11 +26,13 @@ function formatDate(value) {
  * @param {{
  *   onApply: (code: string) => void,
  *   isApplying?: boolean,
+ *   appliedPromos?: { promoCode: string }[],
  * }} props
  */
-export default function PromoCodeSheet({ onApply, isApplying }) {
+export default function PromoCodeSheet({ onApply, isApplying, appliedPromos = [] }) {
   const [open, setOpen] = useState(false);
   const { data: promotions = [], isLoading } = useActivePromotions();
+  const appliedCodes = new Set(appliedPromos.map((p) => p.promoCode));
 
   const handleSelect = (code) => {
     onApply(code);
@@ -73,11 +75,12 @@ export default function PromoCodeSheet({ onApply, isApplying }) {
 
           {!isLoading && promotions.map((promo) => {
             const discountLabel = describePromotionDiscount(promo);
+            const isApplied = appliedCodes.has(promo.promotion_code);
             return (
               <button
                 key={promo.promotion_id}
                 type="button"
-                disabled={isApplying}
+                disabled={isApplying || isApplied}
                 onClick={() => handleSelect(promo.promotion_code)}
                 className="
                   flex items-center justify-between gap-3 rounded-lg border border-stone-200
@@ -105,7 +108,14 @@ export default function PromoCodeSheet({ onApply, isApplying }) {
                     </div>
                   </div>
                 </div>
-                <ChevronRight size={16} className="shrink-0 text-stone-300" aria-hidden="true" />
+                {isApplied ? (
+                  <span className="flex items-center gap-1 shrink-0 text-xs font-medium text-emerald-600">
+                    <Check size={14} aria-hidden="true" />
+                    Applied
+                  </span>
+                ) : (
+                  <ChevronRight size={16} className="shrink-0 text-stone-300" aria-hidden="true" />
+                )}
               </button>
             );
           })}

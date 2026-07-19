@@ -29,6 +29,12 @@
 //   sizes             — unique size options           [{ id, name }]
 //   variantStock      — Map<item_id, pieces>  (for in-stock dots) — real
 //                        per-store counts
+//   storesByItemId    — Map<item_id, { company_id, companyname, pieces }[]>
+//                        — full cross-store breakdown per variant (not just
+//                        the active store), built from the same batch call
+//                        as variantStock. Used to show "in stock at X" for
+//                        whichever variant is currently selected in
+//                        CustomizeSheet.
 //   findVariant       — (metalColorId, karatId, sizeId) => variant | null
 //   hasVariants       — boolean
 
@@ -118,21 +124,43 @@ export function useDesignVariants(styleId, storeId) {
   );
 
   // Real per-store stock — see module note. Only enabled once we know
-  // which items to check and which store to check them at.
-  const { data: stockByItemId = new Map(), isLoading: stockLoading } = useQuery({
+  // which items to check and which store to check them at. Keeps the FULL
+  // row set (every store, not just the active one) so storesByItemId below
+  // can show cross-store availability per variant without a second call.
+  const { data: stockRows = [], isLoading: stockLoading } = useQuery({
     queryKey: QUERY_KEYS.CATALOG.STOCK_BY_STORES_BATCH(itemIds),
     queryFn: async () => {
       const stockData = await getStockByStoresBatch(itemIds);
-      const rows = stockData?.Entities ?? [];
-      return new Map(
-        rows
-          .filter((row) => row.company_id === storeId)
-          .map((row) => [row.item_id, row.pieces ?? 0])
-      );
+      return stockData?.Entities ?? [];
     },
     enabled:   itemIds.length > 0 && !!storeId,
     staleTime: APP_CONFIG.STALE_TIME.STOCK,
   });
+
+  const stockByItemId = useMemo(() => {
+    const map = new Map();
+    for (const row of stockRows) {
+      if (row.company_id === storeId) map.set(row.item_id, row.pieces ?? 0);
+    }
+    return map;
+  }, [stockRows, storeId]);
+
+  // Full cross-store breakdown per variant — used by CustomizeSheet to show
+  // which store(s) have the currently-selected variant in stock.
+  const storesByItemId = useMemo(() => {
+    const map = new Map();
+    for (const row of stockRows) {
+      if (row.item_id == null) continue;
+      const list = map.get(row.item_id) ?? [];
+      list.push({
+        company_id:  row.company_id,
+        companyname: row.companyname,
+        pieces:      row.pieces ?? 0,
+      });
+      map.set(row.item_id, list);
+    }
+    return map;
+  }, [stockRows]);
 
   // Patch each variant's `pieces` with the real per-store count (0 when
   // this store has no stock row for it — i.e. not physically here) so
@@ -208,6 +236,7 @@ export function useDesignVariants(styleId, storeId) {
     karats,
     sizes,
     variantStock,
+    storesByItemId,
     findVariant,
     isLoading,
     isError,
