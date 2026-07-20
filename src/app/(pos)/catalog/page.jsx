@@ -229,13 +229,30 @@ function CatalogScreen() {
   //   2. useSkuSearch — instant server-side SKU search, shown as an interim
   //      result set while (1) is still loading, so search isn't blocked on
   //      a slow first sync.
+  //
+  // useAllCatalog is deferred until the user actually searches (rather than
+  // firing on every catalog page visit) — for a large store it can burst
+  // hundreds of requests, and most catalog visits are pure browsing that
+  // never touch search at all. Once triggered it stays enabled (doesn't
+  // re-gate on isSearchMode) so clearing the search box mid-fetch doesn't
+  // cancel the sync it already started. Latched via the "adjusting state
+  // during render" pattern (react.dev/learn/you-might-not-need-an-effect)
+  // rather than an effect, so the enabled flag is correct in the same
+  // render isSearchMode first turns true.
+  const [hasSearched, setHasSearched]           = useState(isSearchMode);
+  const [prevIsSearchMode, setPrevIsSearchMode] = useState(isSearchMode);
+  if (isSearchMode !== prevIsSearchMode) {
+    setPrevIsSearchMode(isSearchMode);
+    if (isSearchMode) setHasSearched(true);
+  }
+
   const {
     data:        allProducts = [],
     isLoading:   allLoading,
     isSuccess:   allReady,
     isError:     allError,
     loadedCount,
-  } = useAllCatalog(effectiveStoreId);
+  } = useAllCatalog(effectiveStoreId, { enabled: hasSearched });
 
   const {
     data: skuResults = [],

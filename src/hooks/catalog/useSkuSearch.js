@@ -16,7 +16,12 @@ import { searchBySku } from '@/services/catalogService';
 export function useSkuSearch(query, storeId) {
   return useQuery({
     queryKey: QUERY_KEYS.CATALOG.SKU_SEARCH(query, storeId),
-    queryFn:  () => searchBySku({ query, storeId }),
+    // `signal` is TanStack Query's own AbortSignal for this query — it
+    // fires automatically when a newer query supersedes this one (e.g. the
+    // debounced search text changed again before this request finished),
+    // so a superseded keystroke's request is actually cancelled on the
+    // wire, not left to complete and get discarded.
+    queryFn:  ({ signal }) => searchBySku({ query, storeId, signal }),
     enabled:  !!query && !!storeId,
     staleTime: 0, // always fresh — this is the fast/live path
   });
