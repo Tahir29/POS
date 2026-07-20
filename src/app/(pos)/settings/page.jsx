@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { useAddMetalRate } from '@/hooks/settings/useAddMetalRate';
 import APP_CONFIG from '@/constants/appConfig';
 import PageLoader from '@/components/shared/PageLoader';
+import { Input } from '@/components/ui/input';
 import { todayDateString } from '@/lib/dateUtils';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -118,13 +119,13 @@ function MetalRateForm() {
         <label className="text-sm font-medium text-foreground">
           Purchase Rate (₹) <span className="text-destructive">*</span>
         </label>
-        <input
+        <Input
           {...register('purchase_rate')}
           type="number"
           step="0.01"
           min="0"
           placeholder="0.00"
-          className="w-full h-11 rounded-lg border border-input bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+          className="h-11"
         />
         {errors.purchase_rate && (
           <p className="text-xs text-destructive">{errors.purchase_rate.message}</p>
@@ -136,13 +137,13 @@ function MetalRateForm() {
         <label className="text-sm font-medium text-foreground">
           Sales Rate (₹) <span className="text-destructive">*</span>
         </label>
-        <input
+        <Input
           {...register('sales_rate')}
           type="number"
           step="0.01"
           min="0"
           placeholder="0.00"
-          className="w-full h-11 rounded-lg border border-input bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+          className="h-11"
         />
         {errors.sales_rate && (
           <p className="text-xs text-destructive">{errors.sales_rate.message}</p>
@@ -154,11 +155,11 @@ function MetalRateForm() {
         <label className="text-sm font-medium text-foreground">
           Effective Date <span className="text-destructive">*</span>
         </label>
-        <input
+        <Input
           {...register('from_date')}
           type="date"
           max={todayDateString()}
-          className="w-full h-11 rounded-lg border border-input bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+          className="h-11"
         />
         {errors.from_date && (
           <p className="text-xs text-destructive">{errors.from_date.message}</p>

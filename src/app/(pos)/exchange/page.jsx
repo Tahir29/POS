@@ -17,7 +17,7 @@ import { useSelector } from 'react-redux';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { ArrowLeftRight, Plus, Trash2, AlertCircle } from 'lucide-react';
+import { ArrowLeftRight, Plus, AlertCircle } from 'lucide-react';
 
 import { useExchanges }      from '@/hooks/exchange/useExchanges';
 import { useCreateExchange } from '@/hooks/exchange/useCreateExchange';
@@ -31,6 +31,7 @@ import { Input }  from '@/components/ui/input';
 import { Label }  from '@/components/ui/label';
 import MetalTypeSelect from '@/components/shared/MetalTypeSelect';
 import PillTabs from '@/components/shared/PillTabs';
+import RemoveLineItemButton from '@/components/shared/RemoveLineItemButton';
 
 // ── Schema ────────────────────────────────────────────────────
 const exchangeLineSchema = z.object({
@@ -236,10 +237,7 @@ function NewExchangeTab() {
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-stone-500">Item {index + 1}</span>
               {fields.length > 1 && (
-                <button type="button" onClick={() => remove(index)}
-                  className="text-stone-400 hover:text-destructive" aria-label="Remove">
-                  <Trash2 size={14} />
-                </button>
+                <RemoveLineItemButton onClick={() => remove(index)} />
               )}
             </div>
 

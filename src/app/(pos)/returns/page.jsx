@@ -19,7 +19,7 @@ import { useSelector } from 'react-redux';
 import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Plus, Trash2, RotateCcw, AlertCircle } from 'lucide-react';
+import { Plus, RotateCcw, AlertCircle } from 'lucide-react';
 import { toast } from 'react-toastify';
 
 import { useReturns }      from '@/hooks/returns/useReturns';
@@ -35,6 +35,7 @@ import { Input }    from '@/components/ui/input';
 import { Label }    from '@/components/ui/label';
 import PaymentModeSelect from '@/components/shared/PaymentModeSelect';
 import PillTabs from '@/components/shared/PillTabs';
+import RemoveLineItemButton from '@/components/shared/RemoveLineItemButton';
 import { usePaymentModes } from '@/hooks/checkout/usePaymentModes';
 
 // ── Zod schema ────────────────────────────────────────────────
@@ -270,14 +271,7 @@ function NewReturnTab() {
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-stone-500">Item {index + 1}</span>
               {fields.length > 1 && (
-                <button
-                  type="button"
-                  onClick={() => remove(index)}
-                  className="text-stone-400 hover:text-destructive"
-                  aria-label="Remove item"
-                >
-                  <Trash2 size={14} />
-                </button>
+                <RemoveLineItemButton onClick={() => remove(index)} />
               )}
             </div>
 

@@ -56,7 +56,6 @@ import {
   ChevronRight,
   RefreshCw,
   Plus,
-  Trash2,
   X,
   Calendar,
   User,
@@ -92,6 +91,7 @@ import { todayDateString }                 from '@/lib/dateUtils';
 import PageLoader                          from '@/components/shared/PageLoader';
 import PaymentModeSelect                   from '@/components/shared/PaymentModeSelect';
 import PillTabs                            from '@/components/shared/PillTabs';
+import RemoveLineItemButton                from '@/components/shared/RemoveLineItemButton';
 import ListRowsSkeleton                    from '@/components/shared/ListRowsSkeleton';
 import { Button }                          from '@/components/ui/button';
 import { Input }                           from '@/components/ui/input';
@@ -230,9 +230,7 @@ function ReturnNewForm({ onDone }) {
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-stone-500">Item {index + 1}</span>
               {fields.length > 1 && (
-                <button type="button" onClick={() => remove(index)} className="text-stone-400 hover:text-destructive" aria-label="Remove item">
-                  <Trash2 size={14} />
-                </button>
+                <RemoveLineItemButton onClick={() => remove(index)} />
               )}
             </div>
             <div className="grid grid-cols-2 gap-2">
@@ -438,9 +436,7 @@ function MetalLineItemForm({ type, onDone }) {
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-stone-500">Item {index + 1}</span>
               {fields.length > 1 && (
-                <button type="button" onClick={() => remove(index)} className="text-stone-400 hover:text-destructive" aria-label="Remove item">
-                  <Trash2 size={14} />
-                </button>
+                <RemoveLineItemButton onClick={() => remove(index)} />
               )}
             </div>
 
