@@ -16,7 +16,7 @@ import { cn } from '@/lib/utils';
  */
 export default function CartItemQuantityControl({ quantity, onIncrement, onDecrement }) {
   return (
-    <div className="flex items-center gap-1 rounded-lg border border-stone-200 bg-white">
+    <div className="flex items-center gap-1 rounded-lg border border-border bg-card">
       <button
         type="button"
         onClick={onDecrement}

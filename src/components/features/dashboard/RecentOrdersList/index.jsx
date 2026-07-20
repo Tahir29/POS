@@ -9,6 +9,7 @@
 import { useRouter } from 'next/navigation';
 import { ArrowRight, Inbox } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const STATUS_STYLES = {
   paid:    'bg-emerald-50 text-emerald-700 border-emerald-200',
@@ -95,12 +96,12 @@ export default function RecentOrdersList({ orders = [], isLoading }) {
         <div className="divide-y divide-border">
             {Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="flex items-center gap-3 py-3">
-                <div className="h-9 w-9 shrink-0 rounded-full bg-muted animate-pulse" />
+                <Skeleton className="h-9 w-9 shrink-0 rounded-full" />
                 <div className="flex-1 space-y-1.5">
-                <div className="h-3 w-16 rounded bg-muted animate-pulse" />
-                <div className="h-4 w-28 rounded bg-muted animate-pulse" />
+                <Skeleton className="h-3 w-16" />
+                <Skeleton className="h-4 w-28" />
                 </div>
-                <div className="h-4 w-20 rounded bg-muted animate-pulse" />
+                <Skeleton className="h-4 w-20" />
             </div>
             ))}
         </div>

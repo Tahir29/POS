@@ -11,7 +11,7 @@ import { useSelector } from 'react-redux';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { RefreshCw, LayoutGrid, Plus, ChevronDown, X, AlertCircle } from 'lucide-react';
+import { RefreshCw, LayoutGrid, Plus, X, AlertCircle } from 'lucide-react';
 
 import { useSchemes }            from '@/hooks/schemes/useSchemes';
 import { useSchemeEnrollments }  from '@/hooks/schemes/useSchemeEnrollments';
@@ -25,15 +25,11 @@ import { todayDateString } from '@/lib/dateUtils';
 import SchemeCard  from '@/components/features/schemes/SchemeCard';
 import PageLoader  from '@/components/shared/PageLoader';
 import BottomSheet from '@/components/shared/BottomSheet';
+import PaymentModeSelect from '@/components/shared/PaymentModeSelect';
+import PillTabs    from '@/components/shared/PillTabs';
 import { Button }  from '@/components/ui/button';
 import { Input }   from '@/components/ui/input';
 import { Label }   from '@/components/ui/label';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 
 // ── Helpers ───────────────────────────────────────────────────
 function formatCurrency(n) {
@@ -144,40 +140,13 @@ function ReceiptSheet({ enrollment, isOpen, onClose }) {
           {/* Payment mode */}
           <div className="flex flex-col gap-1.5">
             <Label>Payment Mode <span className="text-destructive">*</span></Label>
-            <Controller
-              name="mode_id"
+            <PaymentModeSelect
               control={control}
-              render={({ field }) => {
-                const selected = paymentModes.find((m) => m.modeId === Number(field.value));
-                return (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <button
-                        type="button"
-                        className="flex h-11 w-full items-center justify-between rounded-lg border border-input bg-background px-3 text-sm"
-                      >
-                        <span className={selected ? 'text-foreground' : 'text-muted-foreground'}>
-                          {modesLoading ? 'Loading…' : selected ? selected.modeName : 'Select mode'}
-                        </span>
-                        <ChevronDown size={14} className="text-muted-foreground shrink-0" />
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]">
-                      {paymentModes.map((mode) => (
-                        <DropdownMenuItem
-                          key={mode.modeId}
-                          onSelect={() => {
-                            field.onChange(mode.modeId);
-                            setValue('mode_name', mode.modeName);
-                          }}
-                        >
-                          {mode.modeName}
-                        </DropdownMenuItem>
-                      ))}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                );
-              }}
+              name="mode_id"
+              paymentModes={paymentModes}
+              modesLoading={modesLoading}
+              placeholder="Select mode"
+              onSelect={(mode) => setValue('mode_name', mode.modeName)}
             />
             {errors.mode_id && <p className="text-xs text-destructive">{errors.mode_id.message}</p>}
           </div>
@@ -292,7 +261,7 @@ function EnrollmentsTab() {
         </div>
       ) : (
         enrollments.map((enrollment) => (
-          <div key={enrollment.enrollmentId} className="rounded-xl border border-stone-200 bg-white p-4 flex flex-col gap-3">
+          <div key={enrollment.enrollmentId} className="rounded-xl border border-border bg-card p-4 flex flex-col gap-3">
             <div className="flex items-start justify-between gap-2">
               <div>
                 <p className="text-sm font-semibold text-stone-800">{enrollment.schemeName}</p>
@@ -375,21 +344,8 @@ function SchemesScreen() {
         <h1 className="text-xl font-semibold text-foreground">Schemes</h1>
       </div>
 
-      <div className="flex gap-1 mb-4">
-        {TABS.map((tab) => (
-          <button
-            key={tab.key}
-            type="button"
-            onClick={() => setActiveTab(tab.key)}
-            className={`shrink-0 rounded-full px-4 py-1.5 text-xs font-medium transition-colors ${
-              activeTab === tab.key
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-stone-100 text-stone-500 hover:bg-stone-200'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
+      <div className="mb-4">
+        <PillTabs tabs={TABS} value={activeTab} onChange={setActiveTab} />
       </div>
 
       {activeTab === 'schemes'     && <SchemesTab />}

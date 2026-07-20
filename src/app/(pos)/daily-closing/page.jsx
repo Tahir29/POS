@@ -35,6 +35,7 @@ import { selectActiveStoreId }   from '@/store/slices/storeSlice';
 import { todayDateString } from '@/lib/dateUtils';
 
 import { Button } from '@/components/ui/button';
+import PillTabs from '@/components/shared/PillTabs';
 import { Input }  from '@/components/ui/input';
 import { Label }  from '@/components/ui/label';
 
@@ -95,7 +96,7 @@ function HistoryTab() {
   return (
     <div className="flex flex-col gap-3">
       {closings.map((c) => (
-        <div key={c.closingId} className="rounded-xl border border-stone-200 bg-white p-4 flex flex-col gap-3">
+        <div key={c.closingId} className="rounded-xl border border-border bg-card p-4 flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <p className="text-sm font-semibold text-stone-800">{formatDate(c.closingDate)}</p>
             <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700">
@@ -255,7 +256,7 @@ function NewClosingTab() {
       </div>
 
       {/* Live summary */}
-      <div className="rounded-xl border border-stone-200 bg-white px-4 py-3 flex flex-col gap-2 text-sm">
+      <div className="rounded-xl border border-border bg-card px-4 py-3 flex flex-col gap-2 text-sm">
         <div className="flex justify-between">
           <span className="text-stone-500">Total Sales</span>
           <span className="font-semibold text-stone-800">{formatCurrency(totalSales)}</span>
@@ -301,22 +302,7 @@ function DailyClosingScreen() {
         <h1 className="text-xl font-semibold text-stone-800">Daily Closing</h1>
       </div>
 
-      <div className="flex gap-1">
-        {TABS.map((tab) => (
-          <button
-            key={tab.key}
-            type="button"
-            onClick={() => setActiveTab(tab.key)}
-            className={`shrink-0 rounded-full px-4 py-1.5 text-xs font-medium transition-colors ${
-              activeTab === tab.key
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-stone-100 text-stone-500 hover:bg-stone-200'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
+      <PillTabs tabs={TABS} value={activeTab} onChange={setActiveTab} />
 
       {activeTab === 'new'     && <NewClosingTab />}
       {activeTab === 'history' && <HistoryTab />}

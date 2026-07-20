@@ -15,6 +15,7 @@
 //   onClose        () => void            — controlled by parent page
 
 import BottomSheet from '@/components/shared/BottomSheet';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function SizeSelector({
   sizes,
@@ -69,10 +70,7 @@ export default function SizeSelector({
       {isLoading ? (
         <div className="grid grid-cols-5 gap-2">
           {Array.from({ length: 15 }).map((_, i) => (
-            <div
-              key={i}
-              className="h-14 rounded-xl bg-stone-100 animate-pulse"
-            />
+            <Skeleton key={i} className="h-14 rounded-xl" />
           ))}
         </div>
       ) : safeSizes.length === 0 ? (
@@ -104,7 +102,7 @@ export default function SizeSelector({
                   focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400
                   ${isSelected
                     ? 'bg-amber-500 border-amber-500 text-white shadow-sm'
-                    : 'bg-white border-stone-200 text-stone-700 hover:border-amber-300 hover:bg-amber-50'
+                    : 'bg-card border-border text-stone-700 hover:border-amber-300 hover:bg-amber-50'
                   }
                 `}
               >

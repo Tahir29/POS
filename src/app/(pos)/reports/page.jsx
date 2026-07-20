@@ -63,6 +63,7 @@ import API                             from '@/constants/apiEndpoints';
 import { QUERY_KEYS }                  from '@/constants/queryKeys';
 import APP_CONFIG                      from '@/constants/appConfig';
 import PageLoader                      from '@/components/shared/PageLoader';
+import { Skeleton }                    from '@/components/ui/skeleton';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -371,9 +372,9 @@ function StatRow({ icon, label, value, highlight = false }) {
 
 function ReportSkeleton() {
   return (
-    <div className="flex flex-col gap-3 animate-pulse">
+    <div className="flex flex-col gap-3">
       {[1, 2, 3].map((i) => (
-        <div key={i} className="h-5 bg-muted rounded w-full" />
+        <Skeleton key={i} className="h-5 w-full" />
       ))}
     </div>
   );

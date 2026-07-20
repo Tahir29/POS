@@ -55,7 +55,7 @@ function SpecCard({ icon, title, rows, info }) {
   if (!hasAny) return null;
 
   return (
-    <div className="rounded-xl border border-stone-200 bg-white overflow-hidden">
+    <div className="rounded-xl border border-border bg-card overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-stone-100 bg-stone-50/80">
         <div className="flex items-center gap-2">

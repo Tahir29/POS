@@ -19,7 +19,7 @@ import { useSelector } from 'react-redux';
 import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Plus, Trash2, RotateCcw, ChevronDown, AlertCircle } from 'lucide-react';
+import { Plus, Trash2, RotateCcw, AlertCircle } from 'lucide-react';
 import { toast } from 'react-toastify';
 
 import { useReturns }      from '@/hooks/returns/useReturns';
@@ -33,12 +33,8 @@ import { todayDateString } from '@/lib/dateUtils';
 import { Button }   from '@/components/ui/button';
 import { Input }    from '@/components/ui/input';
 import { Label }    from '@/components/ui/label';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+import PaymentModeSelect from '@/components/shared/PaymentModeSelect';
+import PillTabs from '@/components/shared/PillTabs';
 import { usePaymentModes } from '@/hooks/checkout/usePaymentModes';
 
 // ── Zod schema ────────────────────────────────────────────────
@@ -118,7 +114,7 @@ function ReturnsListTab() {
   return (
     <div className="flex flex-col gap-3">
       {returns.map((ret) => (
-        <div key={ret.transactionId} className="rounded-xl border border-stone-200 bg-white p-4 flex flex-col gap-2">
+        <div key={ret.transactionId} className="rounded-xl border border-border bg-card p-4 flex flex-col gap-2">
           <div className="flex items-start justify-between gap-2">
             <div>
               <p className="text-sm font-medium text-stone-800">{ret.documentNo ?? `#${ret.transactionId}`}</p>
@@ -346,7 +342,7 @@ function NewReturnTab() {
 
       {/* Total */}
       {totalReturnAmount > 0 && (
-        <div className="flex justify-between rounded-xl border border-stone-200 bg-white px-4 py-3 text-sm font-medium">
+        <div className="flex justify-between rounded-xl border border-border bg-card px-4 py-3 text-sm font-medium">
           <span className="text-stone-500">Total Return Amount</span>
           <span className="text-stone-800">{formatCurrency(totalReturnAmount)}</span>
         </div>
@@ -355,40 +351,13 @@ function NewReturnTab() {
       {/* Refund mode */}
       <div className="flex flex-col gap-1.5">
         <Label>Refund Method <span className="text-destructive">*</span></Label>
-        <Controller
-          name="refund_mode_id"
+        <PaymentModeSelect
           control={control}
-          render={({ field }) => {
-            const selected = paymentModes.find((m) => m.modeId === field.value);
-            return (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    className="flex h-11 w-full items-center justify-between rounded-lg border border-input bg-background px-3 text-sm"
-                  >
-                    <span className={selected ? 'text-foreground' : 'text-muted-foreground'}>
-                      {modesLoading ? 'Loading…' : selected ? selected.modeName : 'Select refund method'}
-                    </span>
-                    <ChevronDown size={14} className="text-muted-foreground shrink-0" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]">
-                  {paymentModes.map((mode) => (
-                    <DropdownMenuItem
-                      key={mode.modeId}
-                      onSelect={() => {
-                        field.onChange(mode.modeId);
-                        setValue('refund_mode_name', mode.modeName);
-                      }}
-                    >
-                      {mode.modeName}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            );
-          }}
+          name="refund_mode_id"
+          paymentModes={paymentModes}
+          modesLoading={modesLoading}
+          placeholder="Select refund method"
+          onSelect={(mode) => setValue('refund_mode_name', mode.modeName)}
         />
         {errors.refund_mode_id && (
           <p className="text-xs text-destructive">{errors.refund_mode_id.message}</p>
@@ -425,22 +394,7 @@ function ReturnsScreen() {
       </div>
 
       {/* Tab bar */}
-      <div className="flex gap-1">
-        {TABS.map((tab) => (
-          <button
-            key={tab.key}
-            type="button"
-            onClick={() => setActiveTab(tab.key)}
-            className={`shrink-0 rounded-full px-4 py-1.5 text-xs font-medium transition-colors ${
-              activeTab === tab.key
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-stone-100 text-stone-500 hover:bg-stone-200'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
+      <PillTabs tabs={TABS} value={activeTab} onChange={setActiveTab} />
 
       {/* Tab content */}
       {activeTab === 'list' && <ReturnsListTab />}

@@ -100,7 +100,7 @@ export default function InvoiceDetailSheet({ invoice, isOpen, onClose }) {
       <BottomSheet isOpen={isOpen} onClose={onClose} title="Invoice">
         {raw ? (
           <div className="flex flex-col gap-4">
-            <div className="rounded-xl border border-stone-200 bg-white p-4">
+            <div className="rounded-xl border border-border bg-card p-4">
               <InvoiceContent raw={raw} />
             </div>
             <PrintInvoiceButton />

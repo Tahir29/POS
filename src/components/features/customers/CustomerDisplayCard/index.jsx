@@ -47,7 +47,7 @@ export default function CustomerDisplayCard({ customer, onDetach, detachLabel = 
   const maskedPan = maskPan(raw?.pan_no);
 
   return (
-    <div className="rounded-lg border border-stone-200 bg-white p-4">
+    <div className="rounded-lg border border-border bg-card p-4">
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-start gap-3 min-w-0">
           <div className="shrink-0 flex h-10 w-10 items-center justify-center rounded-full bg-brand-cream text-primary text-xs font-bold">

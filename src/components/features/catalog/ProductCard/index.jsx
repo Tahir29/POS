@@ -37,6 +37,7 @@ import APP_CONFIG          from '@/constants/appConfig';
 import StarRating          from '@/components/shared/StarRating';
 import { useStyleExternalProductId } from '@/hooks/products/useStyleExternalProductId';
 import { useProductReviewSummary }   from '@/hooks/products/useProductReviewSummary';
+import { Badge } from '@/components/ui/badge';
 
 // ── Metal type label + swatch color ───────────────────────────────────────────
 // Swatch colors are a presentation mapping (not fabricated data) — the
@@ -96,15 +97,15 @@ function NoImagePlaceholder() {
 function StockBadge({ inStock }) {
   if (inStock) {
     return (
-      <span className="inline-flex items-center rounded-full bg-emerald-500/90 px-2.5 py-0.5 text-[11px] font-semibold text-white shadow-sm">
+      <Badge className="h-auto rounded-full bg-emerald-500/90 px-2.5 py-0.5 text-[11px] font-semibold text-white shadow-sm">
         In Stock
-      </span>
+      </Badge>
     );
   }
   return (
-    <span className="inline-flex items-center rounded-full bg-red-500/90 px-2.5 py-0.5 text-[11px] font-semibold text-white shadow-sm">
+    <Badge className="h-auto rounded-full bg-red-500/90 px-2.5 py-0.5 text-[11px] font-semibold text-white shadow-sm">
       Out of Stock
-    </span>
+    </Badge>
   );
 }
 

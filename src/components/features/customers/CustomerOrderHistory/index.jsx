@@ -64,7 +64,7 @@ export default function CustomerOrderHistory({ orders, isLoading, isError, refet
 
   return (
     <>
-      <div className="flex flex-col gap-3 rounded-xl border border-stone-200 bg-white p-4">
+      <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4">
         <h3 className="text-sm font-semibold text-stone-800">Order History</h3>
 
         {isLoading ? (

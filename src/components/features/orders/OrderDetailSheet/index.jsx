@@ -166,7 +166,7 @@ export default function OrderDetailSheet({ order, isOpen, onClose }) {
       <BottomSheet isOpen={isOpen} onClose={handleClose} title="Order">
         {raw ? (
           <div className="flex flex-col gap-4">
-            <div className="rounded-xl border border-stone-200 bg-white p-4">
+            <div className="rounded-xl border border-border bg-card p-4">
               <OrderContent raw={raw} status={order?.status} />
             </div>
 

@@ -29,6 +29,8 @@ import { todayDateString } from '@/lib/dateUtils';
 import { Button } from '@/components/ui/button';
 import { Input }  from '@/components/ui/input';
 import { Label }  from '@/components/ui/label';
+import MetalTypeSelect from '@/components/shared/MetalTypeSelect';
+import PillTabs from '@/components/shared/PillTabs';
 
 // ── Schema ────────────────────────────────────────────────────
 const exchangeLineSchema = z.object({
@@ -55,12 +57,6 @@ function formatDate(d) {
   if (!d) return '—';
   return new Date(d).toLocaleDateString('en-IN');
 }
-
-const METAL_TYPES = APP_CONFIG.METAL_TYPES ?? [
-  { id: 1, name: 'Gold' },
-  { id: 2, name: 'Silver' },
-  { id: 3, name: 'Platinum' },
-];
 
 // ── History Tab ───────────────────────────────────────────────
 function HistoryTab() {
@@ -99,7 +95,7 @@ function HistoryTab() {
   return (
     <div className="flex flex-col gap-3">
       {exchanges.map((ex) => (
-        <div key={ex.transactionId} className="rounded-xl border border-stone-200 bg-white p-4 flex flex-col gap-2">
+        <div key={ex.transactionId} className="rounded-xl border border-border bg-card p-4 flex flex-col gap-2">
           <div className="flex items-start justify-between gap-2">
             <div>
               <p className="text-sm font-medium text-stone-800">{ex.documentNo ?? `#${ex.transactionId}`}</p>
@@ -259,15 +255,7 @@ function NewExchangeTab() {
             {/* Metal type */}
             <div className="flex flex-col gap-1">
               <Label className="text-xs">Metal Type <span className="text-destructive">*</span></Label>
-              <select
-                {...register(`line_items.${index}.metal_type_id`)}
-                className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm"
-              >
-                <option value="">Select metal</option>
-                {METAL_TYPES.map((m) => (
-                  <option key={m.id} value={m.id}>{m.name}</option>
-                ))}
-              </select>
+              <MetalTypeSelect control={control} name={`line_items.${index}.metal_type_id`} placeholder="Select metal" />
               {errors.line_items?.[index]?.metal_type_id && (
                 <p className="text-xs text-destructive">{errors.line_items[index].metal_type_id.message}</p>
               )}
@@ -324,7 +312,7 @@ function NewExchangeTab() {
 
       {/* Total */}
       {totalExchangeValue > 0 && (
-        <div className="flex justify-between rounded-xl border border-stone-200 bg-white px-4 py-3 text-sm font-medium">
+        <div className="flex justify-between rounded-xl border border-border bg-card px-4 py-3 text-sm font-medium">
           <span className="text-stone-500">Total Exchange Credit</span>
           <span className="text-emerald-700 font-semibold">{formatCurrency(totalExchangeValue)}</span>
         </div>
@@ -357,20 +345,7 @@ function ExchangeScreen() {
         <h1 className="text-xl font-semibold text-stone-800">Exchange</h1>
       </div>
 
-      <div className="flex gap-1">
-        {TABS.map((tab) => (
-          <button
-            key={tab.key} type="button" onClick={() => setActiveTab(tab.key)}
-            className={`shrink-0 rounded-full px-4 py-1.5 text-xs font-medium transition-colors ${
-              activeTab === tab.key
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-stone-100 text-stone-500 hover:bg-stone-200'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
+      <PillTabs tabs={TABS} value={activeTab} onChange={setActiveTab} />
 
       {activeTab === 'new'     && <NewExchangeTab />}
       {activeTab === 'history' && <HistoryTab />}

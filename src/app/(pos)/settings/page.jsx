@@ -2,13 +2,16 @@
 'use client';
 
 import { Suspense } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useAddMetalRate } from '@/hooks/settings/useAddMetalRate';
 import APP_CONFIG from '@/constants/appConfig';
 import PageLoader from '@/components/shared/PageLoader';
 import { todayDateString } from '@/lib/dateUtils';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
 
 // ─── Zod schema ───────────────────────────────────────────────────────────────
 
@@ -44,6 +47,7 @@ function MetalRateForm() {
   const {
     register,
     handleSubmit,
+    control,
     reset,
     formState: { errors },
   } = useForm({
@@ -83,17 +87,27 @@ function MetalRateForm() {
         <label className="text-sm font-medium text-foreground">
           Metal Type <span className="text-destructive">*</span>
         </label>
-        <select
-          {...register('metal_type_id')}
-          className="w-full h-11 rounded-lg border border-input bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-        >
-          <option value="">Select metal type</option>
-          {METAL_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
+        <Controller
+          name="metal_type_id"
+          control={control}
+          render={({ field }) => (
+            <Select
+              value={field.value ? String(field.value) : ''}
+              onValueChange={(value) => field.onChange(Number(value))}
+            >
+              <SelectTrigger className="h-11 w-full">
+                <SelectValue placeholder="Select metal type" />
+              </SelectTrigger>
+              <SelectContent>
+                {METAL_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={String(opt.value)}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        />
         {errors.metal_type_id && (
           <p className="text-xs text-destructive">{errors.metal_type_id.message}</p>
         )}
