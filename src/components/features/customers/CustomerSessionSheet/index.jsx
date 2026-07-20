@@ -118,6 +118,26 @@ export default function CustomerSessionSheet({ isOpen, onClose }) {
     performAttach(customer);
   };
 
+  // A name-search result was tapped — record the walk-in visit right away
+  // (mirrors handleSearch's mobile-search path), so the "Visit recorded"
+  // note is visible before the staff commits to attaching.
+  //
+  // KNOWN LIMITATION (confirmed live 2026-07-21): Customer/List and
+  // Customer/Retrieve both pre-mask mobile ("******9991") — the real digits
+  // only ever exist in what staff type into the mobile-search box. So
+  // selected.customerMobile here is masked, WALKIN.LOOKUP can never match
+  // it, and this will silently no-op (WalkInRecorded stays false, "Visit
+  // recorded" never shows) for every name-search attach. Left in place
+  // intentionally per product decision — not a bug to "fix" without a
+  // read/unmasked-mobile API change from OrnaVerse.
+  const handleSelectNameResult = (selected) => {
+    setNameResultSelection(selected);
+    walkIn.reset();
+    if (selected?.customerMobile) {
+      walkIn.lookup(selected.customerMobile);
+    }
+  };
+
   // Called by NewCustomerForm after a new customer is created
   const handleNewCustomerCreated = (newCustomer) => {
     if (wouldSwitchCustomer(newCustomer.customerId)) {
@@ -261,12 +281,23 @@ export default function CustomerSessionSheet({ isOpen, onClose }) {
             <div className="flex flex-col gap-3">
               <button
                 type="button"
-                onClick={() => setNameResultSelection(null)}
+                onClick={() => { setNameResultSelection(null); walkIn.reset(); }}
                 className="flex items-center gap-1 text-sm text-stone-500 hover:text-stone-700 w-fit"
               >
                 <ChevronLeft size={15} aria-hidden="true" />
                 Back to results
               </button>
+              {walkIn.isLoading && (
+                <p className="text-xs text-stone-400 flex items-center gap-1.5">
+                  <Loader2 size={12} className="animate-spin" aria-hidden="true" />
+                  Recording visit…
+                </p>
+              )}
+              {walkInKnown && (
+                <p className="text-xs text-stone-400">
+                  Visit recorded{walkInKnown.name ? ` — welcome back, ${walkInKnown.name}` : ' — welcome back'}.
+                </p>
+              )}
               <CustomerDisplayCard customer={customer} />
               <Button type="button" onClick={handleAttachFound} className="h-11">
                 Attach to Session
@@ -282,7 +313,7 @@ export default function CustomerSessionSheet({ isOpen, onClose }) {
                 <CustomerListItem
                   key={c.customerId}
                   customer={c}
-                  onSelect={() => setNameResultSelection(c)}
+                  onSelect={() => handleSelectNameResult(c)}
                 />
               ))}
             </div>

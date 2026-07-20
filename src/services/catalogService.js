@@ -265,21 +265,26 @@ export async function getAllProducts(storeId, onProgress) {
  * or thousands of system-wide matches with no guarantee this store's real
  * matches are among the first N.
  *
- * @param {{ query: string, storeId: number }} params
+ * @param {{ query: string, storeId: number, signal?: AbortSignal }} params
+ *   `signal` lets the caller (useSkuSearch) cancel this request in-flight —
+ *   TanStack Query passes a fresh AbortSignal per query and aborts the
+ *   previous one automatically when the debounced search text changes, so
+ *   wiring it through here means a superseded keystroke's request is
+ *   actually cancelled on the wire instead of completing uselessly.
  * @returns {Promise<object[]>} ProductCatalogRow-shaped results
  */
-export async function searchBySku({ query, storeId }) {
+export async function searchBySku({ query, storeId, signal }) {
   if (!query || !storeId) return [];
 
   const searchResponse = await axiosInstance.post(API.ITEMS.LIST, {
     item_search: query,
     Take: 50,
-  });
+  }, { signal });
   const candidates = searchResponse.data?.Entities ?? [];
   if (!candidates.length) return [];
 
   const itemIds = candidates.map((c) => c.item_id);
-  const stockData = await getStockByStoresBatch(itemIds);
+  const stockData = await getStockByStoresBatch(itemIds, signal);
   const stockRows = stockData?.Entities ?? [];
 
   const stockByItemId = new Map(
@@ -327,11 +332,12 @@ export async function getStockByStores(itemId) {
  * Cross-store stock for multiple items in a single call.
  * Use on catalog grid to show availability indicators without N+1 calls.
  * @param {number[]} itemIds — array of item_id values
+ * @param {AbortSignal} [signal] — optional, cancels the request in-flight
  * @returns {Promise<object>} OrnaVerse batch stock response
  */
-export async function getStockByStoresBatch(itemIds) {
+export async function getStockByStoresBatch(itemIds, signal) {
   const response = await axiosInstance.post(API.CATALOG.GET_STOCK_BY_STORES_BATCH, {
     item_ids: itemIds,
-  });
+  }, { signal });
   return response.data;
 }
