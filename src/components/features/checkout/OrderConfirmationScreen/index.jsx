@@ -92,7 +92,7 @@ export default function OrderConfirmationScreen({ transactionId, invoiceNo }) {
       </div>
 
       {/* Invoice summary */}
-      <div className="w-full max-w-md rounded-xl border border-stone-200 bg-white p-4 text-left">
+      <div className="w-full max-w-md rounded-xl border border-border bg-card p-4 text-left">
         {isLoading ? (
           <div className="flex items-center justify-center gap-2 py-6 text-sm text-stone-500">
             <Loader2 size={16} className="animate-spin" aria-hidden="true" />

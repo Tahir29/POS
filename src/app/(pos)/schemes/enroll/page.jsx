@@ -13,11 +13,10 @@ import { useSelector } from 'react-redux';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { ChevronDown, ChevronLeft } from 'lucide-react';
+import { ChevronLeft } from 'lucide-react';
 
 import { useSchemes }        from '@/hooks/schemes/useSchemes';
 import { useEnrollCustomer } from '@/hooks/schemes/useEnrollCustomer';
-import { useSalesPersonOptions } from '@/hooks/schemes/useSalesPersonOptions';
 import { selectActiveStoreId }   from '@/store/slices/storeSlice';
 import {
   selectCartCustomerId,
@@ -31,11 +30,9 @@ import { Button } from '@/components/ui/button';
 import { Input }  from '@/components/ui/input';
 import { Label }  from '@/components/ui/label';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
+import SalesPersonSelect from '@/components/features/checkout/SalesPersonSelect';
 import PageLoader from '@/components/shared/PageLoader';
 
 // ── Schema ────────────────────────────────────────────────────
@@ -59,12 +56,6 @@ function EnrollScreen() {
 
   const { schemes, isLoading: schemesLoading } = useSchemes();
   const enroll = useEnrollCustomer();
-
-  // sales_person_id is a confirmed-required field on SchemeEnrollment/Create
-  // (per v1.json SchemeEnrollmentRow). Mirrors the vendor's own Scheme
-  // Enrollment screen: a store-scoped picker, not an auto-resolved value —
-  // confirmed via a real UAT response listing employees by company_id only.
-  const { salesPersons, isLoading: salesPersonsLoading } = useSalesPersonOptions(storeId);
 
   const today = todayDateString();
 
@@ -166,31 +157,24 @@ function EnrollScreen() {
           <Controller
             name="scheme_id"
             control={control}
-            render={({ field }) => {
-              const selected = schemes.find((s) => s.scheme_id === Number(field.value));
-              return (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button
-                      type="button"
-                      className="flex h-11 w-full items-center justify-between rounded-lg border border-input bg-background px-3 text-sm"
-                    >
-                      <span className={selected ? 'text-foreground' : 'text-muted-foreground'}>
-                        {schemesLoading ? 'Loading…' : selected ? selected.scheme_display_name ?? selected.scheme_code : 'Select scheme'}
-                      </span>
-                      <ChevronDown size={14} className="text-muted-foreground shrink-0" />
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width] max-h-56 overflow-y-auto">
-                    {schemes.map((s) => (
-                      <DropdownMenuItem key={s.scheme_id} onSelect={() => field.onChange(s.scheme_id)}>
-                        {s.scheme_display_name ?? s.scheme_code}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              );
-            }}
+            render={({ field }) => (
+              <Select
+                value={field.value ? String(field.value) : ''}
+                onValueChange={(v) => field.onChange(Number(v))}
+                disabled={schemesLoading}
+              >
+                <SelectTrigger className="h-11 w-full">
+                  <SelectValue placeholder={schemesLoading ? 'Loading…' : 'Select scheme'} />
+                </SelectTrigger>
+                <SelectContent className="max-h-56 overflow-y-auto">
+                  {schemes.map((s) => (
+                    <SelectItem key={s.scheme_id} value={String(s.scheme_id)}>
+                      {s.scheme_display_name ?? s.scheme_code}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           />
           {errors.scheme_id && <p className="text-xs text-destructive">{errors.scheme_id.message}</p>}
 
@@ -257,31 +241,13 @@ function EnrollScreen() {
           <Controller
             name="sales_person_id"
             control={control}
-            render={({ field }) => {
-              const selected = salesPersons.find((p) => p.employee_id === Number(field.value));
-              return (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button
-                      type="button"
-                      className="flex h-11 w-full items-center justify-between rounded-lg border border-input bg-background px-3 text-sm"
-                    >
-                      <span className={selected ? 'text-foreground' : 'text-muted-foreground'}>
-                        {salesPersonsLoading ? 'Loading…' : selected ? selected.employee_name : 'Select sales person'}
-                      </span>
-                      <ChevronDown size={14} className="text-muted-foreground shrink-0" />
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width] max-h-56 overflow-y-auto">
-                    {salesPersons.map((p) => (
-                      <DropdownMenuItem key={p.employee_id} onSelect={() => field.onChange(p.employee_id)}>
-                        {p.employee_name}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              );
-            }}
+            render={({ field }) => (
+              <SalesPersonSelect
+                companyId={storeId}
+                value={field.value ? Number(field.value) : null}
+                onChange={field.onChange}
+              />
+            )}
           />
           {errors.sales_person_id && <p className="text-xs text-destructive">{errors.sales_person_id.message}</p>}
         </div>

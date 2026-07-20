@@ -6,6 +6,8 @@
 //   ProductCatalog/List  → has_stock: boolean, current_company_pieces: number
 //   Items/Retrieve       → IsInStockJournal: 0 | 1
 
+import { Badge } from '@/components/ui/badge';
+
 const LOW_STOCK_THRESHOLD = 3;
 
 /**
@@ -89,9 +91,9 @@ export function deriveStockStatusFromProduct(product) {
 // ── Badge config ──────────────────────────────────────────────────────────────
 
 const CONFIG = {
-  in_stock:  { label: 'In Stock',     classes: 'bg-emerald-50 text-emerald-700 ring-emerald-600/20' },
-  low_stock: { label: 'Low Stock',    classes: 'bg-amber-50  text-amber-700  ring-amber-500/20'    },
-  out_stock: { label: 'Out of Stock', classes: 'bg-red-50    text-red-600    ring-red-500/20'      },
+  in_stock:  { label: 'In Stock',     classes: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/20' },
+  low_stock: { label: 'Low Stock',    classes: 'bg-amber-50  text-amber-700  ring-1 ring-amber-500/20'    },
+  out_stock: { label: 'Out of Stock', classes: 'bg-red-50    text-red-600    ring-1 ring-red-500/20'      },
 };
 
 export default function StockStatusBadge({ status, size = 'md' }) {
@@ -99,12 +101,12 @@ export default function StockStatusBadge({ status, size = 'md' }) {
 
   const { label, classes } = CONFIG[status] ?? CONFIG.in_stock;
   const sizeClasses = size === 'sm'
-    ? 'px-2 py-0.5 text-[11px]'
-    : 'px-3 py-1 text-xs';
+    ? 'h-auto px-2 py-0.5 text-[11px]'
+    : 'h-auto px-3 py-1 text-xs';
 
   return (
-    <span className={`inline-flex items-center rounded-full font-medium ring-1 ${sizeClasses} ${classes}`}>
+    <Badge className={`rounded-full font-medium ${sizeClasses} ${classes}`}>
       {label}
-    </span>
+    </Badge>
   );
 }

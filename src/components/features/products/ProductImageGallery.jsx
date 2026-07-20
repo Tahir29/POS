@@ -24,6 +24,7 @@ import Image from 'next/image';
 import { ChevronLeft, ChevronRight, ZoomIn } from 'lucide-react';
 import ProductImageZoomModal from '@/components/features/products/ProductImageZoomModal';
 import { resolveImageSrc } from '@/lib/resolveImageSrc';
+import { Skeleton } from '@/components/ui/skeleton';
 
 // Known colour keywords used in Shopify image `alt` text. Anything whose alt
 // doesn't match one of these (e.g. "Cert") is treated as colour-agnostic and
@@ -81,10 +82,10 @@ function NoImagePlaceholder() {
 function GallerySkeleton() {
   return (
     <div className="flex flex-col gap-3">
-      <div className="w-full rounded-2xl bg-stone-100 animate-pulse" style={{ aspectRatio: '1 / 1' }} />
+      <Skeleton className="w-full rounded-2xl" style={{ aspectRatio: '1 / 1' }} />
       <div className="flex gap-2 justify-center">
         {[1, 2, 3, 4].map((i) => (
-          <div key={i} className="w-14 h-14 rounded-lg bg-stone-100 animate-pulse shrink-0" />
+          <Skeleton key={i} className="w-14 h-14 rounded-lg shrink-0" />
         ))}
       </div>
     </div>

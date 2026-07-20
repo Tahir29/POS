@@ -35,6 +35,7 @@ import APP_CONFIG from '@/constants/appConfig';
 import { todayDateString } from '@/lib/dateUtils';
 
 import PageLoader from '@/components/shared/PageLoader';
+import ListRowsSkeleton from '@/components/shared/ListRowsSkeleton';
 import { Button }  from '@/components/ui/button';
 import { Input }   from '@/components/ui/input';
 import { Label }   from '@/components/ui/label';
@@ -173,22 +174,6 @@ function EstimationNewForm({ onDone }) {
 
 // ─── List ─────────────────────────────────────────────────────────────────────
 
-function EstimationListSkeleton() {
-  return (
-    <div className="rounded-xl border border-border overflow-hidden animate-pulse">
-      {[1, 2, 3].map((i) => (
-        <div key={i} className="flex items-center justify-between px-4 py-3.5 border-b border-border last:border-0">
-          <div className="flex flex-col gap-1.5 flex-1">
-            <div className="h-4 bg-muted rounded w-32" />
-            <div className="h-3 bg-muted rounded w-24" />
-          </div>
-          <div className="h-4 bg-muted rounded w-16" />
-        </div>
-      ))}
-    </div>
-  );
-}
-
 function EstimationRow({ item, onConverted }) {
   const [showActions, setShowActions] = useState(false);
   const post   = usePostEstimation({ onSuccess: () => setShowActions(false) });
@@ -241,7 +226,7 @@ function EstimationRow({ item, onConverted }) {
 function EstimationList() {
   const { items, isLoading, isError, refetch } = useEstimations({});
 
-  if (isLoading) return <EstimationListSkeleton />;
+  if (isLoading) return <ListRowsSkeleton />;
 
   if (isError) return (
     <div className="flex flex-col items-center gap-3 py-12">

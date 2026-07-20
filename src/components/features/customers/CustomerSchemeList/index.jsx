@@ -11,6 +11,7 @@
 
 import { Loader2, BookOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 
 /**
  * @param {{
@@ -22,7 +23,7 @@ import { Button } from '@/components/ui/button';
  */
 export default function CustomerSchemeList({ enrollments, isLoading, isError, refetch }) {
   return (
-    <div className="flex flex-col gap-3 rounded-xl border border-stone-200 bg-white p-4">
+    <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4">
       <h3 className="text-sm font-semibold text-stone-800">Scheme Enrollments</h3>
 
       {isLoading ? (
@@ -60,11 +61,11 @@ export default function CustomerSchemeList({ enrollments, isLoading, isError, re
                 )}
               </div>
               {enrollment.status != null && (
-                <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium capitalize ${
+                <Badge className={`h-auto shrink-0 rounded-full px-2 py-0.5 text-xs font-medium capitalize ${
                   enrollment.status === 1 ? 'bg-green-100 text-green-700' : 'bg-stone-100 text-stone-600'
                 }`}>
                   {enrollment.status === 1 ? 'Active' : 'Inactive'}
-                </span>
+                </Badge>
               )}
             </div>
           ))}

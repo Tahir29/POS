@@ -7,6 +7,7 @@
 // here once that hook exists; don't fabricate a count in the meantime.
 
 import { cn } from '@/lib/utils';
+import { Skeleton } from '@/components/ui/skeleton';
 
 function ActivityChip({ count, label }) {
   return (
@@ -24,10 +25,10 @@ export default function TodaysActivityStrip({ returns = 0, exchanges = 0, buybac
   if (isLoading) {
     return (
       <div className="rounded-xl border border-border bg-card p-5">
-        <div className="h-3 w-28 rounded bg-muted animate-pulse mb-3" />
+        <Skeleton className="h-3 w-28 mb-3" />
         <div className="flex gap-2">
           {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="h-8 w-24 rounded-full bg-muted animate-pulse" />
+            <Skeleton key={i} className="h-8 w-24 rounded-full" />
           ))}
         </div>
       </div>

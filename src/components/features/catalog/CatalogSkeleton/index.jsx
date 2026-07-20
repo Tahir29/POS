@@ -5,19 +5,21 @@
 // Renders N placeholder cards that match ProductCard proportions.
 // Shown while useCatalogProducts is in loading state.
 
+import { Skeleton } from '@/components/ui/skeleton';
+
 const SKELETON_COUNT = 12;
 
 function ProductCardSkeleton() {
   return (
     <div className="flex flex-col overflow-hidden rounded-xl border border-stone-100 bg-white shadow-sm">
       {/* Image placeholder */}
-      <div className="aspect-square w-full animate-pulse bg-stone-100" />
+      <Skeleton className="aspect-square w-full rounded-none" />
       {/* Text lines */}
       <div className="flex flex-col gap-2 p-3">
-        <div className="h-2.5 w-16 animate-pulse rounded bg-stone-100" />
-        <div className="h-3.5 w-full animate-pulse rounded bg-stone-100" />
-        <div className="h-3.5 w-3/4 animate-pulse rounded bg-stone-100" />
-        <div className="mt-2 h-4 w-20 animate-pulse rounded bg-stone-100" />
+        <Skeleton className="h-2.5 w-16" />
+        <Skeleton className="h-3.5 w-full" />
+        <Skeleton className="h-3.5 w-3/4" />
+        <Skeleton className="mt-2 h-4 w-20" />
       </div>
     </div>
   );

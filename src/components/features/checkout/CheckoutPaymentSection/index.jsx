@@ -17,6 +17,7 @@
 
 import { useEffect, useState } from 'react';
 import { Loader2, CheckCircle2 } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
 import { useCartTotals } from '@/hooks/cart/useCartTotals';
 import { usePaymentModes } from '@/hooks/checkout/usePaymentModes';
 import { useInvoiceHelpers } from '@/hooks/checkout/useInvoiceHelpers';
@@ -53,18 +54,7 @@ function HelperBalanceRow({ label, amount, modeCode, isApplied, onToggle, isLoad
           {APP_CONFIG.CURRENCY.INR_SYMBOL}{Number(amount).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
         </p>
       </div>
-      <span
-        className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-200 ${
-          isApplied ? 'bg-primary' : 'bg-stone-200'
-        }`}
-        aria-hidden="true"
-      >
-        <span
-          className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow-sm transform transition-transform duration-200 ${
-            isApplied ? 'translate-x-4' : 'translate-x-1'
-          }`}
-        />
-      </span>
+      <Switch checked={isApplied} className="pointer-events-none" tabIndex={-1} aria-hidden="true" />
     </button>
   );
 }
@@ -190,7 +180,7 @@ export default function CheckoutPaymentSection({ onChange }) {
   const hasVisibleHelpers = customerId && helperItems.some((h) => h.data?.amount > 0);
 
   return (
-    <section className="flex flex-col gap-3 rounded-xl border border-stone-200 bg-white p-4">
+    <section className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4">
       <h2 className="text-sm font-bold text-stone-800">Payment</h2>
 
       {/* Invoice Helper Balances — only shown when customer attached + has balance */}

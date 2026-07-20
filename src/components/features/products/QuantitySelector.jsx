@@ -26,7 +26,7 @@ export default function QuantitySelector({
   const canIncrement = quantity < maxQty;
 
   return (
-    <div className="flex items-center gap-1 rounded-lg border border-stone-200 bg-white" aria-label="Quantity selector">
+    <div className="flex items-center gap-1 rounded-lg border border-border bg-card" aria-label="Quantity selector">
 
       {/* Decrement */}
       <button

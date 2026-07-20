@@ -2,6 +2,7 @@
 
 import { TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Skeleton } from '@/components/ui/skeleton';
 
 // ── KPI CARD ──────────────────────────────────────────────────
 //
@@ -25,9 +26,9 @@ export default function KPICard({ label, value, trend, sparkline, isLoading, acc
   if (isLoading) {
     return (
       <div className="rounded-xl border border-border bg-card px-5 py-4">
-        <div className="h-3 w-24 rounded bg-muted animate-pulse mb-3" />
-        <div className="h-7 w-20 rounded bg-muted animate-pulse mb-4" />
-        <div className="h-8 w-full rounded bg-muted animate-pulse" />
+        <Skeleton className="h-3 w-24 mb-3" />
+        <Skeleton className="h-7 w-20 mb-4" />
+        <Skeleton className="h-8 w-full" />
       </div>
     );
   }

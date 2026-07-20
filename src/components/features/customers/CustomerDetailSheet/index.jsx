@@ -12,9 +12,9 @@
 import { useState, useEffect } from 'react';
 import {
   Phone, Mail, MapPin, CreditCard, UserCircle,
-  ChevronDown, Loader2,
+  Loader2,
 } from 'lucide-react';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import Link from 'next/link';
 
@@ -22,12 +22,8 @@ import BottomSheet from '@/components/shared/BottomSheet';
 import { Button }  from '@/components/ui/button';
 import { Input }   from '@/components/ui/input';
 import { Label }   from '@/components/ui/label';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+import LocationSelect from '@/components/shared/LocationSelect';
+import PillTabs from '@/components/shared/PillTabs';
 
 import { updateCustomerSchema } from '@/validators/customerSchema';
 import { useRetrieveCustomer }  from '@/hooks/customer/useRetrieveCustomer';
@@ -208,45 +204,6 @@ function EditTab({ customer }) {
     });
   };
 
-  // Location dropdown helper
-  const LocationDropdown = ({ name, items, idKey, labelKey, placeholder, disabledMsg, disabled, isLoading: loading }) => (
-    <Controller name={name} control={control} render={({ field }) => {
-      const selected = items.find((i) => i[idKey] === field.value);
-      return (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild disabled={disabled}>
-            <button
-              type="button"
-              disabled={disabled}
-              className="flex h-11 w-full items-center justify-between rounded-lg border border-input bg-background px-3 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <span className={selected ? 'text-foreground' : 'text-muted-foreground'}>
-                {loading
-                  ? 'Loading…'
-                  : selected
-                    ? selected[labelKey]
-                    : disabled ? disabledMsg : placeholder}
-              </span>
-              <ChevronDown size={14} className="text-muted-foreground shrink-0" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent className="max-h-56 overflow-y-auto w-[--radix-dropdown-menu-trigger-width]">
-            {items.length === 0 && (
-              <div className="px-3 py-2 text-sm text-muted-foreground">
-                {loading ? 'Loading…' : 'No options found'}
-              </div>
-            )}
-            {items.map((item) => (
-              <DropdownMenuItem key={item[idKey]} onSelect={() => field.onChange(item[idKey])}>
-                {item[labelKey]}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      );
-    }} />
-  );
-
   return (
     <div className="relative">
       {/* Subtle loading overlay while full record fetches — form is still usable */}
@@ -308,7 +265,8 @@ function EditTab({ customer }) {
 
         <div className="flex flex-col gap-1.5">
           <Label>Country</Label>
-          <LocationDropdown
+          <LocationSelect
+            control={control}
             name="country_id" items={countries} idKey="country_id" labelKey="country_name"
             placeholder="Select country" isLoading={countriesLoading}
           />
@@ -316,18 +274,20 @@ function EditTab({ customer }) {
 
         <div className="flex flex-col gap-1.5">
           <Label>State</Label>
-          <LocationDropdown
+          <LocationSelect
+            control={control}
             name="state_id" items={states} idKey="state_id" labelKey="state_name"
-            placeholder="Select state" disabled={!countryId} disabledMsg="Select country first"
+            placeholder="Select state" disabled={!countryId} disabledPlaceholder="Select country first"
             isLoading={statesLoading}
           />
         </div>
 
         <div className="flex flex-col gap-1.5">
           <Label>City</Label>
-          <LocationDropdown
+          <LocationSelect
+            control={control}
             name="city_id" items={cities} idKey="city_id" labelKey="city_name"
-            placeholder="Select city" disabled={!stateId} disabledMsg="Select state first"
+            placeholder="Select city" disabled={!stateId} disabledPlaceholder="Select state first"
             isLoading={citiesLoading}
           />
         </div>
@@ -372,22 +332,14 @@ export default function CustomerDetailSheet({ customer, isOpen, onClose, onAttac
     <BottomSheet isOpen={isOpen} onClose={onClose} title={customer.customerName || 'Customer'}>
 
       {/* Tab bar — Profile + Edit only */}
-      <div className="flex gap-1 pb-3 -mx-1 px-1">
-        {TABS.map((tab) => (
-          <button
-            key={tab}
-            type="button"
-            onClick={() => setActiveTab(tab)}
-            className={`shrink-0 rounded-full px-4 py-1.5 text-xs font-medium transition-colors ${
-              activeTab === tab
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-stone-100 text-stone-500 hover:bg-stone-200'
-            }`}
-          >
-            {TAB_LABELS[tab]}
-          </button>
-        ))}
-      </div>
+      <PillTabs
+        tabs={TABS}
+        value={activeTab}
+        onChange={setActiveTab}
+        getKey={(t) => t}
+        getLabel={(t) => TAB_LABELS[t]}
+        className="pb-3 -mx-1 px-1"
+      />
 
       {/* Tab content */}
       <div className="mt-1">

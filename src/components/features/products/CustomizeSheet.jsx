@@ -16,6 +16,7 @@
 import { useState, useCallback, useMemo } from 'react';
 import { Store } from 'lucide-react';
 import BottomSheet from '@/components/shared/BottomSheet';
+import { Skeleton } from '@/components/ui/skeleton';
 
 // ── Metal color gradient map ──────────────────────────────────────────────────
 const COLOR_GRADIENTS = {
@@ -38,22 +39,22 @@ function resolveGradient(name) {
 function LoadingSkeleton() {
   return (
     <div className="flex flex-col gap-7">
-      <div className="h-3 w-40 rounded bg-muted animate-pulse" />
+      <Skeleton className="h-3 w-40" />
       <div className="grid grid-cols-3 gap-3">
         {[1, 2, 3].map((i) => (
-          <div key={i} className="h-20 rounded-2xl bg-muted animate-pulse" />
+          <Skeleton key={i} className="h-20 rounded-2xl" />
         ))}
       </div>
-      <div className="h-3 w-28 rounded bg-muted animate-pulse mt-2" />
+      <Skeleton className="h-3 w-28 mt-2" />
       <div className="flex gap-2">
         {[1, 2].map((i) => (
-          <div key={i} className="h-10 w-16 rounded-xl bg-muted animate-pulse" />
+          <Skeleton key={i} className="h-10 w-16 rounded-xl" />
         ))}
       </div>
-      <div className="h-3 w-28 rounded bg-muted animate-pulse mt-2" />
+      <Skeleton className="h-3 w-28 mt-2" />
       <div className="grid grid-cols-5 gap-2">
         {Array.from({ length: 10 }).map((_, i) => (
-          <div key={i} className="h-12 rounded-xl bg-muted animate-pulse" />
+          <Skeleton key={i} className="h-12 rounded-xl" />
         ))}
       </div>
     </div>

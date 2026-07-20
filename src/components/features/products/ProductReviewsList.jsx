@@ -9,6 +9,7 @@
 import { useEffect, useRef } from 'react';
 import { Loader2, MessageSquareText, BadgeCheck } from 'lucide-react';
 import StarRating from '@/components/shared/StarRating';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useProductReviews } from '@/hooks/products/useProductReviews';
 import { useProductReviewSummary } from '@/hooks/products/useProductReviewSummary';
 
@@ -49,10 +50,10 @@ function ReviewsSkeleton() {
     <div className="flex flex-col gap-3">
       {[1, 2, 3].map((i) => (
         <div key={i} className="rounded-xl border border-border p-4 flex flex-col gap-2">
-          <div className="h-3 w-28 rounded bg-muted animate-pulse" />
-          <div className="h-3 w-20 rounded bg-muted animate-pulse" />
-          <div className="h-3 w-full rounded bg-muted animate-pulse" />
-          <div className="h-3 w-2/3 rounded bg-muted animate-pulse" />
+          <Skeleton className="h-3 w-28" />
+          <Skeleton className="h-3 w-20" />
+          <Skeleton className="h-3 w-full" />
+          <Skeleton className="h-3 w-2/3" />
         </div>
       ))}
     </div>

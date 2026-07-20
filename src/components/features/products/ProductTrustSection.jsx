@@ -11,12 +11,14 @@
 // If Lucira later wants per-category or per-product variants of this copy,
 // that would need real fields first.
 
-import { useState } from 'react';
 import {
   ShieldCheck, RefreshCw, Truck, Gem,
-  Star, ChevronDown,
+  Star,
 } from 'lucide-react';
 import Image from 'next/image';
+import {
+  Accordion, AccordionItem, AccordionTrigger, AccordionContent,
+} from '@/components/ui/accordion';
 
 // ── Trust badge strip ─────────────────────────────────────────────────────────
 
@@ -120,40 +122,6 @@ const ACCORDION_ITEMS = [
   },
 ];
 
-function AccordionItem({ item }) {
-  const [isOpen, setIsOpen] = useState(!!item.defaultOpen);
-  return (
-    <div className="border-b border-border last:border-0">
-      <button
-        type="button"
-        onClick={() => setIsOpen((v) => !v)}
-        aria-expanded={isOpen}
-        className="flex w-full items-center justify-between gap-3 py-3.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
-      >
-        <span className="text-sm font-medium text-foreground">{item.title}</span>
-        <ChevronDown
-          size={16}
-          className={`shrink-0 text-muted-foreground transition-transform ${isOpen ? 'rotate-180' : ''}`}
-        />
-      </button>
-      {isOpen && (
-        <>
-          {item.image.length > 0 && (
-            <div className='flex items-center justify-start gap-3 mb-4'>
-              {item.image.map((index) => (
-                <Image key={index} src={index} alt={`Image ${index + 1}`} width={80} height={80} className="rounded-xl" />
-              ))}
-            </div>
-          )}
-          <p className="text-sm text-muted-foreground leading-relaxed pb-4">
-            {item.body}
-          </p>
-        </>
-      )}
-    </div>
-  );
-}
-
 function CertifiedQualityBlock() {
   return (
     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -171,7 +139,7 @@ function CertifiedQualityBlock() {
         <div className="flex justify-center items-center gap-6 mt-4">
           {CERT_BADGES.map((label ) => (
             <div key={label} className="flex flex-col items-center gap-1.5">
-              <Image src={label} alt={`Certificate ${label + 1}`} width={60} height={60} />
+              <Image src={label} alt="Certification badge" width={60} height={60} />
             </div>
           ))}
         </div>
@@ -182,9 +150,28 @@ function CertifiedQualityBlock() {
 
       {/* Accordion */}
       <div className="rounded-2xl border border-border bg-card p-5">
-        {ACCORDION_ITEMS.map((item) => (
-          <AccordionItem key={item.id} item={item} />
-        ))}
+        <Accordion
+          type="multiple"
+          defaultValue={ACCORDION_ITEMS.filter((item) => item.defaultOpen).map((item) => item.id)}
+        >
+          {ACCORDION_ITEMS.map((item) => (
+            <AccordionItem key={item.id} value={item.id}>
+              <AccordionTrigger>{item.title}</AccordionTrigger>
+              <AccordionContent className="flex flex-col gap-3 pb-4">
+                {item.image.length > 0 && (
+                  <div className="flex items-center justify-start gap-3">
+                    {item.image.map((src) => (
+                      <Image key={src} src={src} alt="" width={80} height={80} className="rounded-xl" />
+                    ))}
+                  </div>
+                )}
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  {item.body}
+                </p>
+              </AccordionContent>
+            </AccordionItem>
+          ))}
+        </Accordion>
       </div>
     </div>
   );

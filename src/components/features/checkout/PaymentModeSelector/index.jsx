@@ -85,7 +85,7 @@ export default function PaymentModeSelector({
               transition-colors
               ${isSelected
                 ? 'border-primary bg-primary/10 text-primary'
-                : 'border-stone-200 bg-white text-stone-700 hover:border-stone-300'}
+                : 'border-border bg-card text-stone-700 hover:border-stone-300'}
             `}
           >
             {isSelected && (

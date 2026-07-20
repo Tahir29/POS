@@ -17,12 +17,8 @@ import { ChevronLeft, ChevronRight, Loader2, Receipt, Search, X } from 'lucide-r
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { ChevronDown } from 'lucide-react';
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
 import OrderListItem from '@/components/features/orders/OrderListItem';
 import OrderDetailSheet from '@/components/features/orders/OrderDetailSheet';
 import { useOrders } from '@/hooks/orders/useOrders';
@@ -214,34 +210,18 @@ export default function OrdersPage() {
           </div>
 
           {/* Status dropdown */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full md:w-36 justify-between font-normal"
-                aria-label="Filter by status"
-              >
-                <span className={statusFilter ? 'text-stone-800' : 'text-stone-400'}>
-                  {statusFilter
-                    ? STATUS_OPTIONS.find((o) => o.value === statusFilter)?.label
-                    : 'Status'}
-                </span>
-                <ChevronDown size={14} className="text-stone-400 shrink-0" aria-hidden="true" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-36">
+          <Select value={statusFilter || undefined} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-full md:w-36" aria-label="Filter by status">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent align="start">
               {STATUS_OPTIONS.map((opt) => (
-                <DropdownMenuItem
-                  key={opt.value}
-                  onSelect={() => setStatusFilter(opt.value)}
-                  className={statusFilter === opt.value ? 'font-medium text-primary' : ''}
-                >
+                <SelectItem key={opt.value} value={opt.value}>
                   {opt.label}
-                </DropdownMenuItem>
+                </SelectItem>
               ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+            </SelectContent>
+          </Select>
 
           {/* Clear all */}
           {hasFilters && (

@@ -4,10 +4,10 @@
 // Loading skeleton for the product detail page.
 // Matches the exact layout of the assembled page so there's no layout shift.
 
+import { Skeleton } from '@/components/ui/skeleton';
+
 function Bone({ className = '' }) {
-  return (
-    <div className={`animate-pulse rounded-lg bg-stone-200 ${className}`} />
-  );
+  return <Skeleton className={`rounded-lg ${className}`} />;
 }
 
 export default function ProductDetailSkeleton() {
