@@ -11,6 +11,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Search, X, ScanBarcode } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 import APP_CONFIG from '@/constants/appConfig';
 import BarcodeScannerModal from '@/components/features/catalog/BarcodeScannerModal';
 
@@ -118,7 +119,7 @@ export default function ProductSearchBar({
             <Search size={16} />
           </span>
 
-          <input
+          <Input
             ref={inputRef}
             type="search"
             inputMode="search"
@@ -130,15 +131,7 @@ export default function ProductSearchBar({
             onChange={handleChange}
             onKeyDown={handleKeyDown}
             aria-label="Search products or scan barcode"
-            className={[
-              'w-full min-h-[44px]',
-              'pl-9 pr-16 py-2',
-              'text-sm text-foreground',
-              'bg-white border border-border rounded-lg',
-              'focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/50',
-              'placeholder:text-muted-foreground',
-              'transition-colors',
-            ].join(' ')}
+            className="min-h-[44px] pl-9 pr-16"
           />
 
           {/* Right side: clear OR barcode icon */}

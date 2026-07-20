@@ -9,7 +9,7 @@ import { useSelector } from 'react-redux';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { ShoppingBag, Plus, Trash2, AlertCircle } from 'lucide-react';
+import { ShoppingBag, Plus, AlertCircle } from 'lucide-react';
 
 import { useBuybacks }      from '@/hooks/buyback/useBuybacks';
 import { useCreateBuyback } from '@/hooks/buyback/useCreateBuyback';
@@ -25,6 +25,7 @@ import { Label }  from '@/components/ui/label';
 import PaymentModeSelect from '@/components/shared/PaymentModeSelect';
 import MetalTypeSelect   from '@/components/shared/MetalTypeSelect';
 import PillTabs          from '@/components/shared/PillTabs';
+import RemoveLineItemButton from '@/components/shared/RemoveLineItemButton';
 
 const lineSchema = z.object({
   item_name:     z.string().min(1, 'Describe the item'),
@@ -197,9 +198,7 @@ function NewBuybackTab() {
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-stone-500">Item {index + 1}</span>
               {fields.length > 1 && (
-                <button type="button" onClick={() => remove(index)} className="text-stone-400 hover:text-destructive">
-                  <Trash2 size={14} />
-                </button>
+                <RemoveLineItemButton onClick={() => remove(index)} />
               )}
             </div>
 
