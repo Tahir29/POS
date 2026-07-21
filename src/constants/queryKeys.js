@@ -64,6 +64,7 @@ export const QUERY_KEYS = {
     ATTRIBUTES:      (typeId)  => ['items', 'attributes', typeId],
     DESIGN_VARIANTS: (styleId) => ['items', 'design-variants', styleId],
     MASTER_SEARCH:   (query)   => ['items', 'master-search', query],
+    PRICING:         (itemId)  => ['items', 'pricing', itemId],
     SEARCH: (params) => ['items', 'search', {
       q:    params.item_search,
       grp:  params.item_group_ids,

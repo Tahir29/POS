@@ -14,9 +14,11 @@
 //   5. State resets cleanly on sheet close.
 
 import { useState, useCallback, useMemo } from 'react';
-import { Store } from 'lucide-react';
+import { Store, Loader2 } from 'lucide-react';
 import BottomSheet from '@/components/shared/BottomSheet';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useVariantPricing } from '@/hooks/products/useVariantPricing';
+import { formatPrice } from '@/lib/priceUtils';
 
 // ── Metal color gradient map ──────────────────────────────────────────────────
 const COLOR_GRADIENTS = {
@@ -295,6 +297,23 @@ export default function CustomizeSheet({
   const matchedVariant = exactVariant ?? mtoFallback;
   const canConfirm     = allSelected && !!matchedVariant;
 
+  // ── Live price for the matched variant ────────────────────────────────────
+  // Only for a real exact-variant match — the MTO fallback is a pseudo-item
+  // with no real item_components[] BOM, so there's nothing for
+  // SetSalesItems to price. item_rate === 0 means this SKU floats with
+  // today's metal rate rather than having a static one (see
+  // pricingService.js / apiEndpoints.js HELPERS block).
+  const needsLivePricing = !!exactVariant && (exactVariant.item_rate ?? 0) === 0;
+  const {
+    data:      livePricing,
+    isLoading: pricingLoading,
+    isError:   pricingError,
+    refetch:   refetchPricing,
+  } = useVariantPricing(needsLivePricing ? exactVariant : null);
+  const matchedVariantPrice = needsLivePricing
+    ? formatPrice(livePricing?.sub_total)
+    : formatPrice(matchedVariant?.item_rate);
+
   // ── In-stock store list for the currently matched variant ────────────────
   // MTO (no real exact-variant match, or zero stock everywhere) always hides
   // this — there's no store to point to. Recomputes on every selection
@@ -540,6 +559,34 @@ export default function CustomizeSheet({
                   : <>SKU: {matchedVariant.item_code}{(matchedVariant.pieces ?? 0) > 0 && ` · ${matchedVariant.pieces} pc${matchedVariant.pieces !== 1 ? 's' : ''}`}</>
                 }
               </p>
+
+              {/* Price for this exact variant — MTO has no real SKU to
+                  price, so this only ever shows for a real matched variant. */}
+              {!matchedVariant._isMTO && (
+                needsLivePricing && pricingLoading ? (
+                  <p className="flex items-center gap-1.5 text-sm font-semibold text-foreground mt-1.5">
+                    <Loader2 size={13} className="animate-spin text-muted-foreground" aria-hidden="true" />
+                    Calculating price…
+                  </p>
+                ) : matchedVariantPrice ? (
+                  <p className="text-sm font-semibold text-foreground mt-1.5">{matchedVariantPrice}</p>
+                ) : needsLivePricing && pricingError ? (
+                  <p className="flex items-center gap-2 text-xs font-medium text-amber-600 mt-1.5">
+                    Could not calculate price — try again
+                    <button
+                      type="button"
+                      onClick={() => refetchPricing()}
+                      className="font-semibold underline underline-offset-2 hover:text-amber-700"
+                    >
+                      Retry
+                    </button>
+                  </p>
+                ) : (
+                  <p className="text-xs font-medium text-amber-600 mt-1.5">
+                    Price not available for this option
+                  </p>
+                )
+              )}
 
               {/* In-stock store list — hidden entirely for MTO/no-stock
                   variants, shown when this exact variant has real stock
