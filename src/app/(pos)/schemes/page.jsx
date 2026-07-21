@@ -5,7 +5,7 @@
 //   Schemes    — available scheme products (existing SchemeCard grid)
 //   Enrollments — customer enrollments with inline receipt payment
 
-import { Suspense, useState } from 'react';
+import { Suspense, useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useSelector } from 'react-redux';
 import { useForm, Controller } from 'react-hook-form';
@@ -23,6 +23,7 @@ import APP_CONFIG from '@/constants/appConfig';
 import { todayDateString } from '@/lib/dateUtils';
 
 import SchemeCard  from '@/components/features/schemes/SchemeCard';
+import EnrollmentDetailSheet from '@/components/features/schemes/EnrollmentDetailSheet';
 import PageLoader  from '@/components/shared/PageLoader';
 import BottomSheet from '@/components/shared/BottomSheet';
 import PaymentModeSelect from '@/components/shared/PaymentModeSelect';
@@ -30,16 +31,9 @@ import PillTabs    from '@/components/shared/PillTabs';
 import { Button }  from '@/components/ui/button';
 import { Input }   from '@/components/ui/input';
 import { Label }   from '@/components/ui/label';
+import { formatCurrency, formatDate } from '@/lib/schemeFormat';
 
 // ── Helpers ───────────────────────────────────────────────────
-function formatCurrency(n) {
-  return `₹${Number(n ?? 0).toLocaleString('en-IN')}`;
-}
-
-function formatDate(d) {
-  if (!d) return '—';
-  return new Date(d).toLocaleDateString('en-IN');
-}
 
 const STATUS_STYLES = {
   active:    'bg-emerald-50 text-emerald-700',
@@ -77,6 +71,22 @@ function ReceiptSheet({ enrollment, isOpen, onClose }) {
       document_date: today,
     },
   });
+
+  // This sheet stays mounted across different enrollments (only `isOpen`/
+  // `enrollment` change) — RHF's defaultValues only applies at the initial
+  // mount, so without this the amount field was silently staying blank
+  // every time a *different* enrollment's "Record Payment" was opened,
+  // forcing staff to retype the monthly amount each time.
+  useEffect(() => {
+    if (isOpen && enrollment) {
+      reset({
+        amount:        enrollment.schemeAmount ?? '',
+        mode_id:       '',
+        mode_name:     '',
+        document_date: todayDateString(),
+      });
+    }
+  }, [isOpen, enrollment, reset]);
 
   const onSubmit = async (data) => {
     const amount = Number(data.amount);
@@ -221,6 +231,7 @@ function EnrollmentsTab() {
     useSchemeEnrollments(customerId ? { partyId: customerId } : {});
 
   const [receiptTarget, setReceiptTarget] = useState(null);
+  const [detailTarget,  setDetailTarget]  = useState(null);
 
   if (isLoading) {
     return (
@@ -305,16 +316,24 @@ function EnrollmentsTab() {
               </span>
             </div>
 
-            {enrollment.hasPendingInstallment && (
+            <div className="flex gap-2 mt-1">
               <Button
                 variant="outline"
                 size="sm"
-                className="mt-1"
-                onClick={() => setReceiptTarget(enrollment)}
+                onClick={() => setDetailTarget(enrollment)}
               >
-                Record Payment
+                View Details
               </Button>
-            )}
+              {enrollment.hasPendingInstallment && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setReceiptTarget(enrollment)}
+                >
+                  Record Payment
+                </Button>
+              )}
+            </div>
           </div>
         ))
       )}
@@ -324,6 +343,13 @@ function EnrollmentsTab() {
         enrollment={receiptTarget}
         isOpen={!!receiptTarget}
         onClose={() => setReceiptTarget(null)}
+      />
+
+      {/* Monthly schedule + payment history */}
+      <EnrollmentDetailSheet
+        enrollment={detailTarget}
+        isOpen={!!detailTarget}
+        onClose={() => setDetailTarget(null)}
       />
     </div>
   );
