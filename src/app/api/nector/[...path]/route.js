@@ -27,8 +27,25 @@ const NECTOR_BASE   = 'https://cachefront.nector.io/api/v2/merchant';
 const NECTOR_APIKEY = process.env.NECTOR_API_KEY;
 const NECTOR_WORKSPACE = process.env.NECTOR_WORKSPACE_ID;
 
+// SECURITY: this route attaches a real merchant secret (NECTOR_API_KEY) to
+// every request that reaches it, with no session/auth check of its own —
+// src/middleware.js excludes all /api paths from its auth matcher. Without
+// an allowlist, any caller (unauthenticated, since nothing here checks a
+// session) could hit GET /api/nector/<anything> and have this server relay
+// it to Nector's merchant namespace with real credentials attached, turning
+// this into a credentialed open proxy. Only the two endpoints this app
+// actually calls (see nectorService.js) are allowed through.
+const ALLOWED_PATHS = new Set(['reviews', 'reviews-count']);
+
 async function proxy(request, { params }) {
   const { path } = await params;
+
+  if (path.length !== 1 || !ALLOWED_PATHS.has(path[0])) {
+    return new Response(JSON.stringify({ error: 'Not found' }), {
+      status: 404,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
 
   if (!NECTOR_APIKEY || !NECTOR_WORKSPACE) {
     console.error('[Nector] Missing NECTOR_API_KEY or NECTOR_WORKSPACE_ID env vars');
