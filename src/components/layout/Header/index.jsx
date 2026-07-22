@@ -4,6 +4,7 @@
 import { useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { useDispatch, useSelector } from 'react-redux';
+import { AnimatePresence, motion } from 'motion/react';
 import { ShoppingCart, User, LogOut, ChevronDown, Store, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -24,6 +25,7 @@ import CartDrawer from '@/components/features/cart/CartDrawer';
 import HeaderCustomerControl from '@/components/layout/Header/HeaderCustomerControl';
 import { NAV_ITEMS, BOTTOM_ITEMS } from '@/constants/navItems';
 import { cn } from '@/lib/utils';
+import { EASE_PREMIUM, DURATION } from '@/lib/motion';
 
 // ── PAGE TITLE ────────────────────────────────────────────────
 // Derives the header title from the SAME NAV_ITEMS/BOTTOM_ITEMS the
@@ -67,18 +69,25 @@ function CartBadge({ onOpen }) {
       aria-label={`Cart — ${itemCount} ${itemCount === 1 ? 'item' : 'items'}`}
     >
       <ShoppingCart size={20} aria-hidden="true" />
-      {itemCount > 0 && (
-        <span
-          className={cn(
-            'absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center',
-            'rounded-full bg-primary text-primary-foreground text-xs font-bold',
-            'pointer-events-none'
-          )}
-          aria-hidden="true"
-        >
-          {itemCount > 99 ? '99+' : itemCount}
-        </span>
-      )}
+      <AnimatePresence>
+        {itemCount > 0 && (
+          <motion.span
+            key={itemCount > 99 ? '99+' : itemCount}
+            className={cn(
+              'absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center',
+              'rounded-full bg-primary text-primary-foreground text-xs font-bold',
+              'pointer-events-none'
+            )}
+            aria-hidden="true"
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            exit={{ scale: 0 }}
+            transition={{ duration: DURATION.micro, ease: EASE_PREMIUM }}
+          >
+            {itemCount > 99 ? '99+' : itemCount}
+          </motion.span>
+        )}
+      </AnimatePresence>
     </Button>
   );
 }
@@ -100,9 +109,9 @@ function StoreIndicator({ onOpen }) {
       }
       className={cn(
         'flex items-center gap-1.5 rounded-lg border border-input bg-card px-3 py-2 min-h-[44px]',
-        'text-sm font-medium text-foreground transition-colors',
+        'text-sm font-medium text-foreground transition-colors duration-standard ease-premium',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-        hasMultipleStores ? 'hover:bg-accent cursor-pointer' : 'cursor-default'
+        hasMultipleStores ? 'hover:bg-accent hover:shadow-sm cursor-pointer' : 'cursor-default'
       )}
     >
       <Store size={15} aria-hidden="true" className="shrink-0 text-muted-foreground" />
