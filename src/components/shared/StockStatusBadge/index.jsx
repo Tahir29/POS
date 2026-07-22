@@ -89,11 +89,16 @@ export function deriveStockStatusFromProduct(product) {
 }
 
 // ── Badge config ──────────────────────────────────────────────────────────────
+// PREMIUM REVAMP (2026-07-22) — was hardcoding its own emerald/amber/red
+// Tailwind palette instead of routing through this app's own
+// --status-in-stock/--status-made-order/--status-error tokens (already
+// defined in globals.css and already mapped to bg-status-*/text-status-*
+// utilities — this component just wasn't using them).
 
 const CONFIG = {
-  in_stock:  { label: 'In Stock',     classes: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/20' },
-  low_stock: { label: 'Low Stock',    classes: 'bg-amber-50  text-amber-700  ring-1 ring-amber-500/20'    },
-  out_stock: { label: 'Out of Stock', classes: 'bg-red-50    text-red-600    ring-1 ring-red-500/20'      },
+  in_stock:  { label: 'In Stock',     classes: 'bg-status-in-stock/10 text-status-in-stock ring-1 ring-status-in-stock/20' },
+  low_stock: { label: 'Low Stock',    classes: 'bg-status-made-order/10 text-status-made-order ring-1 ring-status-made-order/20' },
+  out_stock: { label: 'Out of Stock', classes: 'bg-status-error/10 text-status-error ring-1 ring-status-error/20' },
 };
 
 export default function StockStatusBadge({ status, size = 'md' }) {

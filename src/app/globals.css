@@ -132,6 +132,32 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+
+  /* Shadow scale — premium revamp (2026-07-22). None of these existed
+     before; Button/Card previously fell back to Tailwind's flat default
+     shadow-xs only. */
+  --shadow-xs:    var(--shadow-xs);
+  --shadow-sm:    var(--shadow-sm);
+  --shadow-md:    var(--shadow-md);
+  --shadow-lg:    var(--shadow-lg);
+  --shadow-hover: var(--shadow-hover);
+
+  /* Gradient tokens — premium revamp. Reference var(--primary)/var(--accent)/
+     var(--status-made-order), so they auto-adjust in .dark with no
+     duplicate block needed. */
+  --background-image-grad-primary-depth: var(--grad-primary-depth);
+  --background-image-grad-gold-sheen:    var(--grad-gold-sheen);
+  --background-image-grad-hairline:      var(--grad-hairline);
+  --background-image-grad-corner-wash:   var(--grad-corner-wash);
+
+  /* Motion timing — premium revamp. Wired from plain :root custom
+     properties (not defined inline here) so the same values are also
+     JS-readable — see src/lib/motion.js, which must stay numerically
+     identical to --motion-ease-premium/--motion-duration-* below. */
+  --ease-premium:      var(--motion-ease-premium);
+  --duration-micro:    var(--motion-duration-micro);
+  --duration-standard: var(--motion-duration-standard);
+  --duration-panel:    var(--motion-duration-panel);
 }
 
 /* ── :root — Light mode ─────────────────────────────────────────────────── */
@@ -150,8 +176,22 @@
   --status-made-order:#AF7C3E;   /* Gold   — made-to-order, informational        */
   --status-error:     #F83E50;   /* Red    — out of stock, errors, destructive   */
 
+  /* ── True-neutral gray scale — premium revamp (2026-07-22) ─────────────
+     Introduced specifically to fix the "everything reads brown" feedback:
+     --muted-foreground and --border/--input below used to be warm-tinted
+     hex values reused for ALL secondary text and hairlines app-wide, not
+     just deliberate brand accents. These are true neutrals (no hue bias)
+     at the same lightness, used only to re-derive the tokens just below —
+     don't reference --neutral-* directly in components, use the semantic
+     tokens (muted-foreground/border/input) as before. */
+  --neutral-100: #F4F4F5;
+  --neutral-200: #E4E4E7;
+  --neutral-400: #A1A1AA;
+  --neutral-500: #71717A;
+  --neutral-700: #3F3F46;
+
   /* ── shadcn/ui semantic tokens → Lucira values ───── */
-  --background:          #FEF5F1;          /* Warm cream app background           */
+  --background:          #FCFCFC;          /* Near-white app background (was warm cream #FEF5F1) */
   --foreground:          #1C1210;          /* Near-black text                     */
 
   --card:                #FFFFFF;          /* Pure white cards                    */
@@ -166,17 +206,41 @@
   --secondary:           #EFE5DE;          /* Blush — secondary buttons/tags      */
   --secondary-foreground:#5A413F;          /* Primary text on secondary           */
 
-  --muted:               #F9F9F9;          /* Surface muted                       */
-  --muted-foreground:    #8C7B78;          /* Warm grey text                      */
+  --muted:               #F5F5F5;          /* Surface muted (was #F9F9F9)         */
+  --muted-foreground:    #71717A;          /* True-neutral grey (was warm #8C7B78) */
 
   --accent:              #B77767;          /* Terracotta accent                   */
   --accent-foreground:   #FFFFFF;          /* White text on accent                */
 
   --destructive:         #F83E50;          /* Error / out of stock red            */
 
-  --border:              #E8DDD9;          /* Warm light border                   */
-  --input:               #E8DDD9;          /* Input border                        */
-  --ring:                #B77767;          /* Focus ring — terracotta             */
+  --border:              #E4E4E7;          /* True-neutral border (was warm #E8DDD9) */
+  --input:               #E4E4E7;          /* Input border (was warm #E8DDD9)     */
+  --ring:                #B77767;          /* Focus ring — terracotta (deliberate accent, unchanged) */
+
+  /* ── Shadow scale — premium revamp. None existed before; Button/Card
+     fell back to Tailwind's flat default shadow-xs only. ──────────── */
+  --shadow-color-rgb: 28, 18, 16; /* matches --foreground */
+  --shadow-xs: 0 1px 2px 0 rgba(var(--shadow-color-rgb), 0.04);
+  --shadow-sm: 0 1px 3px 0 rgba(var(--shadow-color-rgb), 0.07), 0 1px 2px -1px rgba(var(--shadow-color-rgb), 0.06);
+  --shadow-md: 0 4px 8px -2px rgba(var(--shadow-color-rgb), 0.10), 0 2px 4px -2px rgba(var(--shadow-color-rgb), 0.06);
+  --shadow-lg: 0 12px 24px -6px rgba(var(--shadow-color-rgb), 0.14), 0 4px 8px -4px rgba(var(--shadow-color-rgb), 0.08);
+  --shadow-hover: 0 10px 20px -6px rgba(90, 65, 63, 0.22); /* brand-tinted lift, deliberate hover/active elevation */
+
+  /* ── Gradient tokens — premium revamp. --brand-cream is no longer wired
+     to --background; its new job is this rare decorative wash. ──────── */
+  --grad-primary-depth: linear-gradient(135deg, var(--primary) 0%, color-mix(in oklch, var(--primary), black 20%) 100%);
+  --grad-gold-sheen: linear-gradient(120deg, color-mix(in oklch, var(--status-made-order), white 35%) 0%, var(--status-made-order) 45%, color-mix(in oklch, var(--status-made-order), white 35%) 100%);
+  --grad-hairline: linear-gradient(90deg, transparent, var(--accent) 50%, transparent);
+  --grad-corner-wash: radial-gradient(120% 120% at 100% 0%, var(--brand-cream) 0%, transparent 60%);
+
+  /* ── Motion timing — premium revamp. Plain runtime custom properties
+     (not just @theme inline) so the same values are JS-readable — see
+     src/lib/motion.js, which must stay numerically identical. ──────── */
+  --motion-ease-premium: cubic-bezier(0.16, 1, 0.3, 1);
+  --motion-duration-micro: 0.12s;
+  --motion-duration-standard: 0.2s;
+  --motion-duration-panel: 0.32s;
 
   /* ── Sidebar ─────────────────────────────────────── */
   --sidebar:                     #5A413F;  /* Brand primary sidebar bg            */
@@ -233,6 +297,11 @@
   --input:              oklch(1 0 0 / 15%);
   --ring:               #B77767;
 
+  /* Shadow scale — dark override. Shadows need a lighter, terracotta-tinted
+     glow on dark surfaces rather than the light-mode near-black shadow. */
+  --shadow-color-rgb: 0, 0, 0;
+  --shadow-hover: 0 10px 24px -6px rgba(183, 119, 103, 0.28);
+
   --sidebar:                    #2A1E1C;
   --sidebar-foreground:         #FEF5F1;
   --sidebar-primary:            #B77767;
@@ -280,6 +349,22 @@
 
   .animate-scan-line {
     animation: scan-line 2s ease-in-out infinite;
+  }
+
+  /* Premium revamp motion — respects OS-level reduced-motion preference.
+     Covers every plain-CSS transition/animation (Button, Input, Sidebar,
+     PillTabs, .animate-scan-line, existing Radix tw-animate-css enter/exit)
+     automatically. Motion-driven components (BottomSheet, ListItemCard)
+     additionally call useReducedMotion() from motion/react and branch to
+     opacity-only animation — both layers are needed, this one doesn't
+     reach into JS-driven transform animations. */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 }
 
