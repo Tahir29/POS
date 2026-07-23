@@ -24,7 +24,6 @@ import { toast } from 'react-toastify';
 
 import { useReturns }      from '@/hooks/returns/useReturns';
 import { useCreateReturn } from '@/hooks/returns/useCreateReturn';
-import { useSelector as useReduxSelector } from 'react-redux';
 import { selectActiveStoreId } from '@/store/slices/storeSlice';
 import { selectCartCustomerId, selectCartCustomerName } from '@/store/slices/cartSlice';
 import APP_CONFIG from '@/constants/appConfig';
@@ -36,6 +35,8 @@ import { Label }    from '@/components/ui/label';
 import PaymentModeSelect from '@/components/shared/PaymentModeSelect';
 import PillTabs from '@/components/shared/PillTabs';
 import RemoveLineItemButton from '@/components/shared/RemoveLineItemButton';
+import CustomerAttachedBanner from '@/components/shared/CustomerAttachedBanner';
+import PaymentStatusBadge, { mapReturnStatus } from '@/components/shared/PaymentStatusBadge';
 import { usePaymentModes } from '@/hooks/checkout/usePaymentModes';
 
 // ── Zod schema ────────────────────────────────────────────────
@@ -65,18 +66,6 @@ function formatDate(dateStr) {
   return new Date(dateStr).toLocaleDateString('en-IN');
 }
 
-const STATUS_STYLES = {
-  refunded: 'bg-emerald-50 text-emerald-700',
-  partial:  'bg-amber-50  text-amber-700',
-  pending:  'bg-stone-50  text-stone-500',
-};
-
-const STATUS_LABELS = {
-  refunded: 'Refunded',
-  partial:  'Partial',
-  pending:  'Pending',
-};
-
 // ── Returns List Tab ──────────────────────────────────────────
 function ReturnsListTab() {
   const [page, setPage] = useState(1);
@@ -95,7 +84,7 @@ function ReturnsListTab() {
 
   if (isError) {
     return (
-      <div className="flex flex-col items-center gap-3 py-16 text-stone-500">
+      <div className="flex flex-col items-center gap-3 py-16 text-muted-foreground">
         <AlertCircle size={20} />
         <p className="text-sm">Failed to load returns.</p>
         <Button variant="outline" size="sm" onClick={() => refetch()}>Retry</Button>
@@ -105,7 +94,7 @@ function ReturnsListTab() {
 
   if (returns.length === 0) {
     return (
-      <div className="flex flex-col items-center gap-2 py-16 text-stone-400">
+      <div className="flex flex-col items-center gap-2 py-16 text-muted-foreground">
         <RotateCcw size={28} className="opacity-40" />
         <p className="text-sm">No returns found.</p>
       </div>
@@ -118,16 +107,14 @@ function ReturnsListTab() {
         <div key={ret.transactionId} className="rounded-xl border border-border bg-card p-4 flex flex-col gap-2">
           <div className="flex items-start justify-between gap-2">
             <div>
-              <p className="text-sm font-medium text-stone-800">{ret.documentNo ?? `#${ret.transactionId}`}</p>
-              <p className="text-xs text-stone-400">{formatDate(ret.documentDate)}</p>
+              <p className="text-sm font-medium text-foreground">{ret.documentNo ?? `#${ret.transactionId}`}</p>
+              <p className="text-xs text-muted-foreground">{formatDate(ret.documentDate)}</p>
             </div>
-            <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_STYLES[ret.status]}`}>
-              {STATUS_LABELS[ret.status]}
-            </span>
+            <PaymentStatusBadge status={mapReturnStatus(ret.status)} size="sm" />
           </div>
           <div className="flex items-center justify-between text-sm">
-            <span className="text-stone-500">{ret.partyName || '—'}</span>
-            <span className="font-semibold text-stone-800">{formatCurrency(ret.netAmount)}</span>
+            <span className="text-muted-foreground">{ret.partyName || '—'}</span>
+            <span className="font-semibold text-foreground">{formatCurrency(ret.netAmount)}</span>
           </div>
         </div>
       ))}
@@ -137,7 +124,7 @@ function ReturnsListTab() {
           <Button variant="outline" size="sm" disabled={page === 1} onClick={() => setPage((p) => p - 1)}>
             Previous
           </Button>
-          <span className="text-xs text-stone-400">Page {page} of {totalPages}</span>
+          <span className="text-xs text-muted-foreground">Page {page} of {totalPages}</span>
           <Button variant="outline" size="sm" disabled={page === totalPages} onClick={() => setPage((p) => p + 1)}>
             Next
           </Button>
@@ -149,9 +136,9 @@ function ReturnsListTab() {
 
 // ── New Return Tab ────────────────────────────────────────────
 function NewReturnTab() {
-  const storeId      = useReduxSelector(selectActiveStoreId);
-  const customerId   = useReduxSelector(selectCartCustomerId);
-  const customerName = useReduxSelector(selectCartCustomerName);
+  const storeId      = useSelector(selectActiveStoreId);
+  const customerId   = useSelector(selectCartCustomerId);
+  const customerName = useSelector(selectCartCustomerName);
 
   const createReturn = useCreateReturn();
   const { paymentModes, isLoading: modesLoading } = usePaymentModes();
@@ -214,12 +201,11 @@ function NewReturnTab() {
     <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5">
 
       {/* Customer context */}
-      <div className={`rounded-xl border p-3 text-sm ${customerId ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}>
-        {customerId
-          ? <p className="text-emerald-700">Customer: <strong>{customerName}</strong></p>
-          : <p className="text-amber-700">⚠ Attach a customer from the header before submitting a return.</p>
-        }
-      </div>
+      <CustomerAttachedBanner
+        customerId={customerId}
+        customerName={customerName}
+        emptyMessage="Attach a customer from the header before submitting a return."
+      />
 
       {/* Original invoice ID */}
       <div className="flex flex-col gap-1.5">
@@ -237,7 +223,7 @@ function NewReturnTab() {
         {errors.ref_transaction_id && (
           <p className="text-xs text-destructive">{errors.ref_transaction_id.message}</p>
         )}
-        <p className="text-xs text-stone-400">
+        <p className="text-xs text-muted-foreground">
           Find the transaction ID on the printed invoice or in the Invoices list.
         </p>
       </div>
@@ -267,9 +253,9 @@ function NewReturnTab() {
         </div>
 
         {fields.map((field, index) => (
-          <div key={field.id} className="rounded-xl border border-stone-200 bg-stone-50 p-3 flex flex-col gap-3">
+          <div key={field.id} className="rounded-xl border border-border bg-muted p-3 flex flex-col gap-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-stone-500">Item {index + 1}</span>
+              <span className="text-xs font-medium text-muted-foreground">Item {index + 1}</span>
               {fields.length > 1 && (
                 <RemoveLineItemButton onClick={() => remove(index)} />
               )}
@@ -337,8 +323,8 @@ function NewReturnTab() {
       {/* Total */}
       {totalReturnAmount > 0 && (
         <div className="flex justify-between rounded-xl border border-border bg-card px-4 py-3 text-sm font-medium">
-          <span className="text-stone-500">Total Return Amount</span>
-          <span className="text-stone-800">{formatCurrency(totalReturnAmount)}</span>
+          <span className="text-muted-foreground">Total Return Amount</span>
+          <span className="text-foreground">{formatCurrency(totalReturnAmount)}</span>
         </div>
       )}
 
@@ -383,8 +369,8 @@ function ReturnsScreen() {
     <div className="flex flex-col gap-4 p-4 pb-8 max-w-2xl mx-auto">
       {/* Header */}
       <div className="flex items-center gap-3 pt-2">
-        <RotateCcw size={20} className="text-stone-400" />
-        <h1 className="text-xl font-semibold text-stone-800">Returns</h1>
+        <RotateCcw size={20} className="text-muted-foreground" />
+        <h1 className="text-xl font-semibold text-foreground">Returns</h1>
       </div>
 
       {/* Tab bar */}

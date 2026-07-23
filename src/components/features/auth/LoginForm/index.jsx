@@ -238,6 +238,7 @@ export default function LoginForm() {
               {/* Submit */}
               <Button
                 type="submit"
+                variant="premium"
                 disabled={isSubmitting || isLockedOut}
                 className="mt-2 w-full min-h-[48px]"
               >

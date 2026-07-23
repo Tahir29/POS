@@ -56,7 +56,7 @@ export default function ProductStickyActionBar({
 
         {/* Made-to-Order notice — non-blocking, quantity is never capped */}
         {madeToOrderQty > 0 && (
-          <div className="flex items-center gap-1.5 mb-2 text-xs text-amber-700">
+          <div className="flex items-center gap-1.5 mb-2 text-xs text-status-made-order">
             <PackagePlus size={13} className="shrink-0" aria-hidden="true" />
             <span>
               {availableStock > 0
@@ -75,7 +75,7 @@ export default function ProductStickyActionBar({
             </p>
             <p className="font-heading text-xl text-foreground leading-tight">
               {total != null ? formatINR(total) : (
-                <span className="text-sm font-medium text-amber-600">Not priced</span>
+                <span className="text-sm font-medium text-status-made-order">Not priced</span>
               )}
             </p>
           </div>

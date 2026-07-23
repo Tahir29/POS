@@ -31,28 +31,28 @@ export default function CustomerProfileCard({ customer }) {
   return (
     <div className="flex flex-col gap-4 rounded-xl border border-border bg-card p-4">
       <div>
-        <h2 className="text-base font-bold text-stone-800">{customerName || 'Unnamed customer'}</h2>
+        <h2 className="text-base font-bold text-foreground">{customerName || 'Unnamed customer'}</h2>
         {partyCode && (
-          <p className="text-xs text-stone-400 mt-0.5">Customer code: {partyCode}</p>
+          <p className="text-xs text-muted-foreground/70 mt-0.5">Customer code: {partyCode}</p>
         )}
       </div>
 
       <div className="flex flex-col gap-2 text-sm">
         {customerMobile && (
-          <div className="flex items-center gap-2 text-stone-600">
-            <Phone size={15} aria-hidden="true" className="shrink-0 text-stone-400" />
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <Phone size={15} aria-hidden="true" className="shrink-0 text-muted-foreground/70" />
             {customerMobile}
           </div>
         )}
         {customerEmail && (
-          <div className="flex items-center gap-2 text-stone-600">
-            <Mail size={15} aria-hidden="true" className="shrink-0 text-stone-400" />
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <Mail size={15} aria-hidden="true" className="shrink-0 text-muted-foreground/70" />
             <span className="truncate">{customerEmail}</span>
           </div>
         )}
         {customerAddress && (customerAddress.address || customerAddress.city) && (
-          <div className="flex items-start gap-2 text-stone-600">
-            <MapPin size={15} aria-hidden="true" className="shrink-0 text-stone-400 mt-0.5" />
+          <div className="flex items-start gap-2 text-muted-foreground">
+            <MapPin size={15} aria-hidden="true" className="shrink-0 text-muted-foreground/70 mt-0.5" />
             <span>
               {[customerAddress.address, customerAddress.city, customerAddress.state, customerAddress.zip]
                 .filter(Boolean)
@@ -61,8 +61,8 @@ export default function CustomerProfileCard({ customer }) {
           </div>
         )}
         {maskedPan && (
-          <div className="flex items-center gap-2 text-stone-600">
-            <CreditCard size={15} aria-hidden="true" className="shrink-0 text-stone-400" />
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <CreditCard size={15} aria-hidden="true" className="shrink-0 text-muted-foreground/70" />
             PAN: {maskedPan}
           </div>
         )}

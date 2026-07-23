@@ -48,20 +48,20 @@ function ProfileTab({ customer, onAttach, isAttached, onClose }) {
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-2 text-sm">
         {customerMobile && (
-          <div className="flex items-center gap-2 text-stone-600">
-            <Phone size={15} className="shrink-0 text-stone-400" />
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <Phone size={15} className="shrink-0 text-muted-foreground/70" />
             {customerMobile}
           </div>
         )}
         {customerEmail && (
-          <div className="flex items-center gap-2 text-stone-600">
-            <Mail size={15} className="shrink-0 text-stone-400" />
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <Mail size={15} className="shrink-0 text-muted-foreground/70" />
             <span className="truncate">{customerEmail}</span>
           </div>
         )}
         {customerAddress && (customerAddress.address || customerAddress.city) && (
-          <div className="flex items-start gap-2 text-stone-600">
-            <MapPin size={15} className="shrink-0 text-stone-400 mt-0.5" />
+          <div className="flex items-start gap-2 text-muted-foreground">
+            <MapPin size={15} className="shrink-0 text-muted-foreground/70 mt-0.5" />
             <span>
               {[customerAddress.address, customerAddress.city, customerAddress.state, customerAddress.zip]
                 .filter(Boolean).join(', ')}
@@ -69,13 +69,13 @@ function ProfileTab({ customer, onAttach, isAttached, onClose }) {
           </div>
         )}
         {customerPan && (
-          <div className="flex items-center gap-2 text-stone-600">
-            <CreditCard size={15} className="shrink-0 text-stone-400" />
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <CreditCard size={15} className="shrink-0 text-muted-foreground/70" />
             PAN: {maskPan(customerPan)}
           </div>
         )}
         {partyCode && (
-          <p className="text-xs text-stone-400">Code: {partyCode}</p>
+          <p className="text-xs text-muted-foreground/70">Code: {partyCode}</p>
         )}
       </div>
 
@@ -208,7 +208,7 @@ function EditTab({ customer }) {
     <div className="relative">
       {/* Subtle loading overlay while full record fetches — form is still usable */}
       {loadingFull && (
-        <div className="flex items-center gap-1.5 text-xs text-stone-400 mb-3">
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-3">
           <Loader2 size={11} className="animate-spin" />
           Loading full details…
         </div>
@@ -224,7 +224,7 @@ function EditTab({ customer }) {
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="ds_mobile">Mobile</Label>
           {maskedMobile && (
-            <p className="text-xs text-stone-400">Current: {maskedMobile} (masked for privacy)</p>
+            <p className="text-xs text-muted-foreground">Current: {maskedMobile} (masked for privacy)</p>
           )}
           <Input
             id="ds_mobile" type="tel" inputMode="numeric" {...register('mobile')} className="h-11"
@@ -236,7 +236,7 @@ function EditTab({ customer }) {
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="ds_email">Email</Label>
           {maskedEmail && (
-            <p className="text-xs text-stone-400">Current: {maskedEmail} (masked for privacy)</p>
+            <p className="text-xs text-muted-foreground">Current: {maskedEmail} (masked for privacy)</p>
           )}
           <Input
             id="ds_email" type="email" {...register('email')} className="h-11"
@@ -254,7 +254,7 @@ function EditTab({ customer }) {
         <div className="flex flex-col gap-1.5">
           <Label>Address</Label>
           {maskedAddress && (
-            <p className="text-xs text-stone-400">Current: {maskedAddress} (masked for privacy)</p>
+            <p className="text-xs text-muted-foreground">Current: {maskedAddress} (masked for privacy)</p>
           )}
           <Input
             {...register('address')} className="h-11"

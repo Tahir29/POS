@@ -26,6 +26,7 @@ import PaymentModeSelect from '@/components/shared/PaymentModeSelect';
 import MetalTypeSelect   from '@/components/shared/MetalTypeSelect';
 import PillTabs          from '@/components/shared/PillTabs';
 import RemoveLineItemButton from '@/components/shared/RemoveLineItemButton';
+import CustomerAttachedBanner from '@/components/shared/CustomerAttachedBanner';
 
 const lineSchema = z.object({
   metal_type_id: z.coerce.number().min(1, 'Select metal'),
@@ -59,7 +60,7 @@ function HistoryTab() {
   );
 
   if (isError) return (
-    <div className="flex flex-col items-center gap-3 py-16 text-stone-500">
+    <div className="flex flex-col items-center gap-3 py-16 text-muted-foreground">
       <AlertCircle size={20} />
       <p className="text-sm">Failed to load URD purchase records.</p>
       <Button variant="outline" size="sm" onClick={() => refetch()}>Retry</Button>
@@ -67,7 +68,7 @@ function HistoryTab() {
   );
 
   if (purchases.length === 0) return (
-    <div className="flex flex-col items-center gap-2 py-16 text-stone-400">
+    <div className="flex flex-col items-center gap-2 py-16 text-muted-foreground">
       <Coins size={28} className="opacity-40" />
       <p className="text-sm">No URD purchase records found.</p>
     </div>
@@ -79,23 +80,23 @@ function HistoryTab() {
         <div key={p.transactionId} className="rounded-xl border border-border bg-card p-4 flex flex-col gap-2">
           <div className="flex items-start justify-between gap-2">
             <div>
-              <p className="text-sm font-medium text-stone-800">{p.documentNo ?? `#${p.transactionId}`}</p>
-              <p className="text-xs text-stone-400">{formatDate(p.documentDate)}</p>
+              <p className="text-sm font-medium text-foreground">{p.documentNo ?? `#${p.transactionId}`}</p>
+              <p className="text-xs text-muted-foreground">{formatDate(p.documentDate)}</p>
             </div>
             <span className="rounded-full bg-yellow-50 px-2.5 py-0.5 text-xs font-medium text-yellow-700">
               URD
             </span>
           </div>
           <div className="flex items-center justify-between text-sm">
-            <span className="text-stone-500">{p.partyName || '—'}</span>
-            <span className="font-semibold text-stone-800">{formatCurrency(p.netAmount)}</span>
+            <span className="text-muted-foreground">{p.partyName || '—'}</span>
+            <span className="font-semibold text-foreground">{formatCurrency(p.netAmount)}</span>
           </div>
         </div>
       ))}
       {totalPages > 1 && (
         <div className="flex items-center justify-between pt-2">
           <Button variant="outline" size="sm" disabled={page === 1} onClick={() => setPage(p => p - 1)}>Previous</Button>
-          <span className="text-xs text-stone-400">Page {page} of {totalPages}</span>
+          <span className="text-xs text-muted-foreground">Page {page} of {totalPages}</span>
           <Button variant="outline" size="sm" disabled={page === totalPages} onClick={() => setPage(p => p + 1)}>Next</Button>
         </div>
       )}
@@ -162,11 +163,12 @@ function NewURDTab() {
     <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5">
 
       {/* Customer */}
-      <div className={`rounded-xl border p-3 text-sm ${customerId ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}>
-        {customerId
-          ? <p className="text-emerald-700">Seller: <strong>{customerName}</strong></p>
-          : <p className="text-amber-700">⚠ Attach the seller as a customer before recording a URD purchase.</p>}
-      </div>
+      <CustomerAttachedBanner
+        customerId={customerId}
+        customerName={customerName}
+        attachedLabel="Seller:"
+        emptyMessage="Attach the seller as a customer before recording a URD purchase."
+      />
 
       {/* Date */}
       <div className="flex flex-col gap-1.5">
@@ -186,9 +188,9 @@ function NewURDTab() {
         </div>
 
         {fields.map((field, index) => (
-          <div key={field.id} className="rounded-xl border border-stone-200 bg-stone-50 p-4 flex flex-col gap-3">
+          <div key={field.id} className="rounded-xl border border-border bg-muted p-4 flex flex-col gap-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-stone-500">Metal {index + 1}</span>
+              <span className="text-xs font-medium text-muted-foreground">Metal {index + 1}</span>
               {fields.length > 1 && (
                 <RemoveLineItemButton onClick={() => remove(index)} />
               )}
@@ -221,7 +223,7 @@ function NewURDTab() {
                   <button type="button" onClick={() => handleAutoCompute(index)} className="text-xs text-primary underline">Compute</button>
                 </div>
                 <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-stone-400">₹</span>
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">₹</span>
                   <Input type="number" inputMode="decimal" step="any" min={0} {...register(`line_items.${index}.amount`)} className="h-9 text-sm pl-6" />
                 </div>
               </div>
@@ -233,8 +235,8 @@ function NewURDTab() {
       {/* Total */}
       {totalAmount > 0 && (
         <div className="flex justify-between rounded-xl border border-border bg-card px-4 py-3 text-sm">
-          <span className="text-stone-500">Total Payout</span>
-          <span className="font-semibold text-stone-800">{formatCurrency(totalAmount)}</span>
+          <span className="text-muted-foreground">Total Payout</span>
+          <span className="font-semibold text-foreground">{formatCurrency(totalAmount)}</span>
         </div>
       )}
 
@@ -267,9 +269,9 @@ function URDScreen() {
   return (
     <div className="flex flex-col gap-4 p-4 pb-8 max-w-2xl mx-auto">
       <div className="flex items-center gap-3 pt-2">
-        <Coins size={20} className="text-stone-400" />
-        <h1 className="text-xl font-semibold text-stone-800">URD Purchase</h1>
-        <span className="text-xs text-stone-400 font-normal">(Old Gold / Unregistered Dealer)</span>
+        <Coins size={20} className="text-muted-foreground" />
+        <h1 className="text-xl font-semibold text-foreground">URD Purchase</h1>
+        <span className="text-xs text-muted-foreground font-normal">(Old Gold / Unregistered Dealer)</span>
       </div>
       <PillTabs tabs={TABS} value={activeTab} onChange={setActiveTab} />
       {activeTab === 'new'     && <NewURDTab />}

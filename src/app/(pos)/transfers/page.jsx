@@ -19,7 +19,7 @@ export default function TransfersPage() {
   return (
     <div className="flex flex-col gap-4 max-w-2xl mx-auto w-full">
       <div className="relative -mx-4 -mt-4 flex items-center justify-between bg-background px-4 pt-4 pb-2 md:-mx-6 md:-mt-6 md:px-6 md:pt-6">
-        <h1 className="text-base font-bold text-stone-800">Transfers</h1>
+        <h1 className="text-base font-bold text-foreground">Transfers</h1>
       </div>
 
       <div className="flex flex-col items-center gap-4 rounded-xl border border-dashed border-border px-6 py-12 text-center">
@@ -39,10 +39,10 @@ export default function TransfersPage() {
         </div>
       </div>
 
-      <div className="flex flex-col gap-3 rounded-xl border border-border bg-stone-50 px-6 py-6">
+      <div className="flex flex-col gap-3 rounded-xl border border-border bg-muted px-6 py-6">
         <div className="flex items-center gap-2">
-          <Boxes size={18} className="text-stone-500" aria-hidden="true" />
-          <p className="text-sm font-semibold text-stone-800">
+          <Boxes size={18} className="text-muted-foreground" aria-hidden="true" />
+          <p className="text-sm font-semibold text-foreground">
             Available workaround: Cross-store stock visibility
           </p>
         </div>

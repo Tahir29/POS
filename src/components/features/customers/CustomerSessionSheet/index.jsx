@@ -205,10 +205,10 @@ export default function CustomerSessionSheet({ isOpen, onClose }) {
                 onDetach={handleDetach}
                 detachLabel="Remove"
               />
-              <div className="flex items-center gap-2 text-sm text-stone-400">
-                <div className="h-px flex-1 bg-stone-200" />
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <div className="h-px flex-1 bg-border" />
                 <span>or switch customer</span>
-                <div className="h-px flex-1 bg-stone-200" />
+                <div className="h-px flex-1 bg-border" />
               </div>
             </>
           )}
@@ -220,7 +220,7 @@ export default function CustomerSessionSheet({ isOpen, onClose }) {
           {isMobileSearch && customer && (
             <div className="flex flex-col gap-3">
               {walkInKnown && (
-                <p className="text-xs text-stone-400">
+                <p className="text-xs text-muted-foreground">
                   Visit recorded{walkInKnown.name ? ` — welcome back, ${walkInKnown.name}` : ' — welcome back'}.
                 </p>
               )}
@@ -234,7 +234,7 @@ export default function CustomerSessionSheet({ isOpen, onClose }) {
           {/* Mobile search: not found as a billing customer — still checking
               whether they're a known walk-in before deciding what to show */}
           {isMobileSearch && notFound && walkIn.isLoading && (
-            <div className="flex items-center justify-center gap-2 py-6 text-sm text-stone-500">
+            <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
               <Loader2 size={16} className="animate-spin" aria-hidden="true" />
               Checking visit history…
             </div>
@@ -244,10 +244,10 @@ export default function CustomerSessionSheet({ isOpen, onClose }) {
               never registered as a billing customer) -> signup, name pre-filled */}
           {isMobileSearch && notFound && !walkIn.isLoading && walkInKnown && (
             <div className="flex flex-col gap-3">
-              <p className="text-sm text-stone-500">
+              <p className="text-sm text-muted-foreground">
                 {walkInKnown.name ? `Welcome back, ${walkInKnown.name}.` : 'Welcome back.'} They've visited before but aren't a registered customer yet.
               </p>
-              <p className="text-sm font-semibold text-stone-700">Complete Customer Signup</p>
+              <p className="text-sm font-semibold text-foreground/80">Complete Customer Signup</p>
               <NewCustomerForm
                 defaultMobile={trimmed}
                 defaultName={walkInKnown.name ?? ''}
@@ -259,8 +259,8 @@ export default function CustomerSessionSheet({ isOpen, onClose }) {
           {/* Mobile search: not found anywhere -> create new */}
           {isMobileSearch && notFound && !walkIn.isLoading && !walkInKnown && (
             <div className="flex flex-col gap-3">
-              <p className="text-sm text-stone-500">{TOAST.CUSTOMER.NOT_FOUND}</p>
-              <p className="text-sm font-semibold text-stone-700">Create New Customer</p>
+              <p className="text-sm text-muted-foreground">{TOAST.CUSTOMER.NOT_FOUND}</p>
+              <p className="text-sm font-semibold text-foreground/80">Create New Customer</p>
               <NewCustomerForm
                 defaultMobile={trimmed}
                 onCreated={handleNewCustomerCreated}
@@ -270,7 +270,7 @@ export default function CustomerSessionSheet({ isOpen, onClose }) {
 
           {/* Name search: loading directory */}
           {isNameSearch && isNameSearching && (
-            <div className="flex items-center justify-center gap-2 py-6 text-sm text-stone-500">
+            <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
               <Loader2 size={16} className="animate-spin" aria-hidden="true" />
               Searching customers…
             </div>
@@ -282,19 +282,19 @@ export default function CustomerSessionSheet({ isOpen, onClose }) {
               <button
                 type="button"
                 onClick={() => { setNameResultSelection(null); walkIn.reset(); }}
-                className="flex items-center gap-1 text-sm text-stone-500 hover:text-stone-700 w-fit"
+                className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground/80 w-fit"
               >
                 <ChevronLeft size={15} aria-hidden="true" />
                 Back to results
               </button>
               {walkIn.isLoading && (
-                <p className="text-xs text-stone-400 flex items-center gap-1.5">
+                <p className="text-xs text-muted-foreground flex items-center gap-1.5">
                   <Loader2 size={12} className="animate-spin" aria-hidden="true" />
                   Recording visit…
                 </p>
               )}
               {walkInKnown && (
-                <p className="text-xs text-stone-400">
+                <p className="text-xs text-muted-foreground">
                   Visit recorded{walkInKnown.name ? ` — welcome back, ${walkInKnown.name}` : ' — welcome back'}.
                 </p>
               )}
@@ -308,7 +308,7 @@ export default function CustomerSessionSheet({ isOpen, onClose }) {
           {/* Name search: multiple candidates -> pick one */}
           {isNameSearch && !isNameSearching && !nameResultSelection && nameResults.length > 0 && (
             <div className="flex flex-col gap-2">
-              <p className="text-xs text-stone-400">{nameResults.length} match{nameResults.length === 1 ? '' : 'es'}</p>
+              <p className="text-xs text-muted-foreground">{nameResults.length} match{nameResults.length === 1 ? '' : 'es'}</p>
               {nameResults.map((c) => (
                 <CustomerListItem
                   key={c.customerId}
@@ -322,8 +322,8 @@ export default function CustomerSessionSheet({ isOpen, onClose }) {
           {/* Name search: no matches -> create new */}
           {isNameSearch && !isNameSearching && !nameResultSelection && nameResults.length === 0 && (
             <div className="flex flex-col gap-3">
-              <p className="text-sm text-stone-500">No matching customers found.</p>
-              <p className="text-sm font-semibold text-stone-700">Create New Customer</p>
+              <p className="text-sm text-muted-foreground">No matching customers found.</p>
+              <p className="text-sm font-semibold text-foreground/80">Create New Customer</p>
               <NewCustomerForm onCreated={handleNewCustomerCreated} />
             </div>
           )}

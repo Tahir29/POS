@@ -6,6 +6,7 @@
 
 import { useRouter } from 'next/navigation';
 import { ArrowRight } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 /**
  * @param {{
@@ -24,24 +25,16 @@ export default function ProceedToCheckoutButton({ disabled, onNavigate }) {
   };
 
   return (
-    <button
+    <Button
       type="button"
+      variant="premium"
       onClick={handleClick}
       disabled={disabled}
       aria-label="Proceed to Checkout"
-      className="
-        flex w-full items-center justify-center gap-2
-        min-h-[52px] px-6 rounded-xl
-        text-base font-semibold
-        bg-primary hover:bg-primary/90 active:scale-[0.98]
-        text-primary-foreground shadow-sm hover:shadow-md
-        transition-all duration-150
-        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2
-        disabled:opacity-50 disabled:cursor-not-allowed
-      "
+      className="w-full min-h-[52px] px-6 text-base font-semibold"
     >
       Proceed to Checkout
       <ArrowRight size={18} aria-hidden="true" />
-    </button>
+    </Button>
   );
 }

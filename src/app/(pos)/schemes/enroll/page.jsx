@@ -34,6 +34,7 @@ import {
 } from '@/components/ui/select';
 import SalesPersonSelect from '@/components/features/checkout/SalesPersonSelect';
 import PageLoader from '@/components/shared/PageLoader';
+import CustomerAttachedBanner from '@/components/shared/CustomerAttachedBanner';
 
 // ── Schema ────────────────────────────────────────────────────
 const enrollSchema = z.object({
@@ -130,24 +131,20 @@ function EnrollScreen() {
       <button
         type="button"
         onClick={() => router.back()}
-        className="flex items-center gap-1 text-sm text-stone-500 hover:text-stone-700 w-fit -ml-1"
+        className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground/80 w-fit -ml-1"
       >
         <ChevronLeft size={16} /> Back to Schemes
       </button>
 
-      <h1 className="text-xl font-semibold text-stone-800">Enroll in Scheme</h1>
+      <h1 className="text-xl font-semibold text-foreground">Enroll in Scheme</h1>
 
       {/* Customer context */}
-      <div className={`rounded-xl border p-3 text-sm ${
-        customerId
-          ? 'border-emerald-200 bg-emerald-50'
-          : 'border-amber-200 bg-amber-50'
-      }`}>
-        {customerId
-          ? <p className="text-emerald-700">Enrolling: <strong>{customerName}</strong></p>
-          : <p className="text-amber-700">⚠ Attach a customer from the header before enrolling.</p>
-        }
-      </div>
+      <CustomerAttachedBanner
+        customerId={customerId}
+        customerName={customerName}
+        attachedLabel="Enrolling:"
+        emptyMessage="Attach a customer from the header before enrolling."
+      />
 
       <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5">
 
@@ -180,12 +177,12 @@ function EnrollScreen() {
 
           {/* Scheme info card */}
           {selectedScheme && (
-            <div className="rounded-lg border border-stone-200 bg-stone-50 p-3 text-xs text-stone-600 flex flex-col gap-1 mt-1">
+            <div className="rounded-lg border border-border bg-muted p-3 text-xs text-foreground/80 flex flex-col gap-1 mt-1">
               {selectedScheme.scheme_description && (
                 <p>{selectedScheme.scheme_description}</p>
               )}
               {selectedScheme.scheme_code && (
-                <p className="text-stone-400">Code: {selectedScheme.scheme_code}</p>
+                <p className="text-muted-foreground">Code: {selectedScheme.scheme_code}</p>
               )}
             </div>
           )}
@@ -197,7 +194,7 @@ function EnrollScreen() {
             Monthly Amount (₹) <span className="text-destructive">*</span>
           </Label>
           <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-stone-400">₹</span>
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">₹</span>
             <Input
               id="enroll_amount"
               type="number"
@@ -253,8 +250,8 @@ function EnrollScreen() {
         </div>
 
         {/* Nominee (optional) */}
-        <div className="rounded-xl border border-stone-200 bg-stone-50 p-4 flex flex-col gap-4">
-          <p className="text-xs font-medium text-stone-500 uppercase tracking-wide">Nominee (Optional)</p>
+        <div className="rounded-xl border border-border bg-muted p-4 flex flex-col gap-4">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Nominee (Optional)</p>
 
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="enroll_nominee">Nominee Name</Label>

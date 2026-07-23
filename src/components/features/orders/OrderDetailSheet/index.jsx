@@ -16,9 +16,9 @@ import { useCancelOrder } from '@/hooks/orders/useCancelOrder';
 function Row({ label, value, bold, border }) {
   if (value === null || value === undefined || value === '') return null;
   return (
-    <div className={`flex justify-between ${border ? 'border-t border-stone-100 pt-2' : ''}`}>
-      <span className="text-stone-500">{label}</span>
-      <span className={bold ? 'font-bold text-stone-800' : 'font-medium text-stone-800'}>
+    <div className={`flex justify-between ${border ? 'border-t border-border pt-2' : ''}`}>
+      <span className="text-muted-foreground">{label}</span>
+      <span className={bold ? 'font-bold text-foreground' : 'font-medium text-foreground'}>
         {value}
       </span>
     </div>
@@ -58,17 +58,17 @@ function OrderContent({ raw, status }) {
       <Row label="Status"   value={STATUS_LABELS[status] ?? null} />
 
       {lineItems.length > 0 && (
-        <div className="border-t border-stone-100 pt-2 flex flex-col gap-1.5">
-          <span className="text-stone-500 text-xs font-medium uppercase tracking-wide">Items</span>
+        <div className="border-t border-border pt-2 flex flex-col gap-1.5">
+          <span className="text-muted-foreground text-xs font-medium uppercase tracking-wide">Items</span>
           {lineItems.map((item, i) => (
             <div key={item.transaction_item_id ?? i} className="flex justify-between gap-2">
               <div className="min-w-0">
-                <p className="text-stone-700 truncate">{item.item_name}</p>
+                <p className="text-foreground/80 truncate">{item.item_name}</p>
                 {item.item_code && (
-                  <p className="text-xs text-stone-400 truncate">{item.item_code}</p>
+                  <p className="text-xs text-muted-foreground truncate">{item.item_code}</p>
                 )}
               </div>
-              <span className="font-medium text-stone-800 shrink-0">
+              <span className="font-medium text-foreground shrink-0">
                 {formatCurrency(item.gross_amount ?? item.net_amount)}
               </span>
             </div>
@@ -91,12 +91,12 @@ function OrderContent({ raw, status }) {
       />
 
       {payments.length > 0 && (
-        <div className="border-t border-stone-100 pt-2 flex flex-col gap-1.5">
-          <span className="text-stone-500 text-xs font-medium uppercase tracking-wide">Payments</span>
+        <div className="border-t border-border pt-2 flex flex-col gap-1.5">
+          <span className="text-muted-foreground text-xs font-medium uppercase tracking-wide">Payments</span>
           {payments.map((p, i) => (
             <div key={p.receipt_id ?? i} className="flex justify-between gap-2">
-              <span className="text-stone-700">{p.mode_name}</span>
-              <span className="font-medium text-stone-800">{formatCurrency(p.amount)}</span>
+              <span className="text-foreground/80">{p.mode_name}</span>
+              <span className="font-medium text-foreground">{formatCurrency(p.amount)}</span>
             </div>
           ))}
         </div>
@@ -191,13 +191,15 @@ export default function OrderDetailSheet({ order, isOpen, onClose }) {
             )}
           </div>
         ) : (
-          <p className="text-sm text-stone-500 text-center py-4">
+          <p className="text-sm text-muted-foreground text-center py-4">
             Order details unavailable.
           </p>
         )}
       </BottomSheet>
 
-      {/* Print portal — only render when raw exists AND we're in the browser */}
+      {/* Print portal — bg-white here is intentional: this renders on
+          physical paper via the print stylesheet, not the app's screen
+          theme, so it always stays white regardless of .dark. */}
       {raw && typeof document !== 'undefined' && createPortal(
         <div id="invoice-print-area" className="hidden print:block p-6 bg-white">
           <div className="flex justify-center items-center py-8 mb-8 border-b border-stone-100">

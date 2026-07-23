@@ -157,8 +157,8 @@ function CheckoutScreen() {
           <CheckoutCustomerSummary />
 
           {/* Order items — same CartItemRow used on the Cart page, read-only here */}
-          <section className="rounded-xl border border-border bg-card p-4">
-            <h2 className="text-sm font-bold text-stone-800 mb-1">
+          <section className="rounded-xl border border-border bg-card p-4 shadow-sm">
+            <h2 className="text-sm font-bold text-foreground mb-1">
               Order Items <span className="text-muted-foreground font-normal text-xs">({items.length} item{items.length !== 1 ? 's' : ''})</span>
             </h2>
             <div>
@@ -173,15 +173,15 @@ function CheckoutScreen() {
           </section>
 
           {/* Order summary */}
-          <section className="rounded-xl border border-border bg-card p-4">
-            <h2 className="text-sm font-bold text-stone-800 mb-1">Order Summary</h2>
+          <section className="rounded-xl border border-border bg-card p-4 shadow-sm">
+            <h2 className="text-sm font-bold text-foreground mb-1">Order Summary</h2>
             <CartSummary />
           </section>
         </div>
         <div className="flex flex-col gap-4 w-full">
           {/* Sales person — required, mirrors the vendor's own POS Sale screen */}
-          <section className="rounded-xl border border-border bg-card p-4">
-            <h2 className="text-sm font-bold text-stone-800 mb-2">
+          <section className="rounded-xl border border-border bg-card p-4 shadow-sm">
+            <h2 className="text-sm font-bold text-foreground mb-2">
               Sales Person <span className="text-destructive">*</span>
             </h2>
             <SalesPersonSelect
@@ -197,18 +197,6 @@ function CheckoutScreen() {
           {/* Payment modes + invoice helper balances */}
           <CheckoutPaymentSection onChange={setPayments} />
         </div>
-      </div>
-
-      <div className="flex flex-col gap-4">
-
-        
-
-        
-
-        
-
-        
-
       </div>
 
       {/* Sticky Place Order button */}

@@ -32,12 +32,14 @@
 import { useState }        from 'react';
 import Image               from 'next/image';
 import { useRouter }       from 'next/navigation';
+import { motion, useReducedMotion } from 'motion/react';
 import { resolveImageSrc } from '@/lib/resolveImageSrc';
 import APP_CONFIG          from '@/constants/appConfig';
 import StarRating          from '@/components/shared/StarRating';
 import { useStyleExternalProductId } from '@/hooks/products/useStyleExternalProductId';
 import { useProductReviewSummary }   from '@/hooks/products/useProductReviewSummary';
 import { Badge } from '@/components/ui/badge';
+import { EASE_PREMIUM, DURATION } from '@/lib/motion';
 
 // ── Metal type label + swatch color ───────────────────────────────────────────
 // Swatch colors are a presentation mapping (not fabricated data) — the
@@ -70,7 +72,7 @@ function formatINR(value) {
 // ── No-image placeholder ──────────────────────────────────────────────────────
 function NoImagePlaceholder() {
   return (
-    <div className="flex h-full w-full flex-col items-center justify-center gap-1 bg-stone-50">
+    <div className="flex h-full w-full flex-col items-center justify-center gap-1 bg-muted">
       <svg
         xmlns="http://www.w3.org/2000/svg"
         width="32"
@@ -81,14 +83,14 @@ function NoImagePlaceholder() {
         strokeWidth="1.5"
         strokeLinecap="round"
         strokeLinejoin="round"
-        className="text-stone-300"
+        className="text-muted-foreground/50"
         aria-hidden="true"
       >
         <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
         <circle cx="9" cy="9" r="2" />
         <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
       </svg>
-      <span className="text-[10px] text-stone-300 tracking-wide">No image</span>
+      <span className="text-[10px] text-muted-foreground/50 tracking-wide">No image</span>
     </div>
   );
 }
@@ -97,13 +99,13 @@ function NoImagePlaceholder() {
 function StockBadge({ inStock }) {
   if (inStock) {
     return (
-      <Badge className="h-auto rounded-full bg-emerald-500/90 px-2.5 py-0.5 text-[11px] font-semibold text-white shadow-sm">
+      <Badge className="h-auto rounded-full bg-status-in-stock/90 px-2.5 py-0.5 text-[11px] font-semibold text-white shadow-sm">
         In Stock
       </Badge>
     );
   }
   return (
-    <Badge className="h-auto rounded-full bg-red-500/90 px-2.5 py-0.5 text-[11px] font-semibold text-white shadow-sm">
+    <Badge className="h-auto rounded-full bg-status-error/90 px-2.5 py-0.5 text-[11px] font-semibold text-white shadow-sm">
       Out of Stock
     </Badge>
   );
@@ -114,6 +116,7 @@ function StockBadge({ inStock }) {
 export default function ProductCard({ product, showStockBadge = false }) {
   const router = useRouter();
   const [imgError, setImgError] = useState(false);
+  const reduceMotion = useReducedMotion();
 
   const {
     item_id,
@@ -148,21 +151,23 @@ export default function ProductCard({ product, showStockBadge = false }) {
   }
 
   return (
-    <button
+    <motion.button
       type="button"
       onClick={handleTap}
       className={[
-        'group relative flex flex-col overflow-hidden rounded-2xl border bg-white text-left',
-        'shadow-sm transition-all duration-200',
-        'hover:shadow-md hover:-translate-y-0.5',
-        'active:scale-[0.98] active:shadow-sm',
+        'group relative flex flex-col overflow-hidden rounded-2xl border bg-card text-left',
+        'shadow-sm transition-shadow duration-standard ease-premium',
+        'hover:shadow-md',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
         !inStock && 'opacity-60',
       ].filter(Boolean).join(' ')}
       aria-label={`View ${item_name ?? item_code ?? 'product'}`}
+      whileHover={reduceMotion ? undefined : { y: -2 }}
+      whileTap={reduceMotion ? undefined : { scale: 0.98 }}
+      transition={{ duration: DURATION.micro, ease: EASE_PREMIUM }}
     >
       {/* ── Image ─────────────────────────────────────────── */}
-      <div className="relative aspect-square w-full overflow-hidden bg-stone-50">
+      <div className="relative aspect-square w-full overflow-hidden bg-muted">
         {imageSrc ? (
           <Image
             src={imageSrc}
@@ -196,7 +201,7 @@ export default function ProductCard({ product, showStockBadge = false }) {
 
         {/* Name */}
         {item_name && item_name !== item_code && (
-          <p className="line-clamp-2 text-sm font-semibold leading-snug text-stone-800">
+          <p className="line-clamp-2 text-sm font-semibold leading-snug text-foreground">
             {item_name}
           </p>
         )}
@@ -215,6 +220,6 @@ export default function ProductCard({ product, showStockBadge = false }) {
         )}
 
       </div>
-    </button>
+    </motion.button>
   );
 }

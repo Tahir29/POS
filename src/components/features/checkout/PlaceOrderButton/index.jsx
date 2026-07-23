@@ -21,6 +21,7 @@ export default function PlaceOrderButton({ isValid, isPlacingOrder, onPlaceOrder
   return (
     <Button
       type="button"
+      variant="premium"
       onClick={onPlaceOrder}
       disabled={!isValid || isPlacingOrder}
       className="h-12 w-full text-base font-semibold"

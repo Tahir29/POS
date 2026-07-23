@@ -126,9 +126,9 @@ export default function InvoicesPage() {
   return (
     <div className="flex flex-col gap-3 max-w-3xl mx-auto w-full p-4 md:p-6">
       <div className="relative -mx-4 -mt-4 flex items-center justify-between bg-background px-4 pt-4 pb-2 md:-mx-6 md:-mt-6 md:px-6 md:pt-6">
-        <h1 className="text-3xl font-bold text-stone-800">Invoices</h1>
+        <h1 className="text-3xl font-bold text-foreground">Invoices</h1>
         {isAllFetching && !isAllLoading && (
-          <Loader2 size={14} className="animate-spin text-stone-400" aria-hidden="true" />
+          <Loader2 size={14} className="animate-spin text-muted-foreground" aria-hidden="true" />
         )}
       </div>
 
@@ -139,7 +139,7 @@ export default function InvoicesPage() {
           <Search
             size={16}
             aria-hidden="true"
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400"
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
           />
           <Input
             type="search"
@@ -158,7 +158,7 @@ export default function InvoicesPage() {
                 setSearchQuery('');
               }}
               aria-label="Clear search"
-              className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center justify-center h-7 w-7 rounded-full text-stone-400 hover:text-stone-600 hover:bg-stone-100 transition-colors"
+              className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center justify-center h-7 w-7 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
             >
               <X size={15} aria-hidden="true" />
             </button>
@@ -176,7 +176,7 @@ export default function InvoicesPage() {
               aria-label="From date"
               className="flex-1 min-w-0"
             />
-            <span className="text-stone-400 text-sm shrink-0">to</span>
+            <span className="text-muted-foreground text-sm shrink-0">to</span>
             <Input
               type="date"
               value={toDate}
@@ -205,7 +205,7 @@ export default function InvoicesPage() {
 
         {/* Active filter summary */}
         {isSearchActive && !isFilterBusy && (
-          <p className="text-xs text-stone-500">
+          <p className="text-xs text-muted-foreground">
             {filteredInvoices.length} invoice{filteredInvoices.length !== 1 ? 's' : ''} found
           </p>
         )}
@@ -214,7 +214,7 @@ export default function InvoicesPage() {
       {/* ── List ────────────────────────────────────────── */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
         {isLoading ? (
-          <div className="flex items-center justify-center gap-2 py-10 text-sm text-stone-500 col-span-full">
+          <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground col-span-full">
             <Loader2 size={16} className="animate-spin" aria-hidden="true" />
             {isSearchActive ? 'Searching invoices…' : 'Loading invoices…'}
           </div>
@@ -226,8 +226,8 @@ export default function InvoicesPage() {
             </Button>
           </div>
         ) : displayInvoices.length === 0 ? (
-          <div className="flex flex-col items-center gap-2 py-10 text-center text-stone-500 col-span-full">
-            <Receipt size={28} aria-hidden="true" className="text-stone-300" />
+          <div className="flex flex-col items-center gap-2 py-10 text-center text-muted-foreground col-span-full">
+            <Receipt size={28} aria-hidden="true" className="text-muted-foreground/50" />
             <p className="text-sm">
               {isSearchActive ? 'No invoices match your filters.' : 'No invoices found.'}
             </p>
@@ -257,7 +257,7 @@ export default function InvoicesPage() {
           >
             <ChevronLeft size={16} aria-hidden="true" />
           </Button>
-          <span className="text-xs text-stone-500">
+          <span className="text-xs text-muted-foreground">
             {skip + 1}–{Math.min(skip + take, totalCount)} of {totalCount}
           </span>
           <Button

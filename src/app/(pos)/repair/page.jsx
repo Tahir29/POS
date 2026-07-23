@@ -53,6 +53,7 @@ import { Label }   from '@/components/ui/label';
 import PaymentModeSelect from '@/components/shared/PaymentModeSelect';
 import PillTabs from '@/components/shared/PillTabs';
 import ListRowsSkeleton from '@/components/shared/ListRowsSkeleton';
+import CustomerAttachedBanner from '@/components/shared/CustomerAttachedBanner';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -83,16 +84,6 @@ function FormField({ label, required, error, children }) {
       <Label>{label} {required && <span className="text-destructive">*</span>}</Label>
       {children}
       {error && <p className="text-xs text-destructive">{error.message}</p>}
-    </div>
-  );
-}
-
-function CustomerBanner({ customerId, customerName }) {
-  return (
-    <div className={`rounded-xl border p-3 text-sm ${customerId ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}>
-      {customerId
-        ? <p className="text-emerald-700">Customer: <strong>{customerName}</strong></p>
-        : <p className="text-amber-700">⚠ Attach a customer from the header before submitting.</p>}
     </div>
   );
 }
@@ -206,7 +197,7 @@ function RepairInNewForm({ onDone }) {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5">
-      <CustomerBanner customerId={customerId} customerName={customerName} />
+      <CustomerAttachedBanner customerId={customerId} customerName={customerName} />
 
       <FormField label="Date" required error={errors.document_date}>
         <Input type="date" max={todayDateString()} {...register('document_date')} className="h-11" />
@@ -235,8 +226,8 @@ function RepairInNewForm({ onDone }) {
         </FormField>
       </div>
 
-      <div className="rounded-xl border border-stone-200 bg-stone-50 p-3 flex flex-col gap-3">
-        <p className="text-xs font-medium text-stone-500 uppercase tracking-wide">Tracking (optional)</p>
+      <div className="rounded-xl border border-border bg-muted p-3 flex flex-col gap-3">
+        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Tracking (optional)</p>
         <FormField label="Bag No.">
           <Input {...register('bag_no')} className="h-9 text-sm" placeholder="e.g. BAG314" />
         </FormField>

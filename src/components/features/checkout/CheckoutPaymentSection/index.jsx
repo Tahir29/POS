@@ -45,11 +45,11 @@ function HelperBalanceRow({ label, amount, modeCode, isApplied, onToggle, isLoad
       className={`
         flex w-full items-center justify-between rounded-lg border px-3 py-2.5 text-left
         transition-colors
-        ${isApplied ? 'border-primary/40 bg-primary/5' : 'border-stone-100 bg-stone-50'}
+        ${isApplied ? 'border-primary/40 bg-primary/5' : 'border-border bg-muted'}
       `}
     >
       <div>
-        <p className="text-xs font-medium text-stone-700">{label}</p>
+        <p className="text-xs font-medium text-foreground/80">{label}</p>
         <p className="text-sm font-semibold text-primary mt-0.5">
           {APP_CONFIG.CURRENCY.INR_SYMBOL}{Number(amount).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
         </p>
@@ -181,19 +181,19 @@ export default function CheckoutPaymentSection({ onChange }) {
 
   return (
     <section className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4">
-      <h2 className="text-sm font-bold text-stone-800">Payment</h2>
+      <h2 className="text-sm font-bold text-foreground">Payment</h2>
 
       {/* Invoice Helper Balances — only shown when customer attached + has balance */}
       {customerId && (
         <div className="flex flex-col gap-2">
           {helpers.isLoading && (
-            <div className="flex items-center gap-2 text-xs text-stone-400 py-1">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground py-1">
               <Loader2 size={12} className="animate-spin" />
               Checking available balances…
             </div>
           )}
           {!helpers.isLoading && hasVisibleHelpers && (
-            <p className="text-xs font-medium text-stone-500 uppercase tracking-wide">Available Balances</p>
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Available Balances</p>
           )}
           {helperItems.map((h) => (
             <HelperBalanceRow
@@ -216,15 +216,15 @@ export default function CheckoutPaymentSection({ onChange }) {
 
       {/* Divider if helpers are shown */}
       {hasVisibleHelpers && (
-        <div className="flex items-center gap-2 text-xs text-stone-400">
-          <div className="h-px flex-1 bg-stone-100" />
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <div className="h-px flex-1 bg-border" />
           <span>or pay with</span>
-          <div className="h-px flex-1 bg-stone-100" />
+          <div className="h-px flex-1 bg-border" />
         </div>
       )}
 
       {/* Standard payment modes */}
-      <p className="text-xs font-medium text-stone-500 uppercase tracking-wide">Payment Method</p>
+      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Payment Method</p>
       <PaymentModeSelector
         paymentModes={paymentModes}
         selectedModeIds={selectedModeIds}
@@ -235,7 +235,7 @@ export default function CheckoutPaymentSection({ onChange }) {
 
       {/* Amount inputs */}
       {payments.length > 0 && (
-        <div className="flex flex-col gap-2 pt-2 border-t border-stone-100">
+        <div className="flex flex-col gap-2 pt-2 border-t border-border">
           {payments.map((p) => (
             <PaymentAmountInput
               key={p.modeId ?? p.modeCode}
@@ -246,30 +246,30 @@ export default function CheckoutPaymentSection({ onChange }) {
           ))}
 
           {/* Balances applied / Collected / Paid in full summary */}
-          <div className="flex flex-col gap-1 text-sm pt-2 border-t border-stone-100">
+          <div className="flex flex-col gap-1 text-sm pt-2 border-t border-border">
             {balancesApplied > 0 && (
-              <div className="flex items-center justify-between text-stone-500">
+              <div className="flex items-center justify-between text-muted-foreground">
                 <span>Balances applied</span>
                 <span>−{APP_CONFIG.CURRENCY.INR_SYMBOL}{balancesApplied.toLocaleString('en-IN')}</span>
               </div>
             )}
             {collectedByMode.map((p) => (
-              <div key={p.modeId ?? p.modeCode} className="flex items-center justify-between text-stone-500">
+              <div key={p.modeId ?? p.modeCode} className="flex items-center justify-between text-muted-foreground">
                 <span>Collected ({p.modeName})</span>
                 <span>{APP_CONFIG.CURRENCY.INR_SYMBOL}{(Number(p.amount) || 0).toLocaleString('en-IN')}</span>
               </div>
             ))}
             {isBalanced ? (
-              <p className="flex items-center gap-1.5 text-emerald-600 font-medium">
+              <p className="flex items-center gap-1.5 text-status-in-stock font-medium">
                 <CheckCircle2 size={14} aria-hidden="true" />
                 Paid in full
               </p>
             ) : (
               <div className="flex items-center justify-between font-medium">
-                <span className="text-stone-500">
+                <span className="text-muted-foreground">
                   {remaining > 0 ? 'Remaining' : 'Over total'}
                 </span>
-                <span className={remaining > 0 ? 'text-destructive' : 'text-amber-600'}>
+                <span className={remaining > 0 ? 'text-destructive' : 'text-status-made-order'}>
                   {APP_CONFIG.CURRENCY.INR_SYMBOL}{Math.abs(remaining).toLocaleString('en-IN')}
                 </span>
               </div>

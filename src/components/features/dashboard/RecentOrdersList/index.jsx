@@ -1,41 +1,14 @@
 'use client';
 
 // src/components/features/dashboard/RecentOrdersList/index.jsx
-// Compact recent-orders panel for the dashboard. Status badge styling
-// mirrors OrderListItem (src/components/features/orders/OrderListItem)
-// so status colors stay consistent with the /orders page rather than
-// introducing a second palette.
+// Compact recent-orders panel for the dashboard. Status badge is the
+// shared PaymentStatusBadge (src/components/shared/PaymentStatusBadge)
+// so status colors stay consistent with the /orders page.
 
 import { useRouter } from 'next/navigation';
 import { ArrowRight, Inbox } from 'lucide-react';
-import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
-
-const STATUS_STYLES = {
-  paid:    'bg-emerald-50 text-emerald-700 border-emerald-200',
-  partial: 'bg-amber-50 text-amber-700 border-amber-200',
-  due:     'bg-red-50 text-red-700 border-red-200',
-};
-
-const STATUS_LABELS = {
-  paid:    'Paid',
-  partial: 'Partial',
-  due:     'Due',
-};
-
-function StatusBadge({ status }) {
-  if (!status) return null;
-  return (
-    <span
-      className={cn(
-        'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium',
-        STATUS_STYLES[status] ?? 'bg-stone-50 text-stone-600 border-stone-200'
-      )}
-    >
-      {STATUS_LABELS[status] ?? status}
-    </span>
-  );
-}
+import PaymentStatusBadge, { mapOrderStatus } from '@/components/shared/PaymentStatusBadge';
 
 function getInitials(name) {
   if (!name) return '?';
@@ -65,7 +38,7 @@ function OrderRow({ order, onSelect }) {
         <p className="text-sm font-semibold tabular-nums text-foreground">
           &#8377;{Number(order.totalAmount ?? 0).toLocaleString('en-IN')}
         </p>
-        <StatusBadge status={order.status} />
+        {order.status && <PaymentStatusBadge status={mapOrderStatus(order.status)} size="sm" />}
       </div>
     </button>
   );
