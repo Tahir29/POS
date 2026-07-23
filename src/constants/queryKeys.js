@@ -64,6 +64,7 @@ export const QUERY_KEYS = {
     ATTRIBUTES:      (typeId)  => ['items', 'attributes', typeId],
     DESIGN_VARIANTS: (styleId) => ['items', 'design-variants', styleId],
     MASTER_SEARCH:   (query)   => ['items', 'master-search', query],
+    PRICING:         (itemId)  => ['items', 'pricing', itemId],
     SEARCH: (params) => ['items', 'search', {
       q:    params.item_search,
       grp:  params.item_group_ids,
@@ -252,6 +253,14 @@ export const QUERY_KEYS = {
   // external_product_id lives on StyleRow (Style/Retrieve), NOT ProductCatalogRow
   SHOPIFY: {
     PRODUCT_IMAGES: (externalProductId) => ['shopify', 'product-images', externalProductId],
+  },
+
+  // ── REVIEWS (Nector) ─────────────────────────────────────────────────────
+  // Keyed by Shopify product id (external_product_id) — reviews are indexed
+  // by Shopify's catalog, not OrnaVerse's item_id.
+  REVIEWS: {
+    SUMMARY: (shopifyProductId) => ['reviews', 'summary', shopifyProductId],
+    LIST:    (shopifyProductId) => ['reviews', 'list', shopifyProductId],
   },
 
 };

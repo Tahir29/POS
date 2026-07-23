@@ -24,6 +24,10 @@
 //
 // TOAST MESSAGES:
 //   Sourced from TOAST.{RETURNS,REFUNDS,CREDIT_NOTES,EXCHANGE,BUYBACK,URD_PURCHASE}.
+//
+// ANALYTICS: every mutation here also fires a tracker.track() — success
+// events carry data.EntityId (transaction_id) where the API returns one,
+// failure events carry the normalised error message. See events.js.
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSelector }                 from 'react-redux';
@@ -38,6 +42,8 @@ import {
 }                                      from '@/services/transactionService';
 import { QUERY_KEYS }                  from '@/constants/queryKeys';
 import TOAST                           from '@/constants/toastMessages';
+import tracker                         from '@/lib/analytics/tracker';
+import EVENTS                          from '@/lib/analytics/events';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -60,10 +66,12 @@ export function useCreateReturn({ onSuccess } = {}) {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['returns'] });
       toast.success(TOAST.RETURNS.CREATED);
+      tracker.track(EVENTS.RETURN_CREATED, { transactionId: data?.EntityId });
       onSuccess?.(data);
     },
     onError: (error) => {
       toast.error(getErrorMessage(error));
+      tracker.track(EVENTS.RETURN_FAILED, { stage: 'create', error: getErrorMessage(error) });
     },
   });
 }
@@ -73,13 +81,15 @@ export function usePostReturn({ onSuccess } = {}) {
 
   return useMutation({
     mutationFn: (transactionId) => postReturn(transactionId),
-    onSuccess: (data) => {
+    onSuccess: (data, transactionId) => {
       queryClient.invalidateQueries({ queryKey: ['returns'] });
       toast.success(TOAST.RETURNS.POST_SUCCESS);
+      tracker.track(EVENTS.RETURN_POSTED, { transactionId });
       onSuccess?.(data);
     },
-    onError: (error) => {
+    onError: (error, transactionId) => {
       toast.error(getErrorMessage(error));
+      tracker.track(EVENTS.RETURN_FAILED, { stage: 'post', transactionId, error: getErrorMessage(error) });
     },
   });
 }
@@ -89,13 +99,15 @@ export function useCancelReturn({ onSuccess } = {}) {
 
   return useMutation({
     mutationFn: (transactionId) => cancelReturn(transactionId),
-    onSuccess: (data) => {
+    onSuccess: (data, transactionId) => {
       queryClient.invalidateQueries({ queryKey: ['returns'] });
       toast.success(TOAST.RETURNS.CANCELLED);
+      tracker.track(EVENTS.RETURN_CANCELLED, { transactionId });
       onSuccess?.(data);
     },
-    onError: (error) => {
+    onError: (error, transactionId) => {
       toast.error(getErrorMessage(error));
+      tracker.track(EVENTS.RETURN_FAILED, { stage: 'cancel', transactionId, error: getErrorMessage(error) });
     },
   });
 }
@@ -110,10 +122,12 @@ export function useCreateRefund({ onSuccess } = {}) {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['refunds'] });
       toast.success(TOAST.REFUNDS.CREATED);
+      tracker.track(EVENTS.REFUND_CREATED, { transactionId: data?.EntityId });
       onSuccess?.(data);
     },
     onError: (error) => {
       toast.error(getErrorMessage(error));
+      tracker.track(EVENTS.REFUND_FAILED, { stage: 'create', error: getErrorMessage(error) });
     },
   });
 }
@@ -126,6 +140,7 @@ export function useAddRefundDetail({ onSuccess } = {}) {
     },
     onError: (error) => {
       toast.error(getErrorMessage(error));
+      tracker.track(EVENTS.REFUND_FAILED, { stage: 'detail', error: getErrorMessage(error) });
     },
   });
 }
@@ -135,13 +150,15 @@ export function useAddRefundReceipt({ onSuccess } = {}) {
 
   return useMutation({
     mutationFn: (payload) => addRefundReceipt(payload),
-    onSuccess: (data) => {
+    onSuccess: (data, payload) => {
       queryClient.invalidateQueries({ queryKey: ['refunds'] });
       toast.success(TOAST.REFUNDS.COMPLETED);
+      tracker.track(EVENTS.REFUND_RECEIPT_ADDED, { amount: payload?.amount });
       onSuccess?.(data);
     },
     onError: (error) => {
       toast.error(getErrorMessage(error));
+      tracker.track(EVENTS.REFUND_FAILED, { stage: 'receipt', error: getErrorMessage(error) });
     },
   });
 }
@@ -151,13 +168,15 @@ export function useDeleteRefund({ onSuccess } = {}) {
 
   return useMutation({
     mutationFn: (transactionId) => deleteRefund(transactionId),
-    onSuccess: (data) => {
+    onSuccess: (data, transactionId) => {
       queryClient.invalidateQueries({ queryKey: ['refunds'] });
       toast.success(TOAST.REFUNDS.DELETED);
+      tracker.track(EVENTS.REFUND_DELETED, { transactionId });
       onSuccess?.(data);
     },
     onError: (error) => {
       toast.error(getErrorMessage(error));
+      tracker.track(EVENTS.REFUND_FAILED, { stage: 'delete', error: getErrorMessage(error) });
     },
   });
 }
@@ -172,10 +191,12 @@ export function useCreateCreditNote({ onSuccess } = {}) {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['credit-notes'] });
       toast.success(TOAST.CREDIT_NOTES.CREATED);
+      tracker.track(EVENTS.CREDIT_NOTE_CREATED, { transactionId: data?.EntityId });
       onSuccess?.(data);
     },
     onError: (error) => {
       toast.error(getErrorMessage(error));
+      tracker.track(EVENTS.CREDIT_NOTE_FAILED, { stage: 'create', error: getErrorMessage(error) });
     },
   });
 }
@@ -185,13 +206,15 @@ export function usePostCreditNote({ onSuccess } = {}) {
 
   return useMutation({
     mutationFn: (transactionId) => postCreditNote(transactionId),
-    onSuccess: (data) => {
+    onSuccess: (data, transactionId) => {
       queryClient.invalidateQueries({ queryKey: ['credit-notes'] });
       toast.success(TOAST.CREDIT_NOTES.POSTED);
+      tracker.track(EVENTS.CREDIT_NOTE_POSTED, { transactionId });
       onSuccess?.(data);
     },
-    onError: (error) => {
+    onError: (error, transactionId) => {
       toast.error(getErrorMessage(error));
+      tracker.track(EVENTS.CREDIT_NOTE_FAILED, { stage: 'post', transactionId, error: getErrorMessage(error) });
     },
   });
 }
@@ -201,13 +224,15 @@ export function useCancelCreditNote({ onSuccess } = {}) {
 
   return useMutation({
     mutationFn: (transactionId) => cancelCreditNote(transactionId),
-    onSuccess: (data) => {
+    onSuccess: (data, transactionId) => {
       queryClient.invalidateQueries({ queryKey: ['credit-notes'] });
       toast.success(TOAST.CREDIT_NOTES.CANCELLED);
+      tracker.track(EVENTS.CREDIT_NOTE_CANCELLED, { transactionId });
       onSuccess?.(data);
     },
-    onError: (error) => {
+    onError: (error, transactionId) => {
       toast.error(getErrorMessage(error));
+      tracker.track(EVENTS.CREDIT_NOTE_FAILED, { stage: 'cancel', transactionId, error: getErrorMessage(error) });
     },
   });
 }
@@ -222,10 +247,12 @@ export function useCreateExchange({ onSuccess } = {}) {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['exchange'] });
       toast.success(TOAST.EXCHANGE.CREATED);
+      tracker.track(EVENTS.EXCHANGE_CREATED, { transactionId: data?.EntityId });
       onSuccess?.(data);
     },
     onError: (error) => {
       toast.error(getErrorMessage(error));
+      tracker.track(EVENTS.EXCHANGE_FAILED, { stage: 'create', error: getErrorMessage(error) });
     },
   });
 }
@@ -235,13 +262,15 @@ export function usePostExchange({ onSuccess } = {}) {
 
   return useMutation({
     mutationFn: (transactionId) => postExchange(transactionId),
-    onSuccess: (data) => {
+    onSuccess: (data, transactionId) => {
       queryClient.invalidateQueries({ queryKey: ['exchange'] });
       toast.success(TOAST.EXCHANGE.POSTED);
+      tracker.track(EVENTS.EXCHANGE_POSTED, { transactionId });
       onSuccess?.(data);
     },
-    onError: (error) => {
+    onError: (error, transactionId) => {
       toast.error(getErrorMessage(error));
+      tracker.track(EVENTS.EXCHANGE_FAILED, { stage: 'post', transactionId, error: getErrorMessage(error) });
     },
   });
 }
@@ -251,13 +280,15 @@ export function useCancelExchange({ onSuccess } = {}) {
 
   return useMutation({
     mutationFn: (transactionId) => cancelExchange(transactionId),
-    onSuccess: (data) => {
+    onSuccess: (data, transactionId) => {
       queryClient.invalidateQueries({ queryKey: ['exchange'] });
       toast.success(TOAST.EXCHANGE.CANCELLED);
+      tracker.track(EVENTS.EXCHANGE_CANCELLED, { transactionId });
       onSuccess?.(data);
     },
-    onError: (error) => {
+    onError: (error, transactionId) => {
       toast.error(getErrorMessage(error));
+      tracker.track(EVENTS.EXCHANGE_FAILED, { stage: 'cancel', transactionId, error: getErrorMessage(error) });
     },
   });
 }
@@ -272,10 +303,12 @@ export function useCreateBuyback({ onSuccess } = {}) {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['buyback'] });
       toast.success(TOAST.BUYBACK.CREATED);
+      tracker.track(EVENTS.BUYBACK_CREATED, { transactionId: data?.EntityId });
       onSuccess?.(data);
     },
     onError: (error) => {
       toast.error(getErrorMessage(error));
+      tracker.track(EVENTS.BUYBACK_FAILED, { stage: 'create', error: getErrorMessage(error) });
     },
   });
 }
@@ -285,13 +318,15 @@ export function usePostBuyback({ onSuccess } = {}) {
 
   return useMutation({
     mutationFn: (transactionId) => postBuyback(transactionId),
-    onSuccess: (data) => {
+    onSuccess: (data, transactionId) => {
       queryClient.invalidateQueries({ queryKey: ['buyback'] });
       toast.success(TOAST.BUYBACK.POSTED);
+      tracker.track(EVENTS.BUYBACK_POSTED, { transactionId });
       onSuccess?.(data);
     },
-    onError: (error) => {
+    onError: (error, transactionId) => {
       toast.error(getErrorMessage(error));
+      tracker.track(EVENTS.BUYBACK_FAILED, { stage: 'post', transactionId, error: getErrorMessage(error) });
     },
   });
 }
@@ -301,13 +336,15 @@ export function useCancelBuyback({ onSuccess } = {}) {
 
   return useMutation({
     mutationFn: (transactionId) => cancelBuyback(transactionId),
-    onSuccess: (data) => {
+    onSuccess: (data, transactionId) => {
       queryClient.invalidateQueries({ queryKey: ['buyback'] });
       toast.success(TOAST.BUYBACK.CANCELLED);
+      tracker.track(EVENTS.BUYBACK_CANCELLED, { transactionId });
       onSuccess?.(data);
     },
-    onError: (error) => {
+    onError: (error, transactionId) => {
       toast.error(getErrorMessage(error));
+      tracker.track(EVENTS.BUYBACK_FAILED, { stage: 'cancel', transactionId, error: getErrorMessage(error) });
     },
   });
 }
@@ -322,10 +359,12 @@ export function useCreateURDPurchase({ onSuccess } = {}) {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['urd-purchase'] });
       toast.success(TOAST.URD_PURCHASE.CREATED);
+      tracker.track(EVENTS.URD_PURCHASE_CREATED, { transactionId: data?.EntityId });
       onSuccess?.(data);
     },
     onError: (error) => {
       toast.error(getErrorMessage(error));
+      tracker.track(EVENTS.URD_PURCHASE_FAILED, { stage: 'create', error: getErrorMessage(error) });
     },
   });
 }
@@ -335,13 +374,15 @@ export function usePostURDPurchase({ onSuccess } = {}) {
 
   return useMutation({
     mutationFn: (transactionId) => postURDPurchase(transactionId),
-    onSuccess: (data) => {
+    onSuccess: (data, transactionId) => {
       queryClient.invalidateQueries({ queryKey: ['urd-purchase'] });
       toast.success(TOAST.URD_PURCHASE.POSTED);
+      tracker.track(EVENTS.URD_PURCHASE_POSTED, { transactionId });
       onSuccess?.(data);
     },
-    onError: (error) => {
+    onError: (error, transactionId) => {
       toast.error(getErrorMessage(error));
+      tracker.track(EVENTS.URD_PURCHASE_FAILED, { stage: 'post', transactionId, error: getErrorMessage(error) });
     },
   });
 }
@@ -351,13 +392,15 @@ export function useCancelURDPurchase({ onSuccess } = {}) {
 
   return useMutation({
     mutationFn: (transactionId) => cancelURDPurchase(transactionId),
-    onSuccess: (data) => {
+    onSuccess: (data, transactionId) => {
       queryClient.invalidateQueries({ queryKey: ['urd-purchase'] });
       toast.success(TOAST.URD_PURCHASE.CANCELLED);
+      tracker.track(EVENTS.URD_PURCHASE_CANCELLED, { transactionId });
       onSuccess?.(data);
     },
-    onError: (error) => {
+    onError: (error, transactionId) => {
       toast.error(getErrorMessage(error));
+      tracker.track(EVENTS.URD_PURCHASE_FAILED, { stage: 'cancel', transactionId, error: getErrorMessage(error) });
     },
   });
 }

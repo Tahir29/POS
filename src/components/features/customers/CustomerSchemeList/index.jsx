@@ -11,6 +11,7 @@
 
 import { Loader2, BookOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 
 /**
  * @param {{
@@ -22,11 +23,11 @@ import { Button } from '@/components/ui/button';
  */
 export default function CustomerSchemeList({ enrollments, isLoading, isError, refetch }) {
   return (
-    <div className="flex flex-col gap-3 rounded-xl border border-stone-200 bg-white p-4">
-      <h3 className="text-sm font-semibold text-stone-800">Scheme Enrollments</h3>
+    <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4">
+      <h3 className="text-sm font-semibold text-foreground">Scheme Enrollments</h3>
 
       {isLoading ? (
-        <div className="flex items-center justify-center gap-2 py-8 text-sm text-stone-500">
+        <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
           <Loader2 size={16} className="animate-spin" aria-hidden="true" />
           Loading enrollments…
         </div>
@@ -38,8 +39,8 @@ export default function CustomerSchemeList({ enrollments, isLoading, isError, re
           </Button>
         </div>
       ) : enrollments.length === 0 ? (
-        <div className="flex flex-col items-center gap-2 py-8 text-center text-stone-500">
-          <BookOpen size={28} aria-hidden="true" className="text-stone-300" />
+        <div className="flex flex-col items-center gap-2 py-8 text-center text-muted-foreground">
+          <BookOpen size={28} aria-hidden="true" className="text-muted-foreground/50" />
           <p className="text-sm">No scheme enrollments found for this customer.</p>
         </div>
       ) : (
@@ -47,24 +48,24 @@ export default function CustomerSchemeList({ enrollments, isLoading, isError, re
           {enrollments.map((enrollment, idx) => (
             <div
               key={enrollment.enrollmentId ?? idx}
-              className="flex items-center justify-between gap-3 rounded-lg border border-stone-100 px-3 py-2.5"
+              className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2.5"
             >
               <div className="min-w-0">
-                <p className="text-sm font-medium text-stone-800 truncate">
+                <p className="text-sm font-medium text-foreground truncate">
                   {enrollment.schemeName ?? 'Scheme'}
                 </p>
                 {enrollment.enrolledDate && (
-                  <p className="text-xs text-stone-400 mt-0.5">
+                  <p className="text-xs text-muted-foreground mt-0.5">
                     Enrolled: {enrollment.enrolledDate}
                   </p>
                 )}
               </div>
               {enrollment.status != null && (
-                <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium capitalize ${
-                  enrollment.status === 1 ? 'bg-green-100 text-green-700' : 'bg-stone-100 text-stone-600'
+                <Badge className={`h-auto shrink-0 rounded-full px-2 py-0.5 text-xs font-medium capitalize ${
+                  enrollment.status === 1 ? 'bg-status-in-stock/10 text-status-in-stock' : 'bg-muted text-muted-foreground'
                 }`}>
                   {enrollment.status === 1 ? 'Active' : 'Inactive'}
-                </span>
+                </Badge>
               )}
             </div>
           ))}

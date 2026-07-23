@@ -26,6 +26,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-toastify';
 import { createBuyback, postBuyback } from '@/services/buybackService';
 import TOAST from '@/constants/toastMessages';
+import tracker from '@/lib/analytics/tracker';
+import EVENTS from '@/lib/analytics/events';
 
 export function useCreateBuyback() {
   const queryClient = useQueryClient();
@@ -39,13 +41,15 @@ export function useCreateBuyback() {
       return { transactionId };
     },
 
-    onSuccess: () => {
+    onSuccess: (data) => {
       toast.success(TOAST.BUYBACK.POSTED);
+      tracker.track(EVENTS.BUYBACK_POSTED, { transactionId: data?.transactionId });
       queryClient.invalidateQueries({ queryKey: ['buyback'] });
     },
 
-    onError: () => {
+    onError: (error) => {
       toast.error(TOAST.BUYBACK.CREATE_FAILED);
+      tracker.track(EVENTS.BUYBACK_FAILED, { error: error?.message ?? 'unknown' });
     },
   });
 }

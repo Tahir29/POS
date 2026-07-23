@@ -113,7 +113,47 @@ const API = {
   // INVENTORY
   // ─────────────────────────────────────────────────────────────────────────
   INVENTORY: {
-    GET_STOCK: 'Services/Inventory/GetStock',
+    GET_STOCK:          'Services/Inventory/GetStock',
+    STOCK_JOURNAL_LIST: 'Services/Inventory/StockJournal/List',
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // HELPERS (rate calculation)
+  // SET_SALES_ITEMS is the real per-variant price calculator — GET_RATE is
+  // NOT used for this (confirmed 2026-07-22: OrnaVerse's own live UI never
+  // calls GetRate when a variant is selected, only SetSalesItems). GetRate
+  // itself remains unconfirmed/unwired — a bare { item_id } 500s (generic
+  // unhandled exception), do not guess its contract further.
+  //
+  // SET_SALES_ITEMS contract — confirmed live 2026-07-22 against both
+  // OrnaVerse's live tenant and our own UAT tenant (see pricingService.js):
+  //   POST { selected_products: [ <full item object as returned by
+  //     Style/Retrieve's style_variants[] or Items/Retrieve, unmodified —
+  //     including its placeholder item_rate:0/item_labour:0 and full
+  //     item_components[] BOM> ], price_list_id: 0, calculate_rates: true,
+  //     document_date: <now, UTC string>, document_id: 52,
+  //     exchange_rate: 1, generate_line_no: false, generate_lot_no: false,
+  //     is_labour_applicable: true, is_purchase: false,
+  //     is_tax_applicable: true }
+  //   → { Entities: [ <same item shape, but item_rate/item_labour/
+  //       sub_total/tax_amount/net_amount/item_components[].rate all
+  //       recomputed against TODAY's live metal/stone rates> ] }
+  //
+  // document_id: 52 is a document-TYPE constant (same concept as our own
+  // Invoice type being 54 — see useCreateInvoice.js), not a specific
+  // order/transaction instance — confirmed portable across both tenants.
+  // Stateless: response always comes back with ref_document_id: 0 and
+  // ref_transaction_id: 0 — nothing is created or staged server-side, so
+  // this is safe to call from a pure price-preview context (product detail
+  // / customize sheet) before any cart or order exists.
+  //
+  // COSTING.GET_ALL_RATES / GET_METAL_RATE below are a DIFFERENT thing
+  // (raw metal/stone/labour rate tables) — also unverified, zero callers
+  // anywhere in this codebase despite existing since an earlier session.
+  // ─────────────────────────────────────────────────────────────────────────
+  HELPERS: {
+    GET_RATE:         'Services/Helpers/GetRate',
+    SET_SALES_ITEMS:  'Services/Helpers/SetSalesItems',
   },
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -128,6 +168,24 @@ const API = {
     RETRIEVE:     'Services/POS/Customer/Retrieve',
     CREATE:       'Services/POS/Customer/Create',
     UPDATE:       'Services/POS/Customer/Update',
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // WALK-IN
+  // Store-entry customer check: staff enters mobile; if registered, returns
+  // Customer + WalkInRecorded:true (also WRITES a customer_visits row against
+  // the active store, resolved server-side from the token — NOT a pure read).
+  // If unregistered, returns { WalkInRecorded: false } with no Customer —
+  // caller opens the New Customer signup form.
+  // Confirmed via live UAT test 2026-07-19. Request: { mobile }. Only sending
+  // `mobile` works — adding company_id/current_company_id causes a 500.
+  // Response.Customer.mobile is pre-masked by the API (******9999); the
+  // per-visit rows under customer_visits[].mobile come back unmasked.
+  // Because every call records a visit, only fire this once per staff
+  // submission — never speculatively (e.g. on keystroke).
+  // ─────────────────────────────────────────────────────────────────────────
+  WALKIN: {
+    LOOKUP: 'Services/POS/WalkIn/Lookup',
   },
 
   // ─────────────────────────────────────────────────────────────────────────

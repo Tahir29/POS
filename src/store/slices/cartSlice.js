@@ -4,6 +4,7 @@
 // All pricing comes from OrnaVerse API — no independent price computation.
 
 import { createSlice } from '@reduxjs/toolkit';
+import { REHYDRATE } from 'redux-persist';
 
 const initialState = {
   items:               [],    // CartItem[]
@@ -12,11 +13,12 @@ const initialState = {
   customerMobile:      null,
   customerAddress:     null,  // { address, address1, city, state, country, zip } — used as
                                // shipping_address/billing_address at order creation
-  appliedPromoCode:    null,
-  appliedPromoDetails: null,  // full promo object from OrnaVerse
+  appliedPromos:       [],    // { promoCode, promoDetails, discountAmount }[] — multiple
+                               // promos can stack; "similar" (same discount type) ones are
+                               // blocked before dispatch, see usePromoValidation
   appliedGiftCard:     null,
   appliedGiftVoucher:  null,
-  discountAmount:      0,
+  discountAmount:      0,     // sum of appliedPromos[].discountAmount
   subtotal:            0,
   total:               0,
 };
@@ -110,20 +112,25 @@ const cartSlice = createSlice({
       state.customerAddress = null;
     },
 
-    // Apply a validated promo code and its discount
+    // Apply a validated promo code and its discount — appends to the list.
+    // "Similar" (same discount-type) conflicts are checked before dispatch
+    // (see usePromoValidation); this only guards against the exact same
+    // code being added twice.
     applyPromo: (state, action) => {
       const { promoCode, promoDetails, discountAmount } = action.payload;
-      state.appliedPromoCode    = promoCode;
-      state.appliedPromoDetails = promoDetails;
-      state.discountAmount      = discountAmount;
+      const alreadyApplied = state.appliedPromos.some((p) => p.promoCode === promoCode);
+      if (alreadyApplied) return;
+
+      state.appliedPromos.push({ promoCode, promoDetails, discountAmount });
+      state.discountAmount = state.appliedPromos.reduce((sum, p) => sum + p.discountAmount, 0);
       recalculateTotals(state);
     },
 
-    // Remove the applied promo code
-    removePromo: (state) => {
-      state.appliedPromoCode    = null;
-      state.appliedPromoDetails = null;
-      state.discountAmount      = 0;
+    // Remove one applied promo by code
+    removePromo: (state, action) => {
+      const promoCode = action.payload;
+      state.appliedPromos  = state.appliedPromos.filter((p) => p.promoCode !== promoCode);
+      state.discountAmount = state.appliedPromos.reduce((sum, p) => sum + p.discountAmount, 0);
       recalculateTotals(state);
     },
 
@@ -142,6 +149,30 @@ const cartSlice = createSlice({
       return initialState;
     },
 
+  },
+
+  // Redux Persist rehydration migration: a cart persisted before multi-promo
+  // support existed has appliedPromoCode/appliedPromoDetails (singular) and
+  // no appliedPromos array at all — without this, the first push()/reduce()
+  // call on the missing array would throw. Migrates the old single promo
+  // into the new array shape so an in-progress cart isn't lost on upgrade.
+  extraReducers: (builder) => {
+    builder.addCase(REHYDRATE, (state, action) => {
+      const persistedCart = action.payload?.cart;
+      if (!persistedCart) return;
+
+      if (Array.isArray(persistedCart.appliedPromos)) {
+        state.appliedPromos = persistedCart.appliedPromos;
+      } else if (persistedCart.appliedPromoCode) {
+        state.appliedPromos = [{
+          promoCode:      persistedCart.appliedPromoCode,
+          promoDetails:   persistedCart.appliedPromoDetails ?? null,
+          discountAmount: persistedCart.discountAmount ?? 0,
+        }];
+      } else {
+        state.appliedPromos = [];
+      }
+    });
   },
 });
 
@@ -169,8 +200,7 @@ export const selectCartCustomerId     = (state) => state.cart.customerId;
 export const selectCartCustomerName   = (state) => state.cart.customerName;
 export const selectCartCustomerMobile = (state) => state.cart.customerMobile;
 export const selectCartCustomerAddress = (state) => state.cart.customerAddress;
-export const selectAppliedPromoCode   = (state) => state.cart.appliedPromoCode;
-export const selectAppliedPromoDetails= (state) => state.cart.appliedPromoDetails;
+export const selectAppliedPromos      = (state) => state.cart.appliedPromos;
 export const selectIsCartEmpty        = (state) => state.cart.items.length === 0;
 
 export default cartSlice.reducer;

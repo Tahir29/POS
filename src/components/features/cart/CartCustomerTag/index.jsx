@@ -22,9 +22,9 @@ export default function CartCustomerTag({ customerName, customerMobile, onDetach
       <div className="flex items-center gap-2 min-w-0">
         <User size={16} className="text-[var(--brand-primary)] shrink-0" aria-hidden="true" />
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-stone-800 truncate">{customerName}</p>
+          <p className="text-sm font-semibold text-foreground truncate">{customerName}</p>
           {customerMobile && (
-            <p className="text-xs text-stone-500 truncate">{customerMobile}</p>
+            <p className="text-xs text-muted-foreground truncate">{customerMobile}</p>
           )}
         </div>
       </div>
@@ -32,7 +32,7 @@ export default function CartCustomerTag({ customerName, customerMobile, onDetach
         type="button"
         onClick={onDetach}
         aria-label={`Remove customer ${customerName}`}
-        className="shrink-0 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-full text-stone-400 hover:text-destructive hover:bg-destructive/10 transition-colors"
+        className="shrink-0 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-full text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
       >
         <X size={16} aria-hidden="true" />
       </button>

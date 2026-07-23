@@ -8,6 +8,8 @@ import { toast } from 'react-toastify';
 import { createReturn, postReturn } from '@/services/returnService';
 import { QUERY_KEYS } from '@/constants/queryKeys';
 import TOAST from '@/constants/toastMessages';
+import tracker from '@/lib/analytics/tracker';
+import EVENTS from '@/lib/analytics/events';
 
 /**
  * Payload shape expected by mutateAsync():
@@ -44,16 +46,18 @@ export function useCreateReturn() {
       return { transactionId };
     },
 
-    onSuccess: () => {
+    onSuccess: (data) => {
       toast.success(TOAST.RETURNS.POST_SUCCESS);
+      tracker.track(EVENTS.RETURN_POSTED, { transactionId: data?.transactionId });
       // Bust returns list and orders list (return affects order status display)
       queryClient.invalidateQueries({ queryKey: ['returns'] });
       queryClient.invalidateQueries({ queryKey: ['orders'] });
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
     },
 
-    onError: () => {
+    onError: (error) => {
       toast.error(TOAST.RETURNS.CREATE_FAILED);
+      tracker.track(EVENTS.RETURN_FAILED, { error: error?.message ?? 'unknown' });
     },
   });
 }

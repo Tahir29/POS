@@ -26,8 +26,6 @@ import { Button } from '@/components/ui/button';
 import { Input }  from '@/components/ui/input';
 import { Label }  from '@/components/ui/label';
 
-import { clearAllSiteData } from '@/lib/dev/clearSiteData';
-
 // Static build tag shown on the dark panel — matches package.json app version.
 // Update alongside releases; not wired to a dynamic source by design.
 
@@ -240,6 +238,7 @@ export default function LoginForm() {
               {/* Submit */}
               <Button
                 type="submit"
+                variant="premium"
                 disabled={isSubmitting || isLockedOut}
                 className="mt-2 w-full min-h-[48px]"
               >
@@ -261,17 +260,7 @@ export default function LoginForm() {
                 )}
               </Button>
 
-              {process.env.NODE_ENV === 'development' && (
-                <button
-                  type="button"
-                  onClick={clearAllSiteData}
-                  className="mt-4 w-full text-center text-xs text-muted-foreground underline hover:text-destructive"
-                >
-                  Dev: Clear all site data &amp; reset
-                </button>
-              )}
-
-              {/* SEC-004: Attempt counter hint (only after first failure) */}
+{/* SEC-004: Attempt counter hint (only after first failure) */}
               {failedAttempts > 0 && !isLockedOut && (
                 <p className="text-center text-xs text-muted-foreground">
                   {MAX_ATTEMPTS - failedAttempts} attempt{MAX_ATTEMPTS - failedAttempts === 1 ? '' : 's'} remaining before lockout

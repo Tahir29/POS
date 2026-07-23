@@ -32,8 +32,11 @@ import ItemSearchPicker        from '@/components/features/transactions/ItemSear
 import { selectActiveStoreId } from '@/store/slices/storeSlice';
 import { selectCartCustomerId, selectCartCustomerName } from '@/store/slices/cartSlice';
 import APP_CONFIG from '@/constants/appConfig';
+import { todayDateString } from '@/lib/dateUtils';
 
 import PageLoader from '@/components/shared/PageLoader';
+import ListRowsSkeleton from '@/components/shared/ListRowsSkeleton';
+import CustomerAttachedBanner from '@/components/shared/CustomerAttachedBanner';
 import { Button }  from '@/components/ui/button';
 import { Input }   from '@/components/ui/input';
 import { Label }   from '@/components/ui/label';
@@ -52,10 +55,6 @@ function formatDate(iso) {
   return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-function todayISO() {
-  return new Date().toISOString().split('T')[0];
-}
-
 function getErrorMessage(error) {
   return (
     error?.response?.data?.Message ??
@@ -71,16 +70,6 @@ function FormField({ label, required, error, children }) {
       <Label>{label} {required && <span className="text-destructive">*</span>}</Label>
       {children}
       {error && <p className="text-xs text-destructive">{error.message}</p>}
-    </div>
-  );
-}
-
-function CustomerBanner({ customerId, customerName }) {
-  return (
-    <div className={`rounded-xl border p-3 text-sm ${customerId ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}>
-      {customerId
-        ? <p className="text-emerald-700">Customer: <strong>{customerName}</strong></p>
-        : <p className="text-amber-700">⚠ Attach a customer from the header before submitting.</p>}
     </div>
   );
 }
@@ -103,7 +92,7 @@ function EstimationNewForm({ onDone }) {
 
   const { register, handleSubmit, control, setValue, reset, formState: { errors } } = useForm({
     resolver: zodResolver(estimationSchema),
-    defaultValues: { document_date: todayISO(), item: null, pieces: 1, item_rate: '' },
+    defaultValues: { document_date: todayDateString(), item: null, pieces: 1, item_rate: '' },
   });
 
   const handleItemSelect = (item) => {
@@ -138,10 +127,10 @@ function EstimationNewForm({ onDone }) {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5">
-      <CustomerBanner customerId={customerId} customerName={customerName} />
+      <CustomerAttachedBanner customerId={customerId} customerName={customerName} />
 
       <FormField label="Date" required error={errors.document_date}>
-        <Input type="date" {...register('document_date')} className="h-11" />
+        <Input type="date" max={todayDateString()} {...register('document_date')} className="h-11" />
       </FormField>
 
       <FormField label="Item" required error={errors.item}>
@@ -176,22 +165,6 @@ function EstimationNewForm({ onDone }) {
 
 // ─── List ─────────────────────────────────────────────────────────────────────
 
-function EstimationListSkeleton() {
-  return (
-    <div className="rounded-xl border border-border overflow-hidden animate-pulse">
-      {[1, 2, 3].map((i) => (
-        <div key={i} className="flex items-center justify-between px-4 py-3.5 border-b border-border last:border-0">
-          <div className="flex flex-col gap-1.5 flex-1">
-            <div className="h-4 bg-muted rounded w-32" />
-            <div className="h-3 bg-muted rounded w-24" />
-          </div>
-          <div className="h-4 bg-muted rounded w-16" />
-        </div>
-      ))}
-    </div>
-  );
-}
-
 function EstimationRow({ item, onConverted }) {
   const [showActions, setShowActions] = useState(false);
   const post   = usePostEstimation({ onSuccess: () => setShowActions(false) });
@@ -212,8 +185,8 @@ function EstimationRow({ item, onConverted }) {
           <p className="text-xs text-muted-foreground">{formatDate(item.documentDate)}</p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          {item.isOrdered && <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">Converted</span>}
-          {item.isClosed && !item.isOrdered && <span className="rounded-full bg-stone-100 px-2 py-0.5 text-[11px] font-medium text-stone-500">Cancelled</span>}
+          {item.isOrdered && <span className="rounded-full bg-status-in-stock/10 px-2 py-0.5 text-[11px] font-medium text-status-in-stock">Converted</span>}
+          {item.isClosed && !item.isOrdered && <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">Cancelled</span>}
           <p className="text-sm font-semibold text-foreground tabular-nums">{formatINR(item.amount)}</p>
           {isOpen && <ChevronRight className="w-4 h-4 text-muted-foreground" />}
         </div>
@@ -244,7 +217,7 @@ function EstimationRow({ item, onConverted }) {
 function EstimationList() {
   const { items, isLoading, isError, refetch } = useEstimations({});
 
-  if (isLoading) return <EstimationListSkeleton />;
+  if (isLoading) return <ListRowsSkeleton />;
 
   if (isError) return (
     <div className="flex flex-col items-center gap-3 py-12">

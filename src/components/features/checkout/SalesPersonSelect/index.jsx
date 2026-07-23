@@ -6,14 +6,14 @@
 // employee name before placing the order). Reuses useSalesPersonOptions,
 // the same store-scoped Employee/List picker already used and confirmed
 // working on Scheme Enrollment — not duplicated here.
+//
+// Plain controlled component (value/onChange), not react-hook-form bound —
+// checkout/page.jsx drives it with local state. schemes/enroll/page.jsx
+// wraps it in a Controller to reuse the same picker within its RHF form.
 
-import { ChevronDown } from 'lucide-react';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
 import { useSalesPersonOptions } from '@/hooks/schemes/useSalesPersonOptions';
 
 /**
@@ -21,28 +21,23 @@ import { useSalesPersonOptions } from '@/hooks/schemes/useSalesPersonOptions';
  */
 export default function SalesPersonSelect({ companyId, value, onChange }) {
   const { salesPersons, isLoading } = useSalesPersonOptions(companyId);
-  const selected = salesPersons.find((p) => p.employee_id === value);
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          className="flex h-11 w-full items-center justify-between rounded-lg border border-input bg-background px-3 text-sm"
-        >
-          <span className={selected ? 'text-foreground' : 'text-muted-foreground'}>
-            {isLoading ? 'Loading…' : selected ? selected.employee_name : 'Select sales person'}
-          </span>
-          <ChevronDown size={14} className="text-muted-foreground shrink-0" />
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width] max-h-56 overflow-y-auto">
+    <Select
+      value={value != null ? String(value) : ''}
+      onValueChange={(v) => onChange(Number(v))}
+      disabled={isLoading}
+    >
+      <SelectTrigger className="h-11 w-full">
+        <SelectValue placeholder={isLoading ? 'Loading…' : 'Select sales person'} />
+      </SelectTrigger>
+      <SelectContent className="max-h-56 overflow-y-auto">
         {salesPersons.map((p) => (
-          <DropdownMenuItem key={p.employee_id} onSelect={() => onChange(p.employee_id)}>
+          <SelectItem key={p.employee_id} value={String(p.employee_id)}>
             {p.employee_name}
-          </DropdownMenuItem>
+          </SelectItem>
         ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
+      </SelectContent>
+    </Select>
   );
 }

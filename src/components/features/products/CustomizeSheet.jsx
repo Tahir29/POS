@@ -14,7 +14,11 @@
 //   5. State resets cleanly on sheet close.
 
 import { useState, useCallback, useMemo } from 'react';
+import { Store, Loader2 } from 'lucide-react';
 import BottomSheet from '@/components/shared/BottomSheet';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useVariantPricing } from '@/hooks/products/useVariantPricing';
+import { formatPrice } from '@/lib/priceUtils';
 
 // ── Metal color gradient map ──────────────────────────────────────────────────
 const COLOR_GRADIENTS = {
@@ -37,22 +41,22 @@ function resolveGradient(name) {
 function LoadingSkeleton() {
   return (
     <div className="flex flex-col gap-7">
-      <div className="h-3 w-40 rounded bg-muted animate-pulse" />
+      <Skeleton className="h-3 w-40" />
       <div className="grid grid-cols-3 gap-3">
         {[1, 2, 3].map((i) => (
-          <div key={i} className="h-20 rounded-2xl bg-muted animate-pulse" />
+          <Skeleton key={i} className="h-20 rounded-2xl" />
         ))}
       </div>
-      <div className="h-3 w-28 rounded bg-muted animate-pulse mt-2" />
+      <Skeleton className="h-3 w-28 mt-2" />
       <div className="flex gap-2">
         {[1, 2].map((i) => (
-          <div key={i} className="h-10 w-16 rounded-xl bg-muted animate-pulse" />
+          <Skeleton key={i} className="h-10 w-16 rounded-xl" />
         ))}
       </div>
-      <div className="h-3 w-28 rounded bg-muted animate-pulse mt-2" />
+      <Skeleton className="h-3 w-28 mt-2" />
       <div className="grid grid-cols-5 gap-2">
         {Array.from({ length: 10 }).map((_, i) => (
-          <div key={i} className="h-12 rounded-xl bg-muted animate-pulse" />
+          <Skeleton key={i} className="h-12 rounded-xl" />
         ))}
       </div>
     </div>
@@ -67,7 +71,7 @@ function StockDot({ status, isSelected }) {
     return (
       <span
         aria-label="In stock"
-        className="absolute top-1.5 left-1.5 w-2 h-2 rounded-full bg-emerald-500"
+        className="absolute top-1.5 left-1.5 w-2 h-2 rounded-full bg-status-in-stock"
       />
     );
   }
@@ -75,7 +79,7 @@ function StockDot({ status, isSelected }) {
     return (
       <span
         aria-label="Made to order"
-        className="absolute top-1.5 left-1.5 w-2 h-2 rounded-full bg-amber-400"
+        className="absolute top-1.5 left-1.5 w-2 h-2 rounded-full bg-status-made-order"
       />
     );
   }
@@ -218,6 +222,7 @@ export default function CustomizeSheet({
   karats          = [],
   sizes           = [],
   variantStock    = new Map(),
+  storesByItemId  = new Map(),
   findVariant,
   onConfirm,
   isLoading,
@@ -291,6 +296,33 @@ export default function CustomizeSheet({
   // Use exact variant when available, MTO fallback otherwise
   const matchedVariant = exactVariant ?? mtoFallback;
   const canConfirm     = allSelected && !!matchedVariant;
+
+  // ── Live price for the matched variant ────────────────────────────────────
+  // Only for a real exact-variant match — the MTO fallback is a pseudo-item
+  // with no real item_components[] BOM, so there's nothing for
+  // SetSalesItems to price. item_rate === 0 means this SKU floats with
+  // today's metal rate rather than having a static one (see
+  // pricingService.js / apiEndpoints.js HELPERS block).
+  const needsLivePricing = !!exactVariant && (exactVariant.item_rate ?? 0) === 0;
+  const {
+    data:      livePricing,
+    isLoading: pricingLoading,
+    isError:   pricingError,
+    refetch:   refetchPricing,
+  } = useVariantPricing(needsLivePricing ? exactVariant : null);
+  const matchedVariantPrice = needsLivePricing
+    ? formatPrice(livePricing?.sub_total)
+    : formatPrice(matchedVariant?.item_rate);
+
+  // ── In-stock store list for the currently matched variant ────────────────
+  // MTO (no real exact-variant match, or zero stock everywhere) always hides
+  // this — there's no store to point to. Recomputes on every selection
+  // change, so switching to a different variant updates/hides it live.
+  const matchedVariantStores = useMemo(() => {
+    if (!matchedVariant || matchedVariant._isMTO || matchedVariant.item_id == null) return [];
+    const stores = storesByItemId.get(matchedVariant.item_id) ?? [];
+    return stores.filter((s) => (s.pieces ?? 0) > 0);
+  }, [matchedVariant, storesByItemId]);
 
   // ── Stock helpers — use raw variants array ────────────────────────────────
 
@@ -409,11 +441,11 @@ export default function CustomizeSheet({
               {/* Legend */}
               <div className="flex items-center gap-4 mt-1">
                 <div className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                  <span className="w-2 h-2 rounded-full bg-status-in-stock" />
                   <span className="text-[10px] text-muted-foreground">In Stock</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-amber-400" />
+                  <span className="w-2 h-2 rounded-full bg-status-made-order" />
                   <span className="text-[10px] text-muted-foreground">Made to Order</span>
                 </div>
               </div>
@@ -500,10 +532,10 @@ export default function CustomizeSheet({
             <div className={[
               'rounded-xl border px-4 py-3',
               matchedVariant._isMTO
-                ? 'bg-amber-50/60 border-amber-200'
+                ? 'bg-status-made-order/10 border-status-made-order/30'
                 : (matchedVariant.pieces ?? 0) > 0
-                  ? 'bg-emerald-50/60 border-emerald-200'
-                  : 'bg-amber-50/60 border-amber-200',
+                  ? 'bg-status-in-stock/10 border-status-in-stock/30'
+                  : 'bg-status-made-order/10 border-status-made-order/30',
             ].join(' ')}>
               <div className="flex items-center justify-between gap-2">
                 <p className="text-sm font-semibold text-foreground leading-snug">
@@ -512,8 +544,8 @@ export default function CustomizeSheet({
                 <span className={[
                   'text-[11px] font-semibold px-2 py-0.5 rounded-full text-nowrap',
                   matchedVariant._isMTO || (matchedVariant.pieces ?? 0) === 0
-                    ? 'bg-amber-100 text-amber-700'
-                    : 'bg-emerald-100 text-emerald-700',
+                    ? 'bg-status-made-order/15 text-status-made-order'
+                    : 'bg-status-in-stock/15 text-status-in-stock',
                 ].join(' ')}>
                   {matchedVariant._isMTO
                     ? 'Made to Order'
@@ -527,6 +559,49 @@ export default function CustomizeSheet({
                   : <>SKU: {matchedVariant.item_code}{(matchedVariant.pieces ?? 0) > 0 && ` · ${matchedVariant.pieces} pc${matchedVariant.pieces !== 1 ? 's' : ''}`}</>
                 }
               </p>
+
+              {/* Price for this exact variant — MTO has no real SKU to
+                  price, so this only ever shows for a real matched variant. */}
+              {!matchedVariant._isMTO && (
+                needsLivePricing && pricingLoading ? (
+                  <p className="flex items-center gap-1.5 text-sm font-semibold text-foreground mt-1.5">
+                    <Loader2 size={13} className="animate-spin text-muted-foreground" aria-hidden="true" />
+                    Calculating price…
+                  </p>
+                ) : matchedVariantPrice ? (
+                  <p className="text-sm font-semibold text-foreground mt-1.5">{matchedVariantPrice}</p>
+                ) : needsLivePricing && pricingError ? (
+                  <p className="flex items-center gap-2 text-xs font-medium text-status-made-order mt-1.5">
+                    Could not calculate price — try again
+                    <button
+                      type="button"
+                      onClick={() => refetchPricing()}
+                      className="font-semibold underline underline-offset-2 hover:text-status-made-order/80"
+                    >
+                      Retry
+                    </button>
+                  </p>
+                ) : (
+                  <p className="text-xs font-medium text-status-made-order mt-1.5">
+                    Price not available for this option
+                  </p>
+                )
+              )}
+
+              {/* In-stock store list — hidden entirely for MTO/no-stock
+                  variants, shown when this exact variant has real stock
+                  somewhere. Updates live as the selection changes above. */}
+              {matchedVariantStores.length > 0 && (
+                <div className="flex items-start gap-1.5 mt-2 pt-2 border-t border-status-in-stock/30">
+                  <Store size={13} className="shrink-0 text-status-in-stock mt-0.5" aria-hidden="true" />
+                  <p className="text-xs text-status-in-stock">
+                    In stock at{' '}
+                    <span className="font-medium">
+                      {matchedVariantStores.map((s) => s.companyname).join(', ')}
+                    </span>
+                  </p>
+                </div>
+              )}
             </div>
           )}
 

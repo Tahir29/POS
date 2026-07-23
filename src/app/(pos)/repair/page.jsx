@@ -27,7 +27,7 @@ import { zodResolver }        from '@hookform/resolvers/zod';
 import { z }                  from 'zod';
 import { toast }              from 'react-toastify';
 import {
-  Wrench, Hammer, Receipt, ChevronRight, ChevronDown,
+  Wrench, Hammer, Receipt, ChevronRight,
   RefreshCw, Plus, X,
 } from 'lucide-react';
 
@@ -44,14 +44,16 @@ import ItemSearchPicker        from '@/components/features/transactions/ItemSear
 import { selectActiveStoreId } from '@/store/slices/storeSlice';
 import { selectCartCustomerId, selectCartCustomerName } from '@/store/slices/cartSlice';
 import APP_CONFIG               from '@/constants/appConfig';
+import { todayDateString } from '@/lib/dateUtils';
 
 import PageLoader from '@/components/shared/PageLoader';
 import { Button }  from '@/components/ui/button';
 import { Input }   from '@/components/ui/input';
 import { Label }   from '@/components/ui/label';
-import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+import PaymentModeSelect from '@/components/shared/PaymentModeSelect';
+import PillTabs from '@/components/shared/PillTabs';
+import ListRowsSkeleton from '@/components/shared/ListRowsSkeleton';
+import CustomerAttachedBanner from '@/components/shared/CustomerAttachedBanner';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -65,10 +67,6 @@ function formatDate(iso) {
   const d = new Date(iso);
   if (isNaN(d.getTime())) return iso;
   return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-}
-
-function todayISO() {
-  return new Date().toISOString().split('T')[0];
 }
 
 function getErrorMessage(error) {
@@ -86,47 +84,6 @@ function FormField({ label, required, error, children }) {
       <Label>{label} {required && <span className="text-destructive">*</span>}</Label>
       {children}
       {error && <p className="text-xs text-destructive">{error.message}</p>}
-    </div>
-  );
-}
-
-function PaymentModeSelect({ control, name, paymentModes, modesLoading }) {
-  return (
-    <Controller
-      name={name}
-      control={control}
-      render={({ field }) => {
-        const selected = paymentModes.find((m) => m.modeId === field.value);
-        return (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button type="button" className="flex h-11 w-full items-center justify-between rounded-lg border border-input bg-background px-3 text-sm">
-                <span className={selected ? 'text-foreground' : 'text-muted-foreground'}>
-                  {modesLoading ? 'Loading…' : selected ? selected.modeName : 'Select payment mode'}
-                </span>
-                <ChevronDown size={14} className="text-muted-foreground shrink-0" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]">
-              {paymentModes.map((mode) => (
-                <DropdownMenuItem key={mode.modeId} onSelect={() => field.onChange(mode.modeId)}>
-                  {mode.modeName}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        );
-      }}
-    />
-  );
-}
-
-function CustomerBanner({ customerId, customerName }) {
-  return (
-    <div className={`rounded-xl border p-3 text-sm ${customerId ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}>
-      {customerId
-        ? <p className="text-emerald-700">Customer: <strong>{customerName}</strong></p>
-        : <p className="text-amber-700">⚠ Attach a customer from the header before submitting.</p>}
     </div>
   );
 }
@@ -199,7 +156,7 @@ function RepairInNewForm({ onDone }) {
   const { register, handleSubmit, control, setValue, reset, formState: { errors } } = useForm({
     resolver: zodResolver(repairInSchema),
     defaultValues: {
-      document_date: todayISO(), item: null, pieces: 1, weight: '',
+      document_date: todayDateString(), item: null, pieces: 1, weight: '',
       bag_no: '', certificate_no: '', huid: '', narration: '',
     },
   });
@@ -240,10 +197,10 @@ function RepairInNewForm({ onDone }) {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5">
-      <CustomerBanner customerId={customerId} customerName={customerName} />
+      <CustomerAttachedBanner customerId={customerId} customerName={customerName} />
 
       <FormField label="Date" required error={errors.document_date}>
-        <Input type="date" {...register('document_date')} className="h-11" />
+        <Input type="date" max={todayDateString()} {...register('document_date')} className="h-11" />
       </FormField>
 
       <FormField label="Item" required error={errors.item}>
@@ -269,8 +226,8 @@ function RepairInNewForm({ onDone }) {
         </FormField>
       </div>
 
-      <div className="rounded-xl border border-stone-200 bg-stone-50 p-3 flex flex-col gap-3">
-        <p className="text-xs font-medium text-stone-500 uppercase tracking-wide">Tracking (optional)</p>
+      <div className="rounded-xl border border-border bg-muted p-3 flex flex-col gap-3">
+        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Tracking (optional)</p>
         <FormField label="Bag No.">
           <Input {...register('bag_no')} className="h-9 text-sm" placeholder="e.g. BAG314" />
         </FormField>
@@ -314,7 +271,7 @@ function RepairOutNewForm({ onDone }) {
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm({
     resolver: zodResolver(repairOutSchema),
-    defaultValues: { document_date: todayISO(), location_id: '', item_rate: '' },
+    defaultValues: { document_date: todayDateString(), location_id: '', item_rate: '' },
   });
 
   const onSubmit = async (data) => {
@@ -361,7 +318,7 @@ function RepairOutNewForm({ onDone }) {
       </FormField>
 
       <FormField label="Date" required error={errors.document_date}>
-        <Input type="date" {...register('document_date')} className="h-11" />
+        <Input type="date" max={todayDateString()} {...register('document_date')} className="h-11" />
       </FormField>
 
       {/* No confirmed location/workshop master list exists in this app yet —
@@ -403,7 +360,7 @@ function RepairInvoiceNewForm({ onDone }) {
 
   const { register, handleSubmit, control, reset, formState: { errors } } = useForm({
     resolver: zodResolver(repairInvoiceSchema),
-    defaultValues: { document_date: todayISO(), item_rate: '', mode_id: '' },
+    defaultValues: { document_date: todayDateString(), item_rate: '', mode_id: '' },
   });
 
   const onSubmit = async (data) => {
@@ -467,7 +424,7 @@ function RepairInvoiceNewForm({ onDone }) {
       </FormField>
 
       <FormField label="Date" required error={errors.document_date}>
-        <Input type="date" {...register('document_date')} className="h-11" />
+        <Input type="date" max={todayDateString()} {...register('document_date')} className="h-11" />
       </FormField>
 
       <FormField label="Labour Charge (₹)" required error={errors.item_rate}>
@@ -487,26 +444,10 @@ function RepairInvoiceNewForm({ onDone }) {
 
 // ─── List views ───────────────────────────────────────────────────────────────
 
-function RepairListSkeleton() {
-  return (
-    <div className="rounded-xl border border-border overflow-hidden animate-pulse">
-      {[1, 2, 3].map((i) => (
-        <div key={i} className="flex items-center justify-between px-4 py-3.5 border-b border-border last:border-0">
-          <div className="flex flex-col gap-1.5 flex-1">
-            <div className="h-4 bg-muted rounded w-32" />
-            <div className="h-3 bg-muted rounded w-24" />
-          </div>
-          <div className="h-4 bg-muted rounded w-16" />
-        </div>
-      ))}
-    </div>
-  );
-}
-
 function RepairList({ hook: useHook, emptyMessage }) {
   const { items, isLoading, isError, refetch } = useHook({});
 
-  if (isLoading) return <RepairListSkeleton />;
+  if (isLoading) return <ListRowsSkeleton />;
 
   if (isError) return (
     <div className="flex flex-col items-center gap-3 py-12">
@@ -545,23 +486,6 @@ const TABS = [
   { id: 'out',     label: 'Repair Out',     icon: Hammer,  hook: useRepairOuts,     emptyMessage: 'No repair-out records found.', NewForm: (props) => <RepairOutNewForm {...props} /> },
   { id: 'invoice', label: 'Repair Invoice', icon: Receipt, hook: useRepairInvoices, emptyMessage: 'No repair invoices found.', NewForm: (props) => <RepairInvoiceNewForm {...props} /> },
 ];
-
-function TabBar({ tabs, activeId, onChange }) {
-  return (
-    <div className="flex gap-1 overflow-x-auto pb-1 scrollbar-none -mx-4 px-4">
-      {tabs.map(({ id, label, icon: Icon }) => {
-        const isActive = id === activeId;
-        return (
-          <button key={id} onClick={() => onChange(id)}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium whitespace-nowrap transition-colors shrink-0 ${isActive ? 'bg-primary text-primary-foreground' : 'bg-muted/40 text-muted-foreground hover:bg-muted/70'}`}>
-            <Icon className="w-3.5 h-3.5" />
-            {label}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
@@ -604,7 +528,15 @@ function RepairScreen() {
 
       {storeId && (
         <>
-          <TabBar tabs={TABS} activeId={activeTab} onChange={handleTabChange} />
+          <PillTabs
+            tabs={TABS}
+            value={activeTab}
+            onChange={handleTabChange}
+            getKey={(t) => t.id}
+            variant="chip"
+            scrollable
+            className="pb-1 -mx-4 px-4"
+          />
 
           {view === 'list' && (
             <RepairList key={activeTab} hook={activeTabConfig.hook} emptyMessage={activeTabConfig.emptyMessage} />

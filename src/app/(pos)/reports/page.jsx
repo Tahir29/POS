@@ -63,6 +63,7 @@ import API                             from '@/constants/apiEndpoints';
 import { QUERY_KEYS }                  from '@/constants/queryKeys';
 import APP_CONFIG                      from '@/constants/appConfig';
 import PageLoader                      from '@/components/shared/PageLoader';
+import { Skeleton }                    from '@/components/ui/skeleton';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -115,17 +116,17 @@ function OrdersSummaryReport() {
       />
       <div className="border-t border-border pt-3 flex flex-col gap-3">
         <StatRow
-          icon={<CheckCircle className="w-4 h-4 text-green-600" />}
+          icon={<CheckCircle className="w-4 h-4 text-status-in-stock" />}
           label="Paid"
           value={stats.paid}
         />
         <StatRow
-          icon={<Clock className="w-4 h-4 text-amber-500" />}
+          icon={<Clock className="w-4 h-4 text-status-made-order" />}
           label="Partial"
           value={stats.partial}
         />
         <StatRow
-          icon={<AlertCircle className="w-4 h-4 text-red-500" />}
+          icon={<AlertCircle className="w-4 h-4 text-status-error" />}
           label="Due"
           value={stats.due}
         />
@@ -320,7 +321,7 @@ function SchemeEnrollmentReport() {
   return (
     <div className="flex flex-col gap-3">
       <StatRow icon={<FileText className="w-4 h-4" />} label="Total Enrollments" value={enrollments.length} />
-      <StatRow icon={<CheckCircle className="w-4 h-4 text-green-600" />} label="Active (pending instalments)" value={activeCount} />
+      <StatRow icon={<CheckCircle className="w-4 h-4 text-status-in-stock" />} label="Active (pending instalments)" value={activeCount} />
       <StatRow icon={<IndianRupee className="w-4 h-4" />} label="Total Invested" value={formatINR(totalInvested)} highlight />
     </div>
   );
@@ -371,9 +372,9 @@ function StatRow({ icon, label, value, highlight = false }) {
 
 function ReportSkeleton() {
   return (
-    <div className="flex flex-col gap-3 animate-pulse">
+    <div className="flex flex-col gap-3">
       {[1, 2, 3].map((i) => (
-        <div key={i} className="h-5 bg-muted rounded w-full" />
+        <Skeleton key={i} className="h-5 w-full" />
       ))}
     </div>
   );

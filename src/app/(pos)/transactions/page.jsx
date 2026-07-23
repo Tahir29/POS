@@ -54,10 +54,8 @@ import {
   ShoppingBag,
   Coins,
   ChevronRight,
-  ChevronDown,
   RefreshCw,
   Plus,
-  Trash2,
   X,
   Calendar,
   User,
@@ -88,17 +86,17 @@ import ItemSearchPicker                    from '@/components/features/transacti
 import { selectActiveStoreId }            from '@/store/slices/storeSlice';
 import { selectCartCustomerId, selectCartCustomerName } from '@/store/slices/cartSlice';
 import APP_CONFIG                         from '@/constants/appConfig';
+import { todayDateString }                 from '@/lib/dateUtils';
 
 import PageLoader                          from '@/components/shared/PageLoader';
+import PaymentModeSelect                   from '@/components/shared/PaymentModeSelect';
+import PillTabs                            from '@/components/shared/PillTabs';
+import RemoveLineItemButton                from '@/components/shared/RemoveLineItemButton';
+import CustomerAttachedBanner               from '@/components/shared/CustomerAttachedBanner';
+import ListRowsSkeleton                    from '@/components/shared/ListRowsSkeleton';
 import { Button }                          from '@/components/ui/button';
 import { Input }                           from '@/components/ui/input';
 import { Label }                           from '@/components/ui/label';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -112,10 +110,6 @@ function formatDate(iso) {
   const d = new Date(iso);
   if (isNaN(d.getTime())) return iso;
   return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-}
-
-function todayISO() {
-  return new Date().toISOString().split('T')[0];
 }
 
 function getErrorMessage(error) {
@@ -135,56 +129,6 @@ function FormField({ label, required, error, children }) {
       <Label>{label} {required && <span className="text-destructive">*</span>}</Label>
       {children}
       {error && <p className="text-xs text-destructive">{error.message}</p>}
-    </div>
-  );
-}
-
-function PaymentModeSelect({ control, name, paymentModes, modesLoading, onSelect }) {
-  return (
-    <Controller
-      name={name}
-      control={control}
-      render={({ field }) => {
-        const selected = paymentModes.find((m) => m.modeId === field.value);
-        return (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                className="flex h-11 w-full items-center justify-between rounded-lg border border-input bg-background px-3 text-sm"
-              >
-                <span className={selected ? 'text-foreground' : 'text-muted-foreground'}>
-                  {modesLoading ? 'Loading…' : selected ? selected.modeName : 'Select payment mode'}
-                </span>
-                <ChevronDown size={14} className="text-muted-foreground shrink-0" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]">
-              {paymentModes.map((mode) => (
-                <DropdownMenuItem
-                  key={mode.modeId}
-                  onSelect={() => {
-                    field.onChange(mode.modeId);
-                    onSelect?.(mode);
-                  }}
-                >
-                  {mode.modeName}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        );
-      }}
-    />
-  );
-}
-
-function CustomerBanner({ customerId, customerName }) {
-  return (
-    <div className={`rounded-xl border p-3 text-sm ${customerId ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}>
-      {customerId
-        ? <p className="text-emerald-700">Customer: <strong>{customerName}</strong></p>
-        : <p className="text-amber-700">⚠ Attach a customer from the header before submitting.</p>}
     </div>
   );
 }
@@ -218,7 +162,7 @@ function ReturnNewForm({ onDone }) {
     resolver: zodResolver(returnSchema),
     defaultValues: {
       ref_transaction_id: '',
-      document_date:      todayISO(),
+      document_date:      todayDateString(),
       line_items: [{ item_id: '', pieces: 1, item_rate: '', net_amount: '' }],
       refund_mode_id: '',
     },
@@ -253,15 +197,15 @@ function ReturnNewForm({ onDone }) {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5">
-      <CustomerBanner customerId={customerId} customerName={customerName} />
+      <CustomerAttachedBanner customerId={customerId} customerName={customerName} />
 
       <FormField label="Original Invoice ID" required error={errors.ref_transaction_id}>
         <Input type="number" inputMode="numeric" placeholder="transaction_id from invoice" {...register('ref_transaction_id')} className="h-11" />
-        <p className="text-xs text-stone-400">Find this on the printed invoice or in the Invoices list.</p>
+        <p className="text-xs text-muted-foreground">Find this on the printed invoice or in the Invoices list.</p>
       </FormField>
 
       <FormField label="Return Date" required error={errors.document_date}>
-        <Input type="date" {...register('document_date')} className="h-11" />
+        <Input type="date" max={todayDateString()} {...register('document_date')} className="h-11" />
       </FormField>
 
       <div className="flex flex-col gap-2">
@@ -273,13 +217,11 @@ function ReturnNewForm({ onDone }) {
           </Button>
         </div>
         {fields.map((field, index) => (
-          <div key={field.id} className="rounded-xl border border-stone-200 bg-stone-50 p-3 flex flex-col gap-3">
+          <div key={field.id} className="rounded-xl border border-border bg-muted p-3 flex flex-col gap-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-stone-500">Item {index + 1}</span>
+              <span className="text-xs font-medium text-muted-foreground">Item {index + 1}</span>
               {fields.length > 1 && (
-                <button type="button" onClick={() => remove(index)} className="text-stone-400 hover:text-destructive" aria-label="Remove item">
-                  <Trash2 size={14} />
-                </button>
+                <RemoveLineItemButton onClick={() => remove(index)} />
               )}
             </div>
             <div className="grid grid-cols-2 gap-2">
@@ -301,9 +243,9 @@ function ReturnNewForm({ onDone }) {
       </div>
 
       {total > 0 && (
-        <div className="flex justify-between rounded-xl border border-stone-200 bg-white px-4 py-3 text-sm font-medium">
-          <span className="text-stone-500">Total Return Amount</span>
-          <span className="text-stone-800">{formatINR(total)}</span>
+        <div className="flex justify-between rounded-xl border border-border bg-card px-4 py-3 text-sm font-medium">
+          <span className="text-muted-foreground">Total Return Amount</span>
+          <span className="text-foreground">{formatINR(total)}</span>
         </div>
       )}
 
@@ -409,7 +351,7 @@ function MetalLineItemForm({ type, onDone }) {
   const { register, handleSubmit, control, watch, setValue, reset, formState: { errors } } = useForm({
     resolver: zodResolver(schema),
     defaultValues: {
-      document_date: todayISO(),
+      document_date: todayDateString(),
       line_items: [emptyMetalLineItem(config)],
       ...(config.hasReceipt ? { payout_mode_id: '' } : {}),
     },
@@ -466,10 +408,10 @@ function MetalLineItemForm({ type, onDone }) {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5">
-      <CustomerBanner customerId={customerId} customerName={customerName} />
+      <CustomerAttachedBanner customerId={customerId} customerName={customerName} />
 
       <FormField label="Date" required error={errors.document_date}>
-        <Input type="date" {...register('document_date')} className="h-11" />
+        <Input type="date" max={todayDateString()} {...register('document_date')} className="h-11" />
       </FormField>
 
       <div className="flex flex-col gap-2">
@@ -481,13 +423,11 @@ function MetalLineItemForm({ type, onDone }) {
           </Button>
         </div>
         {fields.map((field, index) => (
-          <div key={field.id} className="rounded-xl border border-stone-200 bg-stone-50 p-3 flex flex-col gap-3">
+          <div key={field.id} className="rounded-xl border border-border bg-muted p-3 flex flex-col gap-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-stone-500">Item {index + 1}</span>
+              <span className="text-xs font-medium text-muted-foreground">Item {index + 1}</span>
               {fields.length > 1 && (
-                <button type="button" onClick={() => remove(index)} className="text-stone-400 hover:text-destructive" aria-label="Remove item">
-                  <Trash2 size={14} />
-                </button>
+                <RemoveLineItemButton onClick={() => remove(index)} />
               )}
             </div>
 
@@ -541,9 +481,9 @@ function MetalLineItemForm({ type, onDone }) {
       </div>
 
       {total > 0 && (
-        <div className="flex justify-between rounded-xl border border-stone-200 bg-white px-4 py-3 text-sm font-medium">
-          <span className="text-stone-500">Total</span>
-          <span className="text-stone-800">{formatINR(total)}</span>
+        <div className="flex justify-between rounded-xl border border-border bg-card px-4 py-3 text-sm font-medium">
+          <span className="text-muted-foreground">Total</span>
+          <span className="text-foreground">{formatINR(total)}</span>
         </div>
       )}
 
@@ -582,7 +522,7 @@ function CreditNoteNewForm({ onDone }) {
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm({
     resolver: zodResolver(creditNoteSchema),
-    defaultValues: { document_date: todayISO(), net_amount: '', ref_transaction_id: '', narration: '' },
+    defaultValues: { document_date: todayDateString(), net_amount: '', ref_transaction_id: '', narration: '' },
   });
 
   const onSubmit = async (data) => {
@@ -608,10 +548,10 @@ function CreditNoteNewForm({ onDone }) {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5">
-      <CustomerBanner customerId={customerId} customerName={customerName} />
+      <CustomerAttachedBanner customerId={customerId} customerName={customerName} />
 
       <FormField label="Date" required error={errors.document_date}>
-        <Input type="date" {...register('document_date')} className="h-11" />
+        <Input type="date" max={todayDateString()} {...register('document_date')} className="h-11" />
       </FormField>
 
       <FormField label="Credit Amount (₹)" required error={errors.net_amount}>
@@ -661,7 +601,7 @@ function RefundNewForm({ onDone }) {
 
   const { register, handleSubmit, control, reset, formState: { errors } } = useForm({
     resolver: zodResolver(refundSchema),
-    defaultValues: { document_date: todayISO(), amount: '', mode_id: '', narration: '' },
+    defaultValues: { document_date: todayDateString(), amount: '', mode_id: '', narration: '' },
   });
 
   const onSubmit = async (data) => {
@@ -707,10 +647,10 @@ function RefundNewForm({ onDone }) {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5">
-      <CustomerBanner customerId={customerId} customerName={customerName} />
+      <CustomerAttachedBanner customerId={customerId} customerName={customerName} />
 
       <FormField label="Date" required error={errors.document_date}>
-        <Input type="date" {...register('document_date')} className="h-11" />
+        <Input type="date" max={todayDateString()} {...register('document_date')} className="h-11" />
       </FormField>
 
       <FormField label="Refund Amount (₹)" required error={errors.amount}>
@@ -811,22 +751,6 @@ function TransactionRow({ item, onSelect }) {
   );
 }
 
-function ListSkeleton() {
-  return (
-    <div className="rounded-xl border border-border overflow-hidden animate-pulse">
-      {[1, 2, 3, 4, 5].map((i) => (
-        <div key={i} className="flex items-center justify-between px-4 py-3.5 border-b border-border last:border-0">
-          <div className="flex flex-col gap-1.5 flex-1">
-            <div className="h-4 bg-muted rounded w-32" />
-            <div className="h-3 bg-muted rounded w-24" />
-            <div className="h-3 bg-muted rounded w-20" />
-          </div>
-          <div className="h-4 bg-muted rounded w-16" />
-        </div>
-      ))}
-    </div>
-  );
-}
 
 function TransactionList({ hook: useHook, emptyMessage }) {
   const [skip, setSkip]         = useState(0);
@@ -840,7 +764,7 @@ function TransactionList({ hook: useHook, emptyMessage }) {
   const handlePrev = useCallback(() => setSkip((s) => Math.max(0, s - take)), [take]);
   const handleNext = useCallback(() => setSkip((s) => s + take), [take]);
 
-  if (isLoading) return <ListSkeleton />;
+  if (isLoading) return <ListRowsSkeleton rows={5} lines={3} />;
 
   if (isError) return (
     <div className="flex flex-col items-center gap-3 py-12">
@@ -888,23 +812,6 @@ const TABS = [
   { id: 'urd',          label: 'URD Purchase', icon: Coins,          hook: useURDPurchases, emptyMessage: 'No URD purchase transactions found.',NewForm: (props) => <MetalLineItemForm type="urd" {...props} /> },
 ];
 
-function TabBar({ tabs, activeId, onChange }) {
-  return (
-    <div className="flex gap-1 overflow-x-auto pb-1 scrollbar-none -mx-4 px-4">
-      {tabs.map(({ id, label, icon: Icon }) => {
-        const isActive = id === activeId;
-        return (
-          <button key={id} onClick={() => onChange(id)}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium whitespace-nowrap transition-colors shrink-0 ${isActive ? 'bg-primary text-primary-foreground' : 'bg-muted/40 text-muted-foreground hover:bg-muted/70'}`}>
-            <Icon className="w-3.5 h-3.5" />
-            {label}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 function TransactionsScreen() {
@@ -951,7 +858,15 @@ function TransactionsScreen() {
 
       {storeId && (
         <>
-          <TabBar tabs={TABS} activeId={activeTab} onChange={handleTabChange} />
+          <PillTabs
+            tabs={TABS}
+            value={activeTab}
+            onChange={handleTabChange}
+            getKey={(t) => t.id}
+            variant="chip"
+            scrollable
+            className="pb-1 -mx-4 px-4"
+          />
 
           {view === 'list' && (
             <TransactionList key={activeTab} hook={activeTabConfig.hook} emptyMessage={activeTabConfig.emptyMessage} />

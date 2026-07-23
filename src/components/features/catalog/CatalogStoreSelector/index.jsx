@@ -4,14 +4,11 @@
 
 import { useMemo }     from 'react';
 import { useSelector } from 'react-redux';
-import { Store, ChevronDown } from 'lucide-react';
+import { Store } from 'lucide-react';
 
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+  Select, SelectContent, SelectItem, SelectTrigger,
+} from '@/components/ui/select';
 
 // Store objects shape (confirmed from StoreSelectionGrid):
 //   company_id, mailing_name, company_code
@@ -39,7 +36,7 @@ export default function CatalogStoreSelector({ catalogStoreId, onStoreChange }) 
   // Single store — static label, no dropdown
   if (availableStores.length <= 1) {
     return (
-      <div className="flex items-center gap-2 rounded-full border border-border bg-white px-4 py-2 text-sm font-medium text-foreground shrink-0">
+      <div className="flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2 text-sm font-medium text-foreground shrink-0">
         <Store size={15} className="text-muted-foreground shrink-0" />
         <span className="max-w-[140px] truncate">{displayName}</span>
       </div>
@@ -47,42 +44,26 @@ export default function CatalogStoreSelector({ catalogStoreId, onStoreChange }) 
   }
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          className="flex items-center gap-2 rounded-lg border border-border bg-white px-4 py-2 text-sm font-medium text-foreground hover:bg-stone-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary shrink-0"
-        >
-          <Store size={15} className="text-muted-foreground shrink-0" />
-          <span className="max-w-[140px] truncate">{displayName}</span>
-          <ChevronDown size={14} className="text-muted-foreground shrink-0" />
-        </button>
-      </DropdownMenuTrigger>
+    <Select value={String(effectiveId)} onValueChange={(v) => onStoreChange(Number(v))}>
+      <SelectTrigger className="gap-2 rounded-lg border-border bg-card px-4 py-2 text-sm font-medium text-foreground hover:bg-muted shrink-0">
+        <Store size={15} className="text-muted-foreground shrink-0" />
+        <span className="max-w-[140px] truncate">{displayName}</span>
+      </SelectTrigger>
 
-      <DropdownMenuContent align="center" className="w-56">
-        {availableStores.map((store) => {
-          const isSelected = store.company_id === effectiveId;
-          return (
-            <DropdownMenuItem
-              key={store.company_id}
-              onSelect={() => onStoreChange(store.company_id)}
-              className={isSelected ? 'font-semibold text-primary' : ''}
-            >
-              <span className="flex flex-col">
-                <span>{store.mailing_name}</span>
-                {store.company_code && (
-                  <span className="text-xs text-muted-foreground font-normal">
-                    {store.company_code}
-                  </span>
-                )}
-              </span>
-              {isSelected && (
-                <span className="ml-auto text-xs text-primary">✓</span>
+      <SelectContent align="center" className="w-56">
+        {availableStores.map((store) => (
+          <SelectItem key={store.company_id} value={String(store.company_id)}>
+            <span className="flex flex-col">
+              <span>{store.mailing_name}</span>
+              {store.company_code && (
+                <span className="text-xs text-muted-foreground font-normal">
+                  {store.company_code}
+                </span>
               )}
-            </DropdownMenuItem>
-          );
-        })}
-      </DropdownMenuContent>
-    </DropdownMenu>
+            </span>
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }

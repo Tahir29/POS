@@ -227,6 +227,7 @@ export default function StoreSelectionGrid() {
               {/* Confirm button */}
               <Button
                 onClick={handleConfirm}
+                variant="premium"
                 disabled={!selected || isSelecting}
                 className="mt-2 w-full min-h-[48px]"
               >

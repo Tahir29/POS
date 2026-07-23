@@ -43,9 +43,9 @@ function formatDimension(value) {
 function SpecRow({ label, value }) {
   if (!value) return null;
   return (
-    <div className="flex items-start justify-between gap-4 py-2.5 border-b border-stone-100 last:border-0">
-      <span className="text-sm text-stone-500 shrink-0">{label}</span>
-      <span className="text-sm font-medium text-stone-800 text-right">{value}</span>
+    <div className="flex items-start justify-between gap-4 py-2.5 border-b border-border last:border-0">
+      <span className="text-sm text-muted-foreground shrink-0">{label}</span>
+      <span className="text-sm font-medium text-foreground text-right">{value}</span>
     </div>
   );
 }
@@ -55,9 +55,9 @@ function SpecCard({ icon, title, rows, info }) {
   if (!hasAny) return null;
 
   return (
-    <div className="rounded-xl border border-stone-200 bg-white overflow-hidden">
+    <div className="rounded-xl border border-border bg-card overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-stone-100 bg-stone-50/80">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-muted/80">
         <div className="flex items-center gap-2">
           {icon && (
             <span className="text-accent shrink-0" aria-hidden="true">
@@ -69,7 +69,7 @@ function SpecCard({ icon, title, rows, info }) {
           </h3>
         </div>
         {info && (
-          <span className="text-stone-300" aria-hidden="true">
+          <span className="text-muted-foreground/50" aria-hidden="true">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>
             </svg>

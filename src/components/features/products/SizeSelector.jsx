@@ -15,6 +15,7 @@
 //   onClose        () => void            — controlled by parent page
 
 import BottomSheet from '@/components/shared/BottomSheet';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function SizeSelector({
   sizes,
@@ -39,10 +40,11 @@ export default function SizeSelector({
       type="button"
       onClick={onClose}
       className="
-        w-full min-h-[48px] rounded-xl
-        bg-amber-500 hover:bg-amber-600 active:scale-[0.98]
-        text-white font-semibold text-sm
+        w-full min-h-[52px] rounded-xl
+        bg-primary hover:bg-primary/90 active:scale-[0.98]
+        text-primary-foreground font-semibold text-sm
         transition-all duration-150
+        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
       "
     >
       Confirm — Size {selectedSize?.size_name ?? ''}
@@ -59,7 +61,7 @@ export default function SizeSelector({
     >
       {/* Selected indicator */}
       {selectedSizeId && (
-        <p className="text-xs text-amber-600 font-medium mb-3">
+        <p className="text-xs text-primary font-medium mb-3">
           Selected: {selectedSize?.size_name ?? ''}
           {selectedSize?.size_value ? ` — ${selectedSize.size_value} mm` : ''}
         </p>
@@ -69,14 +71,11 @@ export default function SizeSelector({
       {isLoading ? (
         <div className="grid grid-cols-5 gap-2">
           {Array.from({ length: 15 }).map((_, i) => (
-            <div
-              key={i}
-              className="h-14 rounded-xl bg-stone-100 animate-pulse"
-            />
+            <Skeleton key={i} className="h-14 rounded-xl" />
           ))}
         </div>
       ) : safeSizes.length === 0 ? (
-        <p className="text-sm text-stone-400 text-center py-10">
+        <p className="text-sm text-muted-foreground text-center py-10">
           No sizes available for this product.
         </p>
       ) : (
@@ -97,14 +96,14 @@ export default function SizeSelector({
                 aria-selected={isSelected}
                 onClick={() => handleSelect(size.size_id, label)}
                 className={`
-                  min-h-[52px] px-2 py-2 rounded-xl
+                  min-h-[48px] px-2 py-2 rounded-xl
                   border text-sm font-medium
                   flex flex-col items-center justify-center gap-0.5
                   transition-all duration-150
-                  focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400
+                  focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
                   ${isSelected
-                    ? 'bg-amber-500 border-amber-500 text-white shadow-sm'
-                    : 'bg-white border-stone-200 text-stone-700 hover:border-amber-300 hover:bg-amber-50'
+                    ? 'bg-primary border-primary text-primary-foreground shadow-sm'
+                    : 'bg-card border-border text-foreground/80 hover:border-accent/60'
                   }
                 `}
               >
@@ -112,7 +111,7 @@ export default function SizeSelector({
                 {size.size_value && size.size_value !== label && (
                   <span
                     className={`text-[10px] leading-none ${
-                      isSelected ? 'text-amber-100' : 'text-stone-400'
+                      isSelected ? 'text-primary-foreground/70' : 'text-muted-foreground'
                     }`}
                   >
                     {size.size_value} mm
