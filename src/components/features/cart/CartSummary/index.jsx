@@ -16,24 +16,24 @@ export default function CartSummary() {
 
   return (
     <div className="flex flex-col gap-2 py-3">
-      <div className="flex items-center justify-between text-sm text-stone-600">
+      <div className="flex items-center justify-between text-sm text-muted-foreground">
         <span>Subtotal</span>
-        <span className="font-medium text-stone-800">
+        <span className="font-medium text-foreground">
           ₹{subtotal.toLocaleString('en-IN')}
         </span>
       </div>
 
       {discount > 0 && (
-        <div className="flex items-center justify-between text-sm text-stone-600">
+        <div className="flex items-center justify-between text-sm text-muted-foreground">
           <span>Discount</span>
-          <span className="font-medium text-emerald-600">
+          <span className="font-medium text-status-in-stock">
             −₹{discount.toLocaleString('en-IN')}
           </span>
         </div>
       )}
 
-      <div className="flex items-center justify-between pt-2 mt-1 border-t border-stone-100">
-        <span className="text-base font-bold text-stone-800">Total</span>
+      <div className="flex items-center justify-between pt-2 mt-1 border-t border-border">
+        <span className="text-base font-bold text-foreground">Total</span>
         <span className="text-base font-bold text-[var(--brand-primary)]">
           ₹{total.toLocaleString('en-IN')}
         </span>

@@ -17,31 +17,28 @@ import { Skeleton } from '@/components/ui/skeleton';
 import {
   Accordion, AccordionItem, AccordionTrigger, AccordionContent,
 } from '@/components/ui/accordion';
+import { deriveStockStatus } from '@/components/shared/StockStatusBadge';
 
 const selectActiveStoreId = (state) => state.store.activeStoreId;
-const LOW_STOCK_THRESHOLD = 3;
 
 // ── Stock quantity pill ───────────────────────────────────────────────────────
+// Reuses StockStatusBadge's shared derivation instead of re-implementing the
+// same in-stock/low-stock/out-of-stock threshold logic locally.
+
+const STATUS_TEXT_CLASSES = {
+  out_stock: 'text-status-error',
+  low_stock: 'text-status-made-order',
+  in_stock:  'text-status-in-stock',
+};
 
 function StockQty({ qty }) {
   const n = parseFloat(qty ?? 0);
-  if (n <= 0) {
-    return (
-      <span className="text-xs font-semibold text-red-500 text-nowrap">
-        Out of Stock
-      </span>
-    );
-  }
-  if (n <= LOW_STOCK_THRESHOLD) {
-    return (
-      <span className="text-xs font-semibold text-amber-600 text-nowrap">
-        {n} left
-      </span>
-    );
-  }
+  const status = deriveStockStatus({ stock_qty: qty }) ?? 'out_stock';
+  const label = status === 'out_stock' ? 'Out of Stock' : status === 'low_stock' ? `${n} left` : `${n} in stock`;
+
   return (
-    <span className="text-xs font-semibold text-emerald-600 text-nowrap">
-      {n} in stock
+    <span className={`text-xs font-semibold text-nowrap ${STATUS_TEXT_CLASSES[status]}`}>
+      {label}
     </span>
   );
 }
@@ -61,30 +58,30 @@ export default function CrossStoreStockPanel({ storeStocks = [], isLoading }) {
   const totalStores   = storeStocks.length;
 
   return (
-    <div className="rounded-xl border border-stone-200 overflow-hidden">
+    <div className="rounded-xl border border-border overflow-hidden">
       <Accordion type="single" collapsible>
         <AccordionItem value="stock" className="border-0">
           <AccordionTrigger
-            className="rounded-none px-4 py-3 bg-white hover:bg-stone-50 hover:no-underline focus-visible:ring-inset focus-visible:ring-amber-400"
+            className="rounded-none px-4 py-3 bg-card hover:bg-muted hover:no-underline focus-visible:ring-inset focus-visible:ring-ring"
           >
             <div className="flex items-center gap-2">
               <Store size={16} className="text-accent shrink-0" aria-hidden="true" />
-              <span className="text-sm font-semibold text-stone-700">
+              <span className="text-sm font-semibold text-foreground/80">
                 Stock Across Stores
               </span>
               {!isLoading && totalStores > 0 && (
-                <span className="text-xs text-stone-400">
+                <span className="text-xs text-muted-foreground">
                   ({storesInStock}/{totalStores} in stock)
                 </span>
               )}
             </div>
           </AccordionTrigger>
 
-          <AccordionContent className="border-t border-stone-100 p-0">
+          <AccordionContent className="border-t border-border p-0">
 
             {/* Loading skeleton */}
             {isLoading && (
-              <div className="flex flex-col divide-y divide-stone-100">
+              <div className="flex flex-col divide-y divide-border">
                 {[0, 1, 2].map((i) => (
                   <div key={i} className="flex items-center justify-between px-4 py-3 gap-2">
                     <Skeleton className="h-3 w-40" />
@@ -96,14 +93,14 @@ export default function CrossStoreStockPanel({ storeStocks = [], isLoading }) {
 
             {/* Empty */}
             {!isLoading && storeStocks.length === 0 && (
-              <p className="px-4 py-4 text-sm text-stone-400 text-center">
+              <p className="px-4 py-4 text-sm text-muted-foreground text-center">
                 No stock information available.
               </p>
             )}
 
             {/* Store rows */}
             {!isLoading && storeStocks.length > 0 && (
-              <div className="flex flex-col divide-y divide-stone-100">
+              <div className="flex flex-col divide-y divide-border">
                 {storeStocks.map((store) => {
                   const isActive = store.company_id === activeStoreId;
                   return (
@@ -111,15 +108,15 @@ export default function CrossStoreStockPanel({ storeStocks = [], isLoading }) {
                       key={store.company_id}
                       className={`
                         flex items-center justify-between px-4 py-3 gap-2
-                        ${isActive ? 'bg-amber-50' : 'bg-white'}
+                        ${isActive ? 'bg-status-made-order/10' : 'bg-card'}
                       `}
                     >
                       <div className="flex items-center gap-2 min-w-0">
-                        <span className="text-sm text-stone-700 truncate">
+                        <span className="text-sm text-foreground/80 truncate">
                           {store.companyname}
                         </span>
                         {isActive && (
-                          <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded-full">
+                          <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-status-made-order bg-status-made-order/10 px-1.5 py-0.5 rounded-full">
                             Current
                           </span>
                         )}

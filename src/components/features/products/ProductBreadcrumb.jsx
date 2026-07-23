@@ -46,8 +46,8 @@ export default function ProductBreadcrumb({ product }) {
         className="
           flex items-center justify-center
           w-9 h-9 rounded-lg
-          text-stone-500 hover:bg-stone-100
-          focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400
+          text-muted-foreground hover:bg-muted
+          focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
           transition-colors shrink-0
         "
       >
@@ -61,14 +61,14 @@ export default function ProductBreadcrumb({ product }) {
             {i > 0 && (
               <ChevronRight
                 size={14}
-                className="text-stone-300 shrink-0"
+                className="text-muted-foreground/50 shrink-0"
                 aria-hidden="true"
               />
             )}
             <button
               onClick={() => router.push(crumb.href)}
               className="
-                text-sm text-stone-400 hover:text-amber-600
+                text-sm text-muted-foreground hover:text-accent
                 truncate max-w-[120px]
                 focus-visible:outline-none focus-visible:underline
                 transition-colors
@@ -84,12 +84,12 @@ export default function ProductBreadcrumb({ product }) {
           <span className="flex items-center gap-1 min-w-0">
             <ChevronRight
               size={14}
-              className="text-stone-300 shrink-0"
+              className="text-muted-foreground/50 shrink-0"
               aria-hidden="true"
             />
             <span
               aria-current="page"
-              className="text-sm font-semibold text-stone-700 truncate max-w-[160px]"
+              className="text-sm font-semibold text-foreground/80 truncate max-w-[160px]"
             >
               {product.item_name}
             </span>

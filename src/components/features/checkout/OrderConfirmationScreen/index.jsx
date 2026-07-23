@@ -81,20 +81,20 @@ export default function OrderConfirmationScreen({ transactionId, invoiceNo }) {
   return (
     <div className="flex flex-col items-center gap-6 px-4 py-10 text-center">
       {/* Success icon */}
-      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100">
-        <CheckCircle2 size={36} className="text-emerald-600" aria-hidden="true" />
+      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-status-in-stock/15">
+        <CheckCircle2 size={36} className="text-status-in-stock" aria-hidden="true" />
       </div>
 
       {/* Header */}
       <div>
-        <h1 className="text-xl font-bold text-stone-800">Sale completed</h1>
-        <p className="mt-1 text-sm text-stone-500">Invoice #{displayNo}</p>
+        <h1 className="text-xl font-bold text-foreground">Sale completed</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Invoice #{displayNo}</p>
       </div>
 
       {/* Invoice summary */}
-      <div className="w-full max-w-md rounded-xl border border-border bg-card p-4 text-left">
+      <div className="w-full max-w-md rounded-xl border border-border bg-card p-4 text-left shadow-sm">
         {isLoading ? (
-          <div className="flex items-center justify-center gap-2 py-6 text-sm text-stone-500">
+          <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
             <Loader2 size={16} className="animate-spin" aria-hidden="true" />
             Loading invoice…
           </div>
@@ -102,47 +102,47 @@ export default function OrderConfirmationScreen({ transactionId, invoiceNo }) {
           <div className="flex flex-col gap-2 text-sm">
             {invoiceDate && (
               <div className="flex justify-between">
-                <span className="text-stone-500">Date</span>
-                <span className="text-stone-700">{fmtDate(invoiceDate)}</span>
+                <span className="text-muted-foreground">Date</span>
+                <span className="text-foreground/80">{fmtDate(invoiceDate)}</span>
               </div>
             )}
             <div className="flex justify-between">
-              <span className="text-stone-500">Invoice No.</span>
-              <span className="font-medium text-stone-800">{displayNo}</span>
+              <span className="text-muted-foreground">Invoice No.</span>
+              <span className="font-medium text-foreground">{displayNo}</span>
             </div>
             {customerName && (
               <div className="flex justify-between">
-                <span className="text-stone-500">Customer</span>
-                <span className="font-medium text-stone-800">{customerName}</span>
+                <span className="text-muted-foreground">Customer</span>
+                <span className="font-medium text-foreground">{customerName}</span>
               </div>
             )}
             {taxAmount != null && taxAmount > 0 && (
               <div className="flex justify-between">
-                <span className="text-stone-500">GST</span>
-                <span className="text-stone-700">{fmt(taxAmount)}</span>
+                <span className="text-muted-foreground">GST</span>
+                <span className="text-foreground/80">{fmt(taxAmount)}</span>
               </div>
             )}
             {totalAmount != null && (
-              <div className="flex justify-between border-t border-stone-100 pt-2 mt-1">
-                <span className="text-stone-500">Total</span>
-                <span className="font-bold text-stone-800">{fmt(totalAmount)}</span>
+              <div className="flex justify-between border-t border-border pt-2 mt-1">
+                <span className="text-muted-foreground">Total</span>
+                <span className="font-bold text-foreground">{fmt(totalAmount)}</span>
               </div>
             )}
             {receiptAmt != null && (
               <div className="flex justify-between">
-                <span className="text-stone-500">Paid</span>
-                <span className="text-emerald-600 font-medium">{fmt(receiptAmt)}</span>
+                <span className="text-muted-foreground">Paid</span>
+                <span className="text-status-in-stock font-medium">{fmt(receiptAmt)}</span>
               </div>
             )}
             {balanceAmt != null && balanceAmt > 0 && (
               <div className="flex justify-between">
-                <span className="text-stone-500">Balance Due</span>
-                <span className="text-red-500 font-medium">{fmt(balanceAmt)}</span>
+                <span className="text-muted-foreground">Balance Due</span>
+                <span className="text-status-error font-medium">{fmt(balanceAmt)}</span>
               </div>
             )}
           </div>
         ) : (
-          <p className="text-sm text-stone-500 text-center py-4">Invoice details unavailable.</p>
+          <p className="text-sm text-muted-foreground text-center py-4">Invoice details unavailable.</p>
         )}
       </div>
 

@@ -24,6 +24,7 @@ import { Input }    from '@/components/ui/input';
 import { Label }    from '@/components/ui/label';
 import LocationSelect from '@/components/shared/LocationSelect';
 import PillTabs from '@/components/shared/PillTabs';
+import PaymentStatusBadge, { mapOrderStatus } from '@/components/shared/PaymentStatusBadge';
 
 import { updateCustomerSchema }   from '@/validators/customerSchema';
 import { useRetrieveCustomer }    from '@/hooks/customer/useRetrieveCustomer';
@@ -53,12 +54,6 @@ function maskPan(pan) {
   return `${'*'.repeat(pan.length - 4)}${pan.slice(-4)}`;
 }
 
-const STATUS_STYLES = {
-  paid:    'bg-emerald-50 text-emerald-700 border-emerald-200',
-  partial: 'bg-amber-50 text-amber-700 border-amber-200',
-  due:     'bg-red-50 text-red-700 border-red-200',
-};
-
 // ── Tab config ────────────────────────────────────────────────────────────────
 const TABS    = ['profile', 'edit', 'orders', 'schemes', 'history', 'points'];
 const TAB_LABELS = {
@@ -73,7 +68,7 @@ const TAB_LABELS = {
 // ── Shared primitives ─────────────────────────────────────────────────────────
 function TabLoading({ label }) {
   return (
-    <div className="flex items-center justify-center gap-2 py-12 text-sm text-stone-500">
+    <div className="flex items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
       <Loader2 size={16} className="animate-spin" />{label}
     </div>
   );
@@ -88,7 +83,7 @@ function TabError({ label, onRetry }) {
 }
 function TabEmpty({ icon, label }) {
   return (
-    <div className="flex flex-col items-center gap-2 py-12 text-center text-stone-500">
+    <div className="flex flex-col items-center gap-2 py-12 text-center text-muted-foreground">
       {icon}<p className="text-sm">{label}</p>
     </div>
   );
@@ -105,20 +100,20 @@ function ProfileTab({ customer }) {
   return (
     <div className="flex flex-col gap-3 text-sm">
       {customerMobile && (
-        <div className="flex items-center gap-2 text-stone-600">
-          <Phone size={15} className="shrink-0 text-stone-400" />
+        <div className="flex items-center gap-2 text-muted-foreground">
+          <Phone size={15} className="shrink-0 text-muted-foreground/70" />
           {customerMobile}
         </div>
       )}
       {customerEmail && (
-        <div className="flex items-center gap-2 text-stone-600">
-          <Mail size={15} className="shrink-0 text-stone-400" />
+        <div className="flex items-center gap-2 text-muted-foreground">
+          <Mail size={15} className="shrink-0 text-muted-foreground/70" />
           <span className="truncate">{customerEmail}</span>
         </div>
       )}
       {customerAddress && (customerAddress.address || customerAddress.city) && (
-        <div className="flex items-start gap-2 text-stone-600">
-          <MapPin size={15} className="shrink-0 text-stone-400 mt-0.5" />
+        <div className="flex items-start gap-2 text-muted-foreground">
+          <MapPin size={15} className="shrink-0 text-muted-foreground/70 mt-0.5" />
           <span>
             {[customerAddress.address, customerAddress.city, customerAddress.state, customerAddress.zip]
               .filter(Boolean).join(', ')}
@@ -126,19 +121,19 @@ function ProfileTab({ customer }) {
         </div>
       )}
       {maskedPan && (
-        <div className="flex items-center gap-2 text-stone-600">
-          <CreditCard size={15} className="shrink-0 text-stone-400" />
+        <div className="flex items-center gap-2 text-muted-foreground">
+          <CreditCard size={15} className="shrink-0 text-muted-foreground/70" />
           PAN: {maskedPan}
         </div>
       )}
       {partyCode && (
-        <p className="text-xs text-stone-400">Customer code: {partyCode}</p>
+        <p className="text-xs text-muted-foreground/70">Customer code: {partyCode}</p>
       )}
       {birthDate && (
-        <p className="text-xs text-stone-500">Birthday: {birthDate}</p>
+        <p className="text-xs text-muted-foreground">Birthday: {birthDate}</p>
       )}
       {anniversary && (
-        <p className="text-xs text-stone-500">Anniversary: {anniversary}</p>
+        <p className="text-xs text-muted-foreground">Anniversary: {anniversary}</p>
       )}
     </div>
   );
@@ -294,24 +289,22 @@ function OrdersTab({ customerId }) {
 
   if (isLoading) return <TabLoading label="Loading orders…" />;
   if (isError)   return <TabError label="Failed to load orders." onRetry={refetch} />;
-  if (!orders.length) return <TabEmpty icon={<ClipboardList size={28} className="text-stone-300" />} label="No orders found." />;
+  if (!orders.length) return <TabEmpty icon={<ClipboardList size={28} className="text-muted-foreground/50" />} label="No orders found." />;
 
   return (
     <div className="flex flex-col gap-2">
       {orders.map((order, idx) => (
-        <div key={order.orderId ?? idx} className="flex items-center justify-between gap-3 rounded-lg border border-stone-100 px-3 py-2.5">
+        <div key={order.orderId ?? idx} className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2.5">
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <p className="text-sm font-medium text-stone-800 truncate">{order.orderNo ?? `#${order.orderId}`}</p>
-              <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${STATUS_STYLES[order.status] ?? 'bg-stone-50 text-stone-600 border-stone-200'}`}>
-                {order.status}
-              </span>
+              <p className="text-sm font-medium text-foreground truncate">{order.orderNo ?? `#${order.orderId}`}</p>
+              {order.status && <PaymentStatusBadge status={mapOrderStatus(order.status)} size="sm" />}
             </div>
-            {order.orderDate && <p className="text-xs text-stone-400 mt-0.5">{fmtDate(order.orderDate)}</p>}
+            {order.orderDate && <p className="text-xs text-muted-foreground mt-0.5">{fmtDate(order.orderDate)}</p>}
           </div>
           <div className="text-right shrink-0">
-            {order.totalAmount != null && <p className="text-sm font-semibold text-stone-800">{fmt(order.totalAmount)}</p>}
-            {order.balanceAmount > 0 && <p className="text-xs text-red-500">Due {fmt(order.balanceAmount)}</p>}
+            {order.totalAmount != null && <p className="text-sm font-semibold text-foreground">{fmt(order.totalAmount)}</p>}
+            {order.balanceAmount > 0 && <p className="text-xs text-status-error">Due {fmt(order.balanceAmount)}</p>}
           </div>
         </div>
       ))}
@@ -325,23 +318,23 @@ function SchemesTab({ customerId }) {
 
   if (isLoading) return <TabLoading label="Loading schemes…" />;
   if (isError)   return <TabError label="Failed to load schemes." onRetry={refetch} />;
-  if (!enrollments.length) return <TabEmpty icon={<BookOpen size={28} className="text-stone-300" />} label="No scheme enrollments." />;
+  if (!enrollments.length) return <TabEmpty icon={<BookOpen size={28} className="text-muted-foreground/50" />} label="No scheme enrollments." />;
 
   return (
     <div className="flex flex-col gap-2">
       {enrollments.map((e, idx) => (
-        <div key={e.enrollmentId ?? idx} className="flex items-center justify-between gap-3 rounded-lg border border-stone-100 px-3 py-2.5">
+        <div key={e.enrollmentId ?? idx} className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2.5">
           <div className="min-w-0">
-            <p className="text-sm font-medium text-stone-800 truncate">{e.schemeName ?? 'Scheme'}</p>
-            <p className="text-xs text-stone-400 mt-0.5">
+            <p className="text-sm font-medium text-foreground truncate">{e.schemeName ?? 'Scheme'}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
               {fmt(e.schemeAmount)}/month · {e.tenure} months
               {e.enrolledDate ? ` · ${fmtDate(e.enrolledDate)}` : ''}
             </p>
             {e.investedAmount != null && (
-              <p className="text-xs text-stone-500 mt-0.5">Paid: {fmt(e.investedAmount)}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Paid: {fmt(e.investedAmount)}</p>
             )}
           </div>
-          <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${e.hasPendingInstallment ? 'bg-green-100 text-green-700' : 'bg-stone-100 text-stone-500'}`}>
+          <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${e.hasPendingInstallment ? 'bg-status-in-stock/10 text-status-in-stock' : 'bg-muted text-muted-foreground'}`}>
             {e.hasPendingInstallment ? 'Active' : 'Completed'}
           </span>
         </div>
@@ -360,23 +353,23 @@ function HistoryTab({ customerId }) {
   if (isLoading) return <TabLoading label="Loading history…" />;
   if (isError)   return <TabError label="Failed to load history." onRetry={refetch} />;
   if (!invoices.length && !receiptModes.length) {
-    return <TabEmpty icon={<ClipboardList size={28} className="text-stone-300" />} label="No purchase history found." />;
+    return <TabEmpty icon={<ClipboardList size={28} className="text-muted-foreground/50" />} label="No purchase history found." />;
   }
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="rounded-lg border border-stone-100 p-3">
-        <p className="text-xs text-stone-400">Total Purchases</p>
-        <p className="text-sm font-semibold text-stone-800 mt-0.5">{fmt(invoiceTotal)}</p>
+      <div className="rounded-lg border border-border p-3">
+        <p className="text-xs text-muted-foreground/70">Total Purchases</p>
+        <p className="text-sm font-semibold text-foreground mt-0.5">{fmt(invoiceTotal)}</p>
       </div>
 
       {receiptModes.length > 0 && (
         <div className="flex flex-col gap-1.5">
-          <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide">By Payment Mode</p>
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">By Payment Mode</p>
           {receiptModes.map((r, idx) => (
-            <div key={idx} className="flex justify-between items-center text-sm rounded-lg border border-stone-100 px-3 py-2">
-              <span className="text-stone-700">{r.mode}</span>
-              <span className="font-semibold text-stone-800">{fmt(r.amount)}</span>
+            <div key={idx} className="flex justify-between items-center text-sm rounded-lg border border-border px-3 py-2">
+              <span className="text-foreground/80">{r.mode}</span>
+              <span className="font-semibold text-foreground">{fmt(r.amount)}</span>
             </div>
           ))}
         </div>
@@ -384,14 +377,14 @@ function HistoryTab({ customerId }) {
 
       {invoices.length > 0 && (
         <div className="flex flex-col gap-1.5 mt-1">
-          <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Recent Invoices</p>
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Recent Invoices</p>
           {invoices.slice(0, 10).map((inv, idx) => (
-            <div key={idx} className="flex justify-between items-center text-sm rounded-lg border border-stone-100 px-3 py-2">
+            <div key={idx} className="flex justify-between items-center text-sm rounded-lg border border-border px-3 py-2">
               <div>
-                <p className="text-stone-700 font-medium">{inv.document_no ?? `Invoice #${idx + 1}`}</p>
-                {inv.document_date && <p className="text-xs text-stone-400">{fmtDate(inv.document_date)}</p>}
+                <p className="text-foreground/80 font-medium">{inv.document_no ?? `Invoice #${idx + 1}`}</p>
+                {inv.document_date && <p className="text-xs text-muted-foreground/70">{fmtDate(inv.document_date)}</p>}
               </div>
-              <span className="font-semibold text-stone-800">{fmt(inv.net_amount)}</span>
+              <span className="font-semibold text-foreground">{fmt(inv.net_amount)}</span>
             </div>
           ))}
         </div>
@@ -409,19 +402,19 @@ function PointsTab({ customerId }) {
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="rounded-xl border border-stone-100 bg-stone-50 p-4 text-center">
-        <p className="text-xs text-stone-400 uppercase tracking-wide">Available Points</p>
+      <div className="rounded-xl border border-border bg-muted p-4 text-center">
+        <p className="text-xs text-muted-foreground/70 uppercase tracking-wide">Available Points</p>
         <p className="text-3xl font-bold text-primary mt-1">{availablePoints.toLocaleString('en-IN')}</p>
       </div>
       {loyaltyHistory.length > 0 && (
         <div className="flex flex-col gap-1.5">
-          <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide">History</p>
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">History</p>
           {loyaltyHistory.slice(0, 20).map((h, idx) => (
-            <div key={idx} className="flex justify-between items-center text-sm rounded-lg border border-stone-100 px-3 py-2">
-              <span className="text-stone-500 text-xs">{fmtDate(h.document_date)}</span>
+            <div key={idx} className="flex justify-between items-center text-sm rounded-lg border border-border px-3 py-2">
+              <span className="text-muted-foreground text-xs">{fmtDate(h.document_date)}</span>
               <div className="text-right">
-                {h.points_earned > 0 && <span className="text-emerald-600 font-medium">+{h.points_earned}</span>}
-                {h.points_redeemed > 0 && <span className="text-red-500 font-medium ml-2">-{h.points_redeemed}</span>}
+                {h.points_earned > 0 && <span className="text-status-in-stock font-medium">+{h.points_earned}</span>}
+                {h.points_redeemed > 0 && <span className="text-status-error font-medium ml-2">-{h.points_redeemed}</span>}
               </div>
             </div>
           ))}
@@ -464,14 +457,14 @@ export default function CustomerDetailPage() {
         >
           <ArrowLeft size={18} aria-hidden="true" />
         </Button>
-        <h1 className="text-base font-bold text-stone-800 truncate">
+        <h1 className="text-base font-bold text-foreground truncate">
           {customer?.customerName ?? 'Customer Profile'}
         </h1>
       </div>
 
       {/* Loading */}
       {isLoading && (
-        <div className="flex items-center justify-center gap-2 py-16 text-sm text-stone-500">
+        <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground">
           <Loader2 size={16} className="animate-spin" />
           Loading customer…
         </div>
@@ -490,13 +483,13 @@ export default function CustomerDetailPage() {
 
       {/* Content */}
       {customer && !isLoading && (
-        <div className="rounded-xl border border-border bg-card p-4 flex flex-col gap-4">
+        <div className="rounded-xl border border-border bg-card p-4 flex flex-col gap-4 shadow-sm">
 
           {/* Customer name + code header */}
           <div>
-            <h2 className="text-base font-bold text-stone-800">{customer.customerName}</h2>
+            <h2 className="text-base font-bold text-foreground">{customer.customerName}</h2>
             {customer.raw?.party_code && customer.raw.party_code !== 'NA' && (
-              <p className="text-xs text-stone-400 mt-0.5">Code: {customer.raw.party_code}</p>
+              <p className="text-xs text-muted-foreground/70 mt-0.5">Code: {customer.raw.party_code}</p>
             )}
           </div>
 

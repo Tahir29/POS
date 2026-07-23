@@ -36,7 +36,7 @@ export default function PromoCodeInput({ onApply, isValidating }) {
         <Tag
           size={16}
           aria-hidden="true"
-          className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400"
+          className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
         />
         <Input
           type="text"

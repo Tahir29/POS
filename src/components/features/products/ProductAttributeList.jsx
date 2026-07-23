@@ -25,7 +25,7 @@ export default function ProductAttributeList({ attributes = [] }) {
     <div className="flex flex-col gap-4">
       {Object.entries(grouped).map(([groupName, attrs]) => (
         <div key={groupName} className="flex flex-col gap-2">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-amber-700">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-accent">
             {groupName}
           </h3>
           <div className="flex flex-wrap gap-2">
@@ -36,8 +36,8 @@ export default function ProductAttributeList({ attributes = [] }) {
                   inline-flex items-center
                   px-3 py-1.5 rounded-full
                   text-xs font-medium
-                  bg-amber-50 text-amber-800
-                  border border-amber-200
+                  bg-secondary text-secondary-foreground
+                  border border-border
                 "
               >
                 {attr.attribute_name}

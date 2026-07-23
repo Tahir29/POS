@@ -292,12 +292,12 @@ function ProductDetailScreen() {
                 ) : price ? (
                   <p className="font-heading text-3xl text-foreground">{price}</p>
                 ) : needsLivePricing && pricingError ? (
-                  <p className="flex items-center gap-2 text-sm font-medium text-amber-600">
+                  <p className="flex items-center gap-2 text-sm font-medium text-status-made-order">
                     Could not calculate live price
                     <button
                       type="button"
                       onClick={() => refetchPricing()}
-                      className="font-semibold underline underline-offset-2 hover:text-amber-700"
+                      className="font-semibold underline underline-offset-2 hover:text-status-made-order/80"
                     >
                       Retry
                     </button>
@@ -308,7 +308,7 @@ function ProductDetailScreen() {
                   // say so explicitly rather than leaving a blank where the
                   // price should be, since a customized selection implies
                   // real purchase intent.
-                  <p className="text-sm font-medium text-amber-600">
+                  <p className="text-sm font-medium text-status-made-order">
                     Price not available for this option — needs costing before it can be sold
                   </p>
                 )}

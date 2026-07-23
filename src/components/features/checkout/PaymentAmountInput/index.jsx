@@ -17,12 +17,12 @@ export default function PaymentAmountInput({ modeName, amount, onChange }) {
     <div className="flex items-center justify-between gap-3">
       <label
         htmlFor={`payment-amount-${modeName}`}
-        className="text-sm font-medium text-stone-700 min-w-0 truncate"
+        className="text-sm font-medium text-foreground/80 min-w-0 truncate"
       >
         {modeName}
       </label>
       <div className="relative w-36 shrink-0">
-        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-stone-400">
+        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
           ₹
         </span>
         <Input

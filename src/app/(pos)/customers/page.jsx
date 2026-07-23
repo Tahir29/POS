@@ -135,7 +135,7 @@ export default function CustomersPage() {
   return (
     <div className="flex flex-col gap-4 max-w-3xl mx-auto w-full p-4 md:p-6">
       <div className="flex items-center justify-between gap-2">
-        <h1 className="text-3xl font-bold text-stone-800">Customers</h1>
+        <h1 className="text-3xl font-bold text-foreground">Customers</h1>
         <Button type="button" onClick={() => setIsNewCustomerOpen(true)} className="gap-2">
           <UserPlus size={16} aria-hidden="true" />
           New Customer
@@ -143,7 +143,7 @@ export default function CustomersPage() {
       </div>
 
       <div className="relative">
-        <Search size={16} aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
+        <Search size={16} aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
         <Input
           type="text"
           inputMode="search"
@@ -158,7 +158,7 @@ export default function CustomersPage() {
             type="button"
             onClick={handleClear}
             aria-label="Clear search"
-            className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center justify-center h-7 w-7 rounded-full text-stone-400 hover:text-stone-600 hover:bg-stone-100 transition-colors"
+            className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center justify-center h-7 w-7 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
           >
             <X size={15} aria-hidden="true" />
           </button>
@@ -168,19 +168,19 @@ export default function CustomersPage() {
       {/* List */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
         {isBusy ? (
-          <div className="flex items-center justify-center gap-2 py-10 text-sm text-stone-500">
+          <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
             <Loader2 size={16} className="animate-spin" aria-hidden="true" />
             {isNameSearch ? 'Searching customers…' : 'Loading customers…'}
           </div>
         ) : isMobileSearch && notFound ? (
           <div className="flex flex-col items-center gap-3 py-10 text-center">
-            <p className="text-sm text-stone-500">No customer found with this mobile number.</p>
+            <p className="text-sm text-muted-foreground">No customer found with this mobile number.</p>
             <Button type="button" variant="outline" onClick={() => setIsNewCustomerOpen(true)}>
               Create New Customer
             </Button>
           </div>
         ) : displayList.length === 0 ? (
-          <p className="text-sm text-stone-500 text-center py-10">
+          <p className="text-sm text-muted-foreground text-center py-10">
             {isSearchActive ? 'No matching customers found.' : 'No customers found.'}
           </p>
         ) : (
@@ -208,7 +208,7 @@ export default function CustomersPage() {
             <ChevronLeft size={16} aria-hidden="true" />
             
           </Button>
-          <span className="text-sm text-stone-500">
+          <span className="text-sm text-muted-foreground">
             Page {currentPage} of {totalPages} · {totalCount} customers
           </span>
           <Button

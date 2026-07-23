@@ -83,7 +83,7 @@ export default function PromoCodeSheet({ onApply, isApplying, appliedPromos = []
                 disabled={isApplying || isApplied}
                 onClick={() => handleSelect(promo.promotion_code)}
                 className="
-                  flex items-center justify-between gap-3 rounded-lg border border-stone-200
+                  flex items-center justify-between gap-3 rounded-lg border border-border
                   px-3 py-2.5 text-left transition-colors
                   hover:border-primary/40 hover:bg-primary/5
                   disabled:cursor-not-allowed disabled:opacity-50
@@ -92,11 +92,11 @@ export default function PromoCodeSheet({ onApply, isApplying, appliedPromos = []
                 <div className="flex items-center gap-2.5 min-w-0">
                   <Tag size={16} className="shrink-0 text-primary" aria-hidden="true" />
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-stone-800">
+                    <p className="truncate text-sm font-medium text-foreground">
                       {promo.promotion_name}
                     </p>
                     <div className="flex items-center gap-1.5 mt-0.5 text-xs text-muted-foreground">
-                      <span className="rounded bg-stone-100 px-1.5 py-0.5 font-mono font-semibold text-stone-600">
+                      <span className="rounded bg-muted px-1.5 py-0.5 font-mono font-semibold text-muted-foreground">
                         {promo.promotion_code}
                       </span>
                       {discountLabel && <span>{discountLabel}</span>}
@@ -109,12 +109,12 @@ export default function PromoCodeSheet({ onApply, isApplying, appliedPromos = []
                   </div>
                 </div>
                 {isApplied ? (
-                  <span className="flex items-center gap-1 shrink-0 text-xs font-medium text-emerald-600">
+                  <span className="flex items-center gap-1 shrink-0 text-xs font-medium text-status-in-stock">
                     <Check size={14} aria-hidden="true" />
                     Applied
                   </span>
                 ) : (
-                  <ChevronRight size={16} className="shrink-0 text-stone-300" aria-hidden="true" />
+                  <ChevronRight size={16} className="shrink-0 text-muted-foreground/50" aria-hidden="true" />
                 )}
               </button>
             );

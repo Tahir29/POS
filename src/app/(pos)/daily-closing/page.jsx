@@ -76,7 +76,7 @@ function HistoryTab() {
 
   if (isError) {
     return (
-      <div className="flex flex-col items-center gap-3 py-16 text-stone-500">
+      <div className="flex flex-col items-center gap-3 py-16 text-muted-foreground">
         <AlertCircle size={20} />
         <p className="text-sm">Failed to load closing records.</p>
         <Button variant="outline" size="sm" onClick={() => refetch()}>Retry</Button>
@@ -86,7 +86,7 @@ function HistoryTab() {
 
   if (closings.length === 0) {
     return (
-      <div className="flex flex-col items-center gap-2 py-16 text-stone-400">
+      <div className="flex flex-col items-center gap-2 py-16 text-muted-foreground">
         <ClipboardCheck size={28} className="opacity-40" />
         <p className="text-sm">No closing records yet.</p>
       </div>
@@ -98,43 +98,43 @@ function HistoryTab() {
       {closings.map((c) => (
         <div key={c.closingId} className="rounded-xl border border-border bg-card p-4 flex flex-col gap-3">
           <div className="flex items-center justify-between">
-            <p className="text-sm font-semibold text-stone-800">{formatDate(c.closingDate)}</p>
-            <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700">
+            <p className="text-sm font-semibold text-foreground">{formatDate(c.closingDate)}</p>
+            <span className="rounded-full bg-status-in-stock/10 px-2.5 py-0.5 text-xs font-medium text-status-in-stock">
               Closed
             </span>
           </div>
 
           <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-            <span className="text-stone-500">Opening</span>
-            <span className="text-right font-medium text-stone-700">{formatCurrency(c.openingBalance)}</span>
+            <span className="text-muted-foreground">Opening</span>
+            <span className="text-right font-medium text-foreground/80">{formatCurrency(c.openingBalance)}</span>
 
-            <span className="text-stone-500">Cash Sales</span>
-            <span className="text-right font-medium text-stone-700">{formatCurrency(c.cashSales)}</span>
+            <span className="text-muted-foreground">Cash Sales</span>
+            <span className="text-right font-medium text-foreground/80">{formatCurrency(c.cashSales)}</span>
 
-            <span className="text-stone-500">Card Sales</span>
-            <span className="text-right font-medium text-stone-700">{formatCurrency(c.cardSales)}</span>
+            <span className="text-muted-foreground">Card Sales</span>
+            <span className="text-right font-medium text-foreground/80">{formatCurrency(c.cardSales)}</span>
 
-            <span className="text-stone-500">UPI Sales</span>
-            <span className="text-right font-medium text-stone-700">{formatCurrency(c.upiSales)}</span>
+            <span className="text-muted-foreground">UPI Sales</span>
+            <span className="text-right font-medium text-foreground/80">{formatCurrency(c.upiSales)}</span>
 
             {c.otherSales > 0 && (
               <>
-                <span className="text-stone-500">Other</span>
-                <span className="text-right font-medium text-stone-700">{formatCurrency(c.otherSales)}</span>
+                <span className="text-muted-foreground">Other</span>
+                <span className="text-right font-medium text-foreground/80">{formatCurrency(c.otherSales)}</span>
               </>
             )}
 
-            <span className="text-stone-500 border-t border-stone-100 pt-1 mt-1">Total Sales</span>
-            <span className="text-right font-bold text-stone-800 border-t border-stone-100 pt-1 mt-1">
+            <span className="text-muted-foreground border-t border-border pt-1 mt-1">Total Sales</span>
+            <span className="text-right font-bold text-foreground border-t border-border pt-1 mt-1">
               {formatCurrency(c.totalSales)}
             </span>
 
-            <span className="text-stone-500">Closing Balance</span>
-            <span className="text-right font-medium text-stone-700">{formatCurrency(c.closingBalance)}</span>
+            <span className="text-muted-foreground">Closing Balance</span>
+            <span className="text-right font-medium text-foreground/80">{formatCurrency(c.closingBalance)}</span>
           </div>
 
           {c.notes && (
-            <p className="text-xs text-stone-400 border-t border-stone-100 pt-2">{c.notes}</p>
+            <p className="text-xs text-muted-foreground border-t border-border pt-2">{c.notes}</p>
           )}
         </div>
       ))}
@@ -144,7 +144,7 @@ function HistoryTab() {
           <Button variant="outline" size="sm" disabled={page === 1} onClick={() => setPage((p) => p - 1)}>
             Previous
           </Button>
-          <span className="text-xs text-stone-400">Page {page} of {totalPages}</span>
+          <span className="text-xs text-muted-foreground">Page {page} of {totalPages}</span>
           <Button variant="outline" size="sm" disabled={page === totalPages} onClick={() => setPage((p) => p + 1)}>
             Next
           </Button>
@@ -218,7 +218,7 @@ function NewClosingTab() {
         {label} {required && <span className="text-destructive">*</span>}
       </Label>
       <div className="relative">
-        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-stone-400">₹</span>
+        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">₹</span>
         <Input
           id={id}
           type="number"
@@ -247,8 +247,8 @@ function NewClosingTab() {
       <Field id="dc_opening"  label="Opening Cash Balance" name="opening_balance" required />
 
       {/* Sales by mode */}
-      <div className="rounded-xl border border-stone-200 bg-stone-50 p-4 flex flex-col gap-4">
-        <p className="text-xs font-medium text-stone-500 uppercase tracking-wide">Sales by Payment Mode</p>
+      <div className="rounded-xl border border-border bg-muted p-4 flex flex-col gap-4">
+        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Sales by Payment Mode</p>
         <Field id="dc_cash"  label="Cash Sales"  name="cash_sales"  required />
         <Field id="dc_card"  label="Card Sales"  name="card_sales"  required />
         <Field id="dc_upi"   label="UPI Sales"   name="upi_sales"   required />
@@ -258,14 +258,14 @@ function NewClosingTab() {
       {/* Live summary */}
       <div className="rounded-xl border border-border bg-card px-4 py-3 flex flex-col gap-2 text-sm">
         <div className="flex justify-between">
-          <span className="text-stone-500">Total Sales</span>
-          <span className="font-semibold text-stone-800">{formatCurrency(totalSales)}</span>
+          <span className="text-muted-foreground">Total Sales</span>
+          <span className="font-semibold text-foreground">{formatCurrency(totalSales)}</span>
         </div>
-        <div className="flex justify-between border-t border-stone-100 pt-2">
-          <span className="text-stone-500">Closing Cash Balance</span>
-          <span className="font-bold text-stone-800">{formatCurrency(closingBalance)}</span>
+        <div className="flex justify-between border-t border-border pt-2">
+          <span className="text-muted-foreground">Closing Cash Balance</span>
+          <span className="font-bold text-foreground">{formatCurrency(closingBalance)}</span>
         </div>
-        <p className="text-xs text-stone-400">Closing balance = opening balance + cash sales</p>
+        <p className="text-xs text-muted-foreground">Closing balance = opening balance + cash sales</p>
       </div>
 
       {/* Notes */}
@@ -298,8 +298,8 @@ function DailyClosingScreen() {
   return (
     <div className="flex flex-col gap-4 p-4 pb-8 max-w-2xl mx-auto">
       <div className="flex items-center gap-3 pt-2">
-        <ClipboardCheck size={20} className="text-stone-400" />
-        <h1 className="text-xl font-semibold text-stone-800">Daily Closing</h1>
+        <ClipboardCheck size={20} className="text-muted-foreground" />
+        <h1 className="text-xl font-semibold text-foreground">Daily Closing</h1>
       </div>
 
       <PillTabs tabs={TABS} value={activeTab} onChange={setActiveTab} />

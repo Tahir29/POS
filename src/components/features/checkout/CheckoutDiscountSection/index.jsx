@@ -20,7 +20,7 @@ export default function CheckoutDiscountSection() {
 
   return (
     <section className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4">
-      <h2 className="text-sm font-bold text-stone-800">Discount</h2>
+      <h2 className="text-sm font-bold text-foreground">Discount</h2>
 
       {appliedPromos.map((promo) => (
         <PromoAppliedBadge

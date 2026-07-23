@@ -124,7 +124,7 @@ function DashboardScreen() {
 
 export default function DashboardPage() {
   return (
-    <Suspense fallback={<div className="p-6 text-stone-400">Loading dashboard...</div>}>
+    <Suspense fallback={<div className="p-6 text-muted-foreground">Loading dashboard...</div>}>
       <DashboardScreen />
     </Suspense>
   );

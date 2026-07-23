@@ -61,20 +61,20 @@ function filterShopifyImagesByColor(shopifyImages, activeColorName) {
 
 function NoImagePlaceholder() {
   return (
-    <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-stone-50">
+    <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-muted">
       <svg
         xmlns="http://www.w3.org/2000/svg"
         width="48" height="48"
         viewBox="0 0 24 24"
         fill="none" stroke="currentColor"
         strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
-        className="text-stone-300" aria-hidden="true"
+        className="text-muted-foreground/50" aria-hidden="true"
       >
         <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
         <circle cx="9" cy="9" r="2" />
         <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
       </svg>
-      <span className="text-xs text-stone-400">No image available</span>
+      <span className="text-xs text-muted-foreground">No image available</span>
     </div>
   );
 }
@@ -171,7 +171,7 @@ export default function ProductImageGallery({ product, shopifyImages = [], activ
 
       {/* Main image */}
       <div
-        className="relative w-full overflow-hidden rounded-2xl bg-stone-50"
+        className="relative w-full overflow-hidden rounded-2xl bg-muted"
         style={{ aspectRatio: '1 / 1' }}
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
@@ -199,7 +199,9 @@ export default function ProductImageGallery({ product, shopifyImages = [], activ
           <NoImagePlaceholder />
         )}
 
-        {/* Zoom button */}
+        {/* Zoom button — bg-white/text-stone chrome here is intentional: it
+            floats over arbitrary product-photo content, not the app's own
+            themed background, so it stays fixed-light regardless of .dark. */}
         {showImage && (
           <button
             type="button"
@@ -214,11 +216,11 @@ export default function ProductImageGallery({ product, shopifyImages = [], activ
         {images.length > 1 && (
           <>
             <button onClick={goPrev} aria-label="Previous image"
-              className="absolute left-2 top-1/2 -translate-y-1/2 flex items-center justify-center w-9 h-9 rounded-full bg-white/80 backdrop-blur-sm shadow-sm text-stone-600 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 transition-colors">
+              className="absolute left-2 top-1/2 -translate-y-1/2 flex items-center justify-center w-9 h-9 rounded-full bg-white/80 backdrop-blur-sm shadow-sm text-stone-600 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors">
               <ChevronLeft size={18} />
             </button>
             <button onClick={goNext} aria-label="Next image"
-              className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center justify-center w-9 h-9 rounded-full bg-white/80 backdrop-blur-sm shadow-sm text-stone-600 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 transition-colors">
+              className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center justify-center w-9 h-9 rounded-full bg-white/80 backdrop-blur-sm shadow-sm text-stone-600 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors">
               <ChevronRight size={18} />
             </button>
           </>
@@ -246,8 +248,8 @@ export default function ProductImageGallery({ product, shopifyImages = [], activ
               aria-selected={i === safeIndex}
               aria-label={`Image ${i + 1}`}
               onClick={() => setCurrentIndex(i)}
-              className={`relative w-14 h-14 shrink-0 rounded-lg overflow-hidden border-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${
-                i === safeIndex ? 'border-accent' : 'border-transparent hover:border-stone-300'
+              className={`relative w-14 h-14 shrink-0 rounded-lg overflow-hidden border-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                i === safeIndex ? 'border-accent' : 'border-transparent hover:border-border'
               }`}
             >
               {!imgErrors[i] ? (
@@ -260,7 +262,7 @@ export default function ProductImageGallery({ product, shopifyImages = [], activ
                   onError={() => handleImgError(i)}
                 />
               ) : (
-                <div className="w-full h-full bg-stone-100" />
+                <div className="w-full h-full bg-muted" />
               )}
             </button>
           ))}

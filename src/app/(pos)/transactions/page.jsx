@@ -92,6 +92,7 @@ import PageLoader                          from '@/components/shared/PageLoader'
 import PaymentModeSelect                   from '@/components/shared/PaymentModeSelect';
 import PillTabs                            from '@/components/shared/PillTabs';
 import RemoveLineItemButton                from '@/components/shared/RemoveLineItemButton';
+import CustomerAttachedBanner               from '@/components/shared/CustomerAttachedBanner';
 import ListRowsSkeleton                    from '@/components/shared/ListRowsSkeleton';
 import { Button }                          from '@/components/ui/button';
 import { Input }                           from '@/components/ui/input';
@@ -128,16 +129,6 @@ function FormField({ label, required, error, children }) {
       <Label>{label} {required && <span className="text-destructive">*</span>}</Label>
       {children}
       {error && <p className="text-xs text-destructive">{error.message}</p>}
-    </div>
-  );
-}
-
-function CustomerBanner({ customerId, customerName }) {
-  return (
-    <div className={`rounded-xl border p-3 text-sm ${customerId ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}>
-      {customerId
-        ? <p className="text-emerald-700">Customer: <strong>{customerName}</strong></p>
-        : <p className="text-amber-700">⚠ Attach a customer from the header before submitting.</p>}
     </div>
   );
 }
@@ -206,11 +197,11 @@ function ReturnNewForm({ onDone }) {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5">
-      <CustomerBanner customerId={customerId} customerName={customerName} />
+      <CustomerAttachedBanner customerId={customerId} customerName={customerName} />
 
       <FormField label="Original Invoice ID" required error={errors.ref_transaction_id}>
         <Input type="number" inputMode="numeric" placeholder="transaction_id from invoice" {...register('ref_transaction_id')} className="h-11" />
-        <p className="text-xs text-stone-400">Find this on the printed invoice or in the Invoices list.</p>
+        <p className="text-xs text-muted-foreground">Find this on the printed invoice or in the Invoices list.</p>
       </FormField>
 
       <FormField label="Return Date" required error={errors.document_date}>
@@ -226,9 +217,9 @@ function ReturnNewForm({ onDone }) {
           </Button>
         </div>
         {fields.map((field, index) => (
-          <div key={field.id} className="rounded-xl border border-stone-200 bg-stone-50 p-3 flex flex-col gap-3">
+          <div key={field.id} className="rounded-xl border border-border bg-muted p-3 flex flex-col gap-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-stone-500">Item {index + 1}</span>
+              <span className="text-xs font-medium text-muted-foreground">Item {index + 1}</span>
               {fields.length > 1 && (
                 <RemoveLineItemButton onClick={() => remove(index)} />
               )}
@@ -253,8 +244,8 @@ function ReturnNewForm({ onDone }) {
 
       {total > 0 && (
         <div className="flex justify-between rounded-xl border border-border bg-card px-4 py-3 text-sm font-medium">
-          <span className="text-stone-500">Total Return Amount</span>
-          <span className="text-stone-800">{formatINR(total)}</span>
+          <span className="text-muted-foreground">Total Return Amount</span>
+          <span className="text-foreground">{formatINR(total)}</span>
         </div>
       )}
 
@@ -417,7 +408,7 @@ function MetalLineItemForm({ type, onDone }) {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5">
-      <CustomerBanner customerId={customerId} customerName={customerName} />
+      <CustomerAttachedBanner customerId={customerId} customerName={customerName} />
 
       <FormField label="Date" required error={errors.document_date}>
         <Input type="date" max={todayDateString()} {...register('document_date')} className="h-11" />
@@ -432,9 +423,9 @@ function MetalLineItemForm({ type, onDone }) {
           </Button>
         </div>
         {fields.map((field, index) => (
-          <div key={field.id} className="rounded-xl border border-stone-200 bg-stone-50 p-3 flex flex-col gap-3">
+          <div key={field.id} className="rounded-xl border border-border bg-muted p-3 flex flex-col gap-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-stone-500">Item {index + 1}</span>
+              <span className="text-xs font-medium text-muted-foreground">Item {index + 1}</span>
               {fields.length > 1 && (
                 <RemoveLineItemButton onClick={() => remove(index)} />
               )}
@@ -491,8 +482,8 @@ function MetalLineItemForm({ type, onDone }) {
 
       {total > 0 && (
         <div className="flex justify-between rounded-xl border border-border bg-card px-4 py-3 text-sm font-medium">
-          <span className="text-stone-500">Total</span>
-          <span className="text-stone-800">{formatINR(total)}</span>
+          <span className="text-muted-foreground">Total</span>
+          <span className="text-foreground">{formatINR(total)}</span>
         </div>
       )}
 
@@ -557,7 +548,7 @@ function CreditNoteNewForm({ onDone }) {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5">
-      <CustomerBanner customerId={customerId} customerName={customerName} />
+      <CustomerAttachedBanner customerId={customerId} customerName={customerName} />
 
       <FormField label="Date" required error={errors.document_date}>
         <Input type="date" max={todayDateString()} {...register('document_date')} className="h-11" />
@@ -656,7 +647,7 @@ function RefundNewForm({ onDone }) {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5">
-      <CustomerBanner customerId={customerId} customerName={customerName} />
+      <CustomerAttachedBanner customerId={customerId} customerName={customerName} />
 
       <FormField label="Date" required error={errors.document_date}>
         <Input type="date" max={todayDateString()} {...register('document_date')} className="h-11" />

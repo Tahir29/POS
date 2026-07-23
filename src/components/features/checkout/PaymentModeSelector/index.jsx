@@ -47,7 +47,7 @@ export default function PaymentModeSelector({
 }) {
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center gap-2 py-6 text-sm text-stone-500">
+      <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
         <Loader2 size={16} className="animate-spin" aria-hidden="true" />
         Loading payment modes…
       </div>
@@ -64,7 +64,7 @@ export default function PaymentModeSelector({
 
   if (paymentModes.length === 0) {
     return (
-      <p className="text-sm text-stone-500 py-2">No payment modes available.</p>
+      <p className="text-sm text-muted-foreground py-2">No payment modes available.</p>
     );
   }
 
@@ -85,7 +85,7 @@ export default function PaymentModeSelector({
               transition-colors
               ${isSelected
                 ? 'border-primary bg-primary/10 text-primary'
-                : 'border-border bg-card text-stone-700 hover:border-stone-300'}
+                : 'border-border bg-card text-foreground/80 hover:border-muted-foreground/30'}
             `}
           >
             {isSelected && (
@@ -96,7 +96,7 @@ export default function PaymentModeSelector({
                 <Check size={10} />
               </span>
             )}
-            <Icon size={20} className={isSelected ? 'text-primary' : 'text-stone-400'} aria-hidden="true" />
+            <Icon size={20} className={isSelected ? 'text-primary' : 'text-muted-foreground'} aria-hidden="true" />
             <span className="truncate max-w-full text-xs">{mode.modeName}</span>
           </button>
         );

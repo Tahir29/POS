@@ -18,9 +18,9 @@ import Logo from '@/components/shared/Logo';
 function Row({ label, value, bold, border }) {
   if (value === null || value === undefined || value === '') return null;
   return (
-    <div className={`flex justify-between ${border ? 'border-t border-stone-100 pt-2' : ''}`}>
-      <span className="text-stone-500">{label}</span>
-      <span className={bold ? 'font-bold text-stone-800' : 'font-medium text-stone-800'}>
+    <div className={`flex justify-between ${border ? 'border-t border-border pt-2' : ''}`}>
+      <span className="text-muted-foreground">{label}</span>
+      <span className={bold ? 'font-bold text-foreground' : 'font-medium text-foreground'}>
         {value}
       </span>
     </div>
@@ -48,12 +48,12 @@ function InvoiceContent({ raw }) {
       <Row label="Store"    value={raw.location_name ?? raw.company_name} />
 
       {lineItems.length > 0 && (
-        <div className="border-t border-stone-100 pt-2 flex flex-col gap-1.5">
-          <span className="text-stone-500 text-xs font-medium uppercase tracking-wide">Items</span>
+        <div className="border-t border-border pt-2 flex flex-col gap-1.5">
+          <span className="text-muted-foreground text-xs font-medium uppercase tracking-wide">Items</span>
           {lineItems.map((item) => (
             <div key={item.transaction_item_id} className="flex justify-between gap-2">
-              <span className="text-stone-700 min-w-0">{item.item_name}</span>
-              <span className="font-medium text-stone-800 shrink-0">
+              <span className="text-foreground/80 min-w-0">{item.item_name}</span>
+              <span className="font-medium text-foreground shrink-0">
                 {formatCurrency(item.net_amount)}
               </span>
             </div>
@@ -71,12 +71,12 @@ function InvoiceContent({ raw }) {
       <Row label="Total"    value={formatCurrency(raw.net_amount)} bold border />
 
       {payments.length > 0 && (
-        <div className="border-t border-stone-100 pt-2 flex flex-col gap-1.5">
-          <span className="text-stone-500 text-xs font-medium uppercase tracking-wide">Payments</span>
+        <div className="border-t border-border pt-2 flex flex-col gap-1.5">
+          <span className="text-muted-foreground text-xs font-medium uppercase tracking-wide">Payments</span>
           {payments.map((p) => (
             <div key={p.receipt_id} className="flex justify-between gap-2">
-              <span className="text-stone-700">{p.mode_name}</span>
-              <span className="font-medium text-stone-800">{formatCurrency(p.amount)}</span>
+              <span className="text-foreground/80">{p.mode_name}</span>
+              <span className="font-medium text-foreground">{formatCurrency(p.amount)}</span>
             </div>
           ))}
         </div>
@@ -106,14 +106,16 @@ export default function InvoiceDetailSheet({ invoice, isOpen, onClose }) {
             <PrintInvoiceButton />
           </div>
         ) : (
-          <p className="text-sm text-stone-500 text-center py-4">
+          <p className="text-sm text-muted-foreground text-center py-4">
             Invoice details unavailable.
           </p>
         )}
       </BottomSheet>
 
-      {/* Print-only copy portaled to <body> — escapes BottomSheet's
-          transform/overflow. Logo shown only here (hidden on screen). */}
+      {/* Print-only copy portaled to <body> — bg-white is intentional here
+          (physical paper via print stylesheet, always white regardless of
+          .dark), escapes BottomSheet's transform/overflow. Logo shown only
+          here (hidden on screen). */}
       {raw && typeof document !== 'undefined' &&
         createPortal(
           <div id="invoice-print-area" className="hidden print:block p-6 bg-white">

@@ -409,8 +409,8 @@ function CatalogScreen() {
         )}
 
         {indexingLabel && (
-          <p className="flex items-center gap-1.5 pb-2 text-xs text-amber-600">
-            <span className="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-amber-300 border-t-amber-600" aria-hidden="true" />
+          <p className="flex items-center gap-1.5 pb-2 text-xs text-status-made-order">
+            <span className="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-status-made-order/40 border-t-status-made-order" aria-hidden="true" />
             {indexingLabel} — showing SKU matches only until this finishes
           </p>
         )}

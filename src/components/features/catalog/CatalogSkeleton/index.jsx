@@ -11,7 +11,7 @@ const SKELETON_COUNT = 12;
 
 function ProductCardSkeleton() {
   return (
-    <div className="flex flex-col overflow-hidden rounded-xl border border-stone-100 bg-white shadow-sm">
+    <div className="flex flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm">
       {/* Image placeholder */}
       <Skeleton className="aspect-square w-full rounded-none" />
       {/* Text lines */}

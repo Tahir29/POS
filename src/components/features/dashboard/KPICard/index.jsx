@@ -35,7 +35,7 @@ export default function KPICard({ label, value, trend, sparkline, isLoading, acc
 
   const trendColor =
     trend?.type === 'up'      ? 'text-status-in-stock' :
-    trend?.type === 'warning' ? 'text-amber-600' :
+    trend?.type === 'warning' ? 'text-status-made-order' :
     trend?.type === 'down'    ? 'text-destructive' :
     'text-muted-foreground';
 

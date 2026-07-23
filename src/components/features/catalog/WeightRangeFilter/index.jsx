@@ -42,7 +42,7 @@ export default function WeightRangeFilter({ label, fromValue, toValue, onApply }
 
   return (
     <div className="flex flex-col gap-2">
-      <span className="text-xs font-semibold uppercase tracking-wide text-amber-700">
+      <span className="text-xs font-semibold uppercase tracking-wide text-accent">
         {label}
       </span>
       <div className="flex items-center gap-2">
@@ -62,7 +62,7 @@ export default function WeightRangeFilter({ label, fromValue, toValue, onApply }
           />
         </div>
 
-        <span className="text-gray-400 text-sm select-none">–</span>
+        <span className="text-muted-foreground text-sm select-none">–</span>
 
         <div className="flex-1">
           <label className="sr-only">Maximum {label}</label>

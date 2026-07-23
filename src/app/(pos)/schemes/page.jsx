@@ -35,12 +35,15 @@ import { formatCurrency, formatDate } from '@/lib/schemeFormat';
 
 // ── Helpers ───────────────────────────────────────────────────
 
+// Enrollment lifecycle status (not a payment-settlement concept, so this
+// doesn't route through PaymentStatusBadge). completed/matured keep a raw
+// blue — no existing semantic token maps to an "info" state.
 const STATUS_STYLES = {
-  active:    'bg-emerald-50 text-emerald-700',
+  active:    'bg-status-in-stock/10 text-status-in-stock',
   completed: 'bg-blue-50    text-blue-700',
-  inactive:  'bg-stone-100  text-stone-500',
+  inactive:  'bg-muted  text-muted-foreground',
   matured:   'bg-blue-50    text-blue-700',
-  default:   'bg-stone-100  text-stone-500',
+  default:   'bg-muted  text-muted-foreground',
 };
 
 // ── Receipt payment schema ────────────────────────────────────
@@ -119,9 +122,9 @@ function ReceiptSheet({ enrollment, isOpen, onClose }) {
       <div className="flex flex-col gap-4">
 
         {/* Enrollment summary */}
-        <div className="rounded-xl border border-stone-200 bg-stone-50 p-3 text-sm flex flex-col gap-1">
-          <p className="font-medium text-stone-800">{enrollment.schemeName}</p>
-          <p className="text-stone-500">
+        <div className="rounded-xl border border-border bg-muted p-3 text-sm flex flex-col gap-1">
+          <p className="font-medium text-foreground">{enrollment.schemeName}</p>
+          <p className="text-muted-foreground">
             Monthly: {formatCurrency(enrollment.schemeAmount)} ·{' '}
             Paid so far: {formatCurrency(enrollment.investedAmount)}
           </p>
@@ -135,7 +138,7 @@ function ReceiptSheet({ enrollment, isOpen, onClose }) {
               Amount (₹) <span className="text-destructive">*</span>
             </Label>
             <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-stone-400">₹</span>
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">₹</span>
               <Input
                 id="rcpt_amount"
                 type="number"
@@ -243,7 +246,7 @@ function EnrollmentsTab() {
 
   if (isError) {
     return (
-      <div className="flex flex-col items-center gap-3 py-16 text-stone-500">
+      <div className="flex flex-col items-center gap-3 py-16 text-muted-foreground">
         <AlertCircle size={20} />
         <p className="text-sm">Failed to load enrollments.</p>
         <Button variant="outline" size="sm" onClick={() => refetch()}>Retry</Button>
@@ -255,13 +258,13 @@ function EnrollmentsTab() {
     <div className="flex flex-col gap-3">
       {/* Context banner */}
       {customerId && (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+        <div className="rounded-xl border border-status-in-stock/30 bg-status-in-stock/10 px-3 py-2 text-sm text-status-in-stock">
           Showing enrollments for <strong>{customerName}</strong>
         </div>
       )}
 
       {enrollments.length === 0 ? (
-        <div className="flex flex-col items-center gap-2 py-16 text-stone-400">
+        <div className="flex flex-col items-center gap-2 py-16 text-muted-foreground">
           <LayoutGrid size={28} className="opacity-40" />
           <p className="text-sm">
             {customerId ? 'No enrollments for this customer.' : 'No enrollments found.'}
@@ -275,8 +278,8 @@ function EnrollmentsTab() {
           <div key={enrollment.enrollmentId} className="rounded-xl border border-border bg-card p-4 flex flex-col gap-3">
             <div className="flex items-start justify-between gap-2">
               <div>
-                <p className="text-sm font-semibold text-stone-800">{enrollment.schemeName}</p>
-                <p className="text-xs text-stone-400">{enrollment.partyName} · {enrollment.mobile}</p>
+                <p className="text-sm font-semibold text-foreground">{enrollment.schemeName}</p>
+                <p className="text-xs text-muted-foreground">{enrollment.partyName} · {enrollment.mobile}</p>
               </div>
               <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${
                 STATUS_STYLES[enrollment.status] ?? STATUS_STYLES.default
@@ -286,32 +289,32 @@ function EnrollmentsTab() {
             </div>
 
             <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-              <span className="text-stone-500">Monthly</span>
-              <span className="text-right font-medium text-stone-700">
+              <span className="text-muted-foreground">Monthly</span>
+              <span className="text-right font-medium text-foreground/80">
                 {formatCurrency(enrollment.schemeAmount)}
               </span>
 
-              <span className="text-stone-500">Tenure</span>
-              <span className="text-right font-medium text-stone-700">
+              <span className="text-muted-foreground">Tenure</span>
+              <span className="text-right font-medium text-foreground/80">
                 {enrollment.tenure} months
               </span>
 
-              <span className="text-stone-500">Invested</span>
-              <span className="text-right font-medium text-stone-700">
+              <span className="text-muted-foreground">Invested</span>
+              <span className="text-right font-medium text-foreground/80">
                 {formatCurrency(enrollment.investedAmount)}
               </span>
 
               {enrollment.benefitAmount > 0 && (
                 <>
-                  <span className="text-stone-500">Benefit</span>
-                  <span className="text-right font-medium text-emerald-700">
+                  <span className="text-muted-foreground">Benefit</span>
+                  <span className="text-right font-medium text-status-in-stock">
                     {formatCurrency(enrollment.benefitAmount)}
                   </span>
                 </>
               )}
 
-              <span className="text-stone-500">Enrolled</span>
-              <span className="text-right text-stone-500 text-xs">
+              <span className="text-muted-foreground">Enrolled</span>
+              <span className="text-right text-muted-foreground text-xs">
                 {formatDate(enrollment.documentDate)}
               </span>
             </div>

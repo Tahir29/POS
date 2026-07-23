@@ -17,10 +17,10 @@ export default function AppliedPromoTag({ promoCode, onRemove }) {
   if (!promoCode) return null;
 
   return (
-    <div className="flex items-center justify-between gap-2 rounded-lg bg-emerald-50 px-3 py-2">
+    <div className="flex items-center justify-between gap-2 rounded-lg bg-status-in-stock/10 px-3 py-2">
       <div className="flex items-center gap-2 min-w-0">
-        <Tag size={16} className="text-emerald-600 shrink-0" aria-hidden="true" />
-        <p className="text-sm font-semibold text-emerald-700 truncate">
+        <Tag size={16} className="text-status-in-stock shrink-0" aria-hidden="true" />
+        <p className="text-sm font-semibold text-status-in-stock truncate">
           {promoCode} applied
         </p>
       </div>
@@ -28,7 +28,7 @@ export default function AppliedPromoTag({ promoCode, onRemove }) {
         type="button"
         onClick={onRemove}
         aria-label={`Remove promo code ${promoCode}`}
-        className="shrink-0 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-full text-stone-400 hover:text-destructive hover:bg-destructive/10 transition-colors"
+        className="shrink-0 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-full text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
       >
         <X size={16} aria-hidden="true" />
       </button>

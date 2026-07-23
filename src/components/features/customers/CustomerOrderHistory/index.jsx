@@ -5,13 +5,14 @@
 // Backed by useCustomerOrders (Order/List, client-filtered by customer).
 //
 // Each row is tappable and opens OrderDetailSheet for line items,
-// payments, and balance. Uses the same StatusBadge and date formatting
-// as the /orders directory for visual consistency.
+// payments, and balance. Uses the shared PaymentStatusBadge and date
+// formatting as the /orders directory for visual consistency.
 
 import { useState } from 'react';
 import { Loader2, ClipboardList } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import OrderDetailSheet from '@/components/features/orders/OrderDetailSheet';
+import PaymentStatusBadge, { mapOrderStatus } from '@/components/shared/PaymentStatusBadge';
 import APP_CONFIG from '@/constants/appConfig';
 
 function formatAmount(value) {
@@ -28,29 +29,6 @@ function formatDate(isoString) {
   return d.toLocaleDateString('en-IN');
 }
 
-const STATUS_STYLES = {
-  paid:    'bg-emerald-50 text-emerald-700 border-emerald-200',
-  partial: 'bg-amber-50 text-amber-700 border-amber-200',
-  due:     'bg-red-50 text-red-700 border-red-200',
-};
-
-const STATUS_LABELS = {
-  paid:    'Paid',
-  partial: 'Partial',
-  due:     'Due',
-};
-
-function StatusBadge({ status }) {
-  if (!status) return null;
-  return (
-    <span
-      className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${STATUS_STYLES[status] ?? 'bg-stone-50 text-stone-600 border-stone-200'}`}
-    >
-      {STATUS_LABELS[status] ?? status}
-    </span>
-  );
-}
-
 /**
  * @param {{
  *   orders: ReturnType<typeof import('@/hooks/customer/useCustomerOrders').normalizeCustomerOrder>[],
@@ -65,10 +43,10 @@ export default function CustomerOrderHistory({ orders, isLoading, isError, refet
   return (
     <>
       <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4">
-        <h3 className="text-sm font-semibold text-stone-800">Order History</h3>
+        <h3 className="text-sm font-semibold text-foreground">Order History</h3>
 
         {isLoading ? (
-          <div className="flex items-center justify-center gap-2 py-8 text-sm text-stone-500">
+          <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
             <Loader2 size={16} className="animate-spin" aria-hidden="true" />
             Loading orders…
           </div>
@@ -80,8 +58,8 @@ export default function CustomerOrderHistory({ orders, isLoading, isError, refet
             </Button>
           </div>
         ) : orders.length === 0 ? (
-          <div className="flex flex-col items-center gap-2 py-8 text-center text-stone-500">
-            <ClipboardList size={28} aria-hidden="true" className="text-stone-300" />
+          <div className="flex flex-col items-center gap-2 py-8 text-center text-muted-foreground">
+            <ClipboardList size={28} aria-hidden="true" className="text-muted-foreground/50" />
             <p className="text-sm">No orders found for this customer.</p>
           </div>
         ) : (
@@ -91,29 +69,29 @@ export default function CustomerOrderHistory({ orders, isLoading, isError, refet
                 key={order.orderId ?? idx}
                 type="button"
                 onClick={() => setSelectedOrder(order)}
-                className="flex items-center justify-between gap-3 rounded-lg border border-stone-100 px-3 py-2.5 text-left hover:border-primary/30 hover:bg-stone-50 transition-colors w-full"
+                className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2.5 text-left hover:border-primary/30 hover:bg-muted transition-colors duration-standard ease-premium w-full"
               >
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <p className="text-sm font-medium text-stone-800 truncate">
+                    <p className="text-sm font-medium text-foreground truncate">
                       {order.orderNo ?? `Order #${order.orderId ?? idx + 1}`}
                     </p>
-                    <StatusBadge status={order.status} />
+                    {order.status && <PaymentStatusBadge status={mapOrderStatus(order.status)} size="sm" />}
                   </div>
                   {order.orderDate && (
-                    <p className="text-xs text-stone-400 mt-0.5">
+                    <p className="text-xs text-muted-foreground mt-0.5">
                       {formatDate(order.orderDate)}
                     </p>
                   )}
                 </div>
                 <div className="text-right shrink-0">
                   {formatAmount(order.totalAmount) && (
-                    <p className="text-sm font-semibold text-stone-800">
+                    <p className="text-sm font-semibold text-foreground">
                       {formatAmount(order.totalAmount)}
                     </p>
                   )}
                   {order.balanceAmount > 0 && (
-                    <p className="text-xs text-red-500 mt-0.5">
+                    <p className="text-xs text-status-error mt-0.5">
                       Due {formatAmount(order.balanceAmount)}
                     </p>
                   )}

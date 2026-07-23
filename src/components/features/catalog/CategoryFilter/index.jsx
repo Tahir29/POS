@@ -34,7 +34,7 @@ function CategoryChip({ label, isActive, onClick }) {
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1',
         isActive
           ? 'bg-accent border-accent text-white shadow-sm'
-          : 'bg-white border-border text-stone-600 hover:border-accent/50 hover:text-accent',
+          : 'bg-card border-border text-muted-foreground hover:border-accent/50 hover:text-accent',
       ].join(' ')}
     >
       {label}

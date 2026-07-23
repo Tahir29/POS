@@ -71,7 +71,7 @@ function StockDot({ status, isSelected }) {
     return (
       <span
         aria-label="In stock"
-        className="absolute top-1.5 left-1.5 w-2 h-2 rounded-full bg-emerald-500"
+        className="absolute top-1.5 left-1.5 w-2 h-2 rounded-full bg-status-in-stock"
       />
     );
   }
@@ -79,7 +79,7 @@ function StockDot({ status, isSelected }) {
     return (
       <span
         aria-label="Made to order"
-        className="absolute top-1.5 left-1.5 w-2 h-2 rounded-full bg-amber-400"
+        className="absolute top-1.5 left-1.5 w-2 h-2 rounded-full bg-status-made-order"
       />
     );
   }
@@ -441,11 +441,11 @@ export default function CustomizeSheet({
               {/* Legend */}
               <div className="flex items-center gap-4 mt-1">
                 <div className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                  <span className="w-2 h-2 rounded-full bg-status-in-stock" />
                   <span className="text-[10px] text-muted-foreground">In Stock</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-amber-400" />
+                  <span className="w-2 h-2 rounded-full bg-status-made-order" />
                   <span className="text-[10px] text-muted-foreground">Made to Order</span>
                 </div>
               </div>
@@ -532,10 +532,10 @@ export default function CustomizeSheet({
             <div className={[
               'rounded-xl border px-4 py-3',
               matchedVariant._isMTO
-                ? 'bg-amber-50/60 border-amber-200'
+                ? 'bg-status-made-order/10 border-status-made-order/30'
                 : (matchedVariant.pieces ?? 0) > 0
-                  ? 'bg-emerald-50/60 border-emerald-200'
-                  : 'bg-amber-50/60 border-amber-200',
+                  ? 'bg-status-in-stock/10 border-status-in-stock/30'
+                  : 'bg-status-made-order/10 border-status-made-order/30',
             ].join(' ')}>
               <div className="flex items-center justify-between gap-2">
                 <p className="text-sm font-semibold text-foreground leading-snug">
@@ -544,8 +544,8 @@ export default function CustomizeSheet({
                 <span className={[
                   'text-[11px] font-semibold px-2 py-0.5 rounded-full text-nowrap',
                   matchedVariant._isMTO || (matchedVariant.pieces ?? 0) === 0
-                    ? 'bg-amber-100 text-amber-700'
-                    : 'bg-emerald-100 text-emerald-700',
+                    ? 'bg-status-made-order/15 text-status-made-order'
+                    : 'bg-status-in-stock/15 text-status-in-stock',
                 ].join(' ')}>
                   {matchedVariant._isMTO
                     ? 'Made to Order'
@@ -571,18 +571,18 @@ export default function CustomizeSheet({
                 ) : matchedVariantPrice ? (
                   <p className="text-sm font-semibold text-foreground mt-1.5">{matchedVariantPrice}</p>
                 ) : needsLivePricing && pricingError ? (
-                  <p className="flex items-center gap-2 text-xs font-medium text-amber-600 mt-1.5">
+                  <p className="flex items-center gap-2 text-xs font-medium text-status-made-order mt-1.5">
                     Could not calculate price — try again
                     <button
                       type="button"
                       onClick={() => refetchPricing()}
-                      className="font-semibold underline underline-offset-2 hover:text-amber-700"
+                      className="font-semibold underline underline-offset-2 hover:text-status-made-order/80"
                     >
                       Retry
                     </button>
                   </p>
                 ) : (
-                  <p className="text-xs font-medium text-amber-600 mt-1.5">
+                  <p className="text-xs font-medium text-status-made-order mt-1.5">
                     Price not available for this option
                   </p>
                 )
@@ -592,9 +592,9 @@ export default function CustomizeSheet({
                   variants, shown when this exact variant has real stock
                   somewhere. Updates live as the selection changes above. */}
               {matchedVariantStores.length > 0 && (
-                <div className="flex items-start gap-1.5 mt-2 pt-2 border-t border-emerald-200/60">
-                  <Store size={13} className="shrink-0 text-emerald-600 mt-0.5" aria-hidden="true" />
-                  <p className="text-xs text-emerald-700">
+                <div className="flex items-start gap-1.5 mt-2 pt-2 border-t border-status-in-stock/30">
+                  <Store size={13} className="shrink-0 text-status-in-stock mt-0.5" aria-hidden="true" />
+                  <p className="text-xs text-status-in-stock">
                     In stock at{' '}
                     <span className="font-medium">
                       {matchedVariantStores.map((s) => s.companyname).join(', ')}

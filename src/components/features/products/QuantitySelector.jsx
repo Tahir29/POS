@@ -33,7 +33,7 @@ export default function QuantitySelector({
       incrementDisabled={!canIncrement}
       disabled={disabled}
       trailing={maxQty < 99 && (
-        <span className="text-xs text-stone-400 pl-1">
+        <span className="text-xs text-muted-foreground pl-1">
           of {maxQty}
         </span>
       )}

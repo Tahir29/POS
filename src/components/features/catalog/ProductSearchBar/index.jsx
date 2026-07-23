@@ -141,7 +141,7 @@ export default function ProductSearchBar({
                 type="button"
                 onClick={handleClear}
                 aria-label="Clear search"
-                className="flex items-center justify-center w-6 h-6 rounded-full text-muted-foreground hover:bg-stone-100 hover:text-foreground transition-colors"
+                className="flex items-center justify-center w-6 h-6 rounded-full text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
               >
                 <X size={14} />
               </button>
@@ -173,7 +173,7 @@ export default function ProductSearchBar({
                 role="listitem"
                 type="button"
                 onClick={() => onRecentSelect(q)}
-                className="inline-flex items-center gap-1 min-h-[28px] px-3 py-1 text-xs font-medium text-muted-foreground bg-stone-100 hover:bg-primary/10 hover:text-primary rounded-full border border-transparent hover:border-primary/20 transition-colors"
+                className="inline-flex items-center gap-1 min-h-[28px] px-3 py-1 text-xs font-medium text-muted-foreground bg-muted hover:bg-primary/10 hover:text-primary rounded-full border border-transparent hover:border-primary/20 transition-colors"
               >
                 <Search size={10} className="shrink-0 opacity-60" aria-hidden="true" />
                 {q}

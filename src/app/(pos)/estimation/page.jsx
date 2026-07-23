@@ -36,6 +36,7 @@ import { todayDateString } from '@/lib/dateUtils';
 
 import PageLoader from '@/components/shared/PageLoader';
 import ListRowsSkeleton from '@/components/shared/ListRowsSkeleton';
+import CustomerAttachedBanner from '@/components/shared/CustomerAttachedBanner';
 import { Button }  from '@/components/ui/button';
 import { Input }   from '@/components/ui/input';
 import { Label }   from '@/components/ui/label';
@@ -69,16 +70,6 @@ function FormField({ label, required, error, children }) {
       <Label>{label} {required && <span className="text-destructive">*</span>}</Label>
       {children}
       {error && <p className="text-xs text-destructive">{error.message}</p>}
-    </div>
-  );
-}
-
-function CustomerBanner({ customerId, customerName }) {
-  return (
-    <div className={`rounded-xl border p-3 text-sm ${customerId ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}>
-      {customerId
-        ? <p className="text-emerald-700">Customer: <strong>{customerName}</strong></p>
-        : <p className="text-amber-700">⚠ Attach a customer from the header before submitting.</p>}
     </div>
   );
 }
@@ -136,7 +127,7 @@ function EstimationNewForm({ onDone }) {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5">
-      <CustomerBanner customerId={customerId} customerName={customerName} />
+      <CustomerAttachedBanner customerId={customerId} customerName={customerName} />
 
       <FormField label="Date" required error={errors.document_date}>
         <Input type="date" max={todayDateString()} {...register('document_date')} className="h-11" />
@@ -194,8 +185,8 @@ function EstimationRow({ item, onConverted }) {
           <p className="text-xs text-muted-foreground">{formatDate(item.documentDate)}</p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          {item.isOrdered && <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">Converted</span>}
-          {item.isClosed && !item.isOrdered && <span className="rounded-full bg-stone-100 px-2 py-0.5 text-[11px] font-medium text-stone-500">Cancelled</span>}
+          {item.isOrdered && <span className="rounded-full bg-status-in-stock/10 px-2 py-0.5 text-[11px] font-medium text-status-in-stock">Converted</span>}
+          {item.isClosed && !item.isOrdered && <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">Cancelled</span>}
           <p className="text-sm font-semibold text-foreground tabular-nums">{formatINR(item.amount)}</p>
           {isOpen && <ChevronRight className="w-4 h-4 text-muted-foreground" />}
         </div>

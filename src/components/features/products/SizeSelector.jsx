@@ -75,7 +75,7 @@ export default function SizeSelector({
           ))}
         </div>
       ) : safeSizes.length === 0 ? (
-        <p className="text-sm text-stone-400 text-center py-10">
+        <p className="text-sm text-muted-foreground text-center py-10">
           No sizes available for this product.
         </p>
       ) : (
@@ -103,7 +103,7 @@ export default function SizeSelector({
                   focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
                   ${isSelected
                     ? 'bg-primary border-primary text-primary-foreground shadow-sm'
-                    : 'bg-card border-border text-stone-700 hover:border-accent/60'
+                    : 'bg-card border-border text-foreground/80 hover:border-accent/60'
                   }
                 `}
               >
@@ -111,7 +111,7 @@ export default function SizeSelector({
                 {size.size_value && size.size_value !== label && (
                   <span
                     className={`text-[10px] leading-none ${
-                      isSelected ? 'text-primary-foreground/70' : 'text-stone-400'
+                      isSelected ? 'text-primary-foreground/70' : 'text-muted-foreground'
                     }`}
                   >
                     {size.size_value} mm
