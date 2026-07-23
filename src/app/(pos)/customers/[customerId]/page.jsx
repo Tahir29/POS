@@ -13,7 +13,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
-  ArrowLeft, Loader2, Phone, Mail, MapPin, CreditCard,
+  ArrowLeft, Phone, Mail, MapPin, CreditCard,
   ClipboardList, BookOpen,
 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
@@ -25,6 +25,9 @@ import { Label }    from '@/components/ui/label';
 import LocationSelect from '@/components/shared/LocationSelect';
 import PillTabs from '@/components/shared/PillTabs';
 import PaymentStatusBadge, { mapOrderStatus } from '@/components/shared/PaymentStatusBadge';
+import EmptyState from '@/components/shared/EmptyState';
+import ErrorState from '@/components/shared/ErrorState';
+import InlineLoader from '@/components/shared/InlineLoader';
 
 import { updateCustomerSchema }   from '@/validators/customerSchema';
 import { useRetrieveCustomer }    from '@/hooks/customer/useRetrieveCustomer';
@@ -67,26 +70,13 @@ const TAB_LABELS = {
 
 // ── Shared primitives ─────────────────────────────────────────────────────────
 function TabLoading({ label }) {
-  return (
-    <div className="flex items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
-      <Loader2 size={16} className="animate-spin" />{label}
-    </div>
-  );
+  return <InlineLoader className="py-12" label={label} />;
 }
 function TabError({ label, onRetry }) {
-  return (
-    <div className="flex flex-col items-center gap-3 py-12 text-center">
-      <p className="text-sm text-destructive">{label}</p>
-      <Button type="button" variant="outline" size="sm" onClick={onRetry}>Retry</Button>
-    </div>
-  );
+  return <ErrorState className="py-12" title={label} onRetry={onRetry} />;
 }
 function TabEmpty({ icon, label }) {
-  return (
-    <div className="flex flex-col items-center gap-2 py-12 text-center text-muted-foreground">
-      {icon}<p className="text-sm">{label}</p>
-    </div>
-  );
+  return <EmptyState className="border-0 py-12" icon={icon} title={label} />;
 }
 
 // ── Profile Tab ───────────────────────────────────────────────────────────────
@@ -289,7 +279,7 @@ function OrdersTab({ customerId }) {
 
   if (isLoading) return <TabLoading label="Loading orders…" />;
   if (isError)   return <TabError label="Failed to load orders." onRetry={refetch} />;
-  if (!orders.length) return <TabEmpty icon={<ClipboardList size={28} className="text-muted-foreground/50" />} label="No orders found." />;
+  if (!orders.length) return <TabEmpty icon={ClipboardList} label="No orders found." />;
 
   return (
     <div className="flex flex-col gap-2">
@@ -318,7 +308,7 @@ function SchemesTab({ customerId }) {
 
   if (isLoading) return <TabLoading label="Loading schemes…" />;
   if (isError)   return <TabError label="Failed to load schemes." onRetry={refetch} />;
-  if (!enrollments.length) return <TabEmpty icon={<BookOpen size={28} className="text-muted-foreground/50" />} label="No scheme enrollments." />;
+  if (!enrollments.length) return <TabEmpty icon={BookOpen} label="No scheme enrollments." />;
 
   return (
     <div className="flex flex-col gap-2">
@@ -353,7 +343,7 @@ function HistoryTab({ customerId }) {
   if (isLoading) return <TabLoading label="Loading history…" />;
   if (isError)   return <TabError label="Failed to load history." onRetry={refetch} />;
   if (!invoices.length && !receiptModes.length) {
-    return <TabEmpty icon={<ClipboardList size={28} className="text-muted-foreground/50" />} label="No purchase history found." />;
+    return <TabEmpty icon={ClipboardList} label="No purchase history found." />;
   }
 
   return (
@@ -463,12 +453,7 @@ export default function CustomerDetailPage() {
       </div>
 
       {/* Loading */}
-      {isLoading && (
-        <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground">
-          <Loader2 size={16} className="animate-spin" />
-          Loading customer…
-        </div>
-      )}
+      {isLoading && <InlineLoader className="py-16" label="Loading customer…" />}
 
       {/* Error */}
       {isError && !isLoading && (

@@ -185,8 +185,7 @@ function SettingsScreen() {
   return (
     <div className="p-4 pb-8 max-w-lg">
       <div className="mb-6">
-        <h1 className="text-xl font-semibold text-foreground">Settings</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">
+        <p className="text-sm text-muted-foreground">
           Manage store configuration
         </p>
       </div>

@@ -6,23 +6,12 @@
 // SEC-006: Bootstraps the idle timeout hook so it runs globally across
 //          all authenticated sessions.
 
-import { Geist, Geist_Mono } from "next/font/google";
 import Script from "next/script";
 import Providers from '@/components/shared/Providers';
 import RehydrationGuard from '@/components/shared/RehydrationGuard';
 import "./globals.css";
 
 const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
 
 export const metadata = {
   title: 'Lucira POS',
@@ -37,7 +26,7 @@ export default function RootLayout({ children }) {
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} font-figtree h-full antialiased`}
+      className="font-figtree h-full antialiased"
     >
       <body className="min-h-full flex flex-col antialiased">
         {/*

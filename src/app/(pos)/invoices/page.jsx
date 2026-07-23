@@ -13,6 +13,9 @@
 import { useMemo, useRef, useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, Loader2, Receipt, Search, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import EmptyState from '@/components/shared/EmptyState';
+import ErrorState from '@/components/shared/ErrorState';
+import InlineLoader from '@/components/shared/InlineLoader';
 import { Input } from '@/components/ui/input';
 import InvoiceListItem from '@/components/features/invoices/InvoiceListItem';
 import InvoiceDetailSheet from '@/components/features/invoices/InvoiceDetailSheet';
@@ -125,12 +128,11 @@ export default function InvoicesPage() {
 
   return (
     <div className="flex flex-col gap-3 max-w-3xl mx-auto w-full p-4 md:p-6">
-      <div className="relative -mx-4 -mt-4 flex items-center justify-between bg-background px-4 pt-4 pb-2 md:-mx-6 md:-mt-6 md:px-6 md:pt-6">
-        <h1 className="text-3xl font-bold text-foreground">Invoices</h1>
-        {isAllFetching && !isAllLoading && (
+      {isAllFetching && !isAllLoading && (
+        <div className="flex justify-end -mb-1">
           <Loader2 size={14} className="animate-spin text-muted-foreground" aria-hidden="true" />
-        )}
-      </div>
+        </div>
+      )}
 
       {/* ── Filters ─────────────────────────────────────── */}
       <div className="flex flex-col gap-2">
@@ -214,24 +216,19 @@ export default function InvoicesPage() {
       {/* ── List ────────────────────────────────────────── */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
         {isLoading ? (
-          <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground col-span-full">
-            <Loader2 size={16} className="animate-spin" aria-hidden="true" />
-            {isSearchActive ? 'Searching invoices…' : 'Loading invoices…'}
-          </div>
+          <InlineLoader className="col-span-full" label={isSearchActive ? 'Searching invoices…' : 'Loading invoices…'} />
         ) : isError ? (
-          <div className="flex flex-col items-center gap-3 py-10 text-center col-span-full">
-            <p className="text-sm text-destructive">Failed to load invoices.</p>
-            <Button type="button" variant="outline" onClick={() => refetch()}>
-              Retry
-            </Button>
-          </div>
+          <ErrorState
+            className="col-span-full"
+            title="Failed to load invoices."
+            onRetry={() => refetch()}
+          />
         ) : displayInvoices.length === 0 ? (
-          <div className="flex flex-col items-center gap-2 py-10 text-center text-muted-foreground col-span-full">
-            <Receipt size={28} aria-hidden="true" className="text-muted-foreground/50" />
-            <p className="text-sm">
-              {isSearchActive ? 'No invoices match your filters.' : 'No invoices found.'}
-            </p>
-          </div>
+          <EmptyState
+            className="col-span-full"
+            icon={Receipt}
+            title={isSearchActive ? 'No invoices match your filters.' : 'No invoices found.'}
+          />
         ) : (
           displayInvoices.map((invoice, idx) => (
             <InvoiceListItem

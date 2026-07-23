@@ -16,7 +16,7 @@ export default function RemoveLineItemButton({ onClick, label = 'Remove item' })
       type="button"
       onClick={onClick}
       aria-label={label}
-      className="text-stone-400 hover:text-destructive"
+      className="text-muted-foreground hover:text-destructive"
     >
       <Trash2 size={14} />
     </button>

@@ -11,8 +11,11 @@ import { useSelector } from 'react-redux';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { RefreshCw, LayoutGrid, Plus, X, AlertCircle } from 'lucide-react';
+import { RefreshCw, LayoutGrid, Plus, X } from 'lucide-react';
 
+import EmptyState from '@/components/shared/EmptyState';
+import ErrorState from '@/components/shared/ErrorState';
+import InlineLoader from '@/components/shared/InlineLoader';
 import { useSchemes }            from '@/hooks/schemes/useSchemes';
 import { useSchemeEnrollments }  from '@/hooks/schemes/useSchemeEnrollments';
 import { useSchemeReceipt }      from '@/hooks/schemes/useSchemeReceipt';
@@ -237,21 +240,11 @@ function EnrollmentsTab() {
   const [detailTarget,  setDetailTarget]  = useState(null);
 
   if (isLoading) {
-    return (
-      <div className="flex justify-center py-16">
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-      </div>
-    );
+    return <InlineLoader className="py-16" label="Loading enrollments…" />;
   }
 
   if (isError) {
-    return (
-      <div className="flex flex-col items-center gap-3 py-16 text-muted-foreground">
-        <AlertCircle size={20} />
-        <p className="text-sm">Failed to load enrollments.</p>
-        <Button variant="outline" size="sm" onClick={() => refetch()}>Retry</Button>
-      </div>
-    );
+    return <ErrorState className="py-16" title="Failed to load enrollments." onRetry={() => refetch()} />;
   }
 
   return (
@@ -264,15 +257,16 @@ function EnrollmentsTab() {
       )}
 
       {enrollments.length === 0 ? (
-        <div className="flex flex-col items-center gap-2 py-16 text-muted-foreground">
-          <LayoutGrid size={28} className="opacity-40" />
-          <p className="text-sm">
-            {customerId ? 'No enrollments for this customer.' : 'No enrollments found.'}
-          </p>
-          <Button asChild variant="outline" size="sm" className="mt-2">
-            <Link href="/schemes/enroll"><Plus size={14} className="mr-1" /> Enroll Now</Link>
-          </Button>
-        </div>
+        <EmptyState
+          className="border-0 py-16"
+          icon={LayoutGrid}
+          title={customerId ? 'No enrollments for this customer.' : 'No enrollments found.'}
+          action={(
+            <Button asChild variant="outline" size="sm">
+              <Link href="/schemes/enroll"><Plus size={14} className="mr-1" /> Enroll Now</Link>
+            </Button>
+          )}
+        />
       ) : (
         enrollments.map((enrollment) => (
           <div key={enrollment.enrollmentId} className="rounded-xl border border-border bg-card p-4 flex flex-col gap-3">
@@ -369,10 +363,6 @@ function SchemesScreen() {
 
   return (
     <div className="p-4 pb-8 max-w-2xl mx-auto">
-      <div className="mb-5">
-        <h1 className="text-xl font-semibold text-foreground">Schemes</h1>
-      </div>
-
       <div className="mb-4">
         <PillTabs tabs={TABS} value={activeTab} onChange={setActiveTab} />
       </div>

@@ -18,10 +18,6 @@ import { Button } from '@/components/ui/button';
 export default function TransfersPage() {
   return (
     <div className="flex flex-col gap-4 max-w-2xl mx-auto w-full">
-      <div className="relative -mx-4 -mt-4 flex items-center justify-between bg-background px-4 pt-4 pb-2 md:-mx-6 md:-mt-6 md:px-6 md:pt-6">
-        <h1 className="text-base font-bold text-foreground">Transfers</h1>
-      </div>
-
       <div className="flex flex-col items-center gap-4 rounded-xl border border-dashed border-border px-6 py-12 text-center">
         <ArrowLeftRight size={40} className="text-muted-foreground/50" aria-hidden="true" strokeWidth={1.5} />
 

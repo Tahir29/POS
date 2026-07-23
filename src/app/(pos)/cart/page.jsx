@@ -15,7 +15,7 @@ import CartItemRow from '@/components/features/cart/CartItemRow';
 import CartEmptyState from '@/components/features/cart/CartEmptyState';
 import CartSummary from '@/components/features/cart/CartSummary';
 import CartCustomerTag from '@/components/features/cart/CartCustomerTag';
-import AppliedPromoTag from '@/components/features/cart/AppliedPromoTag';
+import AppliedPromoTag from '@/components/shared/AppliedPromoTag';
 import ProceedToCheckoutButton from '@/components/features/cart/ProceedToCheckoutButton';
 import { useCart } from '@/hooks/cart/useCart';
 import { useRedirectOnCustomerChange } from '@/hooks/checkout/useRedirectOnCustomerChange';
@@ -52,6 +52,7 @@ export default function CartPage() {
               <AppliedPromoTag
                 key={promo.promoCode}
                 promoCode={promo.promoCode}
+                discountAmount={promo.discountAmount}
                 onRemove={() => removePromo(promo.promoCode)}
               />
             ))}

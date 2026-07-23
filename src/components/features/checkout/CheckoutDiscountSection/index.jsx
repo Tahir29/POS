@@ -12,7 +12,7 @@ import { useCart } from '@/hooks/cart/useCart';
 import { usePromoValidation } from '@/hooks/checkout/usePromoValidation';
 import PromoCodeInput from '@/components/features/checkout/PromoCodeInput';
 import PromoCodeSheet from '@/components/features/checkout/PromoCodeSheet';
-import PromoAppliedBadge from '@/components/features/checkout/PromoAppliedBadge';
+import AppliedPromoTag from '@/components/shared/AppliedPromoTag';
 
 export default function CheckoutDiscountSection() {
   const { appliedPromos, removePromo } = useCart();
@@ -23,7 +23,7 @@ export default function CheckoutDiscountSection() {
       <h2 className="text-sm font-bold text-foreground">Discount</h2>
 
       {appliedPromos.map((promo) => (
-        <PromoAppliedBadge
+        <AppliedPromoTag
           key={promo.promoCode}
           promoCode={promo.promoCode}
           discountAmount={promo.discountAmount}

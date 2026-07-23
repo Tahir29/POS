@@ -8,6 +8,7 @@ import KPICard              from '@/components/features/dashboard/KPICard';
 import RecentOrdersList     from '@/components/features/dashboard/RecentOrdersList';
 import QuickActionGrid      from '@/components/features/dashboard/QuickActions';
 import TodaysActivityStrip  from '@/components/features/dashboard/TodaysActivityStrip';
+import InlineLoader         from '@/components/shared/InlineLoader';
 
 import { useDashboardSummary } from '@/hooks/dashboard/useDashboardSummary';
 
@@ -124,7 +125,7 @@ function DashboardScreen() {
 
 export default function DashboardPage() {
   return (
-    <Suspense fallback={<div className="p-6 text-muted-foreground">Loading dashboard...</div>}>
+    <Suspense fallback={<InlineLoader className="py-16" label="Loading dashboard…" />}>
       <DashboardScreen />
     </Suspense>
   );
