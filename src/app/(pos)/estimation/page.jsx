@@ -248,10 +248,7 @@ function EstimationScreen() {
   return (
     <div className="p-4 pb-8 flex flex-col gap-4">
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold text-foreground">Estimation</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Price quotes before a purchase</p>
-        </div>
+        <p className="text-sm text-muted-foreground">Price quotes before a purchase</p>
         {storeId && (
           <Button
             size="sm"

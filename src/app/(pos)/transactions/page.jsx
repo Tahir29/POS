@@ -834,10 +834,7 @@ function TransactionsScreen() {
   return (
     <div className="p-4 pb-8 flex flex-col gap-4">
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold text-foreground">Transactions</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Returns, refunds, and post-sale activity</p>
-        </div>
+        <p className="text-sm text-muted-foreground">Returns, refunds, and post-sale activity</p>
         {storeId && (
           <Button
             size="sm"

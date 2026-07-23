@@ -412,12 +412,9 @@ function ReportsScreen() {
     <div className="p-4 pb-8">
       {/* Header */}
       <div className="mb-5 flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold text-foreground">Reports</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            Operational summaries for this store
-          </p>
-        </div>
+        <p className="text-sm text-muted-foreground">
+          Operational summaries for this store
+        </p>
         <button
           onClick={() => window.print()}
           className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground border border-border rounded-lg px-3 py-2 hover:bg-muted/50 transition-colors"

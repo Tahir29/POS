@@ -134,8 +134,7 @@ export default function CustomersPage() {
 
   return (
     <div className="flex flex-col gap-4 max-w-3xl mx-auto w-full p-4 md:p-6">
-      <div className="flex items-center justify-between gap-2">
-        <h1 className="text-3xl font-bold text-foreground">Customers</h1>
+      <div className="flex items-center justify-end gap-2">
         <Button type="button" onClick={() => setIsNewCustomerOpen(true)} className="gap-2">
           <UserPlus size={16} aria-hidden="true" />
           New Customer

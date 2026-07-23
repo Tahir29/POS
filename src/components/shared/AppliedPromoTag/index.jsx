@@ -1,22 +1,29 @@
 'use client';
 
-// src/components/features/checkout/PromoAppliedBadge/index.jsx
-// Shows the applied discount details (code + amount) with a remove action.
+// src/components/shared/AppliedPromoTag/index.jsx
+//
+// Applied-promo-code pill with a remove action, shown on both the
+// cart (drawer + standalone page) and checkout screens. Was two
+// near-identical components (cart's AppliedPromoTag, checkout's
+// PromoAppliedBadge) differing only in an optional "You saved ₹X"
+// line — merged here with discountAmount as an optional prop.
 
 import { Tag, X } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 /**
  * @param {{
- *   promoCode: string,
- *   discountAmount: number,
+ *   promoCode: string | null,
+ *   discountAmount?: number,
  *   onRemove: () => void,
+ *   className?: string,
  * }} props
  */
-export default function PromoAppliedBadge({ promoCode, discountAmount, onRemove }) {
+export default function AppliedPromoTag({ promoCode, discountAmount, onRemove, className }) {
   if (!promoCode) return null;
 
   return (
-    <div className="flex items-center justify-between gap-2 rounded-lg bg-status-in-stock/10 px-3 py-2.5">
+    <div className={cn('flex items-center justify-between gap-2 rounded-lg bg-status-in-stock/10 px-3 py-2.5', className)}>
       <div className="flex items-center gap-2 min-w-0">
         <Tag size={16} className="text-status-in-stock shrink-0" aria-hidden="true" />
         <div className="min-w-0">

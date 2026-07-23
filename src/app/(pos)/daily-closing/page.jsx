@@ -27,7 +27,10 @@ import { useSelector } from 'react-redux';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { ClipboardCheck, AlertCircle, ChevronDown } from 'lucide-react';
+import { ClipboardCheck, ChevronDown } from 'lucide-react';
+import EmptyState from '@/components/shared/EmptyState';
+import ErrorState from '@/components/shared/ErrorState';
+import InlineLoader from '@/components/shared/InlineLoader';
 
 import { useDailyClosing }       from '@/hooks/dailyClosing/useDailyClosing';
 import { useCreateDailyClosing } from '@/hooks/dailyClosing/useCreateDailyClosing';
@@ -67,30 +70,15 @@ function HistoryTab() {
   const totalPages = Math.ceil(totalCount / 30);
 
   if (isLoading) {
-    return (
-      <div className="flex justify-center py-16">
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-      </div>
-    );
+    return <InlineLoader className="py-16" label="Loading closing records…" />;
   }
 
   if (isError) {
-    return (
-      <div className="flex flex-col items-center gap-3 py-16 text-muted-foreground">
-        <AlertCircle size={20} />
-        <p className="text-sm">Failed to load closing records.</p>
-        <Button variant="outline" size="sm" onClick={() => refetch()}>Retry</Button>
-      </div>
-    );
+    return <ErrorState className="py-16" title="Failed to load closing records." onRetry={() => refetch()} />;
   }
 
   if (closings.length === 0) {
-    return (
-      <div className="flex flex-col items-center gap-2 py-16 text-muted-foreground">
-        <ClipboardCheck size={28} className="opacity-40" />
-        <p className="text-sm">No closing records yet.</p>
-      </div>
-    );
+    return <EmptyState className="border-0 py-16" icon={ClipboardCheck} title="No closing records yet." />;
   }
 
   return (
@@ -247,7 +235,7 @@ function NewClosingTab() {
       <Field id="dc_opening"  label="Opening Cash Balance" name="opening_balance" required />
 
       {/* Sales by mode */}
-      <div className="rounded-xl border border-border bg-muted p-4 flex flex-col gap-4">
+      <div className="rounded-xl border border-border bg-muted shadow-sm p-4 flex flex-col gap-4">
         <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Sales by Payment Mode</p>
         <Field id="dc_cash"  label="Cash Sales"  name="cash_sales"  required />
         <Field id="dc_card"  label="Card Sales"  name="card_sales"  required />
@@ -256,7 +244,7 @@ function NewClosingTab() {
       </div>
 
       {/* Live summary */}
-      <div className="rounded-xl border border-border bg-card px-4 py-3 flex flex-col gap-2 text-sm">
+      <div className="rounded-xl border border-border bg-card shadow-sm px-4 py-3 flex flex-col gap-2 text-sm">
         <div className="flex justify-between">
           <span className="text-muted-foreground">Total Sales</span>
           <span className="font-semibold text-foreground">{formatCurrency(totalSales)}</span>
@@ -297,11 +285,6 @@ function DailyClosingScreen() {
 
   return (
     <div className="flex flex-col gap-4 p-4 pb-8 max-w-2xl mx-auto">
-      <div className="flex items-center gap-3 pt-2">
-        <ClipboardCheck size={20} className="text-muted-foreground" />
-        <h1 className="text-xl font-semibold text-foreground">Daily Closing</h1>
-      </div>
-
       <PillTabs tabs={TABS} value={activeTab} onChange={setActiveTab} />
 
       {activeTab === 'new'     && <NewClosingTab />}

@@ -34,7 +34,7 @@ import { Input }    from '@/components/ui/input';
 import { Label }    from '@/components/ui/label';
 import PaymentModeSelect from '@/components/shared/PaymentModeSelect';
 import PillTabs from '@/components/shared/PillTabs';
-import RemoveLineItemButton from '@/components/shared/RemoveLineItemButton';
+import LineItemCard from '@/components/shared/LineItemCard';
 import CustomerAttachedBanner from '@/components/shared/CustomerAttachedBanner';
 import PaymentStatusBadge, { mapReturnStatus } from '@/components/shared/PaymentStatusBadge';
 import { usePaymentModes } from '@/hooks/checkout/usePaymentModes';
@@ -253,14 +253,13 @@ function NewReturnTab() {
         </div>
 
         {fields.map((field, index) => (
-          <div key={field.id} className="rounded-xl border border-border bg-muted p-3 flex flex-col gap-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-muted-foreground">Item {index + 1}</span>
-              {fields.length > 1 && (
-                <RemoveLineItemButton onClick={() => remove(index)} />
-              )}
-            </div>
-
+          <LineItemCard
+            key={field.id}
+            index={index}
+            itemLabel="Item"
+            showRemove={fields.length > 1}
+            onRemove={() => remove(index)}
+          >
             <div className="grid grid-cols-2 gap-2">
               <div className="flex flex-col gap-1">
                 <Label className="text-xs">Item ID <span className="text-destructive">*</span></Label>
@@ -309,7 +308,7 @@ function NewReturnTab() {
                 />
               </div>
             </div>
-          </div>
+          </LineItemCard>
         ))}
 
         {errors.line_items?.root && (
@@ -322,7 +321,7 @@ function NewReturnTab() {
 
       {/* Total */}
       {totalReturnAmount > 0 && (
-        <div className="flex justify-between rounded-xl border border-border bg-card px-4 py-3 text-sm font-medium">
+        <div className="flex justify-between rounded-xl border border-border bg-card shadow-sm px-4 py-3 text-sm font-medium">
           <span className="text-muted-foreground">Total Return Amount</span>
           <span className="text-foreground">{formatCurrency(totalReturnAmount)}</span>
         </div>
@@ -367,12 +366,6 @@ function ReturnsScreen() {
 
   return (
     <div className="flex flex-col gap-4 p-4 pb-8 max-w-2xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center gap-3 pt-2">
-        <RotateCcw size={20} className="text-muted-foreground" />
-        <h1 className="text-xl font-semibold text-foreground">Returns</h1>
-      </div>
-
       {/* Tab bar */}
       <PillTabs tabs={TABS} value={activeTab} onChange={setActiveTab} />
 

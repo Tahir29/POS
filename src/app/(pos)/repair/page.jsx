@@ -504,10 +504,7 @@ function RepairScreen() {
   return (
     <div className="p-4 pb-8 flex flex-col gap-4">
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold text-foreground">Repair</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Intake, craftsman handoff, and billing</p>
-        </div>
+        <p className="text-sm text-muted-foreground">Intake, craftsman handoff, and billing</p>
         {storeId && (
           <Button
             size="sm"

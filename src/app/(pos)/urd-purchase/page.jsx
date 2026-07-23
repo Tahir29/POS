@@ -25,7 +25,7 @@ import { Label }  from '@/components/ui/label';
 import PaymentModeSelect from '@/components/shared/PaymentModeSelect';
 import MetalTypeSelect   from '@/components/shared/MetalTypeSelect';
 import PillTabs          from '@/components/shared/PillTabs';
-import RemoveLineItemButton from '@/components/shared/RemoveLineItemButton';
+import LineItemCard from '@/components/shared/LineItemCard';
 import CustomerAttachedBanner from '@/components/shared/CustomerAttachedBanner';
 
 const lineSchema = z.object({
@@ -188,14 +188,13 @@ function NewURDTab() {
         </div>
 
         {fields.map((field, index) => (
-          <div key={field.id} className="rounded-xl border border-border bg-muted p-4 flex flex-col gap-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-muted-foreground">Metal {index + 1}</span>
-              {fields.length > 1 && (
-                <RemoveLineItemButton onClick={() => remove(index)} />
-              )}
-            </div>
-
+          <LineItemCard
+            key={field.id}
+            index={index}
+            itemLabel="Metal"
+            showRemove={fields.length > 1}
+            onRemove={() => remove(index)}
+          >
             <div className="flex flex-col gap-1">
               <Label className="text-xs">Metal Type <span className="text-destructive">*</span></Label>
               <MetalTypeSelect control={control} name={`line_items.${index}.metal_type_id`} placeholder="Select metal" />
@@ -228,13 +227,13 @@ function NewURDTab() {
                 </div>
               </div>
             </div>
-          </div>
+          </LineItemCard>
         ))}
       </div>
 
       {/* Total */}
       {totalAmount > 0 && (
-        <div className="flex justify-between rounded-xl border border-border bg-card px-4 py-3 text-sm">
+        <div className="flex justify-between rounded-xl border border-border bg-card shadow-sm px-4 py-3 text-sm">
           <span className="text-muted-foreground">Total Payout</span>
           <span className="font-semibold text-foreground">{formatCurrency(totalAmount)}</span>
         </div>
@@ -268,11 +267,7 @@ function URDScreen() {
 
   return (
     <div className="flex flex-col gap-4 p-4 pb-8 max-w-2xl mx-auto">
-      <div className="flex items-center gap-3 pt-2">
-        <Coins size={20} className="text-muted-foreground" />
-        <h1 className="text-xl font-semibold text-foreground">URD Purchase</h1>
-        <span className="text-xs text-muted-foreground font-normal">(Old Gold / Unregistered Dealer)</span>
-      </div>
+      <p className="text-xs text-muted-foreground -mb-1">Old Gold / Unregistered Dealer</p>
       <PillTabs tabs={TABS} value={activeTab} onChange={setActiveTab} />
       {activeTab === 'new'     && <NewURDTab />}
       {activeTab === 'history' && <HistoryTab />}
