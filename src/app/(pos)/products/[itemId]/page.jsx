@@ -29,6 +29,7 @@ import { useStockByStores }     from '@/hooks/products/useStockByStores';
 import { useProductAttributes } from '@/hooks/products/useProductAttributes';
 import { useDesignVariants }    from '@/hooks/products/useDesignVariants';
 import { useShopifyProductImages } from '@/hooks/products/useShopifyProductImages';
+import { useVariantPricing }    from '@/hooks/products/useVariantPricing';
 
 import ProductImageGallery   from '@/components/features/products/ProductImageGallery';
 import ProductSpecifications from '@/components/features/products/ProductSpecifications';
@@ -40,32 +41,20 @@ import ProductTrustBadge     from '@/components/features/products/ProductTrustBa
 import CustomizeSheet        from '@/components/features/products/CustomizeSheet';
 import ProductStickyActionBar from '@/components/features/products/ProductStickyActionBar';
 import ProductTrustSection   from '@/components/features/products/ProductTrustSection';
+import ProductReviewsList    from '@/components/features/products/ProductReviewsList';
 import StockStatusBadge, {
   deriveStockStatus,
   deriveStockStatusFromProduct,
 } from '@/components/shared/StockStatusBadge';
 
-import APP_CONFIG from '@/constants/appConfig';
 import TOAST      from '@/constants/toastMessages';
 import tracker from '@/lib/analytics/tracker';
 import EVENTS, { GA_ECOMMERCE_EVENTS } from '@/lib/analytics/events';
+import { formatPrice } from '@/lib/priceUtils';
 import { Settings2, CheckCircle2 } from 'lucide-react';
 
 const selectActiveStoreId   = (s) => s.store.activeStoreId;
 const selectActiveStoreName = (s) => s.store.activeStoreName;
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function formatPrice(amount) {
-  if (amount === null || amount === undefined) return null;
-  const num = parseFloat(amount);
-  if (isNaN(num) || num === 0) return null;
-  return new Intl.NumberFormat('en-IN', {
-    style:                'currency',
-    currency:             APP_CONFIG.CURRENCY.INR_CODE ?? 'INR',
-    maximumFractionDigits: 0,
-  }).format(num);
-}
 
 // ── Not found ─────────────────────────────────────────────────────────────────
 
@@ -95,8 +84,23 @@ function ProductDetailScreen() {
   } = useProductDetail(itemId);
 
   const { data: stockData, isLoading: stockLoading, isFetching: stockFetching } = useProductStock(product?.item_code);
-  const { data: storeStocks = [], isLoading: storeStocksLoading } = useStockByStores(product?.item_id);
   const { data: attributes = [] } = useProductAttributes(null);
+
+  // ── UI state ──────────────────────────────────────────────────────────────
+  // Declared before useStockByStores below so the "Stock Across Stores"
+  // panel can be scoped to whichever variant is currently confirmed, not
+  // always the base product.
+  const [customizeOpen, setCustomizeOpen] = useState(false);
+  const [selectedVariant, setSelectedVariant] = useState(null);
+  const [quantity, setQuantity] = useState(1);
+
+  // Cross-store stock for the confirmed variant when one is selected,
+  // otherwise the base product. MTO variants have no real item_id to check
+  // (see CrossStoreStockPanel's hide condition below) — falls back to the
+  // product's own id, which is fine since the panel is hidden in that case.
+  const { data: storeStocks = [], isLoading: storeStocksLoading } = useStockByStores(
+    selectedVariant?.item_id ?? product?.item_id
+  );
 
   // ── Variants ──────────────────────────────────────────────────────────────
   const {
@@ -104,6 +108,7 @@ function ProductDetailScreen() {
     externalProductId,
     metalColors,
     variantStock,
+    storesByItemId,
     karats,
     sizes,
     findVariant,
@@ -120,11 +125,6 @@ function ProductDetailScreen() {
   // avoids the gallery flashing a hard "no image" state before either has
   // had a chance to return data.
   const imagesLoading = variantsLoading || shopifyImagesLoading;
-
-  // ── UI state ──────────────────────────────────────────────────────────────
-  const [customizeOpen, setCustomizeOpen] = useState(false);
-  const [selectedVariant, setSelectedVariant] = useState(null);
-  const [quantity, setQuantity] = useState(1);
 
   // Reset when navigating to a different product
   // useEffect(() => {
@@ -180,8 +180,28 @@ function ProductDetailScreen() {
   // Active item = selected variant (if customized) else original product
   const activeItem = selectedVariant ?? product;
 
+  // item_rate === 0 means this SKU was never given a static price — its
+  // real sell price floats with today's metal rate (see pricingService.js
+  // / apiEndpoints.js HELPERS block). Fetch it live via SetSalesItems
+  // rather than falling through to stale fields (Shopify-synced `price` is
+  // a snapshot, not today's rate — confirmed live 2026-07-22 the two can
+  // differ by ~12%).
+  const needsLivePricing = !!activeItem && (activeItem.item_rate ?? 0) === 0;
+  const {
+    data:      livePricing,
+    isLoading: pricingLoading,
+    isError:   pricingError,
+    refetch:   refetchPricing,
+  } = useVariantPricing(needsLivePricing ? activeItem : null);
+
+  // sub_total (rate + labour, pre-tax) is the analog of item_rate here —
+  // matches how item_rate itself is pre-tax for statically-priced items
+  // (is_tax_inclusive: false), so this doesn't change the existing
+  // tax-exclusive display convention.
+  const effectiveRate = needsLivePricing ? livePricing?.sub_total : activeItem?.item_rate;
+
   const price = formatPrice(
-    activeItem?.item_rate  ??
+    effectiveRate          ??
     activeItem?.sale_price ??
     activeItem?.price      ??
     activeItem?.mrp        ??
@@ -189,7 +209,7 @@ function ProductDetailScreen() {
   );
 
   const numericUnitPrice =
-    activeItem?.item_rate  ||
+    effectiveRate          ||
     activeItem?.sale_price ||
     activeItem?.price      ||
     activeItem?.mrp        ||
@@ -214,6 +234,14 @@ function ProductDetailScreen() {
 
   // Show Customize button when product has a style_id
   const hasCustomization = !!product?.style_id;
+
+  // A confirmed variant counts as Made to Order either because it's the
+  // pseudo-fallback (_isMTO — no real SKU exists for that combo) or because
+  // it's a real SKU with zero stock everywhere — same condition CustomizeSheet
+  // itself uses for the "Made to Order" badge, kept in sync here so "Stock
+  // Across Stores" hides in both cases, not just the fallback one.
+  const isSelectedVariantMTO = !!selectedVariant &&
+    (selectedVariant._isMTO || (selectedVariant.pieces ?? 0) === 0);
 
   // ── Callbacks ─────────────────────────────────────────────────────────────
   const handleCustomizeConfirm = useCallback((variant) => {
@@ -259,15 +287,28 @@ function ProductDetailScreen() {
             {/* Price + discount */}
             <div>
               <div className="flex items-baseline gap-2">
-                {price ? (
+                {needsLivePricing && pricingLoading ? (
+                  <p className="text-sm font-medium text-muted-foreground">Calculating live price…</p>
+                ) : price ? (
                   <p className="font-heading text-3xl text-foreground">{price}</p>
+                ) : needsLivePricing && pricingError ? (
+                  <p className="flex items-center gap-2 text-sm font-medium text-status-made-order">
+                    Could not calculate live price
+                    <button
+                      type="button"
+                      onClick={() => refetchPricing()}
+                      className="font-semibold underline underline-offset-2 hover:text-status-made-order/80"
+                    >
+                      Retry
+                    </button>
+                  </p>
                 ) : (
-                  // item_rate === 0 means this specific variant was never
-                  // costed (common — usually only one representative SKU
-                  // per style gets a real rate) — say so explicitly rather
-                  // than leaving a blank where the price should be, since a
-                  // customized selection implies real purchase intent.
-                  <p className="text-sm font-medium text-amber-600">
+                  // Live pricing came back empty, or this SKU has no static
+                  // rate and isn't a BOM item live pricing could resolve —
+                  // say so explicitly rather than leaving a blank where the
+                  // price should be, since a customized selection implies
+                  // real purchase intent.
+                  <p className="text-sm font-medium text-status-made-order">
                     Price not available for this option — needs costing before it can be sold
                   </p>
                 )}
@@ -350,11 +391,15 @@ function ProductDetailScreen() {
               </p>
             )}
 
-            {/* Availability at other stores */}
-            <CrossStoreStockPanel
-              storeStocks={storeStocks}
-              isLoading={storeStocksLoading}
-            />
+            {/* Availability at other stores — hidden once the confirmed
+                customization is Made to Order (no real stock anywhere to
+                report), shown for the base product or any in-stock variant */}
+            {!isSelectedVariantMTO && (
+              <CrossStoreStockPanel
+                storeStocks={storeStocks}
+                isLoading={storeStocksLoading}
+              />
+            )}
 
           </div>
         </div>
@@ -368,6 +413,11 @@ function ProductDetailScreen() {
         {/* {attributes.length > 0 && (
           <ProductAttributeList attributes={attributes} />
         )} */}
+
+        {/* Customer reviews — infinite scroll, bottom of page. Uses the
+            same externalProductId already resolved above for Shopify
+            images, so this adds zero extra OrnaVerse calls. */}
+        <ProductReviewsList shopifyProductId={externalProductId} />
 
       </div>
 
@@ -396,6 +446,7 @@ function ProductDetailScreen() {
         karats={karats}
         sizes={sizes}
         variantStock={variantStock}
+        storesByItemId={storesByItemId}
         findVariant={findVariant}
         onConfirm={handleCustomizeConfirm}
         isLoading={variantsLoading}

@@ -5,13 +5,13 @@
 //   Schemes    — available scheme products (existing SchemeCard grid)
 //   Enrollments — customer enrollments with inline receipt payment
 
-import { Suspense, useState } from 'react';
+import { Suspense, useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useSelector } from 'react-redux';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { RefreshCw, LayoutGrid, Plus, ChevronDown, X, AlertCircle } from 'lucide-react';
+import { RefreshCw, LayoutGrid, Plus, X, AlertCircle } from 'lucide-react';
 
 import { useSchemes }            from '@/hooks/schemes/useSchemes';
 import { useSchemeEnrollments }  from '@/hooks/schemes/useSchemeEnrollments';
@@ -20,36 +20,30 @@ import { usePaymentModes }       from '@/hooks/checkout/usePaymentModes';
 import { selectActiveStoreId }   from '@/store/slices/storeSlice';
 import { selectCartCustomerId, selectCartCustomerName } from '@/store/slices/cartSlice';
 import APP_CONFIG from '@/constants/appConfig';
+import { todayDateString } from '@/lib/dateUtils';
 
 import SchemeCard  from '@/components/features/schemes/SchemeCard';
+import EnrollmentDetailSheet from '@/components/features/schemes/EnrollmentDetailSheet';
 import PageLoader  from '@/components/shared/PageLoader';
 import BottomSheet from '@/components/shared/BottomSheet';
+import PaymentModeSelect from '@/components/shared/PaymentModeSelect';
+import PillTabs    from '@/components/shared/PillTabs';
 import { Button }  from '@/components/ui/button';
 import { Input }   from '@/components/ui/input';
 import { Label }   from '@/components/ui/label';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+import { formatCurrency, formatDate } from '@/lib/schemeFormat';
 
 // ── Helpers ───────────────────────────────────────────────────
-function formatCurrency(n) {
-  return `₹${Number(n ?? 0).toLocaleString('en-IN')}`;
-}
 
-function formatDate(d) {
-  if (!d) return '—';
-  return new Date(d).toLocaleDateString('en-IN');
-}
-
+// Enrollment lifecycle status (not a payment-settlement concept, so this
+// doesn't route through PaymentStatusBadge). completed/matured keep a raw
+// blue — no existing semantic token maps to an "info" state.
 const STATUS_STYLES = {
-  active:    'bg-emerald-50 text-emerald-700',
+  active:    'bg-status-in-stock/10 text-status-in-stock',
   completed: 'bg-blue-50    text-blue-700',
-  inactive:  'bg-stone-100  text-stone-500',
+  inactive:  'bg-muted  text-muted-foreground',
   matured:   'bg-blue-50    text-blue-700',
-  default:   'bg-stone-100  text-stone-500',
+  default:   'bg-muted  text-muted-foreground',
 };
 
 // ── Receipt payment schema ────────────────────────────────────
@@ -66,7 +60,7 @@ function ReceiptSheet({ enrollment, isOpen, onClose }) {
   const { paymentModes, isLoading: modesLoading } = usePaymentModes();
   const createReceipt = useSchemeReceipt();
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = todayDateString();
 
   const {
     register, handleSubmit, control, setValue, reset,
@@ -80,6 +74,22 @@ function ReceiptSheet({ enrollment, isOpen, onClose }) {
       document_date: today,
     },
   });
+
+  // This sheet stays mounted across different enrollments (only `isOpen`/
+  // `enrollment` change) — RHF's defaultValues only applies at the initial
+  // mount, so without this the amount field was silently staying blank
+  // every time a *different* enrollment's "Record Payment" was opened,
+  // forcing staff to retype the monthly amount each time.
+  useEffect(() => {
+    if (isOpen && enrollment) {
+      reset({
+        amount:        enrollment.schemeAmount ?? '',
+        mode_id:       '',
+        mode_name:     '',
+        document_date: todayDateString(),
+      });
+    }
+  }, [isOpen, enrollment, reset]);
 
   const onSubmit = async (data) => {
     const amount = Number(data.amount);
@@ -112,9 +122,9 @@ function ReceiptSheet({ enrollment, isOpen, onClose }) {
       <div className="flex flex-col gap-4">
 
         {/* Enrollment summary */}
-        <div className="rounded-xl border border-stone-200 bg-stone-50 p-3 text-sm flex flex-col gap-1">
-          <p className="font-medium text-stone-800">{enrollment.schemeName}</p>
-          <p className="text-stone-500">
+        <div className="rounded-xl border border-border bg-muted p-3 text-sm flex flex-col gap-1">
+          <p className="font-medium text-foreground">{enrollment.schemeName}</p>
+          <p className="text-muted-foreground">
             Monthly: {formatCurrency(enrollment.schemeAmount)} ·{' '}
             Paid so far: {formatCurrency(enrollment.investedAmount)}
           </p>
@@ -128,7 +138,7 @@ function ReceiptSheet({ enrollment, isOpen, onClose }) {
               Amount (₹) <span className="text-destructive">*</span>
             </Label>
             <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-stone-400">₹</span>
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">₹</span>
               <Input
                 id="rcpt_amount"
                 type="number"
@@ -143,40 +153,13 @@ function ReceiptSheet({ enrollment, isOpen, onClose }) {
           {/* Payment mode */}
           <div className="flex flex-col gap-1.5">
             <Label>Payment Mode <span className="text-destructive">*</span></Label>
-            <Controller
-              name="mode_id"
+            <PaymentModeSelect
               control={control}
-              render={({ field }) => {
-                const selected = paymentModes.find((m) => m.modeId === Number(field.value));
-                return (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <button
-                        type="button"
-                        className="flex h-11 w-full items-center justify-between rounded-lg border border-input bg-background px-3 text-sm"
-                      >
-                        <span className={selected ? 'text-foreground' : 'text-muted-foreground'}>
-                          {modesLoading ? 'Loading…' : selected ? selected.modeName : 'Select mode'}
-                        </span>
-                        <ChevronDown size={14} className="text-muted-foreground shrink-0" />
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]">
-                      {paymentModes.map((mode) => (
-                        <DropdownMenuItem
-                          key={mode.modeId}
-                          onSelect={() => {
-                            field.onChange(mode.modeId);
-                            setValue('mode_name', mode.modeName);
-                          }}
-                        >
-                          {mode.modeName}
-                        </DropdownMenuItem>
-                      ))}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                );
-              }}
+              name="mode_id"
+              paymentModes={paymentModes}
+              modesLoading={modesLoading}
+              placeholder="Select mode"
+              onSelect={(mode) => setValue('mode_name', mode.modeName)}
             />
             {errors.mode_id && <p className="text-xs text-destructive">{errors.mode_id.message}</p>}
           </div>
@@ -184,7 +167,7 @@ function ReceiptSheet({ enrollment, isOpen, onClose }) {
           {/* Date */}
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="rcpt_date">Payment Date <span className="text-destructive">*</span></Label>
-            <Input id="rcpt_date" type="date" {...register('document_date')} className="h-11" />
+            <Input id="rcpt_date" type="date" max={today} {...register('document_date')} className="h-11" />
             {errors.document_date && <p className="text-xs text-destructive">{errors.document_date.message}</p>}
           </div>
 
@@ -251,6 +234,7 @@ function EnrollmentsTab() {
     useSchemeEnrollments(customerId ? { partyId: customerId } : {});
 
   const [receiptTarget, setReceiptTarget] = useState(null);
+  const [detailTarget,  setDetailTarget]  = useState(null);
 
   if (isLoading) {
     return (
@@ -262,7 +246,7 @@ function EnrollmentsTab() {
 
   if (isError) {
     return (
-      <div className="flex flex-col items-center gap-3 py-16 text-stone-500">
+      <div className="flex flex-col items-center gap-3 py-16 text-muted-foreground">
         <AlertCircle size={20} />
         <p className="text-sm">Failed to load enrollments.</p>
         <Button variant="outline" size="sm" onClick={() => refetch()}>Retry</Button>
@@ -274,13 +258,13 @@ function EnrollmentsTab() {
     <div className="flex flex-col gap-3">
       {/* Context banner */}
       {customerId && (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+        <div className="rounded-xl border border-status-in-stock/30 bg-status-in-stock/10 px-3 py-2 text-sm text-status-in-stock">
           Showing enrollments for <strong>{customerName}</strong>
         </div>
       )}
 
       {enrollments.length === 0 ? (
-        <div className="flex flex-col items-center gap-2 py-16 text-stone-400">
+        <div className="flex flex-col items-center gap-2 py-16 text-muted-foreground">
           <LayoutGrid size={28} className="opacity-40" />
           <p className="text-sm">
             {customerId ? 'No enrollments for this customer.' : 'No enrollments found.'}
@@ -291,11 +275,11 @@ function EnrollmentsTab() {
         </div>
       ) : (
         enrollments.map((enrollment) => (
-          <div key={enrollment.enrollmentId} className="rounded-xl border border-stone-200 bg-white p-4 flex flex-col gap-3">
+          <div key={enrollment.enrollmentId} className="rounded-xl border border-border bg-card p-4 flex flex-col gap-3">
             <div className="flex items-start justify-between gap-2">
               <div>
-                <p className="text-sm font-semibold text-stone-800">{enrollment.schemeName}</p>
-                <p className="text-xs text-stone-400">{enrollment.partyName} · {enrollment.mobile}</p>
+                <p className="text-sm font-semibold text-foreground">{enrollment.schemeName}</p>
+                <p className="text-xs text-muted-foreground">{enrollment.partyName} · {enrollment.mobile}</p>
               </div>
               <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${
                 STATUS_STYLES[enrollment.status] ?? STATUS_STYLES.default
@@ -305,46 +289,54 @@ function EnrollmentsTab() {
             </div>
 
             <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-              <span className="text-stone-500">Monthly</span>
-              <span className="text-right font-medium text-stone-700">
+              <span className="text-muted-foreground">Monthly</span>
+              <span className="text-right font-medium text-foreground/80">
                 {formatCurrency(enrollment.schemeAmount)}
               </span>
 
-              <span className="text-stone-500">Tenure</span>
-              <span className="text-right font-medium text-stone-700">
+              <span className="text-muted-foreground">Tenure</span>
+              <span className="text-right font-medium text-foreground/80">
                 {enrollment.tenure} months
               </span>
 
-              <span className="text-stone-500">Invested</span>
-              <span className="text-right font-medium text-stone-700">
+              <span className="text-muted-foreground">Invested</span>
+              <span className="text-right font-medium text-foreground/80">
                 {formatCurrency(enrollment.investedAmount)}
               </span>
 
               {enrollment.benefitAmount > 0 && (
                 <>
-                  <span className="text-stone-500">Benefit</span>
-                  <span className="text-right font-medium text-emerald-700">
+                  <span className="text-muted-foreground">Benefit</span>
+                  <span className="text-right font-medium text-status-in-stock">
                     {formatCurrency(enrollment.benefitAmount)}
                   </span>
                 </>
               )}
 
-              <span className="text-stone-500">Enrolled</span>
-              <span className="text-right text-stone-500 text-xs">
+              <span className="text-muted-foreground">Enrolled</span>
+              <span className="text-right text-muted-foreground text-xs">
                 {formatDate(enrollment.documentDate)}
               </span>
             </div>
 
-            {enrollment.hasPendingInstallment && (
+            <div className="flex gap-2 mt-1">
               <Button
                 variant="outline"
                 size="sm"
-                className="mt-1"
-                onClick={() => setReceiptTarget(enrollment)}
+                onClick={() => setDetailTarget(enrollment)}
               >
-                Record Payment
+                View Details
               </Button>
-            )}
+              {enrollment.hasPendingInstallment && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setReceiptTarget(enrollment)}
+                >
+                  Record Payment
+                </Button>
+              )}
+            </div>
           </div>
         ))
       )}
@@ -354,6 +346,13 @@ function EnrollmentsTab() {
         enrollment={receiptTarget}
         isOpen={!!receiptTarget}
         onClose={() => setReceiptTarget(null)}
+      />
+
+      {/* Monthly schedule + payment history */}
+      <EnrollmentDetailSheet
+        enrollment={detailTarget}
+        isOpen={!!detailTarget}
+        onClose={() => setDetailTarget(null)}
       />
     </div>
   );
@@ -374,21 +373,8 @@ function SchemesScreen() {
         <h1 className="text-xl font-semibold text-foreground">Schemes</h1>
       </div>
 
-      <div className="flex gap-1 mb-4">
-        {TABS.map((tab) => (
-          <button
-            key={tab.key}
-            type="button"
-            onClick={() => setActiveTab(tab.key)}
-            className={`shrink-0 rounded-full px-4 py-1.5 text-xs font-medium transition-colors ${
-              activeTab === tab.key
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-stone-100 text-stone-500 hover:bg-stone-200'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
+      <div className="mb-4">
+        <PillTabs tabs={TABS} value={activeTab} onChange={setActiveTab} />
       </div>
 
       {activeTab === 'schemes'     && <SchemesTab />}

@@ -7,21 +7,32 @@
 import { useEffect } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ChevronDown } from 'lucide-react';
 import { Input }  from '@/components/ui/input';
 import { Label }  from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
+import LocationSelect from '@/components/shared/LocationSelect';
 import { customerSchema } from '@/validators/customerSchema';
 import { useCreateCustomer } from '@/hooks/customer/useCreateCustomer';
 import { useCountries, useStates, useCities } from '@/hooks/settings/useLocation';
+import { todayDateString } from '@/lib/dateUtils';
 
-export default function NewCustomerForm({ defaultMobile = '', onCreated }) {
+// OrnaVerse enums (see customerSchema.js) — no master-data endpoint for
+// these, they're fixed values.
+const GENDER_OPTIONS = [
+  { value: 1, label: 'Male' },
+  { value: 2, label: 'Female' },
+  { value: 3, label: 'Other' },
+];
+
+const MARITAL_STATUS_OPTIONS = [
+  { value: 1, label: 'Single' },
+  { value: 2, label: 'Married' },
+];
+
+export default function NewCustomerForm({ defaultMobile = '', defaultName = '', onCreated }) {
   const {
     register,
     handleSubmit,
@@ -32,7 +43,7 @@ export default function NewCustomerForm({ defaultMobile = '', onCreated }) {
   } = useForm({
     resolver: zodResolver(customerSchema),
     defaultValues: {
-      party_name:     '',
+      party_name:     defaultName,
       mobile:         defaultMobile,
       email:          '',
       pan_no:         '',
@@ -42,6 +53,10 @@ export default function NewCustomerForm({ defaultMobile = '', onCreated }) {
       state_id:       null,
       city_id:        null,
       pin_code:       '',
+      birth_date:     '',
+      anniversary:    '',
+      gender:         null,
+      marital_status: null,
     },
   });
 
@@ -76,10 +91,6 @@ export default function NewCustomerForm({ defaultMobile = '', onCreated }) {
       // Error toast handled by useCreateCustomer
     }
   };
-
-  const selectedCountry = countries.find((c) => c.country_id === countryId);
-  const selectedState   = states.find((s) => s.state_id === stateId);
-  const selectedCity    = cities.find((c) => c.city_id === watch('city_id'));
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
@@ -152,6 +163,96 @@ export default function NewCustomerForm({ defaultMobile = '', onCreated }) {
         )}
       </div>
 
+      {/* Birth date */}
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="birth_date">
+          Date of birth <span className="text-muted-foreground text-xs">(optional)</span>
+        </Label>
+        <Input
+          id="birth_date"
+          type="date"
+          max={todayDateString()}
+          {...register('birth_date')}
+          className="h-11"
+        />
+        {errors.birth_date && (
+          <p className="text-sm text-destructive">{errors.birth_date.message}</p>
+        )}
+      </div>
+
+      {/* Anniversary */}
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="anniversary">
+          Anniversary <span className="text-muted-foreground text-xs">(optional)</span>
+        </Label>
+        <Input
+          id="anniversary"
+          type="date"
+          max={todayDateString()}
+          {...register('anniversary')}
+          className="h-11"
+        />
+        {errors.anniversary && (
+          <p className="text-sm text-destructive">{errors.anniversary.message}</p>
+        )}
+      </div>
+
+      {/* Gender */}
+      <div className="flex flex-col gap-1.5">
+        <Label>
+          Gender <span className="text-muted-foreground text-xs">(optional)</span>
+        </Label>
+        <Controller
+          name="gender"
+          control={control}
+          render={({ field }) => (
+            <Select
+              value={field.value != null ? String(field.value) : ''}
+              onValueChange={(value) => field.onChange(Number(value))}
+            >
+              <SelectTrigger className="h-11 w-full">
+                <SelectValue placeholder="Select gender" />
+              </SelectTrigger>
+              <SelectContent>
+                {GENDER_OPTIONS.map((g) => (
+                  <SelectItem key={g.value} value={String(g.value)}>
+                    {g.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        />
+      </div>
+
+      {/* Marital status */}
+      <div className="flex flex-col gap-1.5">
+        <Label>
+          Marital status <span className="text-muted-foreground text-xs">(optional)</span>
+        </Label>
+        <Controller
+          name="marital_status"
+          control={control}
+          render={({ field }) => (
+            <Select
+              value={field.value != null ? String(field.value) : ''}
+              onValueChange={(value) => field.onChange(Number(value))}
+            >
+              <SelectTrigger className="h-11 w-full">
+                <SelectValue placeholder="Select marital status" />
+              </SelectTrigger>
+              <SelectContent>
+                {MARITAL_STATUS_OPTIONS.map((m) => (
+                  <SelectItem key={m.value} value={String(m.value)}>
+                    {m.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        />
+      </div>
+
       {/* Address */}
       <div className="flex flex-col gap-1.5">
         <Label>
@@ -172,125 +273,46 @@ export default function NewCustomerForm({ defaultMobile = '', onCreated }) {
       {/* Country */}
       <div className="flex flex-col gap-1.5">
         <Label>Country</Label>
-        <Controller
-          name="country_id"
+        <LocationSelect
           control={control}
-          render={({ field }) => (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  className="flex h-11 w-full items-center justify-between rounded-lg border border-input bg-background px-3 text-sm"
-                >
-                  <span className={selectedCountry ? 'text-foreground' : 'text-muted-foreground'}>
-                    {countriesLoading
-                      ? 'Loading…'
-                      : selectedCountry?.country_name ?? 'Select country'}
-                  </span>
-                  <ChevronDown size={14} className="text-muted-foreground shrink-0" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="max-h-60 overflow-y-auto w-[--radix-dropdown-menu-trigger-width]">
-                {countries.length === 0 && (
-                  <div className="px-3 py-2 text-sm text-muted-foreground">
-                    {countriesLoading ? 'Loading…' : 'No countries found'}
-                  </div>
-                )}
-                {countries.map((c) => (
-                  <DropdownMenuItem
-                    key={c.country_id}
-                    onSelect={() => field.onChange(c.country_id)}
-                  >
-                    {c.country_name}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
+          name="country_id"
+          items={countries}
+          idKey="country_id"
+          labelKey="country_name"
+          placeholder="Select country"
+          isLoading={countriesLoading}
         />
       </div>
 
       {/* State */}
       <div className="flex flex-col gap-1.5">
         <Label>State</Label>
-        <Controller
-          name="state_id"
+        <LocationSelect
           control={control}
-          render={({ field }) => (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild disabled={!countryId}>
-                <button
-                  type="button"
-                  disabled={!countryId}
-                  className="flex h-11 w-full items-center justify-between rounded-lg border border-input bg-background px-3 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <span className={selectedState ? 'text-foreground' : 'text-muted-foreground'}>
-                    {statesLoading
-                      ? 'Loading…'
-                      : selectedState?.state_name ?? (countryId ? 'Select state' : 'Select country first')}
-                  </span>
-                  <ChevronDown size={14} className="text-muted-foreground shrink-0" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="max-h-60 overflow-y-auto w-[--radix-dropdown-menu-trigger-width]">
-                {states.length === 0 && (
-                  <div className="px-3 py-2 text-sm text-muted-foreground">
-                    {statesLoading ? 'Loading…' : 'No states found'}
-                  </div>
-                )}
-                {states.map((s) => (
-                  <DropdownMenuItem
-                    key={s.state_id}
-                    onSelect={() => field.onChange(s.state_id)}
-                  >
-                    {s.state_name}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
+          name="state_id"
+          items={states}
+          idKey="state_id"
+          labelKey="state_name"
+          placeholder="Select state"
+          disabled={!countryId}
+          disabledPlaceholder="Select country first"
+          isLoading={statesLoading}
         />
       </div>
 
       {/* City */}
       <div className="flex flex-col gap-1.5">
         <Label>City</Label>
-        <Controller
-          name="city_id"
+        <LocationSelect
           control={control}
-          render={({ field }) => (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild disabled={!stateId}>
-                <button
-                  type="button"
-                  disabled={!stateId}
-                  className="flex h-11 w-full items-center justify-between rounded-lg border border-input bg-background px-3 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <span className={selectedCity ? 'text-foreground' : 'text-muted-foreground'}>
-                    {citiesLoading
-                      ? 'Loading…'
-                      : selectedCity?.city_name ?? (stateId ? 'Select city' : 'Select state first')}
-                  </span>
-                  <ChevronDown size={14} className="text-muted-foreground shrink-0" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="max-h-60 overflow-y-auto w-[--radix-dropdown-menu-trigger-width]">
-                {cities.length === 0 && (
-                  <div className="px-3 py-2 text-sm text-muted-foreground">
-                    {citiesLoading ? 'Loading…' : 'No cities found'}
-                  </div>
-                )}
-                {cities.map((c) => (
-                  <DropdownMenuItem
-                    key={c.city_id}
-                    onSelect={() => field.onChange(c.city_id)}
-                  >
-                    {c.city_name}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
+          name="city_id"
+          items={cities}
+          idKey="city_id"
+          labelKey="city_name"
+          placeholder="Select city"
+          disabled={!stateId}
+          disabledPlaceholder="Select state first"
+          isLoading={citiesLoading}
         />
       </div>
 

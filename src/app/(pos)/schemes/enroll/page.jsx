@@ -13,11 +13,10 @@ import { useSelector } from 'react-redux';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { ChevronDown, ChevronLeft } from 'lucide-react';
+import { ChevronLeft } from 'lucide-react';
 
 import { useSchemes }        from '@/hooks/schemes/useSchemes';
 import { useEnrollCustomer } from '@/hooks/schemes/useEnrollCustomer';
-import { useSalesPersonOptions } from '@/hooks/schemes/useSalesPersonOptions';
 import { selectActiveStoreId }   from '@/store/slices/storeSlice';
 import {
   selectCartCustomerId,
@@ -25,17 +24,17 @@ import {
   selectCartCustomerMobile,
 } from '@/store/slices/cartSlice';
 import APP_CONFIG from '@/constants/appConfig';
+import { todayDateString } from '@/lib/dateUtils';
 
 import { Button } from '@/components/ui/button';
 import { Input }  from '@/components/ui/input';
 import { Label }  from '@/components/ui/label';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
+import SalesPersonSelect from '@/components/features/checkout/SalesPersonSelect';
 import PageLoader from '@/components/shared/PageLoader';
+import CustomerAttachedBanner from '@/components/shared/CustomerAttachedBanner';
 
 // ── Schema ────────────────────────────────────────────────────
 const enrollSchema = z.object({
@@ -59,13 +58,7 @@ function EnrollScreen() {
   const { schemes, isLoading: schemesLoading } = useSchemes();
   const enroll = useEnrollCustomer();
 
-  // sales_person_id is a confirmed-required field on SchemeEnrollment/Create
-  // (per v1.json SchemeEnrollmentRow). Mirrors the vendor's own Scheme
-  // Enrollment screen: a store-scoped picker, not an auto-resolved value —
-  // confirmed via a real UAT response listing employees by company_id only.
-  const { salesPersons, isLoading: salesPersonsLoading } = useSalesPersonOptions(storeId);
-
-  const today = new Date().toISOString().split('T')[0];
+  const today = todayDateString();
 
   const {
     register, handleSubmit, control, watch,
@@ -138,24 +131,20 @@ function EnrollScreen() {
       <button
         type="button"
         onClick={() => router.back()}
-        className="flex items-center gap-1 text-sm text-stone-500 hover:text-stone-700 w-fit -ml-1"
+        className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground/80 w-fit -ml-1"
       >
         <ChevronLeft size={16} /> Back to Schemes
       </button>
 
-      <h1 className="text-xl font-semibold text-stone-800">Enroll in Scheme</h1>
+      <h1 className="text-xl font-semibold text-foreground">Enroll in Scheme</h1>
 
       {/* Customer context */}
-      <div className={`rounded-xl border p-3 text-sm ${
-        customerId
-          ? 'border-emerald-200 bg-emerald-50'
-          : 'border-amber-200 bg-amber-50'
-      }`}>
-        {customerId
-          ? <p className="text-emerald-700">Enrolling: <strong>{customerName}</strong></p>
-          : <p className="text-amber-700">⚠ Attach a customer from the header before enrolling.</p>
-        }
-      </div>
+      <CustomerAttachedBanner
+        customerId={customerId}
+        customerName={customerName}
+        attachedLabel="Enrolling:"
+        emptyMessage="Attach a customer from the header before enrolling."
+      />
 
       <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5">
 
@@ -165,42 +154,35 @@ function EnrollScreen() {
           <Controller
             name="scheme_id"
             control={control}
-            render={({ field }) => {
-              const selected = schemes.find((s) => s.scheme_id === Number(field.value));
-              return (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button
-                      type="button"
-                      className="flex h-11 w-full items-center justify-between rounded-lg border border-input bg-background px-3 text-sm"
-                    >
-                      <span className={selected ? 'text-foreground' : 'text-muted-foreground'}>
-                        {schemesLoading ? 'Loading…' : selected ? selected.scheme_display_name ?? selected.scheme_code : 'Select scheme'}
-                      </span>
-                      <ChevronDown size={14} className="text-muted-foreground shrink-0" />
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width] max-h-56 overflow-y-auto">
-                    {schemes.map((s) => (
-                      <DropdownMenuItem key={s.scheme_id} onSelect={() => field.onChange(s.scheme_id)}>
-                        {s.scheme_display_name ?? s.scheme_code}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              );
-            }}
+            render={({ field }) => (
+              <Select
+                value={field.value ? String(field.value) : ''}
+                onValueChange={(v) => field.onChange(Number(v))}
+                disabled={schemesLoading}
+              >
+                <SelectTrigger className="h-11 w-full">
+                  <SelectValue placeholder={schemesLoading ? 'Loading…' : 'Select scheme'} />
+                </SelectTrigger>
+                <SelectContent className="max-h-56 overflow-y-auto">
+                  {schemes.map((s) => (
+                    <SelectItem key={s.scheme_id} value={String(s.scheme_id)}>
+                      {s.scheme_display_name ?? s.scheme_code}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           />
           {errors.scheme_id && <p className="text-xs text-destructive">{errors.scheme_id.message}</p>}
 
           {/* Scheme info card */}
           {selectedScheme && (
-            <div className="rounded-lg border border-stone-200 bg-stone-50 p-3 text-xs text-stone-600 flex flex-col gap-1 mt-1">
+            <div className="rounded-lg border border-border bg-muted p-3 text-xs text-foreground/80 flex flex-col gap-1 mt-1">
               {selectedScheme.scheme_description && (
                 <p>{selectedScheme.scheme_description}</p>
               )}
               {selectedScheme.scheme_code && (
-                <p className="text-stone-400">Code: {selectedScheme.scheme_code}</p>
+                <p className="text-muted-foreground">Code: {selectedScheme.scheme_code}</p>
               )}
             </div>
           )}
@@ -212,7 +194,7 @@ function EnrollScreen() {
             Monthly Amount (₹) <span className="text-destructive">*</span>
           </Label>
           <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-stone-400">₹</span>
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">₹</span>
             <Input
               id="enroll_amount"
               type="number"
@@ -246,7 +228,7 @@ function EnrollScreen() {
         {/* Enrollment date */}
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="enroll_date">Start Date <span className="text-destructive">*</span></Label>
-          <Input id="enroll_date" type="date" {...register('document_date')} className="h-11" max={new Date().toISOString().split('T')[0]} />
+          <Input id="enroll_date" type="date" {...register('document_date')} className="h-11" max={today} />
           {errors.document_date && <p className="text-xs text-destructive">{errors.document_date.message}</p>}
         </div>
 
@@ -256,38 +238,20 @@ function EnrollScreen() {
           <Controller
             name="sales_person_id"
             control={control}
-            render={({ field }) => {
-              const selected = salesPersons.find((p) => p.employee_id === Number(field.value));
-              return (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button
-                      type="button"
-                      className="flex h-11 w-full items-center justify-between rounded-lg border border-input bg-background px-3 text-sm"
-                    >
-                      <span className={selected ? 'text-foreground' : 'text-muted-foreground'}>
-                        {salesPersonsLoading ? 'Loading…' : selected ? selected.employee_name : 'Select sales person'}
-                      </span>
-                      <ChevronDown size={14} className="text-muted-foreground shrink-0" />
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width] max-h-56 overflow-y-auto">
-                    {salesPersons.map((p) => (
-                      <DropdownMenuItem key={p.employee_id} onSelect={() => field.onChange(p.employee_id)}>
-                        {p.employee_name}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              );
-            }}
+            render={({ field }) => (
+              <SalesPersonSelect
+                companyId={storeId}
+                value={field.value ? Number(field.value) : null}
+                onChange={field.onChange}
+              />
+            )}
           />
           {errors.sales_person_id && <p className="text-xs text-destructive">{errors.sales_person_id.message}</p>}
         </div>
 
         {/* Nominee (optional) */}
-        <div className="rounded-xl border border-stone-200 bg-stone-50 p-4 flex flex-col gap-4">
-          <p className="text-xs font-medium text-stone-500 uppercase tracking-wide">Nominee (Optional)</p>
+        <div className="rounded-xl border border-border bg-muted p-4 flex flex-col gap-4">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Nominee (Optional)</p>
 
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="enroll_nominee">Nominee Name</Label>

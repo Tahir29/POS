@@ -17,8 +17,8 @@ export default function ReservationsPage() {
   return (
     <div className="flex flex-col gap-4 max-w-2xl mx-auto w-full">
       <div className="relative -mx-4 -mt-4 flex items-center justify-between bg-background px-4 pt-4 pb-2 md:-mx-6 md:-mt-6 md:px-6 md:pt-6">
-        <h1 className="text-base font-bold text-stone-800">Reservations</h1>
-        <span className="rounded-full bg-stone-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-stone-500">
+        <h1 className="text-base font-bold text-foreground">Reservations</h1>
+        <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
           Coming Soon
         </span>
       </div>

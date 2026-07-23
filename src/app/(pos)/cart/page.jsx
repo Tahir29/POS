@@ -27,7 +27,7 @@ export default function CartPage() {
     items,
     customerName,
     customerMobile,
-    appliedPromoCode,
+    appliedPromos,
     isEmpty,
     removeItem,
     updateQuantity,
@@ -48,13 +48,16 @@ export default function CartPage() {
               customerMobile={customerMobile}
               onDetach={detachCustomer}
             /> */}
-            <AppliedPromoTag
-              promoCode={appliedPromoCode}
-              onRemove={removePromo}
-            />
+            {appliedPromos.map((promo) => (
+              <AppliedPromoTag
+                key={promo.promoCode}
+                promoCode={promo.promoCode}
+                onRemove={() => removePromo(promo.promoCode)}
+              />
+            ))}
           </div>
 
-          <div className="rounded-xl border border-stone-200 bg-white px-4">
+          <div className="rounded-xl border border-border bg-card px-4">
             {items.map((item) => (
               <CartItemRow
                 key={`${item.itemId}-${item.sizeId}-${item.styleId}`}
@@ -65,12 +68,12 @@ export default function CartPage() {
             ))}
           </div>
 
-          <div className="rounded-xl border border-stone-200 bg-white p-4">
+          <div className="rounded-xl border border-border bg-card p-4">
             <CartSummary />
           </div>
 
           {/* Sticky footer */}
-          <div className="fixed bottom-0 left-0 right-0 border-t border-stone-200 bg-white p-4 sm:static sm:border-0 sm:bg-transparent sm:p-0">
+          <div className="fixed bottom-0 left-0 right-0 border-t border-border bg-card p-4 sm:static sm:border-0 sm:bg-transparent sm:p-0">
             <div className="max-w-5xl mx-auto w-full">
               <ProceedToCheckoutButton />
             </div>

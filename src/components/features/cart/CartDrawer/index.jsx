@@ -25,7 +25,7 @@ export default function CartDrawer({ isOpen, onClose }) {
     items,
     customerName,
     customerMobile,
-    appliedPromoCode,
+    appliedPromos,
     isEmpty,
     removeItem,
     updateQuantity,
@@ -58,10 +58,13 @@ export default function CartDrawer({ isOpen, onClose }) {
               customerMobile={customerMobile}
               onDetach={detachCustomer}
             />
-            <AppliedPromoTag
-              promoCode={appliedPromoCode}
-              onRemove={removePromo}
-            />
+            {appliedPromos.map((promo) => (
+              <AppliedPromoTag
+                key={promo.promoCode}
+                promoCode={promo.promoCode}
+                onRemove={() => removePromo(promo.promoCode)}
+              />
+            ))}
           </div>
 
           {/* Items */}

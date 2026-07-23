@@ -23,9 +23,9 @@ export default function CheckoutCustomerSummary() {
     : null;
 
   return (
-    <section className="flex flex-col gap-3 rounded-xl border border-stone-200 bg-white p-4">
+    <section className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-bold text-stone-800">Customer</h2>
+        <h2 className="text-sm font-bold text-foreground">Customer</h2>
         <Button
           type="button"
           variant="ghost"
@@ -43,10 +43,10 @@ export default function CheckoutCustomerSummary() {
         <button
           type="button"
           onClick={() => setIsSheetOpen(true)}
-          className="flex items-center gap-3 rounded-lg border border-dashed border-amber-300 bg-amber-50 px-3 py-3 text-left min-h-[44px]"
+          className="flex items-center gap-3 rounded-lg border border-dashed border-status-made-order/40 bg-status-made-order/10 px-3 py-3 text-left min-h-[44px]"
         >
-          <AlertCircle size={18} className="text-amber-600 shrink-0" aria-hidden="true" />
-          <span className="text-sm text-amber-700">
+          <AlertCircle size={18} className="text-status-made-order shrink-0" aria-hidden="true" />
+          <span className="text-sm text-status-made-order">
             No customer attached. Tap to attach a customer before placing the order.
           </span>
         </button>

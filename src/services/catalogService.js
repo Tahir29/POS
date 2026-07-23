@@ -17,6 +17,7 @@
 import axiosInstance from '@/lib/axios/axiosInstance';
 import API from '@/constants/apiEndpoints';
 import APP_CONFIG from '@/constants/appConfig';
+import { calculateItemRates } from '@/services/pricingService';
 
 // ─── ITEMS (Master catalogue) ─────────────────────────────────────────────────
 
@@ -81,20 +82,24 @@ export async function searchItems(params) {
 // ─── CATALOG (Live store inventory) ───────────────────────────────────────────
 
 /**
- * Batch-fetches item_rate for a set of item_ids via Items/List.
+ * Batch-fetches full item detail (including item_rate and item_components[]
+ * BOM) for a set of item_ids via Items/List.
  *
  * ProductCatalogRow does NOT reliably return a `price` field on this
  * environment (confirmed 2026-07-15 — Services/Inventory/ProductCatalog/List
  * omits it entirely for every product in at least one store's catalog).
- * item_rate — computed at item creation/costing time — is the real price
- * source; some items have a valid rate baked in, others are 0 because no
- * metal rate was set when they were costed (a data issue, not a bug here).
- * Items/List supports filtering by `item_ids`, confirmed via direct testing.
+ * item_rate — computed at item creation/costing time — is the first-choice
+ * price source. Items/List supports filtering by `item_ids`, confirmed via
+ * direct testing — but confirmed live 2026-07-22 it silently OMITS items
+ * with no weight/karat/metal/components at all (genuinely incomplete master
+ * records — e.g. a raw-stone entry never given real specs). That's a
+ * separate, unfixable-client-side case from item_rate:0 BOM items (which DO
+ * come back from this call, just needing live pricing — see enrichWithPrice).
  *
  * @param {number[]} itemIds
- * @returns {Promise<Map<number, number>>} item_id -> item_rate
+ * @returns {Promise<Map<number, object>>} item_id -> full ItemRow
  */
-async function getItemRatesByIds(itemIds) {
+async function getItemDetailsByIds(itemIds) {
   if (!itemIds.length) return new Map();
 
   const response = await axiosInstance.post(API.ITEMS.LIST, {
@@ -105,13 +110,23 @@ async function getItemRatesByIds(itemIds) {
     Take: itemIds.length,
   });
   const entities = response.data?.Entities ?? [];
-  return new Map(entities.map((e) => [e.item_id, e.item_rate]));
+  return new Map(entities.map((e) => [e.item_id, e]));
 }
 
 /**
- * Attaches `price` to each ProductCatalogRow, preferring the catalog's own
- * price field when present and falling back to item_rate (see
- * getItemRatesByIds) when it's missing.
+ * Attaches `price` to each ProductCatalogRow. Three tiers, in order:
+ *   1. The catalog row's own `price` field, when present.
+ *   2. item_rate from Items/List, when it's a real positive number.
+ *   3. A live-computed price via Services/Helpers/SetSalesItems (the same
+ *      calculator wired up for the product detail page — see
+ *      pricingService.js) for items whose item_rate is 0 but which DO carry
+ *      real BOM data (item_components[]) — their real sell price floats
+ *      with today's metal rate rather than being stored statically.
+ *      Batched into a single extra call for the whole page, not one per item.
+ * Items missing entirely from Items/List (no weight, no components — see
+ * getItemDetailsByIds) can't be priced by any method and correctly stay
+ * priceless — that's a genuine OrnaVerse master-data gap, not something to
+ * paper over with a fabricated number.
  *
  * @param {object[]} entities — ProductCatalogRow[]
  * @returns {Promise<object[]>}
@@ -122,17 +137,37 @@ async function enrichWithPrice(entities) {
   const needsRate = entities.some((e) => e.price == null);
   if (!needsRate) return entities;
 
-  const itemIds  = entities.map((e) => e.item_id).filter(Boolean);
-  const rateById = await getItemRatesByIds(itemIds);
+  const itemIds     = entities.map((e) => e.item_id).filter(Boolean);
+  const detailById   = await getItemDetailsByIds(itemIds);
 
-  return entities.map((e) => ({
-    ...e,
-    // A real jewellery item is never actually free — item_rate === 0 means
-    // "not costed yet" (no metal rate at creation time), not "free". Treat
-    // it the same as missing so the UI hides the price instead of showing
-    // a misleading ₹0.
-    price: e.price ?? (rateById.get(e.item_id) || null),
-  }));
+  const unpricedWithBom = [...detailById.values()]
+    .filter((d) => (d.item_rate ?? 0) === 0 && d.item_components?.length > 0);
+
+  // Live pricing is a best-effort enrichment, not the primary catalog data —
+  // if SetSalesItems has a transient failure (confirmed live 2026-07-22 it
+  // can occasionally throw a generic 500), the whole page of otherwise-valid
+  // products must still render, just without prices for this handful of
+  // BOM items rather than an error screen for everything.
+  let liveRateById = new Map();
+  if (unpricedWithBom.length) {
+    try {
+      const liveRates = await calculateItemRates(unpricedWithBom);
+      liveRateById = new Map(liveRates.map((r) => [r.item_id, r.sub_total]));
+    } catch (err) {
+      console.error('[catalogService] enrichWithPrice: live pricing failed, showing catalog without it', err);
+    }
+  }
+
+  return entities.map((e) => {
+    if (e.price != null) return e;
+    const staticRate = detailById.get(e.item_id)?.item_rate;
+    // item_rate === 0 is "not costed yet", not "free" — only trust a real
+    // positive static rate before falling to the live-computed price.
+    const price = (staticRate && staticRate > 0)
+      ? staticRate
+      : (liveRateById.get(e.item_id) ?? null);
+    return { ...e, price };
+  });
 }
 
 /**
@@ -265,21 +300,26 @@ export async function getAllProducts(storeId, onProgress) {
  * or thousands of system-wide matches with no guarantee this store's real
  * matches are among the first N.
  *
- * @param {{ query: string, storeId: number }} params
+ * @param {{ query: string, storeId: number, signal?: AbortSignal }} params
+ *   `signal` lets the caller (useSkuSearch) cancel this request in-flight —
+ *   TanStack Query passes a fresh AbortSignal per query and aborts the
+ *   previous one automatically when the debounced search text changes, so
+ *   wiring it through here means a superseded keystroke's request is
+ *   actually cancelled on the wire instead of completing uselessly.
  * @returns {Promise<object[]>} ProductCatalogRow-shaped results
  */
-export async function searchBySku({ query, storeId }) {
+export async function searchBySku({ query, storeId, signal }) {
   if (!query || !storeId) return [];
 
   const searchResponse = await axiosInstance.post(API.ITEMS.LIST, {
     item_search: query,
     Take: 50,
-  });
+  }, { signal });
   const candidates = searchResponse.data?.Entities ?? [];
   if (!candidates.length) return [];
 
   const itemIds = candidates.map((c) => c.item_id);
-  const stockData = await getStockByStoresBatch(itemIds);
+  const stockData = await getStockByStoresBatch(itemIds, signal);
   const stockRows = stockData?.Entities ?? [];
 
   const stockByItemId = new Map(
@@ -327,11 +367,12 @@ export async function getStockByStores(itemId) {
  * Cross-store stock for multiple items in a single call.
  * Use on catalog grid to show availability indicators without N+1 calls.
  * @param {number[]} itemIds — array of item_id values
+ * @param {AbortSignal} [signal] — optional, cancels the request in-flight
  * @returns {Promise<object>} OrnaVerse batch stock response
  */
-export async function getStockByStoresBatch(itemIds) {
+export async function getStockByStoresBatch(itemIds, signal) {
   const response = await axiosInstance.post(API.CATALOG.GET_STOCK_BY_STORES_BATCH, {
     item_ids: itemIds,
-  });
+  }, { signal });
   return response.data;
 }

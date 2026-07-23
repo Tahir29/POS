@@ -28,8 +28,11 @@ const selectIsAuthenticated = (state) => state.auth.isAuthenticated;
  * @param {number|null} storeId - The store to scope the catalog to.
  *   Defaults to the Redux activeStoreId when not provided.
  *   Pass an explicit storeId to support the local catalog store switcher.
+ * @param {{ enabled?: boolean }} [options] - `enabled` defaults to true; pass
+ *   false to defer the fetch (e.g. until the caller actually needs search),
+ *   since this can fire hundreds of requests for a large store.
  */
-export function useAllCatalog(storeId) {
+export function useAllCatalog(storeId, { enabled = true } = {}) {
   const isAuthenticated = useSelector(selectIsAuthenticated);
   const [loadedCount, setLoadedCount] = useState(0);
   const storeIdRef = useRef(storeId);
@@ -46,8 +49,15 @@ export function useAllCatalog(storeId) {
   const query = useQuery({
     queryKey:  QUERY_KEYS.CATALOG.ALL(storeId),
     queryFn,
-    enabled:   isAuthenticated && !!storeId,
-    staleTime: APP_CONFIG.STALE_TIME.STOCK,
+    enabled:   isAuthenticated && !!storeId && enabled,
+    // This fetch pages through the store's ENTIRE catalog (up to hundreds of
+    // requests — see fetchEntireStoreCatalog) — it's the single most
+    // expensive query in the app. STALE_TIME.STOCK (1 min) was wrong here:
+    // combined with the global refetchOnWindowFocus, it meant switching
+    // browser tabs/apps and back after a minute re-triggered a full
+    // catalog re-fetch. A store's catalog doesn't meaningfully change
+    // minute-to-minute, so this uses STALE_TIME.CATALOG (5 min) instead.
+    staleTime: APP_CONFIG.STALE_TIME.CATALOG,
   });
 
   return { ...query, loadedCount };

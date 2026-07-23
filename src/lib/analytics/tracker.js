@@ -9,11 +9,15 @@
 //   tracker.track(event, props)                    → during session
 //   tracker.endSession(reason)                     → customer detached / idle
 //
-// Every event goes to two places:
+// Every event goes to three places:
 //   1. sessionStorage (local buffer, useful for debugging/QA — see
 //      getEvents()/getAgentEvents(), unaffected by GA being configured or not)
 //   2. GA4, via sendToGA() — a no-op if NEXT_PUBLIC_GA_MEASUREMENT_ID isn't
 //      set, so analytics can never break the app.
+//   3. The browser console (always on) — filter devtools by "[POS Analytics]"
+//      to watch every event fire live as you click around: every button,
+//      every search, every transaction. This is how to manually confirm
+//      an event is actually wired up, and spot anything that's missing.
 //
 // trackEcommerce() is for the checkout funnel specifically — it fires the
 // event under BOTH its GA4-reserved name (view_item/add_to_cart/
@@ -59,6 +63,20 @@ function maskMobile(mobile) {
   const digits = String(mobile).replace(/\D/g, '');
   if (digits.length <= 4) return digits;
   return `${'*'.repeat(digits.length - 4)}${digits.slice(-4)}`;
+}
+
+// Prints every fired event to the browser console for manual QA — filter
+// devtools by "[POS Analytics]" to see the full stream live: click a
+// button, run a search, check it showed up here. Fires for every path
+// (track/trackAgent/trackEcommerce), always on — this is an internal
+// staff tool, not a public storefront, so console noise isn't a concern.
+function logEvent(eventName, properties) {
+  if (typeof window === 'undefined' || typeof console === 'undefined') return;
+  console.log(
+    `%c[POS Analytics] ${eventName}`,
+    'color:#7c3aed;font-weight:600',
+    properties,
+  );
 }
 
 // ── Tracker ───────────────────────────────────────────────────────────────────
@@ -126,6 +144,8 @@ const tracker = {
     events.push(event);
     safeSet(EVENTS_KEY, events);
 
+    logEvent(eventName, properties);
+
     sendToGA(eventName, {
       timestamp,
       session_id:            session?.sessionId ?? undefined,
@@ -153,6 +173,8 @@ const tracker = {
     events.push(event);
     safeSet(AGENT_KEY, events);
 
+    logEvent(eventName, properties);
+
     sendToGA(eventName, { timestamp, ...properties });
   },
 
@@ -168,7 +190,8 @@ const tracker = {
    * @param {object} params — GA4 ecommerce params (items[], value, currency, ...)
    */
   trackEcommerce(gaEventName, posEventName, params = {}) {
-    this.track(posEventName, params);
+    this.track(posEventName, params); // already logs POS_-prefixed name
+    logEvent(gaEventName, params);     // also log the GA-reserved-name fire
     sendToGA(gaEventName, {
       timestamp: new Date().toISOString(),
       ...params,

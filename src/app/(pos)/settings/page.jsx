@@ -2,12 +2,17 @@
 'use client';
 
 import { Suspense } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useAddMetalRate } from '@/hooks/settings/useAddMetalRate';
 import APP_CONFIG from '@/constants/appConfig';
 import PageLoader from '@/components/shared/PageLoader';
+import { Input } from '@/components/ui/input';
+import { todayDateString } from '@/lib/dateUtils';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
 
 // ─── Zod schema ───────────────────────────────────────────────────────────────
 
@@ -37,22 +42,13 @@ const METAL_OPTIONS = [
   { label: 'Alloy',     value: APP_CONFIG.METAL_TYPES.ALLOY },
 ];
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function todayDateString() {
-  const d    = new Date();
-  const yyyy = d.getFullYear();
-  const mm   = String(d.getMonth() + 1).padStart(2, '0');
-  const dd   = String(d.getDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}`;
-}
-
 // ─── Metal Rate Form ──────────────────────────────────────────────────────────
 
 function MetalRateForm() {
   const {
     register,
     handleSubmit,
+    control,
     reset,
     formState: { errors },
   } = useForm({
@@ -92,17 +88,27 @@ function MetalRateForm() {
         <label className="text-sm font-medium text-foreground">
           Metal Type <span className="text-destructive">*</span>
         </label>
-        <select
-          {...register('metal_type_id')}
-          className="w-full h-11 rounded-lg border border-input bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-        >
-          <option value="">Select metal type</option>
-          {METAL_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
+        <Controller
+          name="metal_type_id"
+          control={control}
+          render={({ field }) => (
+            <Select
+              value={field.value ? String(field.value) : ''}
+              onValueChange={(value) => field.onChange(Number(value))}
+            >
+              <SelectTrigger className="h-11 w-full">
+                <SelectValue placeholder="Select metal type" />
+              </SelectTrigger>
+              <SelectContent>
+                {METAL_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={String(opt.value)}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        />
         {errors.metal_type_id && (
           <p className="text-xs text-destructive">{errors.metal_type_id.message}</p>
         )}
@@ -113,13 +119,13 @@ function MetalRateForm() {
         <label className="text-sm font-medium text-foreground">
           Purchase Rate (₹) <span className="text-destructive">*</span>
         </label>
-        <input
+        <Input
           {...register('purchase_rate')}
           type="number"
           step="0.01"
           min="0"
           placeholder="0.00"
-          className="w-full h-11 rounded-lg border border-input bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+          className="h-11"
         />
         {errors.purchase_rate && (
           <p className="text-xs text-destructive">{errors.purchase_rate.message}</p>
@@ -131,13 +137,13 @@ function MetalRateForm() {
         <label className="text-sm font-medium text-foreground">
           Sales Rate (₹) <span className="text-destructive">*</span>
         </label>
-        <input
+        <Input
           {...register('sales_rate')}
           type="number"
           step="0.01"
           min="0"
           placeholder="0.00"
-          className="w-full h-11 rounded-lg border border-input bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+          className="h-11"
         />
         {errors.sales_rate && (
           <p className="text-xs text-destructive">{errors.sales_rate.message}</p>
@@ -149,10 +155,11 @@ function MetalRateForm() {
         <label className="text-sm font-medium text-foreground">
           Effective Date <span className="text-destructive">*</span>
         </label>
-        <input
+        <Input
           {...register('from_date')}
           type="date"
-          className="w-full h-11 rounded-lg border border-input bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+          max={todayDateString()}
+          className="h-11"
         />
         {errors.from_date && (
           <p className="text-xs text-destructive">{errors.from_date.message}</p>

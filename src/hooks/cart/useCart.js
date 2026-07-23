@@ -8,8 +8,7 @@ import {
   selectCartCustomerId,
   selectCartCustomerName,
   selectCartCustomerMobile,
-  selectAppliedPromoCode,
-  selectAppliedPromoDetails,
+  selectAppliedPromos,
   selectIsCartEmpty,
   removeItem,
   updateQuantity,
@@ -28,8 +27,7 @@ export function useCart() {
   const customerId          = useSelector(selectCartCustomerId);
   const customerName        = useSelector(selectCartCustomerName);
   const customerMobile      = useSelector(selectCartCustomerMobile);
-  const appliedPromoCode    = useSelector(selectAppliedPromoCode);
-  const appliedPromoDetails = useSelector(selectAppliedPromoDetails);
+  const appliedPromos       = useSelector(selectAppliedPromos);
   const isEmpty             = useSelector(selectIsCartEmpty);
 
   const handleRemoveItem = (item) => {
@@ -69,8 +67,8 @@ export function useCart() {
     toast.success(TOAST.CART.PROMO_APPLIED(promo.promoCode));
   };
 
-  const handleRemovePromo = () => {
-    dispatch(removePromo());
+  const handleRemovePromo = (promoCode) => {
+    dispatch(removePromo(promoCode));
     toast.success(TOAST.CART.PROMO_REMOVED);
   };
 
@@ -84,8 +82,7 @@ export function useCart() {
     customerId,
     customerName,
     customerMobile,
-    appliedPromoCode,
-    appliedPromoDetails,
+    appliedPromos,
     isEmpty,
     removeItem: handleRemoveItem,
     updateQuantity: handleUpdateQuantity,

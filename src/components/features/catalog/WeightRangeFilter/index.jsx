@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { Input } from '@/components/ui/input';
 
 /**
  * WeightRangeFilter
@@ -41,13 +42,13 @@ export default function WeightRangeFilter({ label, fromValue, toValue, onApply }
 
   return (
     <div className="flex flex-col gap-2">
-      <span className="text-xs font-semibold uppercase tracking-wide text-amber-700">
+      <span className="text-xs font-semibold uppercase tracking-wide text-accent">
         {label}
       </span>
       <div className="flex items-center gap-2">
         <div className="flex-1">
           <label className="sr-only">Minimum {label}</label>
-          <input
+          <Input
             type="number"
             inputMode="decimal"
             min="0"
@@ -57,21 +58,15 @@ export default function WeightRangeFilter({ label, fromValue, toValue, onApply }
             onChange={(e) => setFrom(e.target.value)}
             onBlur={commit}
             onKeyDown={handleKeyDown}
-            className="
-              w-full min-h-[44px] px-3 py-2
-              text-sm text-gray-800
-              bg-white border border-gray-200 rounded-lg
-              focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent
-              placeholder:text-gray-400
-            "
+            className="min-h-[44px]"
           />
         </div>
 
-        <span className="text-gray-400 text-sm select-none">–</span>
+        <span className="text-muted-foreground text-sm select-none">–</span>
 
         <div className="flex-1">
           <label className="sr-only">Maximum {label}</label>
-          <input
+          <Input
             type="number"
             inputMode="decimal"
             min="0"
@@ -81,13 +76,7 @@ export default function WeightRangeFilter({ label, fromValue, toValue, onApply }
             onChange={(e) => setTo(e.target.value)}
             onBlur={commit}
             onKeyDown={handleKeyDown}
-            className="
-              w-full min-h-[44px] px-3 py-2
-              text-sm text-gray-800
-              bg-white border border-gray-200 rounded-lg
-              focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent
-              placeholder:text-gray-400
-            "
+            className="min-h-[44px]"
           />
         </div>
       </div>

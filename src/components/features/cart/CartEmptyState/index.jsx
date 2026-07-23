@@ -24,8 +24,8 @@ export default function CartEmptyState({ onNavigate }) {
       <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[var(--brand-cream)]">
         <ShoppingBag size={28} className="text-[var(--brand-primary)]" aria-hidden="true" />
       </div>
-      <h3 className="text-base font-bold text-stone-800 mb-1">Your cart is empty</h3>
-      <p className="text-sm text-stone-500 mb-6 max-w-[24ch]">
+      <h3 className="text-base font-bold text-foreground mb-1">Your cart is empty</h3>
+      <p className="text-sm text-muted-foreground mb-6 max-w-[24ch]">
         Add products from the catalog to get started.
       </p>
       <button

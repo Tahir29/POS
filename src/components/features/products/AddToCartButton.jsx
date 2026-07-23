@@ -14,6 +14,7 @@
 import { useDispatch } from 'react-redux';
 import { toast } from 'react-toastify';
 import { ShoppingCart } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { addItem } from '@/store/slices/cartSlice';
 import { resolveImageSrc } from '@/lib/resolveImageSrc';
 import TOAST from '@/constants/toastMessages';
@@ -99,24 +100,16 @@ export default function AddToCartButton({
   };
 
   return (
-    <button
+    <Button
       type="button"
+      variant="premium"
       onClick={handleAddToCart}
       disabled={isDisabled}
       aria-label="Add to Cart"
-      className="
-        flex flex-1 items-center justify-center gap-2
-        min-h-[52px] px-6 rounded-xl
-        text-base font-semibold
-        bg-accent hover:bg-accent/90 active:scale-[0.98]
-        text-accent-foreground shadow-sm hover:shadow-md
-        transition-all duration-150
-        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2
-        disabled:opacity-50 disabled:cursor-not-allowed
-      "
+      className="flex-1 min-h-[52px] px-6 text-base font-semibold"
     >
       <ShoppingCart size={20} aria-hidden="true" className="shrink-0" />
       Add to Cart
-    </button>
+    </Button>
   );
 }

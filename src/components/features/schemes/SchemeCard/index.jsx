@@ -1,5 +1,6 @@
 // src/components/features/schemes/SchemeCard.jsx
 import { Calendar, IndianRupee, Clock, Gift, Ban } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 
 /**
  * Displays a single scheme's details.
@@ -32,9 +33,9 @@ export default function SchemeCard({ scheme }) {
           <p className="text-xs text-muted-foreground mt-0.5">{scheme_code ?? '—'}</p>
         </div>
         {scheme_type != null && (
-          <span className="shrink-0 text-xs font-medium bg-muted text-muted-foreground px-2 py-1 rounded-md">
+          <Badge variant="secondary" className="h-auto shrink-0 rounded-md px-2 py-1 text-xs">
             Type {scheme_type}
-          </span>
+          </Badge>
         )}
       </div>
 

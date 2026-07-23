@@ -4,10 +4,10 @@
 // Loading skeleton for the product detail page.
 // Matches the exact layout of the assembled page so there's no layout shift.
 
+import { Skeleton } from '@/components/ui/skeleton';
+
 function Bone({ className = '' }) {
-  return (
-    <div className={`animate-pulse rounded-lg bg-stone-200 ${className}`} />
-  );
+  return <Skeleton className={`rounded-lg ${className}`} />;
 }
 
 export default function ProductDetailSkeleton() {
@@ -70,7 +70,7 @@ export default function ProductDetailSkeleton() {
       {/* Specs sections */}
       <div className="flex flex-col gap-3">
         <Bone className="w-28 h-3" />
-        <div className="rounded-xl border border-stone-100 p-4 flex flex-col gap-3">
+        <div className="rounded-xl border border-border p-4 flex flex-col gap-3">
           {[0, 1, 2, 3].map((i) => (
             <div key={i} className="flex justify-between">
               <Bone className="w-24 h-3" />
@@ -82,7 +82,7 @@ export default function ProductDetailSkeleton() {
 
       <div className="flex flex-col gap-3">
         <Bone className="w-28 h-3" />
-        <div className="rounded-xl border border-stone-100 p-4 flex flex-col gap-3">
+        <div className="rounded-xl border border-border p-4 flex flex-col gap-3">
           {[0, 1, 2].map((i) => (
             <div key={i} className="flex justify-between">
               <Bone className="w-24 h-3" />
