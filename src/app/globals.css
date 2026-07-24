@@ -351,6 +351,15 @@
     animation: scan-line 2s ease-in-out infinite;
   }
 
+  @keyframes shimmer-text {
+    to { background-position: -200% center; }
+  }
+
+  .animate-shimmer-text {
+    background-size: 200% auto;
+    animation: shimmer-text 4s linear infinite;
+  }
+
   /* Premium revamp motion — respects OS-level reduced-motion preference.
      Covers every plain-CSS transition/animation (Button, Input, Sidebar,
      PillTabs, .animate-scan-line, existing Radix tw-animate-css enter/exit)

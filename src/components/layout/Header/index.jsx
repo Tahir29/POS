@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { useDispatch, useSelector } from 'react-redux';
 import { AnimatePresence, motion } from 'motion/react';
-import { ShoppingCart, User, LogOut, ChevronDown, Store, ArrowLeft } from 'lucide-react';
+import { ShoppingCart, User, LogOut, ChevronDown, Store, ArrowLeft, Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -19,6 +19,7 @@ import { useAuth } from '@/hooks/auth/useAuth';
 import { useActiveStore } from '@/hooks/store/useActiveStore';
 import { useCartItemCount } from '@/hooks/cart/useCartItemCount';
 import { useSmartBack } from '@/hooks/navigation/useSmartBack';
+import { useSidebar } from '@/hooks/ui/useSidebar';
 import { openCart, closeCart, selectCartOpen } from '@/store/slices/uiSlice';
 import StoreSelectModal from '@/components/features/auth/StoreSelectModal';
 import CartDrawer from '@/components/features/cart/CartDrawer';
@@ -171,6 +172,7 @@ export default function Header() {
   const cartOpen = useSelector(selectCartOpen);
   const pageTitle = usePageTitle();
   const { canGoBack, goBack } = useSmartBack();
+  const { toggle: toggleSidebar } = useSidebar();
 
   return (
     <>
@@ -178,8 +180,18 @@ export default function Header() {
         className="flex items-center justify-between gap-4 border-b bg-card px-4 min-h-[64px] shrink-0"
         role="banner"
       >
-        {/* Left — back button (route-dependent) + page title */}
+        {/* Left — mobile menu toggle + back button (route-dependent) + page title */}
         <div className="flex items-center gap-2 shrink-0 min-w-0">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={toggleSidebar}
+            aria-label="Toggle navigation menu"
+            className="min-h-[40px] min-w-[40px] shrink-0 md:hidden"
+          >
+            <Menu size={18} aria-hidden="true" />
+          </Button>
           {canGoBack && (
             <Button
               type="button"

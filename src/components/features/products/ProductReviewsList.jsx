@@ -7,7 +7,7 @@
 // ProductGrid's catalog infinite scroll, no "Load more" button needed.
 
 import { useEffect, useRef } from 'react';
-import { Loader2, MessageSquareText, BadgeCheck } from 'lucide-react';
+import { Loader2, BadgeCheck } from 'lucide-react';
 import StarRating from '@/components/shared/StarRating';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useProductReviews } from '@/hooks/products/useProductReviews';
@@ -89,19 +89,13 @@ export default function ProductReviewsList({ shopifyProductId }) {
   // No Shopify link for this product at all — nothing to show, no error.
   if (!shopifyProductId) return null;
 
-  // Resolved, but genuinely zero reviews — still show the section so it's
-  // clear this isn't a loading/error state.
-  if (!isLoading && !summaryLoading && count === 0) {
-    return (
-      <section className="flex flex-col gap-4">
-        <h2 className="font-heading text-lg text-foreground">Customer Reviews</h2>
-        <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-border py-10 text-center">
-          <MessageSquareText size={24} className="text-muted-foreground" aria-hidden="true" />
-          <p className="text-sm text-muted-foreground">No reviews yet for this product.</p>
-        </div>
-      </section>
-    );
-  }
+  // Still resolving the summary — hold off rendering anything (including
+  // the title) until we actually know whether this product has reviews,
+  // rather than flashing the section in and then hiding it.
+  if (summaryLoading) return null;
+
+  // Resolved, genuinely zero reviews — hide the entire section, title included.
+  if (count === 0) return null;
 
   return (
     <section className="flex flex-col gap-4">

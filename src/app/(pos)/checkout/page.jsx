@@ -151,8 +151,8 @@ function CheckoutScreen() {
   // ── Checkout form ──────────────────────────────────────────────────────────
   return (
     <div className="flex flex-col gap-6 max-w-5xl mx-auto w-full pb-28 p-4 md:p-6">
-      <div className='flex align-top justify-center gap-4'>
-        <div className="flex flex-col gap-4 w-full">
+      <div className='flex flex-col lg:flex-row lg:items-start justify-center gap-4'>
+        <div className="flex flex-col gap-4 w-full lg:flex-1">
           {/* Customer attached to this sale */}
           <CheckoutCustomerSummary />
 
@@ -178,7 +178,7 @@ function CheckoutScreen() {
             <CartSummary />
           </section>
         </div>
-        <div className="flex flex-col gap-4 w-full">
+        <div className="flex flex-col gap-4 w-full lg:flex-1">
           {/* Sales person — required, mirrors the vendor's own POS Sale screen */}
           <section className="rounded-xl border border-border bg-card p-4 shadow-sm">
             <h2 className="text-sm font-bold text-foreground mb-2">

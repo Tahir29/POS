@@ -366,8 +366,8 @@ function CatalogScreen() {
     <div className="flex h-full flex-col bg-background">
 
       <div className="px-4 pt-4 pb-2 md:px-6 md:pt-5 bg-white">
-        <div className="flex items-center gap-2">
-          <div className="flex-1 min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="w-full min-w-0 sm:w-auto sm:flex-1">
             <ProductSearchBar
               value={searchQuery ?? ''}
               onSearch={handleSearch}

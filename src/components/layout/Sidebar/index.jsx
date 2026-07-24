@@ -13,7 +13,7 @@ import { NAV_ITEMS, BOTTOM_ITEMS } from '@/constants/navItems';
 
 // ── SidebarNavItem ────────────────────────────────────────────────────────────
 
-function SidebarNavItem({ item, collapsed }) {
+function SidebarNavItem({ item, collapsed, onNavigate }) {
   const pathname = usePathname();
   const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
   const Icon = item.icon;
@@ -21,6 +21,7 @@ function SidebarNavItem({ item, collapsed }) {
   const linkContent = (
     <Link
       href={item.href}
+      onClick={onNavigate}
       className={cn(
         'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors duration-standard ease-premium min-h-[44px]',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring',
@@ -62,73 +63,93 @@ function SidebarNavItem({ item, collapsed }) {
 // ── Sidebar ───────────────────────────────────────────────────────────────────
 
 export default function Sidebar() {
-  const { sidebarOpen, toggle } = useSidebar();
+  const { sidebarOpen, toggle, close } = useSidebar();
+
+  // Below `md`, sidebarOpen doubles as "mobile drawer visible" — the drawer
+  // is either fully off-canvas or fully open with labels, never icon-only.
+  // At `md` and up it keeps its original meaning: expanded (w-56) vs
+  // collapsed-to-icons (w-16), always visible either way.
+  const collapsed = !sidebarOpen;
 
   return (
-    <aside
-      className={cn(
-        'flex flex-col border-r border-sidebar-border bg-sidebar transition-all duration-300 ease-in-out shrink-0',
-        sidebarOpen ? 'w-56' : 'w-16'
+    <>
+      {/* Mobile-only backdrop — closes the drawer, invisible/inert at md+ */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/40 md:hidden"
+          onClick={close}
+          aria-hidden="true"
+        />
       )}
-      aria-label="Main navigation"
-    >
-      {/* ── Logo ─────────────────────────────────────────── */}
-      <div
+
+      <aside
         className={cn(
-          'flex items-center border-b border-sidebar-border min-h-[64px]',
-          sidebarOpen ? 'px-4 gap-3' : 'justify-center px-2'
+          'flex flex-col border-r border-sidebar-border bg-sidebar shrink-0',
+          'fixed inset-y-0 left-0 z-50 w-64 transition-transform duration-300 ease-in-out',
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full',
+          'md:relative md:inset-auto md:z-auto md:translate-x-0 md:transition-[width] md:duration-300 md:ease-in-out',
+          sidebarOpen ? 'md:w-56' : 'md:w-16'
         )}
+        aria-label="Main navigation"
       >
-        {sidebarOpen ? (
-          <Logo variant="full" color="white" height={32} width={110} />
-        ) : (
-          <Logo variant="icon" color="white" height={24} width={24} />
-        )}
-      </div>
-
-      {/* ── Main Nav ─────────────────────────────────────── */}
-      <nav
-        className="flex flex-col gap-1 flex-1 overflow-y-auto p-2"
-        aria-label="Primary"
-      >
-        {NAV_ITEMS.map((item) => (
-          <SidebarNavItem key={item.href} item={item} collapsed={!sidebarOpen} />
-        ))}
-      </nav>
-
-      <Separator className="bg-sidebar-border" />
-
-      {/* ── Bottom Nav ───────────────────────────────────── */}
-      <nav className="hidden flex-col gap-1 p-2" aria-label="Secondary">
-        {BOTTOM_ITEMS.map((item) => (
-          <SidebarNavItem key={item.href} item={item} collapsed={!sidebarOpen} />
-        ))}
-      </nav>
-
-      <Separator className="bg-sidebar-border" />
-
-      {/* ── Collapse toggle ───────────────────────────────── */}
-      <div className="p-2">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={toggle}
+        {/* ── Logo ─────────────────────────────────────────── */}
+        <div
           className={cn(
-            'w-full min-h-[44px] text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent',
-            !sidebarOpen && 'px-0 justify-center'
+            'flex items-center border-b border-sidebar-border min-h-[64px] px-4 gap-3',
+            !sidebarOpen && 'md:justify-center md:px-2'
           )}
-          aria-label={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
         >
-          {sidebarOpen ? (
-            <span className="flex items-center gap-2">
+          <span className={cn(!sidebarOpen && 'md:hidden')}>
+            <Logo variant="full" color="white" height={32} width={110} />
+          </span>
+          <span className={cn('hidden', !sidebarOpen && 'md:inline')}>
+            <Logo variant="icon" color="white" height={24} width={24} />
+          </span>
+        </div>
+
+        {/* ── Main Nav ─────────────────────────────────────── */}
+        <nav
+          className="flex flex-col gap-1 flex-1 overflow-y-auto p-2"
+          aria-label="Primary"
+        >
+          {NAV_ITEMS.map((item) => (
+            <SidebarNavItem key={item.href} item={item} collapsed={collapsed} onNavigate={close} />
+          ))}
+        </nav>
+
+        <Separator className="bg-sidebar-border" />
+
+        {/* ── Bottom Nav ───────────────────────────────────── */}
+        <nav className="hidden flex-col gap-1 p-2" aria-label="Secondary">
+          {BOTTOM_ITEMS.map((item) => (
+            <SidebarNavItem key={item.href} item={item} collapsed={collapsed} onNavigate={close} />
+          ))}
+        </nav>
+
+        <Separator className="bg-sidebar-border" />
+
+        {/* ── Collapse toggle — collapses to icon-rail at md+, closes the drawer below md ── */}
+        <div className="p-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={toggle}
+            className={cn(
+              'w-full min-h-[44px] text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent',
+              !sidebarOpen && 'md:px-0 md:justify-center'
+            )}
+            aria-label={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+          >
+            <span className={cn('flex items-center gap-2', !sidebarOpen && 'md:hidden')}>
               <ChevronLeft size={16} aria-hidden="true" />
               <span className="text-xs">Collapse</span>
             </span>
-          ) : (
-            <ChevronRight size={16} aria-hidden="true" />
-          )}
-        </Button>
-      </div>
-    </aside>
+            <span className={cn('hidden', !sidebarOpen && 'md:inline')}>
+              <ChevronRight size={16} aria-hidden="true" />
+            </span>
+          </Button>
+        </div>
+      </aside>
+    </>
   );
 }
