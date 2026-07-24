@@ -189,12 +189,22 @@ export default function ProductCard({ product, showStockBadge = false }) {
       </div>
 
       {/* ── Info ──────────────────────────────────────────── */}
-      <div className="flex flex-1 flex-col gap-1 p-3">
+      <div className="flex flex-1 flex-col gap-1.5 p-3.5">
+
+        {/* Star rating — only ever renders for products with real review
+            data (see header note on why most cards won't have one). Sits
+            in its own row above the price, mirroring the reference card's
+            swatch/rating row — we just don't have swatch data to pair it with. */}
+        {ratingCount > 0 && (
+          <div className="flex justify-end">
+            <StarRating rating={ratingAverage} count={ratingCount} size="sm" />
+          </div>
+        )}
 
         {/* Price — real offer price, no slashed/original price (no such
             field exists anywhere in the API — see header note) */}
         {price != null && (
-          <p className="font-heading text-base font-semibold text-foreground">
+          <p className="font-sans text-lg font-bold text-foreground">
             {formatINR(price)}
           </p>
         )}
@@ -211,12 +221,6 @@ export default function ProductCard({ product, showStockBadge = false }) {
           <p className="text-xs text-muted-foreground">
             {infoLine}
           </p>
-        )}
-
-        {/* Star rating — only ever renders for products with real review
-            data (see header note on why most cards won't have one) */}
-        {ratingCount > 0 && (
-          <StarRating rating={ratingAverage} count={ratingCount} size="sm" />
         )}
 
       </div>
