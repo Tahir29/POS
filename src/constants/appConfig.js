@@ -44,6 +44,16 @@ const APP_CONFIG = {
     INR_SYMBOL: '₹',
   },
 
+  // ── TAX ───────────────────────────────────────────────────────────────────
+  // GST on gold/silver/diamond jewellery in India is a flat 3% (CGST 1.5% +
+  // SGST 1.5% for an intra-state sale), unlike most goods' slab rates — so a
+  // single flat rate here is correct for this business, not a simplification.
+  // Applied to the taxable value (subtotal after discount) in cartSlice's
+  // recalculateTotals, the single source of truth for cart/checkout totals.
+  TAX: {
+    GST_RATE: 0.03,
+  },
+
   // ── AUTHENTICATION ────────────────────────────────────────────────────────
   // LIVE OrnaVerse client (2026-07-25) — client_id/scope only. This app's
   // login flow is still interactive username/password (grant_type stays

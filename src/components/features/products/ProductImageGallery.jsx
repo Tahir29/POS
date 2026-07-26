@@ -70,7 +70,7 @@ function filterShopifyImagesByColor(shopifyImages, activeColorName) {
 
 function NoImagePlaceholder() {
   return (
-    <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-grad-accent-wash bg-muted">
+    <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-muted">
       <Gem size={44} strokeWidth={1.25} className="text-accent/50" aria-hidden="true" />
       <span className="text-xs text-muted-foreground/70">No image available</span>
     </div>

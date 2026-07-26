@@ -54,7 +54,7 @@ export default function KPICard({ label, value, trend, sparkline, icon: Icon, is
     <div
       className={cn(
         'flex items-start justify-between gap-3 rounded-xl border bg-card shadow-sm px-5 py-4 transition-shadow duration-standard ease-premium hover:shadow-md',
-        accent ? 'border-accent/30 bg-grad-accent-wash' : 'border-border'
+        accent ? 'border-accent/30 bg-accent/5' : 'border-border'
       )}
     >
       <div className="min-w-0">

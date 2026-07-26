@@ -5,6 +5,7 @@
 
 import { createSlice } from '@reduxjs/toolkit';
 import { REHYDRATE } from 'redux-persist';
+import APP_CONFIG from '@/constants/appConfig';
 
 const initialState = {
   items:               [],    // CartItem[]
@@ -20,18 +21,21 @@ const initialState = {
   appliedGiftVoucher:  null,
   discountAmount:      0,     // sum of appliedPromos[].discountAmount
   subtotal:            0,
+  taxAmount:           0,     // 3% GST on the taxable value (subtotal - discount)
   total:               0,
 };
 
 // ── HELPERS ──────────────────────────────────────────────────
-// Recalculates subtotal and total after any cart mutation.
+// Recalculates subtotal, tax and total after any cart mutation.
 // Called at the end of every reducer that modifies items or discount.
 const recalculateTotals = (state) => {
   state.subtotal = state.items.reduce(
     (sum, item) => sum + item.unitPrice * item.quantity,
     0
   );
-  state.total = Math.max(0, state.subtotal - state.discountAmount);
+  const taxableValue = Math.max(0, state.subtotal - state.discountAmount);
+  state.taxAmount = +(taxableValue * APP_CONFIG.TAX.GST_RATE).toFixed(2);
+  state.total = +(taxableValue + state.taxAmount).toFixed(2);
 };
 
 const cartSlice = createSlice({
@@ -194,6 +198,7 @@ export const {
 export const selectCartItems          = (state) => state.cart.items;
 export const selectCartItemCount      = (state) => state.cart.items.reduce((sum, i) => sum + i.quantity, 0);
 export const selectCartSubtotal       = (state) => state.cart.subtotal;
+export const selectCartTax            = (state) => state.cart.taxAmount;
 export const selectCartTotal          = (state) => state.cart.total;
 export const selectCartDiscount       = (state) => state.cart.discountAmount;
 export const selectCartCustomerId     = (state) => state.cart.customerId;

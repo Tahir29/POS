@@ -32,7 +32,7 @@ export default function PlaceOrderButton({ isValid, isPlacingOrder, onPlaceOrder
           Generating invoice…
         </>
       ) : (
-        `Place Order · ₹${total.toLocaleString('en-IN')}`
+        `Place Order · ₹${total.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`
       )}
     </Button>
   );

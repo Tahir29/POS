@@ -76,7 +76,7 @@ function formatINR(value) {
 // (most catalog rows genuinely have no photo asset yet, see header note).
 function NoImagePlaceholder() {
   return (
-    <div className="flex h-full w-full flex-col items-center justify-center gap-1.5 bg-grad-accent-wash bg-muted">
+    <div className="flex h-full w-full flex-col items-center justify-center gap-1.5 bg-muted">
       <Gem
         size={30}
         strokeWidth={1.25}

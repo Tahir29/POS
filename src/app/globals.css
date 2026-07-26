@@ -103,16 +103,14 @@
   --shadow-lg:    var(--shadow-lg);
   --shadow-hover: var(--shadow-hover);
 
-  /* Gradient tokens — premium revamp. Reference var(--primary)/var(--accent)/
-     var(--status-made-order), so they auto-adjust in .dark with no
-     duplicate block needed. */
-  --background-image-grad-primary-depth: var(--grad-primary-depth);
+  /* Gradient tokens — only the ones actually in use survive here (decorative
+     CTA/sidebar/card-wash gradients were removed 2026-07-26 per explicit
+     "solid colors + shadows, not gradients" preference). Reference
+     var(--accent)/var(--status-made-order), so they auto-adjust in .dark
+     with no duplicate block needed. */
   --background-image-grad-gold-sheen:    var(--grad-gold-sheen);
   --background-image-grad-hairline:      var(--grad-hairline);
   --background-image-grad-corner-wash:   var(--grad-corner-wash);
-  --background-image-grad-cta:           var(--grad-cta);
-  --background-image-grad-sidebar-depth: var(--grad-sidebar-depth);
-  --background-image-grad-accent-wash:   var(--grad-accent-wash);
 
   /* Motion timing — premium revamp. Wired from plain :root custom
      properties (not defined inline here) so the same values are also
@@ -191,18 +189,14 @@
   --shadow-lg: 0 12px 24px -6px rgba(var(--shadow-color-rgb), 0.14), 0 4px 8px -4px rgba(var(--shadow-color-rgb), 0.08);
   --shadow-hover: 0 10px 20px -6px rgba(90, 65, 63, 0.22); /* brand-tinted lift, deliberate hover/active elevation */
 
-  /* ── Gradient tokens — premium revamp. --brand-cream is no longer wired
-     to --background; its new job is this rare decorative wash. ──────── */
-  --grad-primary-depth: linear-gradient(135deg, var(--primary) 0%, color-mix(in oklch, var(--primary), black 20%) 100%);
+  /* ── Gradient tokens — solid colors + shadows preferred app-wide
+     (2026-07-26); only the few gradients still genuinely in use survive:
+     a status-gold sheen (Why Lucira / trust content), a hairline divider,
+     and 404's corner wash. --brand-cream is no longer wired to
+     --background; its job here is that rare decorative corner wash. ──── */
   --grad-gold-sheen: linear-gradient(120deg, color-mix(in oklch, var(--status-made-order), white 35%) 0%, var(--status-made-order) 45%, color-mix(in oklch, var(--status-made-order), white 35%) 100%);
   --grad-hairline: linear-gradient(90deg, transparent, var(--accent) 50%, transparent);
   --grad-corner-wash: radial-gradient(120% 120% at 100% 0%, var(--brand-cream) 0%, transparent 60%);
-  /* CTA gradient — primary warmed through the accent hue rather than a flat
-     primary→black fade, so the app's main action buttons read richer than
-     the plain --grad-primary-depth used elsewhere (sidebar, decorative). */
-  --grad-cta: linear-gradient(135deg, var(--primary) 0%, color-mix(in oklch, var(--primary), var(--accent) 45%) 55%, color-mix(in oklch, var(--primary), black 25%) 100%);
-  --grad-sidebar-depth: linear-gradient(180deg, color-mix(in oklch, var(--sidebar), white 6%) 0%, var(--sidebar) 45%, color-mix(in oklch, var(--sidebar), black 12%) 100%);
-  --grad-accent-wash: radial-gradient(140% 100% at 100% 0%, color-mix(in oklch, var(--accent), transparent 85%) 0%, transparent 65%);
 
   /* ── Motion timing — premium revamp. Plain runtime custom properties
      (not just @theme inline) so the same values are JS-readable — see
@@ -330,35 +324,6 @@
   .animate-shimmer-text {
     background-size: 200% auto;
     animation: shimmer-text 4s linear infinite;
-  }
-
-  /* CTA shine sweep — a single light pass on hover/focus, not a looping
-     ambient effect. This app runs all day on staff devices; a CTA that
-     glows non-stop reads as broken/nagging, not premium. The sweep only
-     plays on interaction, same restraint as the rest of this app's motion. */
-  @keyframes btn-shine {
-    from { transform: translateX(-150%) skewX(-20deg); }
-    to   { transform: translateX(250%) skewX(-20deg); }
-  }
-
-  .btn-shine {
-    position: relative;
-    overflow: hidden;
-  }
-
-  .btn-shine::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    width: 45%;
-    background: linear-gradient(120deg, transparent, rgba(255, 255, 255, 0.35), transparent);
-    transform: translateX(-150%) skewX(-20deg);
-    pointer-events: none;
-  }
-
-  .btn-shine:hover::after,
-  .btn-shine:focus-visible::after {
-    animation: btn-shine 0.85s ease-out;
   }
 
   /* Premium revamp motion — respects OS-level reduced-motion preference.

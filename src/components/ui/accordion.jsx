@@ -66,9 +66,19 @@ function AccordionContent({
       data-slot="accordion-content"
       className="overflow-hidden text-sm data-[state=open]:animate-accordion-down data-[state=closed]:animate-accordion-up"
       {...props}>
+      {/* No fixed/animation-var height here on purpose — the outer
+          Content element above already animates its own height (via the
+          accordion-down/up keyframes) for the open/close transition. This
+          inner div locking to the SAME --radix-accordion-content-height
+          permanently (not just during that transition) caused real content
+          to get clipped whenever it changed size after the accordion was
+          already open — e.g. async data replacing a loading skeleton, or a
+          list growing — since the var doesn't reliably keep re-tracking
+          content after the initial mount. Plain height:auto always matches
+          real content, growing/shrinking automatically. */}
       <div
         className={cn(
-          "h-(--radix-accordion-content-height) pt-0 pb-4 [&_a]:underline [&_a]:underline-offset-3 [&_a]:hover:text-foreground [&_p:not(:last-child)]:mb-4",
+          "pt-0 pb-4 [&_a]:underline [&_a]:underline-offset-3 [&_a]:hover:text-foreground [&_p:not(:last-child)]:mb-4",
           className
         )}>
         {children}

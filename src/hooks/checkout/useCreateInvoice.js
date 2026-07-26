@@ -15,6 +15,13 @@
 //   line_items[]   → InvoiceItemsRow (item_id, sku, pieces, item_rate, net_amount, ...)
 //   receipt_details[] → InvoiceReceiptRow (mode_id, mode_code, mode_name, amount)
 //
+// tax — cartSlice now computes a flat 3% GST (the real statutory rate for
+// gold/silver/diamond jewellery in India, not an approximation) on the
+// taxable value (subtotal - discount), single source of truth shared with
+// CartSummary/CheckoutPaymentSection/PlaceOrderButton via useCartTotals. Sent
+// below as tax_amount alongside net_amount (which is tax-inclusive, i.e. the
+// actual amount collected from the customer).
+//
 // employee_id / sales_person_id — confirmed 2026-07-16 the vendor's own POS
 // Sale screen requires selecting an employee before placing the order.
 // Exact field name InvoiceRow expects isn't confirmed (only SchemeEnrollmentRow
@@ -25,12 +32,15 @@
 // ExchangeRate/GetExchangeRate is a distinct required lookup alongside
 // currency_id (not implied by it) — see useExchangeRate.
 //
-// tax_amount — NOT hardcoded to 0 anymore. Confirmed 2026-07-16: our POS
-// invoice document type (DocumentNumbering document_id 54) has
-// is_tax_applicable: true, and every Item entity carries its own
-// tax_template_id/is_tax_applicable/is_tax_inclusive — so GST is computed
-// server-side per line item, not something we calculate client-side. Omit
-// the field and read back whatever the server computes via Invoice/Retrieve.
+// tax_amount — confirmed 2026-07-16 our POS invoice document type
+// (DocumentNumbering document_id 54) has is_tax_applicable: true, and every
+// Item entity carries its own tax_template_id/is_tax_applicable/
+// is_tax_inclusive, so per-line-item GST is ultimately the server's to
+// compute. In the meantime we now send our own flat-3%-GST total (see
+// cartSlice) as a best-effort tax_amount rather than omitting the field —
+// once Invoice/Create is unblocked, reconcile against whatever
+// Invoice/Retrieve reports back and drop this client-side figure if the
+// server's per-item total disagrees.
 //
 // STATUS is DERIVED after posting (balance_amount + receipt_amount) — never sent.
 //
@@ -85,7 +95,7 @@ function toGAItems(items) {
  * }} params
  */
 function buildInvoiceEntity({
-  items, subtotal, discount, total,
+  items, subtotal, discount, tax, total,
   customerId, activeStoreId,
   paymentModes, narration,
   salesPersonId, exchangeRate,
@@ -102,6 +112,12 @@ function buildInvoiceEntity({
     // item_rate = unit price on line item (confirmed InvoiceItemsRow field)
     item_rate:    item.unitPrice,
     sub_total:    +(item.unitPrice * item.quantity).toFixed(2),
+    // taxable_amount — confirmed required 2026-07-27: a live Invoice/Create
+    // attempt 400'd with "Taxable amount is missing" once AccessDenied was
+    // resolved for real. Pre-tax line value (same figure as sub_total here
+    // since there's no per-line discount split yet) — server computes its
+    // own tax off this, we don't send a per-line tax figure.
+    taxable_amount: +(item.unitPrice * item.quantity).toFixed(2),
     net_amount:   +(item.unitPrice * item.quantity).toFixed(2),
     // TEMP DIAGNOSTIC — style_id / item_size_id / narration commented out
     // to isolate whether one of these three is causing the server-side
@@ -129,10 +145,8 @@ function buildInvoiceEntity({
     sales_person_id:  salesPersonId,
     sub_total:     subtotal,
     discount:      discount ?? 0,
+    tax_amount:    tax ?? 0,
     net_amount:    total,
-    // NOT sent — see file header: server computes this per line item from
-    // each item's own tax_template_id. Read it back via Invoice/Retrieve
-    // rather than pre-calculating it here.
     narration:     narration ?? undefined,
     line_items,
     receipt_details,
@@ -142,7 +156,7 @@ function buildInvoiceEntity({
 export function useCreateInvoice() {
   const queryClient = useQueryClient();
   const { items, clearCart } = useCart();
-  const { subtotal, discount, total } = useCartTotals();
+  const { subtotal, discount, tax, total } = useCartTotals();
   const { customerId } = useCustomerSession();
   const activeStoreId = useSelector(selectActiveStoreId);
   const { exchangeRate } = useExchangeRate();
@@ -157,7 +171,7 @@ export function useCreateInvoice() {
      */
     mutationFn: async ({ paymentModes, narration, salesPersonId }) => {
       const entity = buildInvoiceEntity({
-        items, subtotal, discount, total,
+        items, subtotal, discount, tax, total,
         customerId, activeStoreId,
         paymentModes, narration,
         salesPersonId, exchangeRate,

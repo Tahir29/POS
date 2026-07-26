@@ -19,7 +19,7 @@ export default function CheckoutDiscountSection() {
   const { validatePromo, isValidating } = usePromoValidation();
 
   return (
-    <section className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4">
+    <section className="flex flex-col gap-3 rounded-xl border border-border bg-card p-5 shadow-sm">
       <h2 className="text-sm font-bold text-foreground">Discount</h2>
 
       {appliedPromos.map((promo) => (
