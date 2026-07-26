@@ -18,10 +18,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSelector } from 'react-redux';
+import { ShieldCheck } from 'lucide-react';
 import ConfirmDialog    from '@/components/shared/ConfirmDialog';
 import CheckoutCustomerSummary  from '@/components/features/checkout/CheckoutCustomerSummary';
 import CheckoutDiscountSection  from '@/components/features/checkout/CheckoutDiscountSection';
 import CheckoutPaymentSection   from '@/components/features/checkout/CheckoutPaymentSection';
+import CheckoutTrustStrip       from '@/components/features/checkout/CheckoutTrustStrip';
 import SalesPersonSelect        from '@/components/features/checkout/SalesPersonSelect';
 import CartItemRow              from '@/components/features/cart/CartItemRow';
 import CartSummary              from '@/components/features/cart/CartSummary';
@@ -150,14 +152,16 @@ function CheckoutScreen() {
 
   // ── Checkout form ──────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col gap-6 max-w-5xl mx-auto w-full pb-28 p-4 md:p-6">
-      <div className='flex flex-col lg:flex-row lg:items-start justify-center gap-4'>
-        <div className="flex flex-col gap-4 w-full lg:flex-1">
+    <div className="flex flex-col gap-6 max-w-6xl mx-auto w-full pb-32 p-4 md:p-6">
+      <p className="text-sm text-muted-foreground -mb-2">Review your order and complete the payment</p>
+
+      <div className='grid grid-cols-1 items-start gap-5 lg:grid-cols-2'>
+        <div className="flex flex-col gap-5 w-full">
           {/* Customer attached to this sale */}
           <CheckoutCustomerSummary />
 
           {/* Order items — same CartItemRow used on the Cart page, read-only here */}
-          <section className="rounded-xl border border-border bg-card p-4 shadow-sm">
+          <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
             <h2 className="text-sm font-bold text-foreground mb-1">
               Order Items <span className="text-muted-foreground font-normal text-xs">({items.length} item{items.length !== 1 ? 's' : ''})</span>
             </h2>
@@ -173,14 +177,14 @@ function CheckoutScreen() {
           </section>
 
           {/* Order summary */}
-          <section className="rounded-xl border border-border bg-card p-4 shadow-sm">
+          <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
             <h2 className="text-sm font-bold text-foreground mb-1">Order Summary</h2>
             <CartSummary />
           </section>
         </div>
-        <div className="flex flex-col gap-4 w-full lg:flex-1">
+        <div className="flex flex-col gap-5 w-full">
           {/* Sales person — required, mirrors the vendor's own POS Sale screen */}
-          <section className="rounded-xl border border-border bg-card p-4 shadow-sm">
+          <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
             <h2 className="text-sm font-bold text-foreground mb-2">
               Sales Person <span className="text-destructive">*</span>
             </h2>
@@ -199,14 +203,21 @@ function CheckoutScreen() {
         </div>
       </div>
 
+      {/* Reassurance strip — exchange/certification/warranty + accepted payment networks */}
+      <CheckoutTrustStrip />
+
       {/* Sticky Place Order button */}
       <div className="fixed bottom-0 left-0 right-0 border-t border-border bg-card p-4 sm:static sm:border-0 sm:bg-transparent sm:p-0">
-        <div className="max-w-5xl mx-auto w-full">
+        <div className="max-w-6xl mx-auto w-full flex flex-col items-center gap-2">
           <PlaceOrderButton
             isValid={isValid}
             isPlacingOrder={isPlacingInvoice}
             onPlaceOrder={handlePlaceOrder}
           />
+          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <ShieldCheck size={13} className="text-accent" aria-hidden="true" />
+            Secure checkout · Your data is safe with us
+          </p>
         </div>
       </div>
 

@@ -180,7 +180,7 @@ export default function CheckoutPaymentSection({ onChange }) {
   const hasVisibleHelpers = customerId && helperItems.some((h) => h.data?.amount > 0);
 
   return (
-    <section className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4">
+    <section className="flex flex-col gap-3 rounded-xl border border-border bg-card p-5 shadow-sm">
       <h2 className="text-sm font-bold text-foreground">Payment</h2>
 
       {/* Invoice Helper Balances — only shown when customer attached + has balance */}
@@ -208,7 +208,7 @@ export default function CheckoutPaymentSection({ onChange }) {
           ))}
           {balancesApplied > 0 && (
             <p className="text-xs text-primary font-medium">
-              {APP_CONFIG.CURRENCY.INR_SYMBOL}{balancesApplied.toLocaleString('en-IN')} applied to this order
+              {APP_CONFIG.CURRENCY.INR_SYMBOL}{balancesApplied.toLocaleString('en-IN', { maximumFractionDigits: 2 })} applied to this order
             </p>
           )}
         </div>
@@ -250,13 +250,13 @@ export default function CheckoutPaymentSection({ onChange }) {
             {balancesApplied > 0 && (
               <div className="flex items-center justify-between text-muted-foreground">
                 <span>Balances applied</span>
-                <span>−{APP_CONFIG.CURRENCY.INR_SYMBOL}{balancesApplied.toLocaleString('en-IN')}</span>
+                <span>−{APP_CONFIG.CURRENCY.INR_SYMBOL}{balancesApplied.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>
               </div>
             )}
             {collectedByMode.map((p) => (
               <div key={p.modeId ?? p.modeCode} className="flex items-center justify-between text-muted-foreground">
                 <span>Collected ({p.modeName})</span>
-                <span>{APP_CONFIG.CURRENCY.INR_SYMBOL}{(Number(p.amount) || 0).toLocaleString('en-IN')}</span>
+                <span>{APP_CONFIG.CURRENCY.INR_SYMBOL}{(Number(p.amount) || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>
               </div>
             ))}
             {isBalanced ? (
@@ -270,7 +270,7 @@ export default function CheckoutPaymentSection({ onChange }) {
                   {remaining > 0 ? 'Remaining' : 'Over total'}
                 </span>
                 <span className={remaining > 0 ? 'text-destructive' : 'text-status-made-order'}>
-                  {APP_CONFIG.CURRENCY.INR_SYMBOL}{Math.abs(remaining).toLocaleString('en-IN')}
+                  {APP_CONFIG.CURRENCY.INR_SYMBOL}{Math.abs(remaining).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
                 </span>
               </div>
             )}

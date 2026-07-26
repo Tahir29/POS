@@ -12,7 +12,7 @@
 import { useCartTotals } from '@/hooks/cart/useCartTotals';
 
 export default function CartSummary() {
-  const { subtotal, discount, total } = useCartTotals();
+  const { subtotal, discount, tax, total } = useCartTotals();
 
   return (
     <div className="flex flex-col gap-2 py-3">
@@ -32,12 +32,19 @@ export default function CartSummary() {
         </div>
       )}
 
+      <div className="flex items-center justify-between text-sm text-muted-foreground">
+        <span>GST (3%)</span>
+        <span className="font-medium text-foreground">
+          ₹{tax.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+        </span>
+      </div>
+
       <div className="h-px w-full bg-grad-hairline mt-1" aria-hidden="true" />
 
       <div className="flex items-center justify-between pt-1">
         <span className="text-base font-bold text-foreground">Total</span>
         <span className="font-heading text-xl font-semibold text-primary tabular-nums">
-          ₹{total.toLocaleString('en-IN')}
+          ₹{total.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
         </span>
       </div>
     </div>

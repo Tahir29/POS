@@ -84,7 +84,7 @@ export default function Sidebar() {
 
       <aside
         className={cn(
-          'flex flex-col border-r border-sidebar-border bg-grad-sidebar-depth shadow-lg shrink-0',
+          'flex flex-col border-r border-sidebar-border bg-sidebar shadow-lg shrink-0',
           'fixed inset-y-0 left-0 z-50 w-64 transition-transform duration-300 ease-in-out',
           sidebarOpen ? 'translate-x-0' : '-translate-x-full',
           'md:relative md:inset-auto md:z-auto md:translate-x-0 md:transition-[width] md:duration-300 md:ease-in-out',
