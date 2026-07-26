@@ -94,6 +94,7 @@ export default function ProductStickyActionBar({
             <AddToCartButton
               product={product}
               quantity={quantity}
+              unitPrice={unitPrice}
               selectedSizeId={selectedSizeId}
               selectedSizeName={selectedSizeName}
               stockStatus={stockStatus}

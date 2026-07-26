@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import EmptyState from '@/components/shared/EmptyState';
 import ErrorState from '@/components/shared/ErrorState';
 import InlineLoader from '@/components/shared/InlineLoader';
+import { StaggerList } from '@/components/shared/StaggerList';
 import { Input } from '@/components/ui/input';
 import InvoiceListItem from '@/components/features/invoices/InvoiceListItem';
 import InvoiceDetailSheet from '@/components/features/invoices/InvoiceDetailSheet';
@@ -214,7 +215,7 @@ export default function InvoicesPage() {
       </div>
 
       {/* ── List ────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
+      <StaggerList className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
         {isLoading ? (
           <InlineLoader className="col-span-full" label={isSearchActive ? 'Searching invoices…' : 'Loading invoices…'} />
         ) : isError ? (
@@ -238,7 +239,7 @@ export default function InvoicesPage() {
             />
           ))
         )}
-      </div>
+      </StaggerList>
 
       {/* ── Pagination — hidden while any filter is active ── */}
       {!isSearchActive && totalCount > take && (

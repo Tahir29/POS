@@ -10,6 +10,16 @@
 // Disabled when there's no valid price (item_rate === 0 means this variant
 // was never costed) — adding it would silently put a ₹0 line item into a
 // real sale, which only gets caught much later at checkout.
+//
+// FIX (2026-07-26): `unitPrice` is now a required prop, resolved once by
+// the page (product/[itemId]/page.jsx handles live-priced items via
+// SetSalesItems there) and passed down through ProductStickyActionBar.
+// This component used to re-derive its own price straight from
+// `product.item_rate` — for any item needing live pricing, item_rate is
+// always 0, so that recomputation always came back null and permanently
+// disabled the button even when a real live price was showing on-screen
+// and had already been added to the cart total. Never recompute price
+// here; always trust the caller's resolved value.
 
 import { useDispatch } from 'react-redux';
 import { toast } from 'react-toastify';
@@ -25,6 +35,7 @@ import EVENTS, { GA_ECOMMERCE_EVENTS } from '@/lib/analytics/events';
  * @param {{
  *   product:          object,
  *   quantity:         number,
+ *   unitPrice:        number | null,
  *   selectedSizeId:   number | null,
  *   selectedSizeName: string | null,
  *   primaryImage:     { src: string, alt: string|null } | null,
@@ -34,23 +45,13 @@ import EVENTS, { GA_ECOMMERCE_EVENTS } from '@/lib/analytics/events';
 export default function AddToCartButton({
   product,
   quantity,
+  unitPrice = null,
   selectedSizeId,
   selectedSizeName,
   primaryImage = null,
   disabled = false,
 }) {
   const dispatch = useDispatch();
-
-  // ── Resolve price ─────────────────────────────────────────────────────────
-  // A real jewellery item is never actually free — treat 0 the same as
-  // missing (see catalogService.enrichWithPrice for the same rule elsewhere).
-  const unitPrice =
-    product?.item_rate  ||
-    product?.sale_price ||
-    product?.price      ||
-    product?.mrp        ||
-    product?.rate       ||
-    null;
 
   const isDisabled = !product || disabled || unitPrice == null;
 

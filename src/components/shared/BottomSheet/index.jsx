@@ -117,10 +117,7 @@ export default function BottomSheet({
           >
             {/* ── Header ─────────────────────────────────────────────── */}
             <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-border shrink-0">
-              <h2
-                className="text-base font-bold text-foreground"
-                style={{ fontFamily: 'var(--font-abhaya)' }}
-              >
+              <h2 className="text-base font-bold text-foreground">
                 {title}
               </h2>
               <button

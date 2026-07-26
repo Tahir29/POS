@@ -8,53 +8,36 @@
 // No "Load More" button needed.
 
 import { useEffect, useRef } from 'react';
+import { PackageSearch } from 'lucide-react';
 import ProductCard     from '@/components/features/catalog/ProductCard';
 import CatalogSkeleton from '@/components/features/catalog/CatalogSkeleton';
+import EmptyState      from '@/components/shared/EmptyState';
+import { Button }      from '@/components/ui/button';
 
 // ── Empty state ───────────────────────────────────────────────────────────────
+// Delegates to the shared EmptyState (same card/badge/icon convention used
+// everywhere else) instead of a one-off hand-rolled version — this was the
+// only catalog-specific empty state left over from before that convention existed.
 
 function CatalogEmptyState({ hasFilters, onClearFilters }) {
   return (
-    <div className="flex flex-col items-center justify-center py-20 text-center">
-      <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-secondary">
-        <svg
-          className="h-8 w-8 text-muted-foreground"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-          strokeWidth={1.5}
-          aria-hidden="true"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"
-          />
-        </svg>
-      </div>
-      <p className="text-base font-semibold text-foreground">
-        {hasFilters ? 'No products match your filters' : 'No products found'}
-      </p>
-      <p className="mt-1 text-sm text-muted-foreground">
-        {hasFilters
+    <EmptyState
+      className="py-20"
+      icon={PackageSearch}
+      title={hasFilters ? 'No products match your filters' : 'No products found'}
+      description={
+        hasFilters
           ? 'Try adjusting or clearing your filters.'
-          : 'This store has no products in the catalog yet.'}
-      </p>
-      {hasFilters && (
-        <button
-          type="button"
-          onClick={onClearFilters}
-          className="
-            mt-5 min-h-[44px] rounded-xl bg-primary px-5 py-2.5
-            text-sm font-semibold text-primary-foreground
-            hover:bg-primary/90 transition-colors
-            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
-          "
-        >
-          Clear filters
-        </button>
-      )}
-    </div>
+          : 'This store has no products in the catalog yet.'
+      }
+      action={
+        hasFilters && (
+          <Button type="button" onClick={onClearFilters}>
+            Clear filters
+          </Button>
+        )
+      }
+    />
   );
 }
 

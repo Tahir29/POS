@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button';
 import EmptyState from '@/components/shared/EmptyState';
 import ErrorState from '@/components/shared/ErrorState';
 import InlineLoader from '@/components/shared/InlineLoader';
+import { StaggerList } from '@/components/shared/StaggerList';
 import { Input } from '@/components/ui/input';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -250,7 +251,7 @@ export default function OrdersPage() {
       </div>
 
       {/* ── List ────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
+      <StaggerList className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
         {isLoading ? (
           <InlineLoader className="col-span-full" label={isSearchActive ? 'Searching orders…' : 'Loading orders…'} />
         ) : isError ? (
@@ -274,7 +275,7 @@ export default function OrdersPage() {
             />
           ))
         )}
-      </div>
+      </StaggerList>
 
       {/* ── Pagination — hidden while any filter is active ── */}
       {!isSearchActive && totalCount > take && (

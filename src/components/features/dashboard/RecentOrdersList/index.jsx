@@ -18,28 +18,51 @@ function getInitials(name) {
   return (first + last).toUpperCase();
 }
 
+// Relative "Today, h:mm AM/PM" vs plain date — no fabricated data, just a
+// nicer format of the order's own real orderDate (matches the reference's
+// row layout, which shows a timestamp alongside the customer).
+function formatOrderTimestamp(iso) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return null;
+  const isToday = d.toDateString() === new Date().toDateString();
+  const time = d.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
+  if (isToday) return `Today, ${time}`;
+  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+}
+
 function OrderRow({ order, onSelect }) {
+  const timestamp = formatOrderTimestamp(order.orderDate);
+
   return (
     <button
       type="button"
       onClick={onSelect}
       className="flex w-full items-center gap-3 py-3 text-left transition-colors hover:bg-accent/50 rounded-lg px-2 -mx-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
+      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-sm font-bold text-primary">
         {getInitials(order.customerName)}
       </span>
 
       <div className="min-w-0 flex-1">
         <p className="text-xs text-muted-foreground truncate">{order.orderNo || '—'}</p>
         <p className="text-sm font-medium text-foreground truncate">{order.customerName || 'Walk-in'}</p>
+        {timestamp && (
+          <p className="flex items-center gap-1 text-xs text-muted-foreground">
+            {timestamp}
+            {order.status && (
+              <>
+                <span aria-hidden="true">·</span>
+                <PaymentStatusBadge status={mapOrderStatus(order.status)} size="sm" />
+              </>
+            )}
+          </p>
+        )}
       </div>
 
-      <div className="flex shrink-0 flex-col items-end gap-1">
-        <p className="text-sm font-semibold tabular-nums text-foreground">
-          &#8377;{Number(order.totalAmount ?? 0).toLocaleString('en-IN')}
-        </p>
-        {order.status && <PaymentStatusBadge status={mapOrderStatus(order.status)} size="sm" />}
-      </div>
+      <p className="shrink-0 text-sm font-semibold tabular-nums text-foreground">
+        &#8377;{Number(order.totalAmount ?? 0).toLocaleString('en-IN')}
+      </p>
     </button>
   );
 }
@@ -52,7 +75,7 @@ export default function RecentOrdersList({ orders = [], isLoading }) {
   const router = useRouter();
 
   return (
-    <div className="rounded-xl border border-border bg-card p-5">
+    <div className="rounded-xl border border-border bg-card shadow-sm p-5 h-full">
       <div className="flex items-center justify-between mb-1">
         <h2 className="font-heading text-base text-foreground">Recent Orders</h2>
         <button

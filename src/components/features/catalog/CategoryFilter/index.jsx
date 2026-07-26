@@ -29,12 +29,12 @@ function CategoryChip({ label, isActive, onClick }) {
       onClick={onClick}
       aria-pressed={isActive}
       className={[
-        'shrink-0 min-h-[36px] px-5 py-1.5 rounded-full text-sm font-medium',
-        'border transition-all duration-150 whitespace-nowrap',
+        'shrink-0 min-h-[38px] px-5 py-1.5 rounded-full text-sm font-medium',
+        'border transition-all duration-standard ease-premium whitespace-nowrap',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1',
         isActive
           ? 'bg-accent border-accent text-white shadow-sm'
-          : 'bg-card border-border text-muted-foreground hover:border-accent/50 hover:text-accent',
+          : 'bg-card border-border text-muted-foreground hover:border-accent/50 hover:text-accent hover:shadow-xs',
       ].join(' ')}
     >
       {label}
@@ -73,42 +73,50 @@ export default function CategoryFilter({
     .filter(Boolean);
 
   return (
-    <div className="flex items-center gap-2 overflow-x-auto scrollbar-none py-1">
+    <div className="relative">
+      <div className="flex items-center gap-2 overflow-x-auto scrollbar-none py-1 pr-6">
 
-      {/* ALL chip */}
-      <CategoryChip
-        label="ALL"
-        isActive={!activeCategorySlug}
-        onClick={() => onSelectCategory(null)}
+        {/* ALL chip */}
+        <CategoryChip
+          label="ALL"
+          isActive={!activeCategorySlug}
+          onClick={() => onSelectCategory(null)}
+        />
+
+        {/* Category chips */}
+        {visibleCategories.map((cat) => {
+          const slug     = toSlug(cat.displayName);
+          const isActive = activeCategorySlug === slug;
+          return (
+            <CategoryChip
+              key={cat.type_id}
+              label={cat.displayName.toUpperCase()}
+              isActive={isActive}
+              onClick={() => onSelectCategory(isActive ? null : slug)}
+            />
+          );
+        })}
+
+        {/* Clear filters — only when a non-category filter is active */}
+        {hasActiveFilters && activeCategorySlug && (
+          <>
+            <div className="w-px h-5 bg-border shrink-0 mx-1" aria-hidden="true" />
+            <button
+              type="button"
+              onClick={onClearFilters}
+              className="shrink-0 min-h-[38px] px-3 py-1.5 rounded-full text-xs font-medium border border-destructive/30 text-destructive hover:bg-destructive/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring whitespace-nowrap"
+            >
+              Clear
+            </button>
+          </>
+        )}
+      </div>
+
+      {/* Fade hint — signals the chip row scrolls horizontally when it overflows */}
+      <div
+        className="pointer-events-none absolute right-0 top-0 h-full w-8 bg-gradient-to-l from-white to-transparent"
+        aria-hidden="true"
       />
-
-      {/* Category chips */}
-      {visibleCategories.map((cat) => {
-        const slug     = toSlug(cat.displayName);
-        const isActive = activeCategorySlug === slug;
-        return (
-          <CategoryChip
-            key={cat.type_id}
-            label={cat.displayName.toUpperCase()}
-            isActive={isActive}
-            onClick={() => onSelectCategory(isActive ? null : slug)}
-          />
-        );
-      })}
-
-      {/* Clear filters — only when a non-category filter is active */}
-      {hasActiveFilters && activeCategorySlug && (
-        <>
-          <div className="w-px h-5 bg-border shrink-0 mx-1" aria-hidden="true" />
-          <button
-            type="button"
-            onClick={onClearFilters}
-            className="shrink-0 min-h-[36px] px-3 py-1.5 rounded-full text-xs font-medium border border-destructive/30 text-destructive hover:bg-destructive/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring whitespace-nowrap"
-          >
-            Clear
-          </button>
-        </>
-      )}
     </div>
   );
 }

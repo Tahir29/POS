@@ -365,9 +365,13 @@ function CatalogScreen() {
   return (
     <div className="flex h-full flex-col bg-background">
 
-      <div className="px-4 pt-4 pb-2 md:px-6 md:pt-5 bg-white">
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="w-full min-w-0 sm:w-auto sm:flex-1">
+      {/* Light grey wash — subtle enough not to draw the eye, just enough to
+          read as its own "filters" region distinct from the white product grid below */}
+      <div className="px-4 pt-4 pb-3 md:px-6 md:pt-5 bg-muted/60 border-b border-border">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+          {/* Search — left, grows on wide screens but caps out so it doesn't
+              dominate the row; always full-width on its own line below lg */}
+          <div className="w-full min-w-0 lg:max-w-md lg:flex-1">
             <ProductSearchBar
               value={searchQuery ?? ''}
               onSearch={handleSearch}
@@ -376,21 +380,29 @@ function CatalogScreen() {
               onRecentSelect={actions.setSearch}
             />
           </div>
-          <CatalogStoreSelector
-            catalogStoreId={catalogStoreId}
-            onStoreChange={actions.setCatalogStore}
-          />
-          <CatalogSortDropdown
-            sortBy={sortBy}
-            onSortChange={actions.setSortBy}
-          />
-          <OutOfStockToggle
-            showOutOfStock={showOutOfStock}
-            onToggle={actions.setShowOutOfStock}
-          />
+
+          {/* Filters — right on desktop; below sm, store+sort share a row and
+              the toggle spans full width so the row uses all available space
+              instead of stacking three narrow boxes with dead space beside them */}
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center lg:ml-auto lg:shrink-0">
+            <CatalogStoreSelector
+              catalogStoreId={catalogStoreId}
+              onStoreChange={actions.setCatalogStore}
+            />
+            <CatalogSortDropdown
+              sortBy={sortBy}
+              onSortChange={actions.setSortBy}
+            />
+            <div className="col-span-2 sm:col-auto sm:contents">
+              <OutOfStockToggle
+                showOutOfStock={showOutOfStock}
+                onToggle={actions.setShowOutOfStock}
+              />
+            </div>
+          </div>
         </div>
 
-        <div className="mt-3">
+        <div className="mt-4 pt-3 border-t border-border">
           <CategoryFilter
             categories={categories}
             activeCategorySlug={activeCategorySlug}

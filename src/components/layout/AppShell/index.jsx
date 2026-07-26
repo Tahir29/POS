@@ -4,6 +4,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import Sidebar from '@/components/layout/Sidebar';
 import Header from '@/components/layout/Header';
 import PageLoader from '@/components/shared/PageLoader';
+import PageTransition from '@/components/shared/PageTransition';
 import ScrollToTopButton from '@/components/shared/ScrollToTopButton';
 import { NavigationGuardProvider } from '@/contexts/NavigationGuardContext';
 
@@ -28,7 +29,7 @@ export default function AppShell({ children }) {
               role="main"
               tabIndex={-1}
             >
-              {children}
+              <PageTransition>{children}</PageTransition>
             </main>
           </div>
           <PageLoader />

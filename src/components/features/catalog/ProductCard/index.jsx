@@ -32,6 +32,7 @@
 import { useState }        from 'react';
 import Image               from 'next/image';
 import { useRouter }       from 'next/navigation';
+import { Gem } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 import { resolveImageSrc } from '@/lib/resolveImageSrc';
 import APP_CONFIG          from '@/constants/appConfig';
@@ -70,43 +71,36 @@ function formatINR(value) {
 }
 
 // ── No-image placeholder ──────────────────────────────────────────────────────
+// On-brand instead of a generic "broken image" glyph — a jewellery app's
+// missing-photo state shouldn't look like an error, since it isn't one
+// (most catalog rows genuinely have no photo asset yet, see header note).
 function NoImagePlaceholder() {
   return (
-    <div className="flex h-full w-full flex-col items-center justify-center gap-1 bg-muted">
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        width="32"
-        height="32"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className="text-muted-foreground/50"
+    <div className="flex h-full w-full flex-col items-center justify-center gap-1.5 bg-grad-accent-wash bg-muted">
+      <Gem
+        size={30}
+        strokeWidth={1.25}
+        className="text-accent/50"
         aria-hidden="true"
-      >
-        <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
-        <circle cx="9" cy="9" r="2" />
-        <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
-      </svg>
-      <span className="text-[10px] text-muted-foreground/50 tracking-wide">No image</span>
+      />
+      <span className="text-[10px] text-muted-foreground/60 tracking-wide">No image</span>
     </div>
   );
 }
 
 // ── Stock Badge ───────────────────────────────────────────────────────────────
+// Flag/tag shape flush to the card's left edge (square on the left, rounded
+// on the right) rather than a floating pill — reads as a tag stuck to the
+// corner of the card instead of a badge hovering over the photo.
 function StockBadge({ inStock }) {
-  if (inStock) {
-    return (
-      <Badge className="h-auto rounded-full bg-status-in-stock/90 px-2.5 py-0.5 text-[11px] font-semibold text-white shadow-sm">
-        In Stock
-      </Badge>
-    );
-  }
   return (
-    <Badge className="h-auto rounded-full bg-status-error/90 px-2.5 py-0.5 text-[11px] font-semibold text-white shadow-sm">
-      Out of Stock
+    <Badge
+      className={[
+        'h-auto rounded-l-none rounded-r-full py-1 pl-2.5 pr-3 text-[11px] font-semibold text-white shadow-sm',
+        inStock ? 'bg-status-in-stock/95' : 'bg-status-error/95',
+      ].join(' ')}
+    >
+      {inStock ? 'In Stock' : 'Out of Stock'}
     </Badge>
   );
 }
@@ -126,6 +120,7 @@ export default function ProductCard({ product, showStockBadge = false }) {
     weight,
     net_weight,
     metal_id,
+    karat_code,
     image,
     image_url,
     image_1,
@@ -139,8 +134,14 @@ export default function ProductCard({ product, showStockBadge = false }) {
   const inStock      = has_stock === true;
   const metalLabel   = getMetalLabel(metal_id);
   const weightLabel  = formatWeight(net_weight ?? weight ?? null);
+  // Purity/karat when the API gives us a real one — "NA" (mostly synthetic
+  // stone rows) is dropped rather than shown as a literal "NA".
+  const karatLabel   = karat_code && karat_code !== 'NA' ? karat_code : null;
+  // Metal name + karat together (e.g. "Silver 925"), falling back to
+  // whichever of the two is actually present.
+  const metalKaratLabel = [metalLabel, karatLabel].filter(Boolean).join(' ') || null;
 
-  const infoLine = [metalLabel, weightLabel].filter(Boolean).join(' · ') || null;
+  const infoLine = [metalKaratLabel, weightLabel].filter(Boolean).join(' · ') || null;
 
   const rawSrc  = image ?? image_url ?? image_1 ?? null;
   const imageSrc = !imgError ? resolveImageSrc(rawSrc) : null;
@@ -156,8 +157,8 @@ export default function ProductCard({ product, showStockBadge = false }) {
       onClick={handleTap}
       className={[
         'group relative flex flex-col overflow-hidden rounded-2xl border bg-card text-left',
-        'shadow-sm transition-shadow duration-standard ease-premium',
-        'hover:shadow-md',
+        'shadow-sm transition-all duration-standard ease-premium',
+        'hover:shadow-md hover:border-accent/40',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
         !inStock && 'opacity-60',
       ].filter(Boolean).join(' ')}
@@ -182,22 +183,31 @@ export default function ProductCard({ product, showStockBadge = false }) {
         )}
 
         {showStockBadge && (
-          <div className="absolute right-2 top-2">
+          <div className="absolute left-0 top-3">
             <StockBadge inStock={inStock} />
           </div>
         )}
       </div>
 
       {/* ── Info ──────────────────────────────────────────── */}
-      <div className="flex flex-1 flex-col gap-1.5 p-3.5">
+      {/* Divider between the photo and details — a deliberate seam rather
+          than the two areas just running together. */}
+      <div className="flex flex-1 flex-col gap-1.5 border-t border-border p-3.5">
 
-        {/* Star rating — only ever renders for products with real review
-            data (see header note on why most cards won't have one). Sits
-            in its own row above the price, mirroring the reference card's
-            swatch/rating row — we just don't have swatch data to pair it with. */}
-        {ratingCount > 0 && (
-          <div className="flex justify-end">
-            <StarRating rating={ratingAverage} count={ratingCount} size="sm" />
+        {/* Karat · Weight (left) — rating + review count (right), sharing
+            one row instead of the rating stranding itself on its own line. */}
+        {(infoLine || ratingCount > 0) && (
+          <div className="flex items-center gap-2">
+            {infoLine && (
+              <span className="truncate text-xs text-muted-foreground">
+                {infoLine}
+              </span>
+            )}
+            {ratingCount > 0 && (
+              <span className="ml-auto shrink-0">
+                <StarRating rating={ratingAverage} count={ratingCount} size="sm" />
+              </span>
+            )}
           </div>
         )}
 
@@ -213,13 +223,6 @@ export default function ProductCard({ product, showStockBadge = false }) {
         {item_name && item_name !== item_code && (
           <p className="line-clamp-2 text-sm font-semibold leading-snug text-foreground">
             {item_name}
-          </p>
-        )}
-
-        {/* Metal type · Weight */}
-        {infoLine && (
-          <p className="text-xs text-muted-foreground">
-            {infoLine}
           </p>
         )}
 

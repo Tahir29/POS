@@ -5,46 +5,6 @@
 /* ── Lucira Brand Fonts ─────────────────────────────────────────────────── */
 
 @font-face {
-  font-family: 'Abhaya Libre';
-  src: url('https://cdn.shopify.com/s/files/1/0739/8516/3482/files/AbhayaLibre-Regular.ttf?v=1779366037') format('truetype');
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'Abhaya Libre';
-  src: url('https://cdn.shopify.com/s/files/1/0739/8516/3482/files/AbhayaLibre-Medium.ttf?v=1779366037') format('truetype');
-  font-weight: 500;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'Abhaya Libre';
-  src: url('https://cdn.shopify.com/s/files/1/0739/8516/3482/files/AbhayaLibre-SemiBold.ttf?v=1779366038') format('truetype');
-  font-weight: 600;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'Abhaya Libre';
-  src: url('https://cdn.shopify.com/s/files/1/0739/8516/3482/files/AbhayaLibre-Bold.ttf?v=1779366037') format('truetype');
-  font-weight: 700;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'Abhaya Libre';
-  src: url('https://cdn.shopify.com/s/files/1/0739/8516/3482/files/AbhayaLibre-ExtraBold.ttf?v=1779366037') format('truetype');
-  font-weight: 800;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
   font-family: 'Figtree';
   src: url('https://cdn.shopify.com/s/files/1/0739/8516/3482/files/Figtree-VariableFont_wght.ttf?v=1779362620') format('truetype');
   font-weight: 300 900;
@@ -69,10 +29,11 @@
 @theme inline {
   /* Fonts */
   --font-sans:    var(--font-figtree);
-  --font-heading: var(--font-abhaya);
+  /* Headings use Figtree, not Abhaya Libre — the serif read as mismatched
+     against the rest of the UI (user feedback 2026-07-26). */
+  --font-heading: var(--font-figtree);
   --font-mono:    ui-monospace, monospace;
   --font-figtree: var(--font-figtree);
-  --font-abhaya:  var(--font-abhaya);
 
   /* Semantic color tokens → CSS vars */
   --color-background:        var(--background);
@@ -149,6 +110,9 @@
   --background-image-grad-gold-sheen:    var(--grad-gold-sheen);
   --background-image-grad-hairline:      var(--grad-hairline);
   --background-image-grad-corner-wash:   var(--grad-corner-wash);
+  --background-image-grad-cta:           var(--grad-cta);
+  --background-image-grad-sidebar-depth: var(--grad-sidebar-depth);
+  --background-image-grad-accent-wash:   var(--grad-accent-wash);
 
   /* Motion timing — premium revamp. Wired from plain :root custom
      properties (not defined inline here) so the same values are also
@@ -233,6 +197,12 @@
   --grad-gold-sheen: linear-gradient(120deg, color-mix(in oklch, var(--status-made-order), white 35%) 0%, var(--status-made-order) 45%, color-mix(in oklch, var(--status-made-order), white 35%) 100%);
   --grad-hairline: linear-gradient(90deg, transparent, var(--accent) 50%, transparent);
   --grad-corner-wash: radial-gradient(120% 120% at 100% 0%, var(--brand-cream) 0%, transparent 60%);
+  /* CTA gradient — primary warmed through the accent hue rather than a flat
+     primary→black fade, so the app's main action buttons read richer than
+     the plain --grad-primary-depth used elsewhere (sidebar, decorative). */
+  --grad-cta: linear-gradient(135deg, var(--primary) 0%, color-mix(in oklch, var(--primary), var(--accent) 45%) 55%, color-mix(in oklch, var(--primary), black 25%) 100%);
+  --grad-sidebar-depth: linear-gradient(180deg, color-mix(in oklch, var(--sidebar), white 6%) 0%, var(--sidebar) 45%, color-mix(in oklch, var(--sidebar), black 12%) 100%);
+  --grad-accent-wash: radial-gradient(140% 100% at 100% 0%, color-mix(in oklch, var(--accent), transparent 85%) 0%, transparent 65%);
 
   /* ── Motion timing — premium revamp. Plain runtime custom properties
      (not just @theme inline) so the same values are JS-readable — see
@@ -243,13 +213,16 @@
   --motion-duration-panel: 0.32s;
 
   /* ── Sidebar ─────────────────────────────────────── */
-  --sidebar:                     #5A413F;  /* Brand primary sidebar bg            */
+  /* Deep near-black brown (same value already used for dark-mode --sidebar/
+     --card below) — darker than plain --primary so the sidebar reads as its
+     own deliberate dark surface, matching the reference design. */
+  --sidebar:                     #2A1E1C;
   --sidebar-foreground:          #FEF5F1;  /* Cream text in sidebar               */
   --sidebar-primary:             #B77767;  /* Active nav item — terracotta        */
   --sidebar-primary-foreground:  #FFFFFF;
-  --sidebar-accent:              #6E524F;  /* Hover state in sidebar              */
+  --sidebar-accent:              #3D2B28;  /* Hover state in sidebar              */
   --sidebar-accent-foreground:   #FEF5F1;
-  --sidebar-border:              #6E524F;  /* Subtle border in sidebar            */
+  --sidebar-border:              oklch(1 0 0 / 10%); /* Subtle hairline on dark bg */
   --sidebar-ring:                #B77767;
 
   /* ── Charts — brand palette ──────────────────────── */
@@ -264,7 +237,6 @@
 
   /* ── Font families ───────────────────────────────── */
   --font-figtree: 'Figtree', sans-serif;
-  --font-abhaya:  'Abhaya Libre', serif;
 }
 
 /* ── Dark mode — kept minimal, POS is primarily light ───────────────────── */
@@ -332,9 +304,9 @@
     -moz-osx-font-smoothing: grayscale;
   }
 
-  /* Headings use Abhaya Libre — the brand serif */
+  /* Headings use Figtree, same as body — Abhaya Libre dropped (mismatched vs. rest of UI) */
   h1, h2, h3, h4, h5, h6 {
-    font-family: var(--font-abhaya);
+    font-family: var(--font-figtree);
   }
 
   html {
@@ -358,6 +330,35 @@
   .animate-shimmer-text {
     background-size: 200% auto;
     animation: shimmer-text 4s linear infinite;
+  }
+
+  /* CTA shine sweep — a single light pass on hover/focus, not a looping
+     ambient effect. This app runs all day on staff devices; a CTA that
+     glows non-stop reads as broken/nagging, not premium. The sweep only
+     plays on interaction, same restraint as the rest of this app's motion. */
+  @keyframes btn-shine {
+    from { transform: translateX(-150%) skewX(-20deg); }
+    to   { transform: translateX(250%) skewX(-20deg); }
+  }
+
+  .btn-shine {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .btn-shine::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    width: 45%;
+    background: linear-gradient(120deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+    transform: translateX(-150%) skewX(-20deg);
+    pointer-events: none;
+  }
+
+  .btn-shine:hover::after,
+  .btn-shine:focus-visible::after {
+    animation: btn-shine 0.85s ease-out;
   }
 
   /* Premium revamp motion — respects OS-level reduced-motion preference.
