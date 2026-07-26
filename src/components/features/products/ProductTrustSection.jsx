@@ -73,7 +73,7 @@ const WHY_LUCIRA = [
 
 function WhyLuciraSection() {
   return (
-    <div className="rounded-2xl border border-border bg-card/10 p-5 md:p-6">
+    <div className="rounded-2xl border border-border bg-card p-5 shadow-sm md:p-6">
       <div className='flex items-center justify-start gap-2'>
         <h2 className="font-heading text-lg text-foreground">Why Lucira</h2>
         <p className="text-sm text-muted-foreground mt-0.5">Three promises behind every piece</p>
@@ -127,7 +127,7 @@ function CertifiedQualityBlock() {
     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
 
       {/* Certified badges */}
-      <div className="rounded-2xl border border-border bg-card p-5">
+      <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
         <div className="flex items-center justify-between">
           <h3 className="font-heading text-base text-foreground">Certified Quality Guaranteed</h3>
           <button type="button" className="text-xs font-medium text-accent hover:underline">
@@ -149,7 +149,7 @@ function CertifiedQualityBlock() {
       </div>
 
       {/* Accordion */}
-      <div className="rounded-2xl border border-border bg-card p-5">
+      <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
         <Accordion
           type="multiple"
           defaultValue={ACCORDION_ITEMS.filter((item) => item.defaultOpen).map((item) => item.id)}

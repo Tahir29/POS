@@ -32,9 +32,11 @@ export default function CartSummary() {
         </div>
       )}
 
-      <div className="flex items-center justify-between pt-2 mt-1 border-t border-border">
+      <div className="h-px w-full bg-grad-hairline mt-1" aria-hidden="true" />
+
+      <div className="flex items-center justify-between pt-1">
         <span className="text-base font-bold text-foreground">Total</span>
-        <span className="text-base font-bold text-[var(--brand-primary)]">
+        <span className="font-heading text-xl font-semibold text-primary tabular-nums">
           ₹{total.toLocaleString('en-IN')}
         </span>
       </div>

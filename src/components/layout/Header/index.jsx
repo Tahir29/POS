@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { useDispatch, useSelector } from 'react-redux';
 import { AnimatePresence, motion } from 'motion/react';
-import { ShoppingCart, User, LogOut, ChevronDown, Store, ArrowLeft, Menu } from 'lucide-react';
+import { ShoppingCart, LogOut, ChevronDown, Store, ArrowLeft, Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -127,10 +127,13 @@ function StoreIndicator({ onOpen }) {
 }
 
 // ── USER MENU ─────────────────────────────────────────────────
-// Not shown in the new design's header mockup, but sign-out has to live
-// somewhere — kept as a compact icon-only menu (same judgment call as
-// the Login/Store-Selection screens where we preserved functionality
-// the static mockup didn't depict).
+// Trigger shows a circular initials avatar (matches the dashboard redesign
+// reference) instead of a generic person icon — still the same DropdownMenu
+// underneath, sign-out functionality unchanged.
+
+function getInitial(name) {
+  return name?.trim()?.[0]?.toUpperCase() ?? '?';
+}
 
 function UserMenu() {
   const { user, logout } = useAuth();
@@ -138,14 +141,13 @@ function UserMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="min-h-[44px] min-w-[44px]"
+        <button
+          type="button"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-secondary text-sm font-semibold text-primary transition-colors duration-standard ease-premium hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           aria-label={`User menu — signed in as ${user?.username ?? 'Staff'}`}
         >
-          <User size={18} aria-hidden="true" />
-        </Button>
+          {getInitial(user?.username)}
+        </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-48">
         <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
@@ -209,13 +211,12 @@ export default function Header() {
           </h1>
         </div>
 
-        {/* Center — customer session (original component, restyled internally) */}
-        <div className="flex flex-1 justify-center min-w-0">
-          <HeaderCustomerControl />
-        </div>
+        {/* Spacer — pushes the action cluster to the right on wide screens */}
+        <div className="hidden flex-1 md:block" />
 
-        {/* Right — actions */}
-        <div className="flex items-center gap-2 shrink-0">
+        {/* Right — actions: customer session, cart, store, account */}
+        <div className="flex items-center gap-2 shrink-0 overflow-x-auto">
+          <HeaderCustomerControl />
           <CartBadge onOpen={() => dispatch(openCart())} />
           <StoreIndicator onOpen={() => setStoreModalOpen(true)} />
           <UserMenu />

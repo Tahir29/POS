@@ -31,7 +31,7 @@ const QUICK_ACTIONS = [
     description: 'Browse catalog',
     icon:        ShoppingBag,
     href:        '/catalog',
-    accent:      'bg-primary text-primary-foreground hover:bg-primary/90',
+    accent:      'bg-secondary text-primary border border-accent/30 shadow-sm hover:shadow-md',
   },
   {
     id:          'new-return',
@@ -39,7 +39,7 @@ const QUICK_ACTIONS = [
     description: 'Process a return',
     icon:        RotateCcw,
     href:        '/transactions?tab=returns',
-    accent:      'bg-card text-foreground border border-border hover:bg-accent',
+    accent:      'bg-card text-foreground border border-border shadow-sm hover:shadow-md hover:border-accent/40 hover:text-accent',
   },
   {
     id:          'refund',
@@ -47,7 +47,7 @@ const QUICK_ACTIONS = [
     description: 'Refund customer',
     icon:        CreditCard,
     href:        '/transactions?tab=refunds',
-    accent:      'bg-card text-foreground border border-border hover:bg-accent',
+    accent:      'bg-card text-foreground border border-border shadow-sm hover:shadow-md hover:border-accent/40 hover:text-accent',
   },
   {
     id:          'credit-note',
@@ -55,7 +55,7 @@ const QUICK_ACTIONS = [
     description: 'Issue store credit',
     icon:        FileText,
     href:        '/transactions?tab=credit-notes',
-    accent:      'bg-card text-foreground border border-border hover:bg-accent',
+    accent:      'bg-card text-foreground border border-border shadow-sm hover:shadow-md hover:border-accent/40 hover:text-accent',
   },
   {
     id:          'exchange',
@@ -63,7 +63,7 @@ const QUICK_ACTIONS = [
     description: 'Item exchange',
     icon:        ArrowLeftRight,
     href:        '/transactions?tab=exchange',
-    accent:      'bg-card text-foreground border border-border hover:bg-accent',
+    accent:      'bg-card text-foreground border border-border shadow-sm hover:shadow-md hover:border-accent/40 hover:text-accent',
   },
   {
     id:          'buyback',
@@ -71,7 +71,7 @@ const QUICK_ACTIONS = [
     description: 'Buy from customer',
     icon:        Gem,
     href:        '/transactions?tab=buyback',
-    accent:      'bg-card text-foreground border border-border hover:bg-accent',
+    accent:      'bg-card text-foreground border border-border shadow-sm hover:shadow-md hover:border-accent/40 hover:text-accent',
   },
   {
     id:          'urd-purchase',
@@ -79,7 +79,7 @@ const QUICK_ACTIONS = [
     description: 'Record purchase',
     icon:        Coins,
     href:        '/transactions?tab=urd',
-    accent:      'bg-card text-foreground border border-border hover:bg-accent',
+    accent:      'bg-card text-foreground border border-border shadow-sm hover:shadow-md hover:border-accent/40 hover:text-accent',
   },
   {
     id:          'scheme-payment',
@@ -87,7 +87,7 @@ const QUICK_ACTIONS = [
     description: 'Collect instalment',
     icon:        BookOpen,
     href:        '/schemes',
-    accent:      'bg-card text-foreground border border-border hover:bg-accent',
+    accent:      'bg-card text-foreground border border-border shadow-sm hover:shadow-md hover:border-accent/40 hover:text-accent',
   },
   {
     id:          'day-close',
@@ -95,7 +95,7 @@ const QUICK_ACTIONS = [
     description: 'Close today',
     icon:        ClipboardCheck,
     href:        '/daily-closing',
-    accent:      'bg-card text-foreground border border-border hover:bg-accent',
+    accent:      'bg-card text-foreground border border-border shadow-sm hover:shadow-md hover:border-accent/40 hover:text-accent',
   },
   {
     id:          'reports',
@@ -103,7 +103,7 @@ const QUICK_ACTIONS = [
     description: 'View reports',
     icon:        BarChart2,
     href:        '/reports',
-    accent:      'bg-card text-foreground border border-border hover:bg-accent',
+    accent:      'bg-card text-foreground border border-border shadow-sm hover:shadow-md hover:border-accent/40 hover:text-accent',
   },
 ];
 
@@ -120,7 +120,7 @@ function QuickActionButton({ action, onClick }) {
       className={cn(
         'flex flex-col items-center justify-center gap-1.5',
         'rounded-lg p-2.5 min-h-[76px] w-full',
-        'transition-all duration-150 active:scale-[0.97]',
+        'transition-all duration-standard ease-premium active:scale-[0.97]',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
         action.accent
       )}
@@ -143,10 +143,10 @@ export default function QuickActionGrid() {
   };
 
   return (
-    <section aria-labelledby="quick-actions-heading" className="rounded-xl border border-border bg-card p-5">
+    <section aria-labelledby="quick-actions-heading" className="rounded-xl border border-border bg-card shadow-sm p-5 h-full">
       <h2
         id="quick-actions-heading"
-        className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3"
+        className="font-heading text-base text-foreground mb-3"
       >
         Quick Actions
       </h2>

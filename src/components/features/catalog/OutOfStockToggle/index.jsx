@@ -9,8 +9,8 @@ import { Switch } from '@/components/ui/switch';
 
 export default function OutOfStockToggle({ showOutOfStock, onToggle }) {
   return (
-    <label className="flex items-center gap-2 shrink-0 min-h-[44px] px-2 rounded-lg">
-      <span className="hidden sm:inline text-sm text-muted-foreground whitespace-nowrap">
+    <label className="flex h-11 w-full items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 sm:w-auto sm:justify-start sm:shrink-0">
+      <span className="text-sm font-medium text-foreground whitespace-nowrap">
         Show Out of Stock
       </span>
       <Switch checked={showOutOfStock} onCheckedChange={onToggle} />

@@ -11,7 +11,7 @@
 // Unattached state is unchanged from the original ghost-button treatment.
 
 import { useState } from 'react';
-import { User, X } from 'lucide-react';
+import { UserPlus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import CustomerSessionSheet from '@/components/features/customers/CustomerSessionSheet';
 import { useCustomerSession } from '@/hooks/customer/useCustomerSession';
@@ -34,12 +34,12 @@ export default function HeaderCustomerControl() {
       <>
         <Button
           type="button"
-          variant="ghost"
+          variant="outline"
           onClick={() => setSheetOpen(true)}
-          className="flex items-center gap-2 min-h-[44px] px-3"
+          className="flex items-center gap-2 min-h-[44px] rounded-full px-4"
           aria-label="Add customer"
         >
-          <User size={18} aria-hidden="true" />
+          <UserPlus size={16} aria-hidden="true" />
           <span className="hidden md:inline text-sm font-medium">Add Customer</span>
         </Button>
 

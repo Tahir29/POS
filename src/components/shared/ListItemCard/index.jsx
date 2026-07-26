@@ -16,9 +16,20 @@
 // the app (Orders/Invoices/Customers/Catalog lists), so it's a deliberate
 // Motion candidate per the phase-1 plan (unlike Button, which stays plain
 // CSS to avoid forcing a client boundary on every action in the app).
+//
+// `variants` uses the same "hidden"/"show" keys as StaggerList's container
+// variants — when a page wraps its list in <StaggerList>, every card here
+// cascades in automatically via Motion's variant propagation. Used
+// standalone (no StaggerList ancestor), variants are simply never
+// triggered — hover/tap keep working, no entrance animation, no crash.
 
 import { motion, useReducedMotion } from 'motion/react';
 import { EASE_PREMIUM, DURATION } from '@/lib/motion';
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 10 },
+  show: { opacity: 1, y: 0, transition: { duration: DURATION.standard, ease: EASE_PREMIUM } },
+};
 
 export default function ListItemCard({ onSelect, header, footer, children }) {
   const reduceMotion = useReducedMotion();
@@ -28,6 +39,7 @@ export default function ListItemCard({ onSelect, header, footer, children }) {
       type="button"
       onClick={onSelect}
       className="w-full rounded-2xl border border-border bg-card text-left hover:border-primary/40 hover:shadow-md transition-all duration-standard ease-premium overflow-hidden"
+      variants={reduceMotion ? undefined : itemVariants}
       whileHover={reduceMotion ? undefined : { y: -2 }}
       whileTap={reduceMotion ? undefined : { scale: 0.99 }}
       transition={{ duration: DURATION.micro, ease: EASE_PREMIUM }}

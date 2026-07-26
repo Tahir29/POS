@@ -342,9 +342,11 @@ function NotAvailableReport({ reason }) {
 
 function ReportCard({ icon, title, children }) {
   return (
-    <div className="bg-card border border-border rounded-xl overflow-hidden">
+    <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden transition-shadow duration-standard ease-premium hover:shadow-md">
       <div className="flex items-center gap-2.5 px-4 py-3 border-b border-border bg-muted/30">
-        <span className="text-muted-foreground">{icon}</span>
+        <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-accent/10 text-accent">
+          {icon}
+        </span>
         <h2 className="text-sm font-semibold text-foreground">{title}</h2>
       </div>
       <div className="p-4">{children}</div>

@@ -29,7 +29,7 @@
 
 import { useMemo } from 'react';
 import { useAllOrders } from '@/hooks/orders/useAllOrders';
-import { useReturns, useExchanges, useBuybacks } from '@/hooks/transactions/useTransactionLists';
+import { useReturns, useExchanges, useBuybacks, useURDPurchases } from '@/hooks/transactions/useTransactionLists';
 
 // ── Date helpers ──────────────────────────────────────────────
 // Mirrors the LOCAL-date comparison approach in useOrdersSummary so
@@ -80,9 +80,10 @@ export function useDashboardSummary() {
   const { items: returns,   isLoading: returnsLoading,   isError: returnsError }   = useReturns({ skip: 0 });
   const { items: exchanges, isLoading: exchangesLoading, isError: exchangesError } = useExchanges({ skip: 0 });
   const { items: buybacks,  isLoading: buybacksLoading,  isError: buybacksError }  = useBuybacks({ skip: 0 });
+  const { items: urdPurchases, isLoading: urdLoading, isError: urdError } = useURDPurchases({ skip: 0 });
 
-  const isLoading = ordersLoading || returnsLoading || exchangesLoading || buybacksLoading;
-  const isError   = ordersError || returnsError || exchangesError || buybacksError;
+  const isLoading = ordersLoading || returnsLoading || exchangesLoading || buybacksLoading || urdLoading;
+  const isError   = ordersError || returnsError || exchangesError || buybacksError || urdError;
 
   return useMemo(() => {
     const todayPrefix     = toLocalPrefix(new Date());
@@ -142,9 +143,10 @@ export function useDashboardSummary() {
       list.filter((item) => item.documentDate && getLocalDatePrefix(item.documentDate) === todayPrefix).length;
 
     const activityToday = {
-      returns:   countToday(returns),
-      exchanges: countToday(exchanges),
-      buybacks:  countToday(buybacks),
+      returns:      countToday(returns),
+      exchanges:    countToday(exchanges),
+      buybacks:     countToday(buybacks),
+      urdPurchases: countToday(urdPurchases),
     };
 
     return {
@@ -159,5 +161,5 @@ export function useDashboardSummary() {
       pendingReturnsCount,
       activityToday,
     };
-  }, [allOrders, returns, exchanges, buybacks, isLoading, isError]);
+  }, [allOrders, returns, exchanges, buybacks, urdPurchases, isLoading, isError]);
 }

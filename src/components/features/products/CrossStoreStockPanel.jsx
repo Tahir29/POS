@@ -58,8 +58,8 @@ export default function CrossStoreStockPanel({ storeStocks = [], isLoading }) {
   const totalStores   = storeStocks.length;
 
   return (
-    <div className="rounded-xl border border-border overflow-hidden">
-      <Accordion type="single" collapsible>
+    <div className="rounded-xl border border-border overflow-hidden shadow-sm">
+      <Accordion type="single" collapsible defaultValue="stock">
         <AccordionItem value="stock" className="border-0">
           <AccordionTrigger
             className="rounded-none px-4 py-3 bg-card hover:bg-muted hover:no-underline focus-visible:ring-inset focus-visible:ring-ring"

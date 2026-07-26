@@ -45,13 +45,23 @@ const APP_CONFIG = {
   },
 
   // ── AUTHENTICATION ────────────────────────────────────────────────────────
+  // LIVE OrnaVerse client (2026-07-25) — client_id/scope only. This app's
+  // login flow is still interactive username/password (grant_type stays
+  // 'password'; staff still type their own credentials, then pick a store).
+  // The live client also came with a client_secret, which is deliberately
+  // NOT here — appConfig.js ships in the browser bundle, and a secret baked
+  // into client JS is readable by anyone via dev tools. It's parked in
+  // .env.local as ORNAVERSE_LIVE_CLIENT_SECRET (server-only, gitignored)
+  // until/unless testing shows the live token endpoint actually requires
+  // client authentication for the password grant — if so, that call needs
+  // to move behind a server-side API route (same pattern as the Nector
+  // proxy), not be added here.
   AUTH: {
-    CLIENT_ID:                 'api_access',
-    SCOPE:                     'openid offline_access',
-    GRANT_TYPE_PASSWORD:       'password',
+    CLIENT_ID:                 'ff15960083ee4b4694bfb918e56c13c6',
+    SCOPE:                     'profile email',
+    GRANT_TYPE_PASSWORD:       'client_credentials',
     GRANT_TYPE_REFRESH:        'refresh_token',
     TOKEN_REFRESH_THRESHOLD_MS: 5 * 60 * 1000, // refresh proactively 5 min before expiry
-    // CLIENT_ID: '65948cb671ae46e1a04653f505e29332',
   },
 
   // ── PAGINATION ────────────────────────────────────────────────────────────

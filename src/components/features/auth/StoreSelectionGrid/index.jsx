@@ -16,7 +16,8 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'react-toastify';
-import { LogOut, ChevronsUpDown, Check, CheckCircle2, Store, ArrowRight } from 'lucide-react';
+import Image from 'next/image';
+import { LogOut, ChevronsUpDown, Check, CheckCircle2, Store, ArrowRight, Sparkle } from 'lucide-react';
 
 import { useActiveStore } from '@/hooks/store/useActiveStore';
 import Logo from '@/components/shared/Logo';
@@ -66,47 +67,57 @@ export default function StoreSelectionGrid() {
 
   return (
     <div className="flex min-h-screen bg-background">
+      <div className="flex w-full overflow-hidden sm:shadow-lg">
 
-      {/* ── Left — dark brand panel ─────────────────────────────────── */}
-      <div className="relative hidden w-2/5 shrink-0 flex-col overflow-hidden bg-primary sm:flex">
-        {/* Watermark — real brand icon asset, matches Login treatment */}
-        <span
-          aria-hidden="true"
-          className="pointer-events-none absolute -bottom-16 right-8 font-heading text-[280px] leading-none opacity-4 select-none"
-        >
-          <Logo variant="icon" color="white" width={250} height={68} priority />
-        </span>
+        {/* ── Left — brand photo panel — same banner + treatment as Login ── */}
+        <div className="relative hidden w-[42%] shrink-0 flex-col overflow-hidden bg-primary sm:flex">
+          <Image
+            src="/images/login-banner.png"
+            alt=""
+            fill
+            priority
+            sizes="42vw"
+            className="object-cover"
+          />
+          <div
+            className="absolute inset-0 bg-gradient-to-b from-primary/95 via-primary/70 to-primary/25"
+            aria-hidden="true"
+          />
 
-        <div className="relative flex flex-1 flex-col items-center justify-center gap-3 px-8 text-center">
-          <Logo variant="full" color="white" width={150} height={48} priority />
-          <div className="mt-1 h-px w-10 bg-accent" aria-hidden="true" />
+          <div className="relative flex flex-1 flex-col items-center gap-4 px-8 pt-[22%]">
+            <div className="p-3">
+              <Logo variant="icon" color="white" width={44} height={44} priority />
+            </div>
 
-          <div className="mt-4">
-            <p className="font-heading text-xl text-primary-foreground/70">Select Your</p>
-            <p className="font-heading text-4xl text-primary-foreground">Store</p>
+            <div className="flex flex-col items-center gap-1">
+              <Logo variant="full" color="white" width={190} height={64} priority />
+            </div>
+
+            <div className="mt-1 flex items-center gap-3 text-accent">
+              <span className="h-px w-8 bg-accent/70" aria-hidden="true" />
+              <Sparkle size={12} aria-hidden="true" />
+              <span className="h-px w-8 bg-accent/70" aria-hidden="true" />
+            </div>
+
+            <p className="font-heading text-lg text-accent">Select Your Store</p>
           </div>
-
-          <p className="mt-2 max-w-[220px] text-sm text-primary-foreground/60">
-            Choose the showroom you&rsquo;re working from today
-          </p>
         </div>
-      </div>
 
-      {/* ── Right — store selection panel ───────────────────────────── */}
-      <div className="flex flex-1 items-center justify-center px-6 py-10 sm:px-12">
-        <div className="w-full max-w-md">
+        {/* ── Right — store selection panel ───────────────────────────── */}
+        <div className="flex flex-1 items-center justify-center bg-card px-6 py-10 sm:px-14 sm:py-12">
+          <div className="w-full max-w-md">
 
-          {/* Logo shown only when the dark panel is hidden (small screens) */}
-          <div className="mb-8 flex justify-center sm:hidden">
-            <Logo variant="full" width={130} height={42} priority />
-          </div>
+            {/* Logo shown only when the photo panel is hidden (small screens) */}
+            <div className="mb-8 flex justify-center sm:hidden">
+              <Logo variant="full" width={130} height={42} priority />
+            </div>
 
-          <p className="text-xs font-semibold tracking-[0.15em] text-accent">
-            SHOWROOM
-          </p>
-          <h2 className="mt-2 mb-8 font-heading text-3xl text-foreground">
-            Where are you today?
-          </h2>
+            <p className="text-xs font-semibold tracking-[0.15em] text-accent">
+              SHOWROOM
+            </p>
+            <h2 className="mt-2 mb-8 font-heading text-3xl text-foreground">
+              Where are you today?
+            </h2>
 
           {availableStores.length === 0 ? (
             <div className="rounded-lg bg-muted px-4 py-6 text-center">
@@ -131,11 +142,11 @@ export default function StoreSelectionGrid() {
                       className="
                         flex w-full items-center justify-between
                         rounded-xl border border-input bg-card
-                        px-4 py-3 min-h-[52px]
+                        px-4 h-14
                         text-sm text-left
                         hover:border-ring
-                        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
-                        transition-colors
+                        focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50
+                        transition-colors duration-standard ease-premium
                       "
                     >
                       {selected ? (
@@ -227,9 +238,8 @@ export default function StoreSelectionGrid() {
               {/* Confirm button */}
               <Button
                 onClick={handleConfirm}
-                variant="premium"
                 disabled={!selected || isSelecting}
-                className="mt-2 w-full min-h-[48px]"
+                className="mt-2 w-full min-h-[56px] rounded-xl text-base"
               >
                 {isSelecting ? (
                   <span className="flex items-center gap-2">
@@ -260,6 +270,7 @@ export default function StoreSelectionGrid() {
             </Button>
           </div>
 
+        </div>
         </div>
       </div>
     </div>

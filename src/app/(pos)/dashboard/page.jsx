@@ -1,8 +1,7 @@
 'use client';
 
 import { Suspense } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
-import { RefreshCw } from 'lucide-react';
+import { RevenueIcon, OrdersIcon, PendingReturnsIcon } from '@/components/features/dashboard/KPICard/icons';
 
 import KPICard              from '@/components/features/dashboard/KPICard';
 import RecentOrdersList     from '@/components/features/dashboard/RecentOrdersList';
@@ -13,8 +12,6 @@ import InlineLoader         from '@/components/shared/InlineLoader';
 import { useDashboardSummary } from '@/hooks/dashboard/useDashboardSummary';
 
 function DashboardScreen() {
-  const queryClient = useQueryClient();
-
   const {
     isLoading,
     todayRevenue,
@@ -26,19 +23,6 @@ function DashboardScreen() {
     pendingReturnsCount,
     activityToday,
   } = useDashboardSummary();
-
-  // ── Manual refresh ────────────────────────────────────────────────────────
-  // Invalidates orders, returns, exchange, and buyback queries — the four
-  // data sources useDashboardSummary reads from. Each list re-fetches
-  // independently in the background.
-  const handleRefresh = async () => {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ['orders'] }),
-      queryClient.invalidateQueries({ queryKey: ['returns', 'list'] }),
-      queryClient.invalidateQueries({ queryKey: ['exchange', 'list'] }),
-      queryClient.invalidateQueries({ queryKey: ['buyback', 'list'] }),
-    ]);
-  };
 
   const revenueTrend = revenueTrendPct == null
     ? undefined
@@ -60,19 +44,7 @@ function DashboardScreen() {
   };
 
   return (
-    <div className="flex flex-col gap-6 max-w-6xl mx-auto w-full px-4 md:px-6">
-
-      {/* ── Manual refresh ─────────────────────────────────────── */}
-      <div className="flex justify-end -mb-2">
-        <button
-          type="button"
-          onClick={handleRefresh}
-          aria-label="Refresh dashboard"
-          className="flex items-center justify-center h-10 w-10 rounded-lg border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-accent transition-colors duration-150 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <RefreshCw size={16} aria-hidden="true" />
-        </button>
-      </div>
+    <div className="flex flex-col gap-6 max-w-6xl mx-auto w-full px-4 py-4 md:px-6">
 
       {/* ── ROW 1: KPI cards ───────────────────────────────────── */}
       {/* Scheme Collections intentionally omitted — no data source yet (Phase 23) */}
@@ -83,6 +55,7 @@ function DashboardScreen() {
           value={`₹${todayRevenue.toLocaleString('en-IN')}`}
           trend={revenueTrend}
           sparkline={revenueSparkline}
+          icon={RevenueIcon}
           isLoading={isLoading}
           accent
         />
@@ -90,12 +63,14 @@ function DashboardScreen() {
           label="Orders Today"
           value={String(todayOrderCount)}
           trend={ordersTrend}
+          icon={OrdersIcon}
           isLoading={isLoading}
         />
         <KPICard
           label="Pending Returns"
           value={String(pendingReturnsCount)}
           trend={returnsTrend}
+          icon={PendingReturnsIcon}
           isLoading={isLoading}
         />
       </div>
@@ -116,6 +91,7 @@ function DashboardScreen() {
         returns={activityToday.returns}
         exchanges={activityToday.exchanges}
         buybacks={activityToday.buybacks}
+        urdPurchases={activityToday.urdPurchases}
         isLoading={isLoading}
       />
 

@@ -38,12 +38,14 @@ export default function ErrorState({
       )}
       role="alert"
     >
-      <Icon
-        size={40}
-        className="text-destructive/70"
-        aria-hidden="true"
-        strokeWidth={1.5}
-      />
+      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10 ring-1 ring-destructive/20">
+        <Icon
+          size={28}
+          className="text-destructive/80"
+          aria-hidden="true"
+          strokeWidth={1.5}
+        />
+      </div>
 
       <div className="space-y-1">
         <p className="text-sm font-medium text-destructive">{title}</p>

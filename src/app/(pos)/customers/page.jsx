@@ -24,6 +24,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import BottomSheet from '@/components/shared/BottomSheet';
 import ConfirmDialog from '@/components/shared/ConfirmDialog';
+import { StaggerList } from '@/components/shared/StaggerList';
 import CustomerListItem from '@/components/features/customers/CustomerListItem';
 import CustomerDetailSheet from '@/components/features/customers/CustomerDetailSheet';
 import NewCustomerForm from '@/components/features/customers/NewCustomerForm';
@@ -165,7 +166,7 @@ export default function CustomersPage() {
       </div>
 
       {/* List */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+      <StaggerList className="grid grid-cols-1 md:grid-cols-2 gap-2">
         {isBusy ? (
           <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
             <Loader2 size={16} className="animate-spin" aria-hidden="true" />
@@ -191,7 +192,7 @@ export default function CustomersPage() {
             />
           ))
         )}
-      </div>
+      </StaggerList>
 
       {/* Pagination — hidden while searching */}
       {!isSearchActive && totalCount > take && (
