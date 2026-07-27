@@ -82,6 +82,7 @@ export const QUERY_KEYS = {
     PRODUCTS:              (params)  => ['catalog', 'products', params],
     ALL:                   (storeId) => ['catalog', 'all', storeId],
     SKU_SEARCH:            (query, storeId) => ['catalog', 'sku-search', query, storeId],
+    CATEGORY_SEARCH:       (typeIds, storeId) => ['catalog', 'category-search', typeIds, storeId],
     STOCK_BY_STORES:       (itemId)  => ['catalog', 'stock-by-stores', itemId],
     STOCK_BY_STORES_BATCH: (itemIds) => ['catalog', 'stock-by-stores-batch', itemIds],
   },

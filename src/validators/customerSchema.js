@@ -19,6 +19,11 @@
 
 import { z } from 'zod';
 
+// ── PAN ──────────────────────────────────────────────────────────────────────
+// Shared so checkout's ₹2,00,000 mandatory-PAN gate validates the exact same
+// format as the customer create/update forms, instead of a drifted copy.
+export const PAN_REGEX = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
+
 // ── Mobile ─────────────────────────────────────────────────────────────────────
 // 10-digit Indian mobile, must start with 6-9
 export const mobileSchema = z
@@ -44,7 +49,7 @@ export const customerSchema = z.object({
 
   pan_no: z
     .string()
-    .regex(/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/, { message: 'Enter a valid PAN (e.g. ABCDE1234F)' })
+    .regex(PAN_REGEX, { message: 'Enter a valid PAN (e.g. ABCDE1234F)' })
     .optional()
     .or(z.literal('')),
 
@@ -106,7 +111,7 @@ export const updateCustomerSchema = z.object({
 
   pan_no: z
     .string()
-    .regex(/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/, { message: 'Enter a valid PAN (e.g. ABCDE1234F)' })
+    .regex(PAN_REGEX, { message: 'Enter a valid PAN (e.g. ABCDE1234F)' })
     .optional()
     .or(z.literal('')),
 

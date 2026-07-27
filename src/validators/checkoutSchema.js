@@ -1,5 +1,7 @@
 // src/validators/checkoutSchema.js
 import { z } from 'zod';
+import { PAN_REGEX } from '@/validators/customerSchema';
+import APP_CONFIG from '@/constants/appConfig';
 
 /**
  * Zod validation schema for the checkout screen (Phase 9b).
@@ -8,6 +10,10 @@ import { z } from 'zod';
  * - customerId: a customer session must be attached before order submission
  * - paymentModes: at least one payment mode with a positive amount
  * - totalAmount / cartTotal: split payment amounts must sum to the cart total
+ * - panNumber: mandatory once totalAmount crosses the statutory PAN
+ *   threshold (Income Tax Rule 114B) — see APP_CONFIG.COMPLIANCE. Either
+ *   already on the customer's record or entered fresh at checkout; the page
+ *   resolves that into a single `panNumber` before validating here.
  */
 
 const paymentModeSchema = z.object({
@@ -43,6 +49,10 @@ export const checkoutSchema = z
     totalAmount: z.number().nonnegative(),
 
     cartTotal: z.number().nonnegative(),
+
+    // Already-on-file or freshly-entered-and-valid PAN — null is fine below
+    // the statutory threshold, required above it.
+    panNumber: z.string().nullable(),
   })
   .refine(
     (data) => {
@@ -60,5 +70,15 @@ export const checkoutSchema = z
     {
       message: 'Order total mismatch — please refresh and try again',
       path: ['totalAmount'],
+    }
+  )
+  .refine(
+    (data) => {
+      if (data.totalAmount <= APP_CONFIG.COMPLIANCE.PAN_MANDATORY_THRESHOLD) return true;
+      return !!data.panNumber && PAN_REGEX.test(data.panNumber);
+    },
+    {
+      message: `PAN is mandatory for orders above ₹${APP_CONFIG.COMPLIANCE.PAN_MANDATORY_THRESHOLD.toLocaleString('en-IN')}`,
+      path: ['panNumber'],
     }
   );

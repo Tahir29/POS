@@ -7,12 +7,14 @@ import { useRouter }   from 'next/navigation';
 import { useSelector } from 'react-redux';
 import { toast }       from 'react-toastify';
 
-import { useCatalogFilters }  from '@/hooks/catalog/useCatalogFilters';
-import { useCatalogProducts } from '@/hooks/catalog/useCatalogProducts';
-import { useAllCatalog }      from '@/hooks/catalog/useAllCatalog';
-import { useSkuSearch }       from '@/hooks/catalog/useSkuSearch';
-import { useCategories }      from '@/hooks/catalog/useCategoryFilters';
-import { searchBySku }        from '@/services/catalogService';
+import { useCatalogFilters }     from '@/hooks/catalog/useCatalogFilters';
+import { useCatalogProducts }    from '@/hooks/catalog/useCatalogProducts';
+import { useAllCatalog }         from '@/hooks/catalog/useAllCatalog';
+import { useSkuSearch }          from '@/hooks/catalog/useSkuSearch';
+import { useCategoryNameSearch } from '@/hooks/catalog/useCategoryNameSearch';
+import { useCategories }         from '@/hooks/catalog/useCategoryFilters';
+import { useLiveCatalogPrices }  from '@/hooks/catalog/useLiveCatalogPrices';
+import { searchBySku }           from '@/services/catalogService';
 
 import CategoryFilter        from '@/components/features/catalog/CategoryFilter';
 import ProductGrid           from '@/components/features/catalog/ProductGrid';
@@ -259,6 +261,21 @@ function CatalogScreen() {
     isLoading: skuLoading,
   } = useSkuSearch(isSearchMode && !allReady ? searchQuery : '', effectiveStoreId);
 
+  // Category-NAME matches (e.g. "Rings") for the interim pre-index result
+  // set — see useCategoryNameSearch for why this can't just wait on
+  // useSkuSearch, which only ever matches item_code. Categories themselves
+  // load fast/independently of the slow full-catalog scan, so this can
+  // resolve immediately even on a store with thousands of items still
+  // indexing in the background.
+  const interimMatchingTypeIds = useMemo(
+    () => (isSearchMode && !allReady ? getMatchingTypeIds(searchQuery, categories) : []),
+    [isSearchMode, allReady, searchQuery, categories],
+  );
+  const {
+    data: categoryNameResults = [],
+    isLoading: categoryNameLoading,
+  } = useCategoryNameSearch(interimMatchingTypeIds, effectiveStoreId, isSearchMode && !allReady);
+
   const searchResults = useMemo(() => {
     if (!isSearchMode) return [];
     if (allReady) {
@@ -270,9 +287,19 @@ function CatalogScreen() {
         categories,           // ← passed so category name matching works
       });
     }
-    // Full catalog still loading — show what the fast SKU path has so far.
-    return applyBasicFilters(skuResults, { activeCategoryId, showOutOfStock, sortBy });
-  }, [isSearchMode, allReady, allProducts, skuResults, searchQuery, activeCategoryId, showOutOfStock, sortBy, categories]);
+    // Full catalog still loading — show what the fast SKU + category-name
+    // paths have so far, deduped (a query can conceivably match both).
+    const seen = new Set();
+    const merged = [...skuResults, ...categoryNameResults].filter((p) => {
+      if (seen.has(p.item_id)) return false;
+      seen.add(p.item_id);
+      return true;
+    });
+    return applyBasicFilters(merged, { activeCategoryId, showOutOfStock, sortBy });
+  }, [
+    isSearchMode, allReady, allProducts, skuResults, categoryNameResults,
+    searchQuery, activeCategoryId, showOutOfStock, sortBy, categories,
+  ]);
 
   const isIndexingFullCatalog = isSearchMode && !allReady;
 
@@ -285,12 +312,26 @@ function CatalogScreen() {
 
   // ── Derived ───────────────────────────────────────────────────────────────
   const displayProducts = isSearchMode ? searchResults : browseProducts;
-  // Only block on the fast SKU path — the full background fetch can take a
-  // while on a large store and shouldn't hold the whole search UI hostage.
-  const isLoading       = isSearchMode ? (!allReady && skuLoading) : browseLoading;
+  // Only block on the fast SKU/category-name paths — the full background
+  // fetch can take a while on a large store and shouldn't hold the whole
+  // search UI hostage.
+  const isLoading       = isSearchMode ? (!allReady && (skuLoading || categoryNameLoading)) : browseLoading;
   const isFetchingMore  = !isSearchMode && isFetchingNextPage;
   const hasMore         = !isSearchMode && !!hasNextPage;
   const showStockBadge  = true; // always show — badge content reflects actual stock status
+
+  // Live (SetSalesItems) prices for items whose price couldn't come from the
+  // fast tier — fetched in the background so they never hold up the page
+  // itself; see useLiveCatalogPrices for why this had to be split out.
+  const livePriceById = useLiveCatalogPrices(displayProducts);
+  const pricedDisplayProducts = useMemo(
+    () => displayProducts.map((p) => (
+      p.price == null && livePriceById.has(p.item_id)
+        ? { ...p, price: livePriceById.get(p.item_id) }
+        : p
+    )),
+    [displayProducts, livePriceById],
+  );
 
   // ── Barcode handler ───────────────────────────────────────────────────────
   const handleBarcodeDetected = useCallback(async (code) => {
@@ -429,7 +470,7 @@ function CatalogScreen() {
 
         <div className="flex-1 overflow-y-auto py-2">
           <ProductGrid
-            products={displayProducts}
+            products={pricedDisplayProducts}
             isLoading={isLoading}
             isFetchingMore={isFetchingMore}
             hasMore={hasMore}

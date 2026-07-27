@@ -108,6 +108,11 @@ export async function getSchemeReceipts({ scheme_enrollment_id, take = 0 } = {})
  * the real schema). ledger_id comes from the selected payment mode's own
  * ledger_id (see usePaymentModes.js), same pattern as Refund details.
  *
+ * document_id — confirmed 2026-07-28 (was previously blocked by a "Document
+ * field is required!" 400): the correct value is 99 (prefix "SPY"), read
+ * directly off a real existing SchemeReceipt/List row rather than guessed —
+ * see the caller in schemes/page.jsx for the confirming record.
+ *
  * @param {{
  *   scheme_enrollment_id: number,
  *   party_id:             number,
@@ -115,6 +120,7 @@ export async function getSchemeReceipts({ scheme_enrollment_id, take = 0 } = {})
  *   document_date:        string,
  *   currency_id:          number,
  *   exchange_rate:        number,
+ *   document_id:          number,
  *   amount:               number,
  *   scheme_receipt_details: { mode_id: number, amount: number, ledger_id?: number }[],
  * }} payload
