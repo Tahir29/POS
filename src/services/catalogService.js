@@ -114,60 +114,77 @@ async function getItemDetailsByIds(itemIds) {
 }
 
 /**
- * Attaches `price` to each ProductCatalogRow. Three tiers, in order:
+ * Attaches `price` to each ProductCatalogRow from the two FAST tiers only:
  *   1. The catalog row's own `price` field, when present.
  *   2. item_rate from Items/List, when it's a real positive number.
- *   3. A live-computed price via Services/Helpers/SetSalesItems (the same
- *      calculator wired up for the product detail page — see
- *      pricingService.js) for items whose item_rate is 0 but which DO carry
- *      real BOM data (item_components[]) — their real sell price floats
- *      with today's metal rate rather than being stored statically.
- *      Batched into a single extra call for the whole page, not one per item.
- * Items missing entirely from Items/List (no weight, no components — see
- * getItemDetailsByIds) can't be priced by any method and correctly stay
- * priceless — that's a genuine OrnaVerse master-data gap, not something to
- * paper over with a fabricated number.
+ * Items whose only option is tier 3 (live SetSalesItems pricing — see
+ * getLivePricesForItems below) are left with `price: null` here on purpose.
+ *
+ * SPLIT FROM live pricing 2026-07-28: confirmed live that
+ * Services/Helpers/SetSalesItems takes 6-7+ SECONDS per call for a page's
+ * worth of BOM items (~15 items), and the old enrichWithPrice awaited it
+ * inline before returning ANY of the page's entities — so a catalog page
+ * with a typical mix of BOM items took 30+ seconds to appear while
+ * scrolling, even though the actual catalog fetch (ProductCatalog/List +
+ * Items/List) is consistently under 250ms. This function now only does the
+ * fast lookup; live pricing is fetched separately, in the background, by
+ * useLiveCatalogPrices, so pages render immediately and BOM items' prices
+ * fill in a moment later instead of blocking the whole page.
  *
  * @param {object[]} entities — ProductCatalogRow[]
  * @returns {Promise<object[]>}
  */
-async function enrichWithPrice(entities) {
+async function attachStaticPrice(entities) {
   if (!entities.length) return entities;
 
   const needsRate = entities.some((e) => e.price == null);
   if (!needsRate) return entities;
 
-  const itemIds     = entities.map((e) => e.item_id).filter(Boolean);
-  const detailById   = await getItemDetailsByIds(itemIds);
-
-  const unpricedWithBom = [...detailById.values()]
-    .filter((d) => (d.item_rate ?? 0) === 0 && d.item_components?.length > 0);
-
-  // Live pricing is a best-effort enrichment, not the primary catalog data —
-  // if SetSalesItems has a transient failure (confirmed live 2026-07-22 it
-  // can occasionally throw a generic 500), the whole page of otherwise-valid
-  // products must still render, just without prices for this handful of
-  // BOM items rather than an error screen for everything.
-  let liveRateById = new Map();
-  if (unpricedWithBom.length) {
-    try {
-      const liveRates = await calculateItemRates(unpricedWithBom);
-      liveRateById = new Map(liveRates.map((r) => [r.item_id, r.sub_total]));
-    } catch (err) {
-      console.error('[catalogService] enrichWithPrice: live pricing failed, showing catalog without it', err);
-    }
-  }
+  const itemIds    = entities.map((e) => e.item_id).filter(Boolean);
+  const detailById = await getItemDetailsByIds(itemIds);
 
   return entities.map((e) => {
     if (e.price != null) return e;
     const staticRate = detailById.get(e.item_id)?.item_rate;
     // item_rate === 0 is "not costed yet", not "free" — only trust a real
-    // positive static rate before falling to the live-computed price.
-    const price = (staticRate && staticRate > 0)
-      ? staticRate
-      : (liveRateById.get(e.item_id) ?? null);
+    // positive static rate; leave null (not 0) for the live-pricing tier.
+    const price = (staticRate && staticRate > 0) ? staticRate : null;
     return { ...e, price };
   });
+}
+
+/**
+ * Live-computes price for a set of item_ids via Services/Helpers/SetSalesItems
+ * (see pricingService.calculateItemRates) — the slow tier split out of
+ * attachStaticPrice above. Only items that are genuinely BOM-priced (item_rate
+ * 0 but real item_components[]) come back with a price; anything else in the
+ * input is simply absent from the returned Map, same "can't be priced, stays
+ * priceless" contract as before.
+ *
+ * Best-effort: if SetSalesItems has a transient failure (confirmed live
+ * 2026-07-22 it can occasionally throw a generic 500), callers get back
+ * whatever did resolve rather than an exception — a background price fill-in
+ * failing silently is far preferable to it taking down the catalog.
+ *
+ * @param {number[]} itemIds
+ * @returns {Promise<Map<number, number>>} item_id -> live price
+ */
+export async function getLivePricesForItems(itemIds) {
+  if (!itemIds?.length) return new Map();
+
+  try {
+    const detailById = await getItemDetailsByIds(itemIds);
+    const unpricedWithBom = [...detailById.values()]
+      .filter((d) => (d.item_rate ?? 0) === 0 && d.item_components?.length > 0);
+
+    if (!unpricedWithBom.length) return new Map();
+
+    const liveRates = await calculateItemRates(unpricedWithBom);
+    return new Map(liveRates.map((r) => [r.item_id, r.sub_total]));
+  } catch (err) {
+    console.error('[catalogService] getLivePricesForItems: live pricing failed', err);
+    return new Map();
+  }
 }
 
 /**
@@ -200,7 +217,7 @@ export async function getProducts(params) {
   });
 
   const entities = response.data?.Entities ?? [];
-  return { ...response.data, Entities: await enrichWithPrice(entities) };
+  return { ...response.data, Entities: await attachStaticPrice(entities) };
 }
 
 /**
@@ -286,7 +303,7 @@ async function fetchEntireStoreCatalog(storeId, onProgress) {
  */
 export async function getAllProducts(storeId, onProgress) {
   const entities = await fetchEntireStoreCatalog(storeId, onProgress);
-  return enrichWithPrice(entities);
+  return attachStaticPrice(entities);
 }
 
 /**

@@ -21,6 +21,7 @@ import { useSelector } from 'react-redux';
 import { ShieldCheck } from 'lucide-react';
 import ConfirmDialog    from '@/components/shared/ConfirmDialog';
 import CheckoutCustomerSummary  from '@/components/features/checkout/CheckoutCustomerSummary';
+import CheckoutPanCapture       from '@/components/features/checkout/CheckoutPanCapture';
 import CheckoutDiscountSection  from '@/components/features/checkout/CheckoutDiscountSection';
 import CheckoutPaymentSection   from '@/components/features/checkout/CheckoutPaymentSection';
 import CheckoutTrustStrip       from '@/components/features/checkout/CheckoutTrustStrip';
@@ -58,6 +59,7 @@ function CheckoutScreen() {
 
   const [payments, setPayments]     = useState([]);
   const [salesPersonId, setSalesPersonId] = useState(null);
+  const [panNumber, setPanNumber]   = useState(null);
   const [isBackConfirmOpen, setIsBackConfirmOpen] = useState(false);
 
   // Track whether a sale has been successfully completed
@@ -131,6 +133,7 @@ function CheckoutScreen() {
     paymentModes: payments,
     totalAmount:  total,
     cartTotal:    total,
+    panNumber,
   });
   const isValid = validation.success;
 
@@ -160,6 +163,25 @@ function CheckoutScreen() {
           {/* Customer attached to this sale */}
           <CheckoutCustomerSummary />
 
+          {/* Mandatory PAN once the order crosses the statutory threshold */}
+          <CheckoutPanCapture totalAmount={total} onPanResolved={setPanNumber} />
+
+          {/* Sales person — required, mirrors the vendor's own POS Sale screen */}
+          <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
+            <h2 className="text-sm font-bold text-foreground mb-2">
+              Sales Person <span className="text-destructive">*</span>
+            </h2>
+            <SalesPersonSelect
+              companyId={activeStoreId}
+              value={salesPersonId}
+              onChange={setSalesPersonId}
+            />
+          </section>
+
+          {/* Promo code / discount */}
+          <CheckoutDiscountSection />
+        </div>
+        <div className="flex flex-col gap-5 w-full">
           {/* Order items — same CartItemRow used on the Cart page, read-only here */}
           <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
             <h2 className="text-sm font-bold text-foreground mb-1">
@@ -181,22 +203,6 @@ function CheckoutScreen() {
             <h2 className="text-sm font-bold text-foreground mb-1">Order Summary</h2>
             <CartSummary />
           </section>
-        </div>
-        <div className="flex flex-col gap-5 w-full">
-          {/* Sales person — required, mirrors the vendor's own POS Sale screen */}
-          <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
-            <h2 className="text-sm font-bold text-foreground mb-2">
-              Sales Person <span className="text-destructive">*</span>
-            </h2>
-            <SalesPersonSelect
-              companyId={activeStoreId}
-              value={salesPersonId}
-              onChange={setSalesPersonId}
-            />
-          </section>
-
-          {/* Promo code / discount */}
-          <CheckoutDiscountSection />
 
           {/* Payment modes + invoice helper balances */}
           <CheckoutPaymentSection onChange={setPayments} />

@@ -107,6 +107,13 @@ function ReceiptSheet({ enrollment, isOpen, onClose }) {
       document_date:        data.document_date,
       currency_id:          APP_CONFIG.CURRENCY.INR_ID,
       exchange_rate:        1,
+      // document_id — confirmed 2026-07-28 via a real SchemeReceipt/List row
+      // (Param Deep, enrollment 142): document_no "HO-SPY-07-26-1", prefix
+      // "SPY" matches document_id 99 in DocumentNumbering/List. Not a
+      // guess — read directly off an existing real receipt, since guessing
+      // a document_id wrong risks mis-filing a real payment under the
+      // wrong OrnaVerse document type.
+      document_id:          99,
       amount,
       scheme_receipt_details: [{
         mode_id:   Number(data.mode_id),

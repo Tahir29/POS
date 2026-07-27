@@ -44,6 +44,15 @@ const APP_CONFIG = {
     INR_SYMBOL: '₹',
   },
 
+  // ── COMPLIANCE ────────────────────────────────────────────────────────────
+  // Income Tax Rule 114B: PAN is mandatory on a sale once the transaction
+  // value crosses ₹2,00,000, regardless of payment mode — this is a
+  // statutory threshold, not a store policy, so it isn't configurable per
+  // store/scheme the way PAYMENT_MODES is.
+  COMPLIANCE: {
+    PAN_MANDATORY_THRESHOLD: 200000,
+  },
+
   // ── TAX ───────────────────────────────────────────────────────────────────
   // GST on gold/silver/diamond jewellery in India is a flat 3% (CGST 1.5% +
   // SGST 1.5% for an intra-state sale), unlike most goods' slab rates — so a
