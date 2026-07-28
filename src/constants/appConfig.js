@@ -50,8 +50,24 @@ const APP_CONFIG = {
   // Each row carries that document type's control ledger_id + posting flags,
   // keyed by (document_id, company_id) — required on Order/Invoice Create.
   DOCUMENT_TYPES: {
-    POS_INVOICE: 54, // prefix "LJ"
-    POS_ORDER:   53, // prefix "RPO"
+    POS_INVOICE:     54,  // prefix "LJ"
+    POS_ORDER:       53,  // prefix "RPO"
+    // Confirmed live 2026-07-28 by reading real document_no prefixes off
+    // each endpoint's own List response (ground truth, not guessed from
+    // DocumentNumbering's prefix text) — see [[transactions-duplicate-implementations]]
+    // memory for the broader context on these transaction flows.
+    RETURN:          55,  // prefix "PSR" (List also returns CreditNote-identical
+                           // rows in this data set — unconfirmed whether
+                           // standalone CreditNote/Create uses a different id)
+    REFUND:          126, // prefix "RFD"
+    EXCHANGE:        56,  // prefix "EXC"
+    BUYBACK:         97,  // prefix "BYB"
+    URD_PURCHASE:    104, // prefix "URD"
+    REPAIR_IN:       117, // prefix "REPI"
+    REPAIR_OUT:      118, // prefix "RPO" (distinct document_id from POS_ORDER
+                           // despite the same prefix text — this store's own config)
+    REPAIR_INVOICE:  119, // prefix "RIN"
+    SCHEME_RECEIPT:  99,  // prefix "SPY"
   },
 
   // ── COMPLIANCE ────────────────────────────────────────────────────────────

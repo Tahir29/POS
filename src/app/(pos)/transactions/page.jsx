@@ -33,11 +33,18 @@
 // selected payment mode's own ledger_id (confirmed real field via
 // PaymentReceiptMode/List and Refund/List) — see RefundNewForm below.
 //
-// STILL BLOCKED (all 6 types, confirmed via direct API test 2026-07-16):
-// every Create endpoint here (Return/Refund/CreditNote/Exchange/Buyback/
-// URDPurchase) returns the same AccessDenied as POS/Order/Create and
-// POS/Invoice/Create — a systemic OAuth-client scope gap on OrnaVerse's
-// side, not a payload issue. See useCreateInvoice.js for the full history.
+// HEADER FIELDS (2026-07-28) — the "AccessDenied" framing below is STALE.
+// Confirmed live 2026-07-28 that Return/Create actually returns the same
+// generic 500 Order/Invoice/Create had before their header-field fix, not
+// AccessDenied — see [[pos-cash-checkout-status]] memory. Applied the same
+// fix here (financial_year_id/ledger_id/document_id/document_no/party
+// identity/aggregate weight/receipt+balance — see
+// transactionHeaderService.buildTransactionHeaderFields, useOrderHeaderConfig)
+// across all 6 flows below, UNVERIFIED LIVE per the user's explicit
+// direction to code this without a live round-trip per flow (unlike Order,
+// which went through 3 rounds of live retest-and-discover). Treat a
+// continued 500 on any of these as "run the same live-capture diagnostic
+// used for Order" rather than assuming AccessDenied again.
 
 import { Suspense, useState, useCallback } from 'react';
 import { useSelector }                     from 'react-redux';
@@ -82,9 +89,11 @@ import {
 }                                          from '@/hooks/transactions/useTransactionMutations';
 import { usePaymentModes }                from '@/hooks/checkout/usePaymentModes';
 import { useURDMasterItem }                from '@/hooks/transactions/useURDMasterItem';
+import { useOrderHeaderConfig }            from '@/hooks/checkout/useOrderHeaderConfig';
+import { buildTransactionHeaderFields }    from '@/services/transactionHeaderService';
 import ItemSearchPicker                    from '@/components/features/transactions/ItemSearchPicker';
 import { selectActiveStoreId }            from '@/store/slices/storeSlice';
-import { selectCartCustomerId, selectCartCustomerName } from '@/store/slices/cartSlice';
+import { selectCartCustomerId, selectCartCustomerName, selectCartCustomerMobile } from '@/store/slices/cartSlice';
 import APP_CONFIG                         from '@/constants/appConfig';
 import { todayDateString }                 from '@/lib/dateUtils';
 
@@ -153,7 +162,9 @@ function ReturnNewForm({ onDone }) {
   const storeId       = useSelector(selectActiveStoreId);
   const customerId    = useSelector(selectCartCustomerId);
   const customerName  = useSelector(selectCartCustomerName);
+  const customerMobile = useSelector(selectCartCustomerMobile);
   const { paymentModes, isLoading: modesLoading } = usePaymentModes();
+  const headerConfig = useOrderHeaderConfig(APP_CONFIG.DOCUMENT_TYPES.RETURN);
 
   const createReturn = useCreateReturn({ onSuccess: () => {} });
   const postReturn    = usePostReturn({ onSuccess: () => onDone() });
@@ -173,15 +184,31 @@ function ReturnNewForm({ onDone }) {
 
   const onSubmit = async (data) => {
     if (!customerId) return toast.error('Attach a customer to the session before creating a return.');
+    if (!headerConfig.isReady) return toast.error('Store configuration is still loading — try again in a moment.');
     try {
-      const createRes = await createReturn.mutateAsync({
-        party_id: customerId, company_id: storeId,
-        document_date: data.document_date, currency_id: APP_CONFIG.CURRENCY.INR_ID,
-        ref_transaction_id: data.ref_transaction_id,
-        line_items: data.line_items.map((i) => ({
+      const line_items = data.line_items.map((i) => {
+        const netAmount = Number(i.net_amount);
+        return {
           item_id: Number(i.item_id), pieces: Number(i.pieces),
-          item_rate: Number(i.item_rate), net_amount: Number(i.net_amount),
-        })),
+          item_rate: Number(i.item_rate), net_amount: netAmount,
+          sub_total: netAmount, taxable_amount: netAmount,
+        };
+      });
+      const totalPieces = line_items.reduce((s, i) => s + i.pieces, 0);
+
+      const createRes = await createReturn.mutateAsync({
+        ...buildTransactionHeaderFields({
+          subTotal: total, taxableAmount: total, taxAmount: 0, netAmount: total,
+          pieces: totalPieces,
+          customerId, customerName, customerMobile,
+          activeStoreId: storeId,
+          headerConfig,
+          documentTypeId: APP_CONFIG.DOCUMENT_TYPES.RETURN,
+          receiptAmount: total,
+          documentDate: data.document_date,
+        }),
+        ref_transaction_id: data.ref_transaction_id,
+        line_items,
         receipt_details: [{ mode_id: data.refund_mode_id, amount: total }],
       });
       const transactionId = createRes?.EntityId;
@@ -285,6 +312,7 @@ const METAL_TYPE_CONFIGS = {
     postHook:    usePostExchange,
     submitLabel: 'Submit Exchange',
     processingLabel: 'Processing Exchange…',
+    documentTypeId: APP_CONFIG.DOCUMENT_TYPES.EXCHANGE,
   },
   buyback: {
     amountField: 'amount',
@@ -294,6 +322,7 @@ const METAL_TYPE_CONFIGS = {
     postHook:    usePostBuyback,
     submitLabel: 'Submit Buyback',
     processingLabel: 'Processing Buyback…',
+    documentTypeId: APP_CONFIG.DOCUMENT_TYPES.BUYBACK,
   },
   urd: {
     amountField: 'amount',
@@ -303,6 +332,7 @@ const METAL_TYPE_CONFIGS = {
     postHook:    usePostURDPurchase,
     submitLabel: 'Submit URD Purchase',
     processingLabel: 'Processing Purchase…',
+    documentTypeId: APP_CONFIG.DOCUMENT_TYPES.URD_PURCHASE,
   },
 };
 
@@ -340,8 +370,10 @@ function MetalLineItemForm({ type, onDone }) {
   const storeId      = useSelector(selectActiveStoreId);
   const customerId   = useSelector(selectCartCustomerId);
   const customerName = useSelector(selectCartCustomerName);
+  const customerMobile = useSelector(selectCartCustomerMobile);
   const { paymentModes, isLoading: modesLoading } = usePaymentModes();
   const { item: urdItem, isLoading: urdItemLoading } = useURDMasterItem('GOLD');
+  const headerConfig = useOrderHeaderConfig(config.documentTypeId);
 
   const create = config.createHook({ onSuccess: () => {} });
   const post   = config.postHook({ onSuccess: () => onDone() });
@@ -374,22 +406,38 @@ function MetalLineItemForm({ type, onDone }) {
     if (config.pickerMode === 'fixed' && !urdItem) {
       return toast.error('URD Gold master item is still loading — try again in a moment.');
     }
+    if (!headerConfig.isReady) return toast.error('Store configuration is still loading — try again in a moment.');
     try {
+      const line_items = data.line_items.map((i) => {
+        const resolvedItem = config.pickerMode === 'fixed' ? urdItem : i.item;
+        const amount = Number(i[config.amountField]);
+        return {
+          item_id:   resolvedItem.item_id,
+          item_code: resolvedItem.item_code,
+          item_name: resolvedItem.item_name,
+          weight:    Number(i.weight),
+          purity:    Number(i.purity),
+          item_rate: Number(i.item_rate),
+          [config.amountField]: amount,
+          sub_total: amount,
+          taxable_amount: amount,
+          net_amount: amount,
+        };
+      });
+      const totalWeight = line_items.reduce((s, i) => s + i.weight, 0);
+
       const payload = {
-        party_id: customerId, company_id: storeId,
-        document_date: data.document_date, currency_id: APP_CONFIG.CURRENCY.INR_ID,
-        line_items: data.line_items.map((i) => {
-          const resolvedItem = config.pickerMode === 'fixed' ? urdItem : i.item;
-          return {
-            item_id:   resolvedItem.item_id,
-            item_code: resolvedItem.item_code,
-            item_name: resolvedItem.item_name,
-            weight:    Number(i.weight),
-            purity:    Number(i.purity),
-            item_rate: Number(i.item_rate),
-            [config.amountField]: Number(i[config.amountField]),
-          };
+        ...buildTransactionHeaderFields({
+          subTotal: total, taxableAmount: total, taxAmount: 0, netAmount: total,
+          pieces: line_items.length, weight: totalWeight, netWeight: totalWeight,
+          customerId, customerName, customerMobile,
+          activeStoreId: storeId,
+          headerConfig,
+          documentTypeId: config.documentTypeId,
+          receiptAmount: config.hasReceipt ? total : 0,
+          documentDate: data.document_date,
         }),
+        line_items,
       };
       if (config.hasReceipt) {
         payload.receipt_details = [{ mode_id: data.payout_mode_id, amount: total }];
@@ -516,6 +564,12 @@ function CreditNoteNewForm({ onDone }) {
   const storeId       = useSelector(selectActiveStoreId);
   const customerId    = useSelector(selectCartCustomerId);
   const customerName  = useSelector(selectCartCustomerName);
+  const customerMobile = useSelector(selectCartCustomerMobile);
+  // document_id — reusing RETURN's (55/"PSR"): CreditNote/List returned rows
+  // identical to Return/List in the confirmed live sample, so standalone
+  // CreditNote/Create's own document_id is unconfirmed. See
+  // [[transactions-duplicate-implementations]].
+  const headerConfig = useOrderHeaderConfig(APP_CONFIG.DOCUMENT_TYPES.RETURN);
 
   const create = useCreateCreditNote({ onSuccess: () => {} });
   const post   = usePostCreditNote({ onSuccess: () => onDone() });
@@ -527,11 +581,18 @@ function CreditNoteNewForm({ onDone }) {
 
   const onSubmit = async (data) => {
     if (!customerId) return toast.error('Attach a customer to the session before submitting.');
+    if (!headerConfig.isReady) return toast.error('Store configuration is still loading — try again in a moment.');
     try {
+      const amount = Number(data.net_amount);
       const createRes = await create.mutateAsync({
-        party_id: customerId, company_id: storeId,
-        document_date: data.document_date, currency_id: APP_CONFIG.CURRENCY.INR_ID,
-        net_amount: Number(data.net_amount),
+        ...buildTransactionHeaderFields({
+          subTotal: amount, taxableAmount: amount, taxAmount: 0, netAmount: amount,
+          customerId, customerName, customerMobile,
+          activeStoreId: storeId,
+          headerConfig,
+          documentTypeId: APP_CONFIG.DOCUMENT_TYPES.RETURN,
+          documentDate: data.document_date,
+        }),
         ref_transaction_id: data.ref_transaction_id ? Number(data.ref_transaction_id) : undefined,
         narration: data.narration || undefined,
       });
@@ -593,7 +654,9 @@ function RefundNewForm({ onDone }) {
   const storeId       = useSelector(selectActiveStoreId);
   const customerId    = useSelector(selectCartCustomerId);
   const customerName  = useSelector(selectCartCustomerName);
+  const customerMobile = useSelector(selectCartCustomerMobile);
   const { paymentModes, isLoading: modesLoading } = usePaymentModes();
+  const headerConfig = useOrderHeaderConfig(APP_CONFIG.DOCUMENT_TYPES.REFUND);
 
   const create     = useCreateRefund({ onSuccess: () => {} });
   const addDetail  = useAddRefundDetail({ onSuccess: () => {} });
@@ -606,11 +669,20 @@ function RefundNewForm({ onDone }) {
 
   const onSubmit = async (data) => {
     if (!customerId) return toast.error('Attach a customer to the session before submitting.');
+    if (!headerConfig.isReady) return toast.error('Store configuration is still loading — try again in a moment.');
     try {
+      const amount = Number(data.amount);
       const createRes = await create.mutateAsync({
-        party_id: customerId, company_id: storeId,
-        document_date: data.document_date, currency_id: APP_CONFIG.CURRENCY.INR_ID,
-        total_amount: Number(data.amount),
+        ...buildTransactionHeaderFields({
+          subTotal: amount, taxableAmount: amount, taxAmount: 0, netAmount: amount,
+          customerId, customerName, customerMobile,
+          activeStoreId: storeId,
+          headerConfig,
+          documentTypeId: APP_CONFIG.DOCUMENT_TYPES.REFUND,
+          receiptAmount: amount,
+          documentDate: data.document_date,
+        }),
+        total_amount: amount,
         narration: data.narration || undefined,
       });
       const transactionId = createRes?.EntityId;

@@ -20,6 +20,8 @@ import { useSchemes }            from '@/hooks/schemes/useSchemes';
 import { useSchemeEnrollments }  from '@/hooks/schemes/useSchemeEnrollments';
 import { useSchemeReceipt }      from '@/hooks/schemes/useSchemeReceipt';
 import { usePaymentModes }       from '@/hooks/checkout/usePaymentModes';
+import { useOrderHeaderConfig }  from '@/hooks/checkout/useOrderHeaderConfig';
+import { buildTransactionHeaderFields } from '@/services/transactionHeaderService';
 import { selectActiveStoreId }   from '@/store/slices/storeSlice';
 import { selectCartCustomerId, selectCartCustomerName } from '@/store/slices/cartSlice';
 import APP_CONFIG from '@/constants/appConfig';
@@ -62,6 +64,11 @@ function ReceiptSheet({ enrollment, isOpen, onClose }) {
   const storeId = useSelector(selectActiveStoreId);
   const { paymentModes, isLoading: modesLoading } = usePaymentModes();
   const createReceipt = useSchemeReceipt();
+  // HEADER FIELDS (2026-07-28) — same missing-header-fields root cause as
+  // Order/Invoice Create (financial_year_id/ledger_id/document_no/party
+  // identity/receipt+balance), applied here for parity. UNVERIFIED LIVE —
+  // see transactions/page.jsx's header comment for the full context.
+  const headerConfig = useOrderHeaderConfig(APP_CONFIG.DOCUMENT_TYPES.SCHEME_RECEIPT);
 
   const today = todayDateString();
 
@@ -96,24 +103,28 @@ function ReceiptSheet({ enrollment, isOpen, onClose }) {
 
   const onSubmit = async (data) => {
     const amount = Number(data.amount);
-    // ledger_id — confirmed 2026-07-16 via real SchemeReceipt/List data,
-    // sourced from the selected mode's own ledger_id (see usePaymentModes.js).
+    // ledger_id (per-detail-row) — confirmed 2026-07-16 via real
+    // SchemeReceipt/List data, sourced from the selected mode's own
+    // ledger_id (see usePaymentModes.js) — distinct from the HEADER
+    // ledger_id below (the document type's own control ledger).
     const selectedMode = paymentModes.find((m) => m.modeId === Number(data.mode_id));
+
+    if (!headerConfig.isReady) return;
 
     await createReceipt.mutateAsync({
       scheme_enrollment_id: enrollment.enrollmentId,
-      party_id:             enrollment.partyId,
-      company_id:           storeId,
-      document_date:        data.document_date,
-      currency_id:          APP_CONFIG.CURRENCY.INR_ID,
-      exchange_rate:        1,
-      // document_id — confirmed 2026-07-28 via a real SchemeReceipt/List row
-      // (Param Deep, enrollment 142): document_no "HO-SPY-07-26-1", prefix
-      // "SPY" matches document_id 99 in DocumentNumbering/List. Not a
-      // guess — read directly off an existing real receipt, since guessing
-      // a document_id wrong risks mis-filing a real payment under the
-      // wrong OrnaVerse document type.
-      document_id:          99,
+      ...buildTransactionHeaderFields({
+        subTotal: amount, taxableAmount: amount, taxAmount: 0, netAmount: amount,
+        customerId: enrollment.partyId, customerName: enrollment.partyName,
+        activeStoreId: storeId,
+        headerConfig,
+        // document_id — confirmed 2026-07-28 via a real SchemeReceipt/List
+        // row (Param Deep, enrollment 142): document_no "HO-SPY-07-26-1",
+        // prefix "SPY" matches document_id 99 in DocumentNumbering/List.
+        documentTypeId: APP_CONFIG.DOCUMENT_TYPES.SCHEME_RECEIPT,
+        receiptAmount: amount,
+        documentDate: data.document_date,
+      }),
       amount,
       scheme_receipt_details: [{
         mode_id:   Number(data.mode_id),
