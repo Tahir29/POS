@@ -31,6 +31,7 @@ import { useCart } from '@/hooks/cart/useCart';
 import { useCartTotals } from '@/hooks/cart/useCartTotals';
 import { useCustomerSession } from '@/hooks/customer/useCustomerSession';
 import { useExchangeRate } from '@/hooks/checkout/useExchangeRate';
+import { useOrderHeaderConfig } from '@/hooks/checkout/useOrderHeaderConfig';
 import { selectActiveStoreId } from '@/store/slices/storeSlice';
 import { QUERY_KEYS } from '@/constants/queryKeys';
 import APP_CONFIG from '@/constants/appConfig';
@@ -42,10 +43,15 @@ import TOAST from '@/constants/toastMessages';
  *
  * employee_id/sales_person_id + exchange_rate — see useCreateInvoice.js
  * header for the full rationale (same schema, same findings 2026-07-16).
+ *
+ * HEADER FIELDS (financial_year_id, ledger_id, is_tax_applicable,
+ * auto_posting, is_document_number_editable, round_off, backdating flags) —
+ * see useCreateInvoice.js's header comment for the full root-cause story
+ * (confirmed live 2026-07-28); same fix applied here for parity.
  */
 function buildOrderEntity({
   items, subtotal, discount, total, customerId, activeStoreId, paymentModes,
-  salesPersonId, exchangeRate,
+  salesPersonId, exchangeRate, headerConfig,
 }) {
   const today = new Date().toISOString();
 
@@ -58,6 +64,9 @@ function buildOrderEntity({
     pieces:       item.quantity,
     item_rate:    item.unitPrice,   // line item price field = item_rate (NOT price)
     sub_total:    item.unitPrice * item.quantity,
+    // taxable_amount — confirmed required 2026-07-27: a live Order/Create
+    // attempt 400'd with "Taxable amount is missing" without this.
+    taxable_amount: +(item.unitPrice * item.quantity).toFixed(2),
     net_amount:   item.unitPrice * item.quantity,
     style_id:     item.styleId    ?? undefined,
     item_size_id: item.sizeId     ?? undefined,
@@ -80,7 +89,18 @@ function buildOrderEntity({
     sales_person_id:  salesPersonId,
     sub_total:     subtotal,
     discount:      discount ?? 0,
+    taxable_amount: +Math.max(0, subtotal - (discount ?? 0)).toFixed(2),
     net_amount:    total,
+    round_off:     0,
+    document_id:                 APP_CONFIG.DOCUMENT_TYPES.POS_ORDER,
+    financial_year_id:           headerConfig.financialYearId,
+    ledger_id:                   headerConfig.ledgerId,
+    is_tax_applicable:           headerConfig.isTaxApplicable,
+    auto_posting:                headerConfig.autoPosting,
+    is_document_number_editable: headerConfig.isDocumentNumberEditable,
+    allow_backdated_entry:       false,
+    number_of_backdated_days:    0,
+    is_einvoice:                 false,
     line_items,
     receipt_details,
   };
@@ -93,16 +113,21 @@ export function useCreateOrder() {
   const { customerId } = useCustomerSession();
   const activeStoreId = useSelector(selectActiveStoreId);
   const { exchangeRate } = useExchangeRate();
+  const headerConfig = useOrderHeaderConfig(APP_CONFIG.DOCUMENT_TYPES.POS_ORDER);
 
   const mutation = useMutation({
     /**
      * @param {{ paymentModes: {modeId, modeCode, modeName, amount}[], salesPersonId: number }} params
      */
     mutationFn: async ({ paymentModes, salesPersonId }) => {
+      if (!headerConfig.isReady) {
+        throw new Error('Store configuration is still loading — please try again in a moment');
+      }
+
       const entity = buildOrderEntity({
         items, subtotal, discount, total,
         customerId, activeStoreId, paymentModes,
-        salesPersonId, exchangeRate,
+        salesPersonId, exchangeRate, headerConfig,
       });
 
       // Step 1: Create draft order
