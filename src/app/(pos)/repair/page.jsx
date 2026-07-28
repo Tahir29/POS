@@ -16,9 +16,16 @@
 // "pick from recent records" list for the Out/Invoice stages instead of
 // re-searching the catalog (staff pick the specific job, not an item).
 //
-// Same systemic AccessDenied blocker as every other POS transaction Create
-// endpoint applies here too (confirmed via direct API test) — payloads are
-// built correctly and ready for when OrnaVerse resolves the OAuth scope gap.
+// HEADER FIELDS (2026-07-28) — the "AccessDenied" framing above is STALE.
+// Confirmed live 2026-07-28 that this whole family of Create endpoints
+// (Return/Refund/CreditNote/Exchange/Buyback/URDPurchase, same schema as
+// RepairIn/Out/Invoice) actually 500s with a missing-header-fields error,
+// not AccessDenied — see [[pos-cash-checkout-status]] memory. Applied the
+// same fix here (financial_year_id/ledger_id/document_id/document_no/party
+// identity/aggregate weight/receipt+balance — see
+// transactionHeaderService.buildTransactionHeaderFields, useOrderHeaderConfig),
+// UNVERIFIED LIVE per the user's explicit direction to code this without a
+// live round-trip per flow.
 
 import { Suspense, useState } from 'react';
 import { useSelector }        from 'react-redux';
@@ -40,9 +47,11 @@ import {
   useCreateRepairInvoice, usePostRepairInvoice, useCreateRepairInvoiceReceipt,
 } from '@/hooks/repair/useRepairMutations';
 import { usePaymentModes }     from '@/hooks/checkout/usePaymentModes';
+import { useOrderHeaderConfig } from '@/hooks/checkout/useOrderHeaderConfig';
+import { buildTransactionHeaderFields } from '@/services/transactionHeaderService';
 import ItemSearchPicker        from '@/components/features/transactions/ItemSearchPicker';
 import { selectActiveStoreId } from '@/store/slices/storeSlice';
-import { selectCartCustomerId, selectCartCustomerName } from '@/store/slices/cartSlice';
+import { selectCartCustomerId, selectCartCustomerName, selectCartCustomerMobile } from '@/store/slices/cartSlice';
 import APP_CONFIG               from '@/constants/appConfig';
 import { todayDateString } from '@/lib/dateUtils';
 
@@ -149,6 +158,8 @@ function RepairInNewForm({ onDone }) {
   const storeId       = useSelector(selectActiveStoreId);
   const customerId    = useSelector(selectCartCustomerId);
   const customerName  = useSelector(selectCartCustomerName);
+  const customerMobile = useSelector(selectCartCustomerMobile);
+  const headerConfig = useOrderHeaderConfig(APP_CONFIG.DOCUMENT_TYPES.REPAIR_IN);
 
   const create = useCreateRepairIn({ onSuccess: () => {} });
   const post   = usePostRepairIn({ onSuccess: () => onDone() });
@@ -168,16 +179,27 @@ function RepairInNewForm({ onDone }) {
 
   const onSubmit = async (data) => {
     if (!customerId) return toast.error('Attach a customer to the session before submitting.');
+    if (!headerConfig.isReady) return toast.error('Store configuration is still loading — try again in a moment.');
     try {
+      const pieces = Number(data.pieces);
+      const weight = Number(data.weight);
       const createRes = await create.mutateAsync({
-        party_id: customerId, company_id: storeId,
-        document_date: data.document_date, currency_id: APP_CONFIG.CURRENCY.INR_ID,
+        ...buildTransactionHeaderFields({
+          // Intake has no charge yet — pure item tracking until Repair Out/Invoice.
+          subTotal: 0, taxableAmount: 0, taxAmount: 0, netAmount: 0,
+          pieces, weight, netWeight: weight,
+          customerId, customerName, customerMobile,
+          activeStoreId: storeId,
+          headerConfig,
+          documentTypeId: APP_CONFIG.DOCUMENT_TYPES.REPAIR_IN,
+          documentDate: data.document_date,
+        }),
         line_items: [{
           item_id:        data.item.item_id,
           item_code:      data.item.item_code,
           item_name:      data.item.item_name,
-          pieces:         Number(data.pieces),
-          weight:         Number(data.weight),
+          pieces,
+          weight,
           bag_no:         data.bag_no || undefined,
           certificate_no: data.certificate_no || undefined,
           huid:           data.huid || undefined,
@@ -265,6 +287,7 @@ function RepairOutNewForm({ onDone }) {
   const storeId = useSelector(selectActiveStoreId);
   const { items: repairIns, isLoading: repairInsLoading } = useRepairIns({});
   const [selectedIn, setSelectedIn] = useState(null);
+  const headerConfig = useOrderHeaderConfig(APP_CONFIG.DOCUMENT_TYPES.REPAIR_OUT);
 
   const create = useCreateRepairOut({ onSuccess: () => {} });
   const post   = usePostRepairOut({ onSuccess: () => onDone() });
@@ -278,19 +301,32 @@ function RepairOutNewForm({ onDone }) {
     if (!selectedIn) return toast.error('Select the repair intake this item belongs to.');
     const item = selectedIn.lineItems?.[0];
     if (!item) return toast.error('Selected intake has no item on record.');
+    if (!headerConfig.isReady) return toast.error('Store configuration is still loading — try again in a moment.');
     try {
+      const pieces = item.pieces ?? 1;
+      const weight = item.weight ?? 0;
+      const laborCost = Number(data.item_rate);
       const createRes = await create.mutateAsync({
-        party_id: selectedIn.customerId, company_id: storeId,
-        document_date: data.document_date, currency_id: APP_CONFIG.CURRENCY.INR_ID,
+        ...buildTransactionHeaderFields({
+          // Estimated labour cost isn't billed until Repair Invoice — track
+          // as the header amount here since there's no separate tax split.
+          subTotal: laborCost, taxableAmount: laborCost, taxAmount: 0, netAmount: laborCost,
+          pieces, weight, netWeight: weight,
+          customerId: selectedIn.customerId, customerName: selectedIn.customerName,
+          activeStoreId: storeId,
+          headerConfig,
+          documentTypeId: APP_CONFIG.DOCUMENT_TYPES.REPAIR_OUT,
+          documentDate: data.document_date,
+        }),
         ref_transaction_id: selectedIn.transactionId,
         line_items: [{
           item_id:    item.item_id,
           item_code:  item.item_code,
           item_name:  item.item_name,
-          pieces:     item.pieces ?? 1,
-          weight:     item.weight,
+          pieces,
+          weight,
           location_id: Number(data.location_id),
-          item_rate:  Number(data.item_rate),
+          item_rate:  laborCost,
         }],
       });
       const transactionId = createRes?.EntityId;
@@ -353,6 +389,7 @@ function RepairInvoiceNewForm({ onDone }) {
   const { items: repairOuts, isLoading: repairOutsLoading } = useRepairOuts({});
   const { paymentModes, isLoading: modesLoading } = usePaymentModes();
   const [selectedOut, setSelectedOut] = useState(null);
+  const headerConfig = useOrderHeaderConfig(APP_CONFIG.DOCUMENT_TYPES.REPAIR_INVOICE);
 
   const create      = useCreateRepairInvoice({ onSuccess: () => {} });
   const post        = usePostRepairInvoice({ onSuccess: () => {} });
@@ -370,20 +407,32 @@ function RepairInvoiceNewForm({ onDone }) {
 
     const itemRate = Number(data.item_rate);
     const selectedMode = paymentModes.find((m) => m.modeId === Number(data.mode_id));
+    if (!headerConfig.isReady) return toast.error('Store configuration is still loading — try again in a moment.');
 
     try {
+      const pieces = item.pieces ?? 1;
+      const weight = item.weight ?? 0;
       const createRes = await create.mutateAsync({
-        party_id: selectedOut.customerId, company_id: storeId,
-        document_date: data.document_date, currency_id: APP_CONFIG.CURRENCY.INR_ID,
+        ...buildTransactionHeaderFields({
+          subTotal: itemRate, taxableAmount: itemRate, taxAmount: 0, netAmount: itemRate,
+          pieces, weight, netWeight: weight,
+          customerId: selectedOut.customerId, customerName: selectedOut.customerName,
+          activeStoreId: storeId,
+          headerConfig,
+          documentTypeId: APP_CONFIG.DOCUMENT_TYPES.REPAIR_INVOICE,
+          receiptAmount: itemRate,
+          documentDate: data.document_date,
+        }),
         ref_transaction_id: selectedOut.transactionId,
         line_items: [{
           item_id:    item.item_id,
           item_code:  item.item_code,
           item_name:  item.item_name,
-          pieces:     item.pieces ?? 1,
-          weight:     item.weight,
+          pieces,
+          weight,
           item_rate:  itemRate,
           sub_total:  itemRate,
+          taxable_amount: itemRate,
           net_amount: itemRate,
         }],
       });
