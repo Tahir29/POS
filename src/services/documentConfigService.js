@@ -57,3 +57,69 @@ export function resolveDocumentConfig(rows, documentId, companyId) {
     rows.find((r) => r.document_id === documentId && r.company_id === companyId) ?? null
   );
 }
+
+/**
+ * Computes the next document_no for a DocumentNumbering row.
+ *
+ * REVERSE-ENGINEERED 2026-07-28 from ONE confirmed real example — there is
+ * no dedicated "reserve next number" service action in v1.json (checked:
+ * only Create/Update/Delete/Retrieve/List), so OrnaVerse's own frontend
+ * computes this client-side too and sends it explicitly on Create despite
+ * is_document_number_editable:false. Confirmed live: DocumentNumbering row
+ * for document_id 53 (RPO/Order), company_id 1 (branch_wise, prefix "RPO",
+ * separator "-", prefix_date "[MM]/[YY]", no_of_zeroes 5, prefill_with_zero
+ * true) + storeCode "HO" (company_code from Stores/GetUserStores, confirmed
+ * live — NOT company_name/mailing_name, which has no such prefix) produces
+ * exactly "HO-RPO-07-26-000004" for counter value 4, i.e.:
+ *   [branch, prefix, MM, YY, counter].join(separator)
+ *   counter = String(n).padStart(no_of_zeroes + 1, '0')
+ *
+ * This is a best-effort reconstruction from a single sample — a genuine
+ * collision is possible if two terminals compute the same next number
+ * concurrently (there's no server-side reservation to prevent it). Create
+ * should be expected to reject a duplicate document_no with a clear error
+ * rather than the opaque generic 500 this whole investigation was about —
+ * treat that as a distinct, recoverable failure mode, not evidence this
+ * function is wrong.
+ *
+ * @param {object} docConfigRow — a DocumentNumbering row (see resolveDocumentConfig)
+ * @param {string} storeCode — active store's company_code (e.g. "HO")
+ * @param {Date} [date]
+ */
+export function buildDocumentNumber(docConfigRow, storeCode, date = new Date()) {
+  const {
+    prefix, separator = '', suffix, prefix_date,
+    no_of_zeroes = 0, prefill_with_zero, branch_wise,
+    increment_by = 1, last_number = 0,
+    reset_monthly, reset_yearly, current_month, current_year,
+  } = docConfigRow;
+
+  const month = date.getMonth() + 1;
+  const year  = date.getFullYear();
+
+  // A new numbering period starts the counter over at 1 rather than
+  // continuing last_number — mirrors reset_monthly/reset_yearly on the row.
+  const periodChanged = reset_monthly
+    ? (current_month !== month || current_year !== year)
+    : reset_yearly
+      ? current_year !== year
+      : false;
+
+  const nextNumber = periodChanged ? 1 : (last_number ?? 0) + (increment_by ?? 1);
+
+  const counterWidth = prefill_with_zero ? no_of_zeroes + 1 : 0;
+  const counterStr = counterWidth > 0
+    ? String(nextNumber).padStart(counterWidth, '0')
+    : String(nextNumber);
+
+  const parts = [];
+  if (branch_wise && storeCode) parts.push(storeCode);
+  if (prefix) parts.push(prefix);
+  if (prefix_date) {
+    parts.push(String(month).padStart(2, '0'));
+    parts.push(String(year % 100).padStart(2, '0'));
+  }
+  parts.push(counterStr);
+
+  return parts.join(separator || '') + (suffix || '');
+}

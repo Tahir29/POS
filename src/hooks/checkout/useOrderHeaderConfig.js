@@ -15,8 +15,9 @@ import {
   resolveCurrentFinancialYear,
   getDocumentNumberingList,
   resolveDocumentConfig,
+  buildDocumentNumber,
 } from '@/services/documentConfigService';
-import { selectActiveStoreId } from '@/store/slices/storeSlice';
+import { selectActiveStoreId, selectActiveStoreCode } from '@/store/slices/storeSlice';
 import { QUERY_KEYS } from '@/constants/queryKeys';
 import APP_CONFIG from '@/constants/appConfig';
 
@@ -26,6 +27,7 @@ import APP_CONFIG from '@/constants/appConfig';
  */
 export function useOrderHeaderConfig(documentId) {
   const companyId = useSelector(selectActiveStoreId);
+  const storeCode = useSelector(selectActiveStoreCode);
 
   const finYearQuery = useQuery({
     queryKey: QUERY_KEYS.DOCUMENT_CONFIG.FINANCIAL_YEARS(),
@@ -47,13 +49,22 @@ export function useOrderHeaderConfig(documentId) {
     ? resolveDocumentConfig(docNumQuery.data, documentId, companyId)
     : null;
 
+  // documentNo recomputed fresh on every render off the CURRENT docConfig
+  // row (react-query keeps that reasonably fresh at STALE_TIME.STATIC) —
+  // see buildDocumentNumber's header comment for why this is a best-effort
+  // reconstruction rather than a server-issued reservation.
+  const documentNo = (docConfig && storeCode)
+    ? buildDocumentNumber(docConfig, storeCode)
+    : null;
+
   return {
     financialYearId:        currentFinancialYear?.financial_year_id ?? null,
     ledgerId:                docConfig?.ledger_id ?? null,
     isTaxApplicable:         docConfig?.is_tax_applicable ?? true,
     autoPosting:             docConfig?.auto_posting ?? true,
     isDocumentNumberEditable:docConfig?.is_document_number_editable ?? false,
+    documentNo,
     isLoading: finYearQuery.isLoading || docNumQuery.isLoading,
-    isReady:   !!currentFinancialYear && !!docConfig,
+    isReady:   !!currentFinancialYear && !!docConfig && !!documentNo,
   };
 }

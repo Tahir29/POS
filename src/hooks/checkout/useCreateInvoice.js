@@ -61,11 +61,30 @@
 //     we don't round display prices, so 0 is correct here.
 //   allow_backdated_entry/number_of_backdated_days — POS sales are always
 //     same-day; no backdating UI exists, so false/0.
+//   document_id / document_no — confirmed live: document_id (the document
+//     TYPE, not just a DocumentNumbering lookup key) is a required header
+//     field in its own right, and document_no must be explicitly computed
+//     and sent despite is_document_number_editable:false — see
+//     buildDocumentNumber() in documentConfigService.js.
+//
+// LINE ITEMS — confirmed live 2026-07-28 (after the header fix alone still
+// 500'd) that each line item must be the FULL computed Helpers/SetSalesItems
+// object (item_components[]/item_operations[]/item_taxes[]/hsn/
+// tax_template_id, ~70 fields) — NOT a hand-rolled summary. See
+// checkoutPricingService.buildPricedLineItems, which re-fetches each cart
+// item's master record and re-prices it against TODAY's rates at
+// submission time (not whatever was cached at add-to-cart). Header
+// sub_total/taxable_amount/tax_amount/net_amount are now summed from these
+// authoritative per-line figures (summarizeLineItems) rather than the
+// cart's own flat-3%-GST display estimate — the two should closely agree
+// since 3% IS the real combined CGST+SGST rate for jewellery, but the
+// server's own per-item computation is the one actually submitted.
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSelector } from 'react-redux';
 import { toast } from 'react-toastify';
 import { createInvoice, postInvoice } from '@/services/orderService';
+import { buildPricedLineItems, summarizeLineItems } from '@/services/checkoutPricingService';
 import { useCart } from '@/hooks/cart/useCart';
 import { useCartTotals } from '@/hooks/cart/useCartTotals';
 import { useCustomerSession } from '@/hooks/customer/useCustomerSession';
@@ -89,57 +108,42 @@ function toGAItems(items) {
 }
 
 /**
- * Builds InvoiceRow Entity from cart + session state.
+ * Builds InvoiceRow Entity from already-priced line items + session state.
  * Field names confirmed against OrnaVerse.POS.InvoiceRow +
  * OrnaVerse.POS.InvoiceItemsRow + OrnaVerse.POS.InvoiceReceiptRow (v1.json).
  *
  * @param {{
- *   items:          CartItem[],
- *   subtotal:       number,
+ *   lineItems:      object[], // buildPricedLineItems() output
  *   discount:       number,
- *   total:          number,
  *   customerId:     number,
+ *   customerName:   string,
+ *   customerMobile: string,
  *   activeStoreId:  number,
  *   paymentModes:   { modeId, modeCode, modeName, amount }[],
  *   narration?:     string,
  *   salesPersonId:  number,
  *   exchangeRate:   number,
+ *   headerConfig:   ReturnType<typeof useOrderHeaderConfig>,
  * }} params
  */
 function buildInvoiceEntity({
-  items, subtotal, discount, tax, total,
-  customerId, activeStoreId,
+  lineItems, discount,
+  customerId, customerName, customerMobile,
+  activeStoreId,
   paymentModes, narration,
   salesPersonId, exchangeRate,
   headerConfig,
 }) {
   const today = new Date().toISOString();
+  const { subTotal, taxableAmount, taxAmount, netAmount, pieces, weight, netWeight } =
+    summarizeLineItems(lineItems);
 
-  const line_items = items.map((item, idx) => ({
-    item_line_no: idx + 1,
-    item_id:      item.itemId,
-    sku:          item.sku,
-    item_code:    item.itemCode,
-    item_name:    item.itemName,
-    pieces:       item.quantity,
-    // item_rate = unit price on line item (confirmed InvoiceItemsRow field)
-    item_rate:    item.unitPrice,
-    sub_total:    +(item.unitPrice * item.quantity).toFixed(2),
-    // taxable_amount — confirmed required 2026-07-27: a live Invoice/Create
-    // attempt 400'd with "Taxable amount is missing" once AccessDenied was
-    // resolved for real. Pre-tax line value (same figure as sub_total here
-    // since there's no per-line discount split yet) — server computes its
-    // own tax off this, we don't send a per-line tax figure.
-    taxable_amount: +(item.unitPrice * item.quantity).toFixed(2),
-    net_amount:   +(item.unitPrice * item.quantity).toFixed(2),
-    // TEMP DIAGNOSTIC — style_id / item_size_id / narration commented out
-    // to isolate whether one of these three is causing the server-side
-    // exception on Invoice/Create. Restore once confirmed innocent (or
-    // fix whichever one is the actual cause).
-    // style_id:     item.styleId    ?? undefined,
-    // item_size_id: item.sizeId     ?? undefined,
-    // narration:    item.attributes ? JSON.stringify(item.attributes) : undefined,
-  }));
+  const discountedNet = +Math.max(0, netAmount - (discount ?? 0)).toFixed(2);
+  // round_off — the rounding adjustment between the raw computed total and
+  // the amount actually recorded, mirroring the real captured payload
+  // (base_net_amount 128523.16 → net_amount 128523, round_off -0.16).
+  const roundedNet = Math.round(discountedNet);
+  const round_off  = +(roundedNet - discountedNet).toFixed(2);
 
   const receipt_details = paymentModes.map((p) => ({
     mode_id:   p.modeId,
@@ -147,25 +151,39 @@ function buildInvoiceEntity({
     mode_name: p.modeName,
     amount:    p.amount,
   }));
+  const receiptAmount = +receipt_details.reduce((s, r) => s + (r.amount ?? 0), 0).toFixed(2);
 
   return {
     party_id:      customerId,
+    // party_name/mobile/user_id — confirmed live 2026-07-28: the header
+    // denormalizes the customer identity too (not just party_id); omitting
+    // these was part of what still 500'd even with every other field
+    // correct. user_id is null on the real captured example even for a
+    // real logged-in staff session — not something to guess further.
+    party_name:    customerName ?? undefined,
+    mobile:        customerMobile ?? undefined,
+    user_id:       null,
     company_id:    activeStoreId,
     document_date: today,
     currency_id:   APP_CONFIG.CURRENCY.INR_ID,
     exchange_rate: exchangeRate,
     employee_id:      salesPersonId,
     sales_person_id:  salesPersonId,
-    sub_total:     subtotal,
-    discount:      discount ?? 0,
-    // header-level taxable_amount — the pre-tax value tax is computed on
-    // (subtotal net of discount), mirroring the per-line-item field below.
-    taxable_amount: +Math.max(0, subtotal - (discount ?? 0)).toFixed(2),
-    tax_amount:    tax ?? 0,
-    net_amount:    total,
-    round_off:     0,
+    pieces, weight, net_weight: netWeight,
+    sub_total:      subTotal,
+    discount:       discount ?? 0,
+    taxable_amount: taxableAmount,
+    tax_amount:     taxAmount,
+    net_amount:     roundedNet,
+    base_sub_total: subTotal,
+    base_net_amount: roundedNet,
+    base_tax_amount: taxAmount,
+    round_off,
+    receipt_amount: receiptAmount,
+    balance_amount: +(roundedNet - receiptAmount).toFixed(2),
     narration:     narration ?? undefined,
     document_id:                 APP_CONFIG.DOCUMENT_TYPES.POS_INVOICE,
+    document_no:                 headerConfig.documentNo,
     financial_year_id:           headerConfig.financialYearId,
     ledger_id:                   headerConfig.ledgerId,
     is_tax_applicable:           headerConfig.isTaxApplicable,
@@ -174,16 +192,17 @@ function buildInvoiceEntity({
     allow_backdated_entry:       false,
     number_of_backdated_days:    0,
     is_einvoice:                 false,
-    line_items,
+    line_items: lineItems,
     receipt_details,
+    promotion_details: [],
   };
 }
 
 export function useCreateInvoice() {
   const queryClient = useQueryClient();
   const { items, clearCart } = useCart();
-  const { subtotal, discount, tax, total } = useCartTotals();
-  const { customerId } = useCustomerSession();
+  const { discount, total } = useCartTotals();
+  const { customerId, customerName, customerMobile } = useCustomerSession();
   const activeStoreId = useSelector(selectActiveStoreId);
   const { exchangeRate } = useExchangeRate();
   const headerConfig = useOrderHeaderConfig(APP_CONFIG.DOCUMENT_TYPES.POS_INVOICE);
@@ -201,9 +220,12 @@ export function useCreateInvoice() {
         throw new Error('Store configuration is still loading — please try again in a moment');
       }
 
+      const lineItems = await buildPricedLineItems({ items, activeStoreId, salesPersonId });
+
       const entity = buildInvoiceEntity({
-        items, subtotal, discount, tax, total,
-        customerId, activeStoreId,
+        lineItems, discount,
+        customerId, customerName, customerMobile,
+        activeStoreId,
         paymentModes, narration,
         salesPersonId, exchangeRate,
         headerConfig,
