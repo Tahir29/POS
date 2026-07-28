@@ -27,6 +27,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSelector } from 'react-redux';
 import { toast } from 'react-toastify';
 import { createOrder, postOrder } from '@/services/orderService';
+import { buildPricedLineItems, summarizeLineItems } from '@/services/checkoutPricingService';
 import { useCart } from '@/hooks/cart/useCart';
 import { useCartTotals } from '@/hooks/cart/useCartTotals';
 import { useCustomerSession } from '@/hooks/customer/useCustomerSession';
@@ -45,32 +46,25 @@ import TOAST from '@/constants/toastMessages';
  * header for the full rationale (same schema, same findings 2026-07-16).
  *
  * HEADER FIELDS (financial_year_id, ledger_id, is_tax_applicable,
- * auto_posting, is_document_number_editable, round_off, backdating flags) —
- * see useCreateInvoice.js's header comment for the full root-cause story
- * (confirmed live 2026-07-28); same fix applied here for parity.
+ * auto_posting, is_document_number_editable, round_off, backdating flags,
+ * document_id/document_no) + LINE ITEMS (full SetSalesItems computed shape,
+ * not a hand-rolled summary) — see useCreateInvoice.js's header comment for
+ * the full root-cause story (confirmed live 2026-07-28); same fix applied
+ * here for parity.
  */
 function buildOrderEntity({
-  items, subtotal, discount, total, customerId, activeStoreId, paymentModes,
+  lineItems, discount,
+  customerId, customerName, customerMobile,
+  activeStoreId, paymentModes,
   salesPersonId, exchangeRate, headerConfig,
 }) {
   const today = new Date().toISOString();
+  const { subTotal, taxableAmount, taxAmount, netAmount, pieces, weight, netWeight } =
+    summarizeLineItems(lineItems);
 
-  const line_items = items.map((item, idx) => ({
-    item_line_no: idx + 1,
-    item_id:      item.itemId,
-    sku:          item.sku,
-    item_code:    item.itemCode,
-    item_name:    item.itemName,
-    pieces:       item.quantity,
-    item_rate:    item.unitPrice,   // line item price field = item_rate (NOT price)
-    sub_total:    item.unitPrice * item.quantity,
-    // taxable_amount — confirmed required 2026-07-27: a live Order/Create
-    // attempt 400'd with "Taxable amount is missing" without this.
-    taxable_amount: +(item.unitPrice * item.quantity).toFixed(2),
-    net_amount:   item.unitPrice * item.quantity,
-    style_id:     item.styleId    ?? undefined,
-    item_size_id: item.sizeId     ?? undefined,
-  }));
+  const discountedNet = +Math.max(0, netAmount - (discount ?? 0)).toFixed(2);
+  const roundedNet = Math.round(discountedNet);
+  const round_off  = +(roundedNet - discountedNet).toFixed(2);
 
   const receipt_details = paymentModes.map((p) => ({
     mode_id:   p.modeId,
@@ -78,21 +72,33 @@ function buildOrderEntity({
     mode_name: p.modeName,
     amount:    p.amount,
   }));
+  const receiptAmount = +receipt_details.reduce((s, r) => s + (r.amount ?? 0), 0).toFixed(2);
 
   return {
     party_id:      customerId,
+    party_name:    customerName ?? undefined,
+    mobile:        customerMobile ?? undefined,
+    user_id:       null,
     company_id:    activeStoreId,
     document_date: today,
     currency_id:   APP_CONFIG.CURRENCY.INR_ID,
     exchange_rate: exchangeRate,
     employee_id:      salesPersonId,
     sales_person_id:  salesPersonId,
-    sub_total:     subtotal,
-    discount:      discount ?? 0,
-    taxable_amount: +Math.max(0, subtotal - (discount ?? 0)).toFixed(2),
-    net_amount:    total,
-    round_off:     0,
+    pieces, weight, net_weight: netWeight,
+    sub_total:      subTotal,
+    discount:       discount ?? 0,
+    taxable_amount: taxableAmount,
+    tax_amount:     taxAmount,
+    net_amount:     roundedNet,
+    base_sub_total: subTotal,
+    base_net_amount: roundedNet,
+    base_tax_amount: taxAmount,
+    round_off,
+    receipt_amount: receiptAmount,
+    balance_amount: +(roundedNet - receiptAmount).toFixed(2),
     document_id:                 APP_CONFIG.DOCUMENT_TYPES.POS_ORDER,
+    document_no:                 headerConfig.documentNo,
     financial_year_id:           headerConfig.financialYearId,
     ledger_id:                   headerConfig.ledgerId,
     is_tax_applicable:           headerConfig.isTaxApplicable,
@@ -101,16 +107,17 @@ function buildOrderEntity({
     allow_backdated_entry:       false,
     number_of_backdated_days:    0,
     is_einvoice:                 false,
-    line_items,
+    line_items: lineItems,
     receipt_details,
+    promotion_details: [],
   };
 }
 
 export function useCreateOrder() {
   const queryClient = useQueryClient();
   const { items, clearCart } = useCart();
-  const { subtotal, discount, total } = useCartTotals();
-  const { customerId } = useCustomerSession();
+  const { discount } = useCartTotals();
+  const { customerId, customerName, customerMobile } = useCustomerSession();
   const activeStoreId = useSelector(selectActiveStoreId);
   const { exchangeRate } = useExchangeRate();
   const headerConfig = useOrderHeaderConfig(APP_CONFIG.DOCUMENT_TYPES.POS_ORDER);
@@ -124,9 +131,12 @@ export function useCreateOrder() {
         throw new Error('Store configuration is still loading — please try again in a moment');
       }
 
+      const lineItems = await buildPricedLineItems({ items, activeStoreId, salesPersonId });
+
       const entity = buildOrderEntity({
-        items, subtotal, discount, total,
-        customerId, activeStoreId, paymentModes,
+        lineItems, discount,
+        customerId, customerName, customerMobile,
+        activeStoreId, paymentModes,
         salesPersonId, exchangeRate, headerConfig,
       });
 
