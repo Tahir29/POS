@@ -443,6 +443,37 @@ const API = {
   },
 
   // ─────────────────────────────────────────────────────────────────────────
+  // DOCUMENT CONFIG (per-document-type header fields for Order/Invoice Create)
+  // Confirmed live 2026-07-28 via OrnaVerse's own OAuth client_credentials
+  // token: root-caused the Order/Invoice/Create 500s to two entirely-missing
+  // header fields that neither endpoint's 400 validation ever complained
+  // about, so they went undetected until we captured a real working payload
+  // from OrnaVerse's own frontend and cross-checked it against v1.json:
+  //
+  //   financial_year_id — NOT a customer/document field. FinancialYear/List
+  //   returns { financial_year_id, from_date, to_date, financial_year_code }
+  //   rows with no company/document scoping at all — resolve by finding the
+  //   row where from_date <= today <= to_date. Confirmed live: FY 2025-2026
+  //   (id 1) and FY 2026-2027 (id 3, current as of 2026-07).
+  //
+  //   ledger_id — NOT sourced from the customer (CustomerRow only has
+  //   payable_ledger_id/receivable_ledger_id/wip_ledger_id/loss_ledger_id,
+  //   confirmed via v1.json schema — no bare ledger_id). It's the document
+  //   TYPE's own configured control ledger: DocumentNumberingRow, keyed by
+  //   (document_id, company_id). Confirmed live: document_id 53 (RPO/Order),
+  //   company_id 1 (HO) → ledger_id 182 — an EXACT match to the real
+  //   ledger_id captured from OrnaVerse's own successful Order/Create.
+  //   Same row also carries is_tax_applicable/auto_posting/
+  //   is_document_number_editable — send those from here too rather than
+  //   hardcoding, since they're genuinely per-document-type config, not
+  //   universal constants.
+  // ─────────────────────────────────────────────────────────────────────────
+  DOCUMENT_CONFIG: {
+    FINANCIAL_YEAR_LIST:   'Services/Administration/FinancialYear/List',
+    DOCUMENT_NUMBERING_LIST: 'Services/Administration/DocumentNumbering/List',
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
   // EXCHANGE RATE
   // Required on Order/Invoice Create alongside currency_id — confirmed via
   // direct UAT test 2026-07-16: currency_id 103 (INR) returns exchange_rate: 1.

@@ -44,6 +44,16 @@ const APP_CONFIG = {
     INR_SYMBOL: '₹',
   },
 
+  // ── DOCUMENT TYPES ────────────────────────────────────────────────────────
+  // document_id constants for DocumentNumbering rows — confirmed live
+  // 2026-07-28 (see documentConfigService.js / useOrderHeaderConfig.js).
+  // Each row carries that document type's control ledger_id + posting flags,
+  // keyed by (document_id, company_id) — required on Order/Invoice Create.
+  DOCUMENT_TYPES: {
+    POS_INVOICE: 54, // prefix "LJ"
+    POS_ORDER:   53, // prefix "RPO"
+  },
+
   // ── COMPLIANCE ────────────────────────────────────────────────────────────
   // Income Tax Rule 114B: PAN is mandatory on a sale once the transaction
   // value crosses ₹2,00,000, regardless of payment mode — this is a

@@ -44,12 +44,23 @@
 //
 // STATUS is DERIVED after posting (balance_amount + receipt_amount) — never sent.
 //
-// STILL BLOCKED: Invoice/Create itself returns AccessDenied regardless of
-// payload correctness — confirmed via a direct test with a fully-formed
-// payload (2026-07-16). That's an OAuth-client scope gap on OrnaVerse's
-// side (their team needs to grant `api_access` permission on Order/Create,
-// Invoice/Create, Common/GetTaxes), not something fixable here. This payload
-// is correct and ready for the moment that's resolved.
+// HEADER FIELDS — confirmed live 2026-07-28 by capturing a real, successful
+// Order/Create request from OrnaVerse's own frontend (see
+// useOrderHeaderConfig.js). Every prior 500 on this family of endpoints
+// (Invoice/Order/SchemeReceipt Create) traced back to an entire missing tier
+// of header fields that the 400 validation never flagged:
+//   financial_year_id — from FinancialYear/List, matched to today's date.
+//     NOT a customer or document field; not implied by document_date.
+//   ledger_id — the document TYPE's own control ledger (DocumentNumberingRow,
+//     keyed by document_id+company_id) — NOT the customer's receivable
+//     ledger, confirmed via v1.json (CustomerRow has no bare ledger_id).
+//   is_tax_applicable/auto_posting/is_document_number_editable — same
+//     DocumentNumbering row; genuinely per-document-type config, not
+//     universal constants, so sourced from there rather than hardcoded.
+//   round_off — rounding adjustment between computed and collected amount;
+//     we don't round display prices, so 0 is correct here.
+//   allow_backdated_entry/number_of_backdated_days — POS sales are always
+//     same-day; no backdating UI exists, so false/0.
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSelector } from 'react-redux';
@@ -59,6 +70,7 @@ import { useCart } from '@/hooks/cart/useCart';
 import { useCartTotals } from '@/hooks/cart/useCartTotals';
 import { useCustomerSession } from '@/hooks/customer/useCustomerSession';
 import { useExchangeRate } from '@/hooks/checkout/useExchangeRate';
+import { useOrderHeaderConfig } from '@/hooks/checkout/useOrderHeaderConfig';
 import { selectActiveStoreId } from '@/store/slices/storeSlice';
 import { QUERY_KEYS } from '@/constants/queryKeys';
 import APP_CONFIG from '@/constants/appConfig';
@@ -99,6 +111,7 @@ function buildInvoiceEntity({
   customerId, activeStoreId,
   paymentModes, narration,
   salesPersonId, exchangeRate,
+  headerConfig,
 }) {
   const today = new Date().toISOString();
 
@@ -145,9 +158,22 @@ function buildInvoiceEntity({
     sales_person_id:  salesPersonId,
     sub_total:     subtotal,
     discount:      discount ?? 0,
+    // header-level taxable_amount — the pre-tax value tax is computed on
+    // (subtotal net of discount), mirroring the per-line-item field below.
+    taxable_amount: +Math.max(0, subtotal - (discount ?? 0)).toFixed(2),
     tax_amount:    tax ?? 0,
     net_amount:    total,
+    round_off:     0,
     narration:     narration ?? undefined,
+    document_id:                 APP_CONFIG.DOCUMENT_TYPES.POS_INVOICE,
+    financial_year_id:           headerConfig.financialYearId,
+    ledger_id:                   headerConfig.ledgerId,
+    is_tax_applicable:           headerConfig.isTaxApplicable,
+    auto_posting:                headerConfig.autoPosting,
+    is_document_number_editable: headerConfig.isDocumentNumberEditable,
+    allow_backdated_entry:       false,
+    number_of_backdated_days:    0,
+    is_einvoice:                 false,
     line_items,
     receipt_details,
   };
@@ -160,6 +186,7 @@ export function useCreateInvoice() {
   const { customerId } = useCustomerSession();
   const activeStoreId = useSelector(selectActiveStoreId);
   const { exchangeRate } = useExchangeRate();
+  const headerConfig = useOrderHeaderConfig(APP_CONFIG.DOCUMENT_TYPES.POS_INVOICE);
 
   const mutation = useMutation({
     /**
@@ -170,11 +197,16 @@ export function useCreateInvoice() {
      * }} params
      */
     mutationFn: async ({ paymentModes, narration, salesPersonId }) => {
+      if (!headerConfig.isReady) {
+        throw new Error('Store configuration is still loading — please try again in a moment');
+      }
+
       const entity = buildInvoiceEntity({
         items, subtotal, discount, tax, total,
         customerId, activeStoreId,
         paymentModes, narration,
         salesPersonId, exchangeRate,
+        headerConfig,
       });
 
       // Step 1: Create draft invoice

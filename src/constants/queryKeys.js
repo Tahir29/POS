@@ -40,6 +40,12 @@ export const QUERY_KEYS = {
     GET: (currencyId, companyId) => ['exchange-rate', currencyId, companyId],
   },
 
+  // ── DOCUMENT CONFIG (financial year + per-document-type ledger config) ────
+  DOCUMENT_CONFIG: {
+    FINANCIAL_YEARS:    ()          => ['document-config', 'financial-years'],
+    DOCUMENT_NUMBERING: ()          => ['document-config', 'document-numbering'],
+  },
+
   // ── LOCATION ─────────────────────────────────────────────────────────────
   LOCATION: {
     COUNTRIES: ()            => ['location', 'countries'],
