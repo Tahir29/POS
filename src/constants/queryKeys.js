@@ -31,8 +31,6 @@ export const QUERY_KEYS = {
     TAXES:                (companyId) => ['settings', 'taxes', companyId],
     METAL_RATE_TODAY:     () => ['settings', 'metal-rate-today'],
     REASON_CODES:         () => ['settings', 'reason-codes'],
-    METAL_RATE:           (metalTypeId) => ['settings', 'metal-rate', metalTypeId],
-    ALL_RATES:            () => ['settings', 'all-rates'],
   },
 
   // ── EXCHANGE RATE ──────────────────────────────────────────────────────────
@@ -64,9 +62,6 @@ export const QUERY_KEYS = {
   ITEMS: {
     LIST:            (params)  => ['items', 'list', params],
     DETAIL:          (itemId)  => ['items', 'detail', itemId],
-    NEW:             ()        => ['items', 'new'],
-    FEATURED:        ()        => ['items', 'featured'],
-    SIZES:           ()        => ['items', 'sizes'],
     ATTRIBUTES:      (typeId)  => ['items', 'attributes', typeId],
     DESIGN_VARIANTS: (styleId) => ['items', 'design-variants', styleId],
     MASTER_SEARCH:   (query)   => ['items', 'master-search', query],
@@ -114,8 +109,6 @@ export const QUERY_KEYS = {
   // ── ORDERS ───────────────────────────────────────────────────────────────
   ORDERS: {
     LIST:            (params)     => ['orders', 'list', params],
-    ALL:             (companyId)  => ['orders', 'all', companyId],
-    DETAIL:          (orderId)    => ['orders', 'detail', orderId],
     CUSTOMER_ORDERS: (customerId) => ['orders', 'customer', customerId],
   },
 
@@ -225,18 +218,6 @@ export const QUERY_KEYS = {
     MATURITY:            (enrollmentId)   => ['schemes', 'maturity',     enrollmentId],
     FORECLOSE:           (enrollmentId)   => ['schemes', 'foreclose',    enrollmentId],
     CANCELLATION:        (enrollmentId)   => ['schemes', 'cancellation', enrollmentId],
-  },
-
-  // ── ANALYTICS ────────────────────────────────────────────────────────────
-  ANALYTICS: {
-    SKU_VELOCITY:           (companyId, from, to) => ['analytics', 'sku-velocity',          companyId, from, to],
-    CATEGORY_PERFORMANCE:   (companyId, from, to) => ['analytics', 'category-performance',   companyId, from, to],
-    GROSS_PROFIT:           (companyId, from, to) => ['analytics', 'gross-profit',           companyId, from, to],
-    MONTHLY_REVENUE:        (companyId)           => ['analytics', 'monthly-revenue',         companyId],
-    MONTHLY_REVENUE_DETAIL: (companyId)           => ['analytics', 'monthly-revenue-detail',  companyId],
-    REORDER_SIGNAL:         (companyId)           => ['analytics', 'reorder-signal',          companyId],
-    POS_DASHBOARD:          (companyId, from, to) => ['analytics', 'pos-dashboard',           companyId, from, to],
-    AI_INSIGHTS:            (companyId, from, to) => ['analytics', 'ai-insights',             companyId, from, to],
   },
 
   // ── REPORTS ──────────────────────────────────────────────────────────────
