@@ -209,7 +209,13 @@ function ReturnNewForm({ onDone }) {
         }),
         ref_transaction_id: data.ref_transaction_id,
         line_items,
-        receipt_details: [{ mode_id: data.refund_mode_id, amount: total }],
+        // NO receipt_details — confirmed live on UAT 2026-07-29 that sending
+        // it is exactly what made Return/Create 500. receipt_details exists
+        // ONLY on Order and Invoice (the documents where the customer PAYS);
+        // on Return/Exchange/BuyBack/URDPurchase the field is `undefined` on
+        // every real record, and including it is rejected. The selected
+        // refund method is therefore NOT recorded by this call — issuing the
+        // actual money back is a separate Refund/CreditNote document.
       });
       const transactionId = createRes?.EntityId;
       if (!transactionId) throw new Error('Return creation failed — no EntityId returned.');
@@ -438,10 +444,13 @@ function MetalLineItemForm({ type, onDone }) {
           documentDate: data.document_date,
         }),
         line_items,
+        // NO receipt_details for ANY of these three — see ReturnNewForm above.
+        // Confirmed live on UAT 2026-07-29: receipt_details exists only on
+        // Order/Invoice; on Exchange/BuyBack/URDPurchase every real record has
+        // it `undefined`, and sending it 500s the Create. config.hasReceipt is
+        // now only used to drive the payout-method FIELD and the header's
+        // receipt_amount — not a receipt_details array.
       };
-      if (config.hasReceipt) {
-        payload.receipt_details = [{ mode_id: data.payout_mode_id, amount: total }];
-      }
       const createRes = await create.mutateAsync(payload);
       const transactionId = createRes?.EntityId;
       if (!transactionId) throw new Error('Creation failed — no EntityId returned.');

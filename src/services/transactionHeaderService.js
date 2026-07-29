@@ -21,7 +21,7 @@
  *   discount?: number,
  *   customerId: number, customerName?: string, customerMobile?: string,
  *   activeStoreId: number,
- *   headerConfig: { financialYearId, ledgerId, isTaxApplicable, autoPosting, isDocumentNumberEditable, documentNo },
+ *   headerConfig: { financialYearId, ledgerId, isTaxApplicable, autoPosting, isDocumentNumberEditable },
  *   documentTypeId: number,
  *   receiptAmount?: number,
  *   exchangeRate?: number,
@@ -69,7 +69,8 @@ export function buildTransactionHeaderFields({
     receipt_amount: receiptAmount,
     balance_amount: +(roundedNet - receiptAmount).toFixed(2),
     document_id:                 documentTypeId,
-    document_no:                 headerConfig.documentNo,
+    // document_no deliberately NOT sent — server assigns it (see the note at
+    // the bottom of documentConfigService.js).
     financial_year_id:           headerConfig.financialYearId,
     ledger_id:                   headerConfig.ledgerId,
     is_tax_applicable:           headerConfig.isTaxApplicable,

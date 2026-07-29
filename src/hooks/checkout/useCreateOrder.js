@@ -98,7 +98,6 @@ function buildOrderEntity({
     receipt_amount: receiptAmount,
     balance_amount: +(roundedNet - receiptAmount).toFixed(2),
     document_id:                 APP_CONFIG.DOCUMENT_TYPES.POS_ORDER,
-    document_no:                 headerConfig.documentNo,
     financial_year_id:           headerConfig.financialYearId,
     ledger_id:                   headerConfig.ledgerId,
     is_tax_applicable:           headerConfig.isTaxApplicable,
