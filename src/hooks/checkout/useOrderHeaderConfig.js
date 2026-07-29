@@ -15,7 +15,6 @@ import {
   resolveCurrentFinancialYear,
   getDocumentNumberingList,
   resolveDocumentConfig,
-  buildDocumentNumber,
 } from '@/services/documentConfigService';
 import { selectActiveStoreId, selectActiveStoreCode } from '@/store/slices/storeSlice';
 import { QUERY_KEYS } from '@/constants/queryKeys';
@@ -41,30 +40,28 @@ export function useOrderHeaderConfig(documentId) {
     staleTime: APP_CONFIG.STALE_TIME.STATIC,
   });
 
+  // One timestamp shared by both resolutions so a month-boundary crossing
+  // mid-render can't pick one period's row against another period's date.
+  const now = new Date();
+
   const currentFinancialYear = finYearQuery.data
-    ? resolveCurrentFinancialYear(finYearQuery.data)
+    ? resolveCurrentFinancialYear(finYearQuery.data, now)
     : null;
 
   const docConfig = (docNumQuery.data && companyId)
-    ? resolveDocumentConfig(docNumQuery.data, documentId, companyId)
+    ? resolveDocumentConfig(docNumQuery.data, documentId, companyId, now)
     : null;
 
-  // documentNo recomputed fresh on every render off the CURRENT docConfig
-  // row (react-query keeps that reasonably fresh at STALE_TIME.STATIC) —
-  // see buildDocumentNumber's header comment for why this is a best-effort
-  // reconstruction rather than a server-issued reservation.
-  const documentNo = (docConfig && storeCode)
-    ? buildDocumentNumber(docConfig, storeCode)
-    : null;
-
+  // NOTE: no documentNo here on purpose — the server assigns document_no on
+  // Create (proven live 2026-07-29) and computing it client-side risks
+  // duplicates. See the note at the bottom of documentConfigService.js.
   return {
     financialYearId:        currentFinancialYear?.financial_year_id ?? null,
     ledgerId:                docConfig?.ledger_id ?? null,
     isTaxApplicable:         docConfig?.is_tax_applicable ?? true,
     autoPosting:             docConfig?.auto_posting ?? true,
     isDocumentNumberEditable:docConfig?.is_document_number_editable ?? false,
-    documentNo,
     isLoading: finYearQuery.isLoading || docNumQuery.isLoading,
-    isReady:   !!currentFinancialYear && !!docConfig && !!documentNo,
+    isReady:   !!currentFinancialYear && !!docConfig,
   };
 }

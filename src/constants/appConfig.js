@@ -94,21 +94,33 @@ const APP_CONFIG = {
   },
 
   // ── AUTHENTICATION ────────────────────────────────────────────────────────
-  // LIVE OrnaVerse client (2026-07-25) — client_id/scope only. This app's
-  // login flow is still interactive username/password (grant_type stays
-  // 'password'; staff still type their own credentials, then pick a store).
-  // The live client also came with a client_secret, which is deliberately
-  // NOT here — appConfig.js ships in the browser bundle, and a secret baked
-  // into client JS is readable by anyone via dev tools. It's parked in
-  // .env.local as ORNAVERSE_LIVE_CLIENT_SECRET (server-only, gitignored)
-  // until/unless testing shows the live token endpoint actually requires
-  // client authentication for the password grant — if so, that call needs
-  // to move behind a server-side API route (same pattern as the Nector
-  // proxy), not be added here.
+  // UAT OrnaVerse client (2026-07-29) — client_id/scope only, no secret.
+  // Confirmed from the UAT admin panel's "Edit OAuth Client (api_access)"
+  // screen: OAuth Client Type is **Public**, so no client_secret exists for
+  // this client at all (public clients are secretless by definition — that's
+  // the whole distinction from a confidential client). Nothing to park in
+  // .env.local for UAT; ORNAVERSE_UAT_CLIENT_SECRET stays unset.
+  //
+  // GRANT_TYPE_PASSWORD is 'password' — the UAT client's allowed Grant Types
+  // are exactly Password / Authorization Code / Refresh Token. It was briefly
+  // set to 'client_credentials' during the LIVE service-account work; against
+  // this public client that produced a misleading
+  // 400 "The 'client_secret' or 'client_assertion' parameter must be
+  // specified when using the client credentials grant" — which reads like a
+  // missing-secret problem but is really "that grant isn't enabled for this
+  // client, so it assumed you must be a confidential client." Don't chase a
+  // nonexistent UAT secret if this reappears; check the grant type first.
+  //
+  // NOTE for switching back to LIVE: LIVE's client IS confidential and its
+  // secret lives in .env.local as ORNAVERSE_LIVE_CLIENT_SECRET (server-only,
+  // injected by the api/[...path] proxy — never in this browser-shipped
+  // file). LIVE also used client_credentials; if reverting, both CLIENT_ID
+  // and GRANT_TYPE_PASSWORD here need to go back alongside route.js's
+  // ACTIVE_ENV.
   AUTH: {
-    CLIENT_ID:                 'ff15960083ee4b4694bfb918e56c13c6',
+    CLIENT_ID:                 '65948cb671ae46e1a04653f505e29332',
     SCOPE:                     'profile email',
-    GRANT_TYPE_PASSWORD:       'client_credentials',
+    GRANT_TYPE_PASSWORD:       'password',
     GRANT_TYPE_REFRESH:        'refresh_token',
     TOKEN_REFRESH_THRESHOLD_MS: 5 * 60 * 1000, // refresh proactively 5 min before expiry
   },

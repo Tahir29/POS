@@ -19,20 +19,39 @@
 // same path, so this replaces that behavior outright — no config change
 // needed there beyond removing the now-dead rewrite entry.
 //
-// LIVE cutover (2026-07-25): UPSTREAM now points at
-// NEXT_PUBLIC_ORNAVERSE_BASE_URL_LIVE instead of _UAT. To switch back to
-// UAT, change the env var this reads — don't hardcode a second copy here.
+// UAT switch (2026-07-29): to avoid repeating the accidental-write-on-LIVE
+// risk from testing transaction Create flows, UPSTREAM now points at
+// NEXT_PUBLIC_ORNAVERSE_BASE_URL_UAT. To switch back to LIVE, change
+// ACTIVE_ENV below — don't hardcode a second UPSTREAM/secret pair.
 //
-// The live client is a confidential client: connect/token 401s with
+// The LIVE client is a confidential client: connect/token 401s with
 // "WWW-Authenticate: Basic error=invalid_client, Client authentication is
 // required for this application" unless the request carries HTTP Basic
 // Auth (client_id:client_secret). client_id itself isn't secret (it's
 // already in appConfig.js and in the request body from authService.js),
-// but the secret must never reach the browser — so it's injected here,
-// server-side only, from ORNAVERSE_LIVE_CLIENT_SECRET (never NEXT_PUBLIC_).
+// but a secret must never reach the browser — so it's injected here,
+// server-side only, from *_CLIENT_SECRET env vars (never NEXT_PUBLIC_).
+//
+// UAT, by contrast, is a PUBLIC client — confirmed 2026-07-29 from the UAT
+// admin panel's "Edit OAuth Client (api_access)" screen (OAuth Client Type:
+// Public, Grant Types: Password / Authorization Code / Refresh Token). A
+// public client has no secret by definition, so ORNAVERSE_UAT_CLIENT_SECRET
+// stays unset and the Basic Auth injection below is correctly skipped for
+// UAT. Don't go hunting for a UAT secret — there isn't one.
 
-const UPSTREAM = (process.env.NEXT_PUBLIC_ORNAVERSE_BASE_URL_LIVE || '').replace(/\/+$/, '');
-const CLIENT_SECRET = process.env.ORNAVERSE_LIVE_CLIENT_SECRET || '';
+const ACTIVE_ENV = 'UAT'; // 'LIVE' | 'UAT'
+
+const UPSTREAM = (
+  (ACTIVE_ENV === 'LIVE'
+    ? process.env.NEXT_PUBLIC_ORNAVERSE_BASE_URL_LIVE
+    : process.env.NEXT_PUBLIC_ORNAVERSE_BASE_URL_UAT) || ''
+).replace(/\/+$/, '');
+
+const CLIENT_SECRET = (
+  ACTIVE_ENV === 'LIVE'
+    ? process.env.ORNAVERSE_LIVE_CLIENT_SECRET
+    : process.env.ORNAVERSE_UAT_CLIENT_SECRET
+) || '';
 
 async function proxy(request, { params }) {
   const { path } = await params;

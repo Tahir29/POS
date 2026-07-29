@@ -61,11 +61,11 @@
 //     we don't round display prices, so 0 is correct here.
 //   allow_backdated_entry/number_of_backdated_days — POS sales are always
 //     same-day; no backdating UI exists, so false/0.
-//   document_id / document_no — confirmed live: document_id (the document
-//     TYPE, not just a DocumentNumbering lookup key) is a required header
-//     field in its own right, and document_no must be explicitly computed
-//     and sent despite is_document_number_editable:false — see
-//     buildDocumentNumber() in documentConfigService.js.
+//   document_id — confirmed live: the document TYPE (not just a
+//     DocumentNumbering lookup key) is a required header field in its own
+//     right. document_no, by contrast, must NOT be sent — the server
+//     assigns it (proven live 2026-07-29; see the note at the bottom of
+//     documentConfigService.js for why computing it client-side is unsafe).
 //
 // LINE ITEMS — confirmed live 2026-07-28 (after the header fix alone still
 // 500'd) that each line item must be the FULL computed Helpers/SetSalesItems
@@ -183,7 +183,6 @@ function buildInvoiceEntity({
     balance_amount: +(roundedNet - receiptAmount).toFixed(2),
     narration:     narration ?? undefined,
     document_id:                 APP_CONFIG.DOCUMENT_TYPES.POS_INVOICE,
-    document_no:                 headerConfig.documentNo,
     financial_year_id:           headerConfig.financialYearId,
     ledger_id:                   headerConfig.ledgerId,
     is_tax_applicable:           headerConfig.isTaxApplicable,
