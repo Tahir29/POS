@@ -488,24 +488,6 @@ const API = {
   // ─────────────────────────────────────────────────────────────────────────
   COSTING: {
     ADD_METAL_RATE: 'Services/Costing/MetalRates/Create',
-    GET_METAL_RATE: 'Services/Helpers/GetMetalRate',
-    GET_ALL_RATES:  'Services/Helpers/GetAllRates',
-  },
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // ANALYTICS
-  // Business intelligence for store managers
-  // ─────────────────────────────────────────────────────────────────────────
-  ANALYTICS: {
-    SKU_VELOCITY:           'Services/Analytics/SKUVelocity',
-    CATEGORY_PERFORMANCE:   'Services/Analytics/CategoryPerformance',
-    GROSS_PROFIT:           'Services/Analytics/GrossProfit',
-    MONTHLY_REVENUE:        'Services/Analytics/MonthlyRevenueSummary/List',
-    MONTHLY_REVENUE_DETAIL: 'Services/Analytics/MonthlyRevenueDetail/List',
-    REORDER_SIGNAL:         'Services/Analytics/ReorderSignal',
-    AI_ASK:                 'Services/Reporting/AIAnalytics/Ask',
-    AI_INSIGHTS:            'Services/Reporting/AIAnalytics/GetInsights',
-    POS_DASHBOARD:          'Services/Reports/POSDashbaord/List',
   },
 
   // ─────────────────────────────────────────────────────────────────────────

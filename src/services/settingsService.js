@@ -77,32 +77,6 @@ export async function addMetalRate(payload) {
   return response.data;
 }
 
-/**
- * Fetches current metal rate for a specific metal type.
- * @param {{ metal_type_id: number, company_id?: number }} params
- * @returns {Promise<object>} OrnaVerse rate response
- */
-export async function getMetalRate({ metal_type_id, company_id } = {}) {
-  const response = await axiosInstance.post(API.COSTING.GET_METAL_RATE, {
-    metal_type_id,
-    company_id,
-  });
-  return response.data;
-}
-
-/**
- * Fetches all current metal + stone + labour rates in one call.
- * Use on the Settings page to display current rate snapshot.
- * @param {{ company_id?: number }} params
- * @returns {Promise<object>} OrnaVerse all-rates response
- */
-export async function getAllRates({ company_id } = {}) {
-  const response = await axiosInstance.post(API.COSTING.GET_ALL_RATES, {
-    company_id,
-  });
-  return response.data;
-}
-
 // ─── EXCHANGE RATE ────────────────────────────────────────────────────────────
 
 /**
