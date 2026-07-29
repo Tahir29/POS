@@ -68,6 +68,10 @@ const APP_CONFIG = {
                            // despite the same prefix text — this store's own config)
     REPAIR_INVOICE:  119, // prefix "RIN"
     SCHEME_RECEIPT:  99,  // prefix "SPY"
+    ESTIMATION:      52,  // prefix "QTN" — same constant pricingService.js
+                           // already uses for the stateless SetSalesItems
+                           // preview call, confirmed live via the full
+                           // DocumentNumbering/List prefix dump 2026-07-28.
   },
 
   // ── COMPLIANCE ────────────────────────────────────────────────────────────

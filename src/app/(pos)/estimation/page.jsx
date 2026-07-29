@@ -13,8 +13,14 @@
 // days later), not an automatic finalisation step. So Create just saves
 // the draft quote; Convert/Cancel are separate per-record actions in the list.
 //
-// Same systemic AccessDenied blocker as every other POS transaction Create
-// endpoint applies here too (confirmed via direct API test).
+// HEADER FIELDS (2026-07-28) — the "AccessDenied" framing below is STALE.
+// Confirmed live 2026-07-28 that this whole family of Create endpoints
+// actually 500s on a missing-header-fields gap, not AccessDenied — see
+// [[pos-cash-checkout-status]] memory. Applied the same fix here
+// (financial_year_id/ledger_id/document_id/document_no/party identity/
+// receipt+balance — see transactionHeaderService.buildTransactionHeaderFields,
+// useOrderHeaderConfig), UNVERIFIED LIVE per the user's explicit direction
+// to code this without a live round-trip per flow.
 
 import { Suspense, useState } from 'react';
 import { useSelector }        from 'react-redux';
@@ -29,8 +35,10 @@ import {
   useCreateEstimation, usePostEstimation, useCancelEstimation,
 } from '@/hooks/estimation/useEstimationMutations';
 import ItemSearchPicker        from '@/components/features/transactions/ItemSearchPicker';
+import { useOrderHeaderConfig } from '@/hooks/checkout/useOrderHeaderConfig';
+import { buildTransactionHeaderFields } from '@/services/transactionHeaderService';
 import { selectActiveStoreId } from '@/store/slices/storeSlice';
-import { selectCartCustomerId, selectCartCustomerName } from '@/store/slices/cartSlice';
+import { selectCartCustomerId, selectCartCustomerName, selectCartCustomerMobile } from '@/store/slices/cartSlice';
 import APP_CONFIG from '@/constants/appConfig';
 import { todayDateString } from '@/lib/dateUtils';
 
@@ -87,6 +95,8 @@ function EstimationNewForm({ onDone }) {
   const storeId       = useSelector(selectActiveStoreId);
   const customerId    = useSelector(selectCartCustomerId);
   const customerName  = useSelector(selectCartCustomerName);
+  const customerMobile = useSelector(selectCartCustomerMobile);
+  const headerConfig = useOrderHeaderConfig(APP_CONFIG.DOCUMENT_TYPES.ESTIMATION);
 
   const create = useCreateEstimation({ onSuccess: () => onDone() });
 
@@ -102,13 +112,21 @@ function EstimationNewForm({ onDone }) {
 
   const onSubmit = async (data) => {
     if (!customerId) return toast.error('Attach a customer to the session before submitting.');
+    if (!headerConfig.isReady) return toast.error('Store configuration is still loading — try again in a moment.');
     try {
       const pieces = Number(data.pieces);
       const itemRate = Number(data.item_rate);
       const amount = pieces * itemRate;
       await create.mutateAsync({
-        party_id: customerId, company_id: storeId,
-        document_date: data.document_date, currency_id: APP_CONFIG.CURRENCY.INR_ID,
+        ...buildTransactionHeaderFields({
+          subTotal: amount, taxableAmount: amount, taxAmount: 0, netAmount: amount,
+          pieces,
+          customerId, customerName, customerMobile,
+          activeStoreId: storeId,
+          headerConfig,
+          documentTypeId: APP_CONFIG.DOCUMENT_TYPES.ESTIMATION,
+          documentDate: data.document_date,
+        }),
         line_items: [{
           item_id:    data.item.item_id,
           item_code:  data.item.item_code,
@@ -116,6 +134,7 @@ function EstimationNewForm({ onDone }) {
           pieces,
           item_rate:  itemRate,
           sub_total:  amount,
+          taxable_amount: amount,
           net_amount: amount,
         }],
       });
