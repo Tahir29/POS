@@ -82,7 +82,7 @@ import {
 }                                          from '@/hooks/transactions/useTransactionLists';
 import {
   useCreateReturn,     usePostReturn,
-  useCreateRefund,     useAddRefundDetail, useAddRefundReceipt,
+  useCreateRefund,
   useCreateCreditNote, usePostCreditNote,
   useCreateExchange,   usePostExchange,
   useCreateBuyback,    usePostBuyback,
@@ -91,6 +91,7 @@ import {
 import { usePaymentModes }                from '@/hooks/checkout/usePaymentModes';
 import { useURDMasterItem }                from '@/hooks/transactions/useURDMasterItem';
 import { useSoldItems }                    from '@/hooks/transactions/useSoldItems';
+import { useCustomerCredits }              from '@/hooks/transactions/useCustomerCredits';
 import { useOrderHeaderConfig }            from '@/hooks/checkout/useOrderHeaderConfig';
 import { buildTransactionHeaderFields }    from '@/services/transactionHeaderService';
 import { calculateReturnItems, calculateBuybackItems, calculateExchangeItems } from '@/services/returnItemsService';
@@ -767,87 +768,81 @@ function CreditNoteNewForm({ onDone }) {
 }
 
 // ─── Refunds — New form ─────────────────────────────────────────────────────────
-// Three-step flow: createRefund() header → addRefundDetail() line →
-// addRefundReceipt() payment mode (this last call finalises the refund,
-// there is no separate Post step for refunds).
+// REBUILT 2026-07-31 after capturing the ERP's own Refund dialog.
 //
-// ledger_id on RefundDetailsRow — confirmed required 2026-07-16 via real
-// Refund/List data, sourced from the selected payment mode's own ledger_id
-// field (see usePaymentModes.js normalizeMode).
-
+// A refund PAYS OUT credit that a Return / Exchange / Buy Back already
+// raised — it is not a free-standing "give the customer money" document.
+// The old form asked for a bare amount + mode and fired THREE calls
+// (create → RefundDetails/Create → RefundReceipts/Create) with no link to
+// any credit at all, so it produced refunds that settled nothing.
+//
+// Real flow: pick which outstanding credit(s) to settle, say how the money
+// leaves, and Create ONCE with details[] + receipts[] nested. The receipt
+// MUST carry the credit's transaction_id — that FK is the settlement; two
+// hand-built refunds saved cleanly without it and left the credit open.
+// See refundService.js.
 const refundSchema = z.object({
   document_date: z.string().min(1, 'Required'),
-  amount:        z.coerce.number().min(1, 'Enter an amount'),
-  mode_id:       z.coerce.number().min(1, 'Select payment mode'),
-  narration:     z.string().optional(),
+  mode_id:       z.coerce.number().min(1, 'Select how the money is paid out'),
+  credit_keys:   z.array(z.number()).min(1, 'Select at least one credit to refund'),
 });
 
 function RefundNewForm({ onDone }) {
-  const storeId       = useSelector(selectActiveStoreId);
-  const customerId    = useSelector(selectCartCustomerId);
-  const customerName  = useSelector(selectCartCustomerName);
-  const customerMobile = useSelector(selectCartCustomerMobile);
+  const storeId      = useSelector(selectActiveStoreId);
+  const customerId   = useSelector(selectCartCustomerId);
+  const customerName = useSelector(selectCartCustomerName);
   const { paymentModes, isLoading: modesLoading } = usePaymentModes();
   const headerConfig = useOrderHeaderConfig(APP_CONFIG.DOCUMENT_TYPES.REFUND);
+  const { credits, isLoading: creditsLoading, isError: creditsError, refetch: refetchCredits } =
+    useCustomerCredits(customerId);
 
-  const create     = useCreateRefund({ onSuccess: () => {} });
-  const addDetail  = useAddRefundDetail({ onSuccess: () => {} });
-  const addReceipt = useAddRefundReceipt({ onSuccess: () => onDone() });
+  const create = useCreateRefund({ onSuccess: () => onDone() });
 
-  const { register, handleSubmit, control, reset, formState: { errors } } = useForm({
+  const { register, handleSubmit, control, watch, setValue, reset, formState: { errors } } = useForm({
     resolver: zodResolver(refundSchema),
-    defaultValues: { document_date: todayDateString(), amount: '', mode_id: '', narration: '' },
+    defaultValues: { document_date: todayDateString(), mode_id: '', credit_keys: [] },
   });
+
+  const creditKeys = watch('credit_keys');
+  const selectedCredits = credits.filter((c) => creditKeys.includes(c.transaction_id));
+  const total = +selectedCredits.reduce((s, c) => s + (c.amount ?? 0), 0).toFixed(2);
+
+  const toggleCredit = (credit) => {
+    const id = credit.transaction_id;
+    setValue(
+      'credit_keys',
+      creditKeys.includes(id) ? creditKeys.filter((k) => k !== id) : [...creditKeys, id],
+      { shouldValidate: true },
+    );
+  };
 
   const onSubmit = async (data) => {
     if (!customerId) return toast.error('Attach a customer to the session before submitting.');
     if (!headerConfig.isReady) return toast.error('Store configuration is still loading — try again in a moment.');
     try {
-      const amount = Number(data.amount);
-      const createRes = await create.mutateAsync({
-        ...buildTransactionHeaderFields({
-          subTotal: amount, taxableAmount: amount, taxAmount: 0, netAmount: amount,
-          customerId, customerName, customerMobile,
-          activeStoreId: storeId,
-          headerConfig,
-          documentTypeId: APP_CONFIG.DOCUMENT_TYPES.REFUND,
-          receiptAmount: amount,
-          documentDate: data.document_date,
-        }),
-        total_amount: amount,
-        narration: data.narration || undefined,
+      const mode = paymentModes.find((m) => m.modeId === Number(data.mode_id));
+      await create.mutateAsync({
+        partyId: customerId,
+        partyName: customerName,
+        activeStoreId: storeId,
+        financialYearId: headerConfig.financialYearId,
+        documentDate: data.document_date,
+        // settle each selected credit in full — the API supports partial
+        // (allow_partial:true) but there's no per-credit amount input yet.
+        credits: selectedCredits.map((credit) => ({ credit, amount: credit.amount })),
+        payout: {
+          modeId:   Number(data.mode_id),
+          ledgerId: mode?.ledgerId,
+          amount:   total,
+        },
       });
-      const transactionId = createRes?.EntityId;
-      if (!transactionId) throw new Error('Refund creation failed — no EntityId returned.');
-
-      // ledger_id — confirmed 2026-07-16 via real Refund/List data that
-      // RefundDetailsRow genuinely carries this field. Sourced from the
-      // selected payment mode's own ledger_id (see usePaymentModes.js).
-      const selectedMode = paymentModes.find((m) => m.modeId === Number(data.mode_id));
-
-      await addDetail.mutateAsync({
-        transaction_id: transactionId,
-        amount:         Number(data.amount),
-        mode_id:        data.mode_id,
-        ledger_id:      selectedMode?.ledgerId ?? undefined,
-      });
-
-      await addReceipt.mutateAsync({
-        transaction_id: transactionId,
-        party_id:       customerId,
-        company_id:     storeId,
-        amount:         Number(data.amount),
-        mode_id:        data.mode_id,
-        ledger_id:      selectedMode?.ledgerId ?? undefined,
-      });
-
       reset();
     } catch (err) {
       toast.error(getErrorMessage(err));
     }
   };
 
-  const isSubmitting = create.isPending || addDetail.isPending || addReceipt.isPending;
+  const isSubmitting = create.isPending;
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5">
@@ -857,19 +852,79 @@ function RefundNewForm({ onDone }) {
         <Input type="date" max={todayDateString()} {...register('document_date')} className="h-11" />
       </FormField>
 
-      <FormField label="Refund Amount (₹)" required error={errors.amount}>
-        <Input type="number" inputMode="decimal" placeholder="0.00" {...register('amount')} className="h-11" />
-      </FormField>
+      <div className="flex flex-col gap-2">
+        <Label>
+          Credit to Refund <span className="text-destructive">*</span>
+        </Label>
+        <p className="text-xs text-muted-foreground -mt-1">
+          A refund pays out credit from a return, exchange or buy back.
+        </p>
 
-      <FormField label="Refund Method" required error={errors.mode_id}>
+        {!customerId ? (
+          <p className="rounded-xl border border-dashed border-border px-3 py-6 text-center text-sm text-muted-foreground">
+            Attach a customer to see their credit.
+          </p>
+        ) : creditsLoading ? (
+          <InlineLoader className="py-6" label="Loading credit…" />
+        ) : creditsError ? (
+          <ErrorState className="py-6" title="Couldn't load credit." onRetry={() => refetchCredits()} />
+        ) : credits.length === 0 ? (
+          <EmptyState
+            className="border-0 py-6"
+            icon={CreditCard}
+            title="No outstanding credit."
+            description="Raise a return, exchange or buy back first — a refund settles the credit it creates."
+          />
+        ) : (
+          <div className="flex flex-col gap-2">
+            {credits.map((c) => {
+              const isSelected = creditKeys.includes(c.transaction_id);
+              return (
+                <button
+                  type="button"
+                  key={c.transaction_id}
+                  onClick={() => toggleCredit(c)}
+                  aria-pressed={isSelected}
+                  className={`flex items-center justify-between gap-3 rounded-xl border p-3 text-left transition-colors min-h-[44px] ${
+                    isSelected ? 'border-primary bg-primary/5' : 'border-border bg-muted hover:bg-muted/70'
+                  }`}
+                >
+                  <div className="flex flex-col gap-0.5 min-w-0">
+                    <span className="truncate text-sm font-medium text-foreground">{c.document_no}</span>
+                    <span className="truncate text-xs text-muted-foreground">
+                      {c.document_name} · {formatDate(c.document_date)}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-sm font-semibold tabular-nums text-foreground">
+                      {formatINR(c.amount)}
+                    </span>
+                    {isSelected && <Check className="h-4 w-4 text-primary" aria-hidden="true" />}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+        {errors.credit_keys && <p className="text-xs text-destructive">{errors.credit_keys.message}</p>}
+      </div>
+
+      {total > 0 && (
+        <div className="flex justify-between rounded-xl border border-border bg-card px-4 py-3 text-sm font-medium">
+          <span className="text-muted-foreground">Total Refund</span>
+          <span className="text-foreground">{formatINR(total)}</span>
+        </div>
+      )}
+
+      <FormField label="Paid Out By" required error={errors.mode_id}>
         <PaymentModeSelect control={control} name="mode_id" paymentModes={paymentModes} modesLoading={modesLoading} />
       </FormField>
 
-      <FormField label="Narration (optional)">
-        <Input placeholder="Reason for refund" {...register('narration')} className="h-11" />
-      </FormField>
-
-      <Button type="submit" disabled={isSubmitting || !customerId} className="h-12 mt-1">
+      <Button
+        type="submit"
+        disabled={isSubmitting || !customerId || selectedCredits.length === 0}
+        className="h-12 mt-1"
+      >
         {isSubmitting ? 'Processing Refund…' : 'Submit Refund'}
       </Button>
     </form>

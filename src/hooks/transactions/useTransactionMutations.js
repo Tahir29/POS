@@ -9,10 +9,9 @@
 //     useCancel[Type] — calls service.cancel[Type] with EntityId, voids the draft
 //
 //   Refund flow (different — no Post step):
-//     useCreateRefund    — creates refund header
-//     useAddRefundDetail — adds line-item detail row
-//     useAddRefundReceipt — adds payment receipt (commits the refund)
-//     useDeleteRefund    — voids the refund
+//     useCreateRefund — ONE call; settles credit raised by Return/Exchange/BuyBack
+//                       (detail + receipt rows nest INTO it — see refundService)
+//     useDeleteRefund — voids the refund
 //
 // CACHE INVALIDATION:
 //   Every onSuccess invalidates the matching LIST key so the tab re-fetches.
@@ -34,12 +33,15 @@ import { useSelector }                 from 'react-redux';
 import { toast }                       from 'react-toastify';
 import {
   createReturn,    postReturn,    cancelReturn,
-  createRefund,    addRefundDetail, addRefundReceipt, deleteRefund,
+  deleteRefund,
   createCreditNote, postCreditNote, cancelCreditNote,
   createExchange,  postExchange,  cancelExchange,
   createBuyback,   postBuyback,   cancelBuyback,
   createURDPurchase, postURDPurchase, cancelURDPurchase,
 }                                      from '@/services/transactionService';
+// createRefund lives in its own service — a refund settles credit raised by
+// a Return/Exchange/Buy Back and has no line items of its own.
+import { createRefund }                from '@/services/refundService';
 import { QUERY_KEYS }                  from '@/constants/queryKeys';
 import TOAST                           from '@/constants/toastMessages';
 import tracker                         from '@/lib/analytics/tracker';
@@ -132,36 +134,11 @@ export function useCreateRefund({ onSuccess } = {}) {
   });
 }
 
-export function useAddRefundDetail({ onSuccess } = {}) {
-  return useMutation({
-    mutationFn: (payload) => addRefundDetail(payload),
-    onSuccess: (data) => {
-      onSuccess?.(data);
-    },
-    onError: (error) => {
-      toast.error(getErrorMessage(error));
-      tracker.track(EVENTS.REFUND_FAILED, { stage: 'detail', error: getErrorMessage(error) });
-    },
-  });
-}
-
-export function useAddRefundReceipt({ onSuccess } = {}) {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (payload) => addRefundReceipt(payload),
-    onSuccess: (data, payload) => {
-      queryClient.invalidateQueries({ queryKey: ['refunds'] });
-      toast.success(TOAST.REFUNDS.COMPLETED);
-      tracker.track(EVENTS.REFUND_RECEIPT_ADDED, { amount: payload?.amount });
-      onSuccess?.(data);
-    },
-    onError: (error) => {
-      toast.error(getErrorMessage(error));
-      tracker.track(EVENTS.REFUND_FAILED, { stage: 'receipt', error: getErrorMessage(error) });
-    },
-  });
-}
+// useAddRefundDetail / useAddRefundReceipt removed 2026-07-31. They drove
+// RefundDetails/Create + RefundReceipts/Create as separate follow-up calls,
+// but the rows they posted linked to no credit document, so the refund
+// settled nothing. Refund/Create now takes details[] and receipts[] nested
+// in a single call — see services/refundService.js.
 
 export function useDeleteRefund({ onSuccess } = {}) {
   const queryClient = useQueryClient();

@@ -112,38 +112,11 @@ export async function getRefundDetail(transactionId) {
   return response.data;
 }
 
-/**
- * Create a refund header (step 1 of 3).
- * @param {object} payload
- */
-export async function createRefund(payload) {
-  const response = await axiosInstance.post(API.REFUNDS.CREATE, {
-    Entity: payload,
-  });
-  return response.data;
-}
-
-/**
- * Add line-item detail to a refund (step 2 of 3).
- * @param {object} payload — refund detail row
- */
-export async function addRefundDetail(payload) {
-  const response = await axiosInstance.post(API.REFUNDS.ADD_DETAIL, {
-    Entity: payload,
-  });
-  return response.data;
-}
-
-/**
- * Add payment receipt to a refund (step 3 of 3 — commits the refund).
- * @param {object} payload — refund receipt row
- */
-export async function addRefundReceipt(payload) {
-  const response = await axiosInstance.post(API.REFUNDS.ADD_RECEIPT, {
-    Entity: payload,
-  });
-  return response.data;
-}
+// createRefund / addRefundDetail / addRefundReceipt moved out 2026-07-31.
+// A refund is not a three-step build: it settles credit raised by a
+// Return/Exchange/Buy Back, in ONE call with details[] + receipts[] nested,
+// and its receipt must carry the credit's transaction_id. That lives in
+// services/refundService.js now.
 
 /**
  * Delete (void) a refund.
