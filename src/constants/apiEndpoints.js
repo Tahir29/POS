@@ -165,15 +165,17 @@ const API = {
   //          exchange_rate: 1, document_date: <Date.toDateString()>,
   //          is_tax_applicable: false, calculate_rates: false }
   //   → { Entities: [ <line item ready to drop into Return/Create> ] }
-  // SET_BUYBACK_ITEMS is the same idea for Buy Back (confirmed 2026-07-30
-  // from the same capture session). Its request omits calculate_rates:
+  // SET_BUYBACK_ITEMS / SET_EXCHANGE_ITEMS are the same idea for Buy Back
+  // and Exchange (all confirmed 2026-07-30 from capture sessions). Both
+  // omit calculate_rates, unlike the return variant:
   //   POST { selected_products: [...], document_date, exchange_rate: 1,
   //          is_tax_applicable: false }
   HELPERS: {
-    GET_RATE:          'Services/Helpers/GetRate',
-    SET_SALES_ITEMS:   'Services/Helpers/SetSalesItems',
-    SET_RETURN_ITEMS:  'Services/Helpers/SetReturnItems',
-    SET_BUYBACK_ITEMS: 'Services/Helpers/SetBuyBackItems',
+    GET_RATE:           'Services/Helpers/GetRate',
+    SET_SALES_ITEMS:    'Services/Helpers/SetSalesItems',
+    SET_RETURN_ITEMS:   'Services/Helpers/SetReturnItems',
+    SET_BUYBACK_ITEMS:  'Services/Helpers/SetBuyBackItems',
+    SET_EXCHANGE_ITEMS: 'Services/Helpers/SetExchangeItems',
   },
 
   // ─────────────────────────────────────────────────────────────────────────

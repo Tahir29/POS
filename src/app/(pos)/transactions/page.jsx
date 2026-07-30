@@ -93,7 +93,7 @@ import { useURDMasterItem }                from '@/hooks/transactions/useURDMast
 import { useSoldItems }                    from '@/hooks/transactions/useSoldItems';
 import { useOrderHeaderConfig }            from '@/hooks/checkout/useOrderHeaderConfig';
 import { buildTransactionHeaderFields }    from '@/services/transactionHeaderService';
-import { calculateReturnItems, calculateBuybackItems } from '@/services/returnItemsService';
+import { calculateReturnItems, calculateBuybackItems, calculateExchangeItems } from '@/services/returnItemsService';
 import EmptyState                          from '@/components/shared/EmptyState';
 import ErrorState                          from '@/components/shared/ErrorState';
 import InlineLoader                        from '@/components/shared/InlineLoader';
@@ -196,6 +196,29 @@ const SOLD_ITEM_FLOWS = {
     // Their captured BuyBack/Create sends allow_backdated_entry:true —
     // a buyback can legitimately be dated to when the piece came in.
     allowBackdatedEntry: true,
+  },
+  // Exchange is ONE-SIDED at the document level — confirmed live
+  // 2026-07-30. It does NOT carry a replacement item; completing it just
+  // raises the customer's credit (their balance rose by exactly the
+  // exchange value), and the replacement is then bought as a normal sale
+  // paid with that credit. Structurally identical to Return/Buy Back, so
+  // it belongs here rather than in the metal-weights form.
+  exchange: {
+    documentTypeId: APP_CONFIG.DOCUMENT_TYPES.EXCHANGE,
+    priceItems:     calculateExchangeItems,
+    createHook:     useCreateExchange,
+    postHook:       usePostExchange,
+    itemsLabel:     'Items Being Exchanged',
+    emptyTitle:     'No purchases found for this customer.',
+    emptyHint:      'Only previously sold pieces can be exchanged.',
+    totalLabel:     'Exchange Credit',
+    submitLabel:    'Submit Exchange',
+    busyLabel:      'Processing Exchange…',
+    allowBackdatedEntry: true,
+    // NOTE: unlike Return/Buy Back, Exchange's document type has
+    // auto_posting:FALSE — so the explicit Post step genuinely runs here.
+    // That's handled generically off headerConfig.autoPosting.
+    helperText: 'This raises store credit for the customer. Ring up the replacement piece as a normal sale and pay with that credit.',
   },
 };
 
@@ -379,6 +402,12 @@ function SoldItemFlowForm({ flow, onDone }) {
         </div>
       )}
 
+      {config.helperText && selectedRows.length > 0 && (
+        <p className="rounded-xl border border-border bg-muted px-4 py-3 text-xs text-muted-foreground">
+          {config.helperText}
+        </p>
+      )}
+
       {/* No refund/payout method picker here on purpose. Neither a Return
           nor a Buy Back carries receipt_details (confirmed against
           OrnaVerse's own payloads — sending them is rejected); both raise
@@ -413,28 +442,17 @@ function SoldItemFlowForm({ flow, onDone }) {
 // since a buyback/exchange appraisal rate can legitimately differ from the
 // item's original sale rate.
 
+// Only URD Purchase still belongs here. Returns, Buy Back and Exchange all
+// moved to SoldItemFlowForm on 2026-07-30: each is the store taking back a
+// piece it previously SOLD, so each needs the sold-item picker plus its own
+// Helpers/Set*Items pricing call — not hand-typed metal weights. That
+// mirrors OrnaVerse's own POS, where all three are modes of one Returns
+// screen sharing a single "Sold Item" picker.
+//
+// URD Purchase is genuinely different: old gold walks in off the street and
+// was never sold by us, so there's no sold-item record to price against and
+// hand-entered weight/purity/rate is the correct model.
 const METAL_TYPE_CONFIGS = {
-  exchange: {
-    amountField: 'exchange_value',
-    hasReceipt:  false, // exchange value is applied as invoice credit, not paid out directly
-    pickerMode:  'search',
-    createHook:  useCreateExchange,
-    postHook:    usePostExchange,
-    submitLabel: 'Submit Exchange',
-    processingLabel: 'Processing Exchange…',
-    documentTypeId: APP_CONFIG.DOCUMENT_TYPES.EXCHANGE,
-  },
-  // NOTE: no `buyback` entry here any more. Buy Back moved to
-  // SoldItemFlowForm on 2026-07-30 — a buyback is the store re-purchasing a
-  // piece it previously SOLD, so it needs the sold-item picker +
-  // Helpers/SetBuyBackItems, not hand-typed metal weights. Confirmed against
-  // OrnaVerse's own Buy Back journey, which is a mode of their Returns
-  // screen sharing that same picker.
-  //
-  // Exchange stays here for now: their Exchange mode additionally requires
-  // choosing a REPLACEMENT item, which this form doesn't model yet — that's
-  // the next one to capture. URD stays because old-gold purchase genuinely
-  // is hand-entered metal (never sold by us), so this form is right for it.
   urd: {
     amountField: 'amount',
     hasReceipt:  true,
@@ -993,7 +1011,7 @@ const TABS = [
   { id: 'returns',      label: 'Returns',      icon: RotateCcw,      hook: useReturns,      emptyMessage: 'No return transactions found.',      NewForm: (props) => <SoldItemFlowForm flow="return" {...props} /> },
   { id: 'refunds',      label: 'Refunds',      icon: CreditCard,     hook: useRefunds,      emptyMessage: 'No refund transactions found.',      NewForm: (props) => <RefundNewForm {...props} /> },
   { id: 'credit-notes', label: 'Credit Notes', icon: FileText,       hook: useCreditNotes,  emptyMessage: 'No credit notes found.',             NewForm: (props) => <CreditNoteNewForm {...props} /> },
-  { id: 'exchange',     label: 'Exchange',     icon: ArrowLeftRight, hook: useExchanges,    emptyMessage: 'No exchange transactions found.',    NewForm: (props) => <MetalLineItemForm type="exchange" {...props} /> },
+  { id: 'exchange',     label: 'Exchange',     icon: ArrowLeftRight, hook: useExchanges,    emptyMessage: 'No exchange transactions found.',    NewForm: (props) => <SoldItemFlowForm flow="exchange" {...props} /> },
   { id: 'buyback',      label: 'Buyback',      icon: ShoppingBag,    hook: useBuybacks,     emptyMessage: 'No buyback transactions found.',     NewForm: (props) => <SoldItemFlowForm flow="buyback" {...props} /> },
   { id: 'urd',          label: 'URD Purchase', icon: Coins,          hook: useURDPurchases, emptyMessage: 'No URD purchase transactions found.',NewForm: (props) => <MetalLineItemForm type="urd" {...props} /> },
 ];
