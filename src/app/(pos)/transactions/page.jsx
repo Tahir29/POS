@@ -281,7 +281,14 @@ function SoldItemFlowForm({ flow, onDone }) {
       });
       const transactionId = createRes?.EntityId;
       if (!transactionId) throw new Error('Creation failed — no EntityId returned.');
-      await postDoc.mutateAsync(transactionId);
+      // Only Post when the document type isn't already auto-posting.
+      // Confirmed live 2026-07-30: these document types have
+      // auto_posting:true, so Create ALSO posts (posting_date/posted_by come
+      // back populated) and a follow-up Post fails with
+      // {"Code":"AlreadyPosted","Message":"[pos].[return] is already posted!"}.
+      if (!headerConfig.autoPosting) {
+        await postDoc.mutateAsync(transactionId);
+      }
       reset();
     } catch (err) {
       setIsPricing(false);
