@@ -138,8 +138,9 @@ export const QUERY_KEYS = {
 
   // ── REFUNDS ──────────────────────────────────────────────────────────────
   REFUNDS: {
-    LIST:   (params)    => ['refunds', 'list', params],
-    DETAIL: (refundId)  => ['refunds', 'detail', refundId],
+    LIST:             (params)   => ['refunds', 'list', params],
+    DETAIL:           (refundId) => ['refunds', 'detail', refundId],
+    CUSTOMER_CREDITS: (partyId)  => ['refunds', 'customer-credits', partyId],
   },
 
   // ── CREDIT NOTES ─────────────────────────────────────────────────────────

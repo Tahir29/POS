@@ -308,14 +308,27 @@ const API = {
   // REFUNDS
   // Cash/payment refund to customer
   // ─────────────────────────────────────────────────────────────────────────
+  // A Refund PAYS OUT credit that a Return / Exchange / Buy Back already
+  // raised — it has no line items of its own. Confirmed 2026-07-31 by
+  // capturing the ERP's own Refund dialog (there is no Refund screen in
+  // their POS UI; only the ERP at /POS/Refund has one).
+  //
+  //   CUSTOMER_CREDITS ({ party_id }) → that customer's OUTSTANDING credits
+  //     (already-settled ones are filtered out server-side). Each row is a
+  //     Return/Exchange/Buy Back document and carries the transaction_id
+  //     that the refund receipt must reference.
+  //   CREATE  → ONE call, with details[] and receipts[] nested.
+  //
+  // ADD_DETAIL / ADD_RECEIPT are NOT needed — the old three-call sequence
+  // (create → RefundDetails/Create → RefundReceipts/Create) never linked to
+  // a credit document at all, so it created refunds that settled nothing.
   REFUNDS: {
-    CREATE:      'Services/POS/Refund/Create',
-    UPDATE:      'Services/POS/Refund/Update',
-    DELETE:      'Services/POS/Refund/Delete',
-    RETRIEVE:    'Services/POS/Refund/Retrieve',
-    LIST:        'Services/POS/Refund/List',
-    ADD_DETAIL:  'Services/POS/RefundDetails/Create',
-    ADD_RECEIPT: 'Services/POS/RefundReceipts/Create',
+    CREATE:           'Services/POS/Refund/Create',
+    UPDATE:           'Services/POS/Refund/Update',
+    DELETE:           'Services/POS/Refund/Delete',
+    RETRIEVE:         'Services/POS/Refund/Retrieve',
+    LIST:             'Services/POS/Refund/List',
+    CUSTOMER_CREDITS: 'Services/POS/POSReceiptsSelect/List',
   },
 
   // ─────────────────────────────────────────────────────────────────────────
