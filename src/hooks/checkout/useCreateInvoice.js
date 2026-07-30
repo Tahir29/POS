@@ -238,8 +238,16 @@ export function useCreateInvoice() {
         throw new Error('Invoice creation failed — no EntityId returned');
       }
 
-      // Step 2: Post (finalise) — triggers stock deduction + accounting
-      const postResponse = await postInvoice(transactionId);
+      // Step 2: Post (finalise) — triggers stock deduction + accounting.
+      // SKIPPED when the document type auto-posts. Confirmed live
+      // 2026-07-30: with auto_posting:true (which is how this store's POS
+      // document types are configured), Create already posts — Retrieve
+      // comes back with posting_date/posted_by populated — and a follow-up
+      // Post fails with {"Code":"AlreadyPosted"}. Posting twice isn't just
+      // redundant, it surfaces as a failed sale to the operator.
+      const postResponse = headerConfig.autoPosting
+        ? null
+        : await postInvoice(transactionId);
 
       return { transactionId, createResponse, postResponse };
     },

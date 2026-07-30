@@ -147,8 +147,13 @@ export function useCreateOrder() {
         throw new Error('Order creation failed — no EntityId returned');
       }
 
-      // Step 2: Post (finalise) the order
-      const postResponse = await postOrder(transactionId);
+      // Step 2: Post (finalise) — skipped when the document type auto-posts.
+      // See useCreateInvoice.js for the full note: with auto_posting:true,
+      // Create already posts and a follow-up Post returns
+      // {"Code":"AlreadyPosted"}, which would surface as a failed order.
+      const postResponse = headerConfig.autoPosting
+        ? null
+        : await postOrder(transactionId);
       return { transactionId, createResponse, postResponse };
     },
 
