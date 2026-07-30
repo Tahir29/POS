@@ -131,8 +131,9 @@ export const QUERY_KEYS = {
 
   // ── RETURNS ──────────────────────────────────────────────────────────────
   RETURNS: {
-    LIST:   (params)          => ['returns', 'list', params],
-    DETAIL: (transactionId)   => ['returns', 'detail', transactionId],
+    LIST:       (params)        => ['returns', 'list', params],
+    DETAIL:     (transactionId) => ['returns', 'detail', transactionId],
+    SOLD_ITEMS: (partyId)       => ['returns', 'sold-items', partyId],
   },
 
   // ── REFUNDS ──────────────────────────────────────────────────────────────
