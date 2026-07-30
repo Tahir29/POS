@@ -88,3 +88,27 @@ export async function calculateBuybackItems({ items, documentDate = new Date() }
   });
   return response.data?.Entities ?? [];
 }
+
+/**
+ * Same, for EXCHANGE.
+ *
+ * IMPORTANT — an Exchange document is ONE-SIDED, exactly like a Return.
+ * Confirmed live 2026-07-30: it carries a single `line_items` array (the
+ * item coming back) and NO replacement item. Completing it simply raises
+ * the customer's credit; they then buy the replacement as a normal sale
+ * that spends that credit. So "exchange" here does not mean "swap in one
+ * document" — don't model a second line-item set for it.
+ *
+ * @param {{ items: object[], documentDate?: Date }} params
+ * @returns {Promise<object[]>} line items ready for Exchange/Create
+ */
+export async function calculateExchangeItems({ items, documentDate = new Date() }) {
+  if (!items?.length) return [];
+  const response = await axiosInstance.post(API.HELPERS.SET_EXCHANGE_ITEMS, {
+    selected_products: items,
+    document_date:     documentDate.toDateString(),
+    exchange_rate:     1,
+    is_tax_applicable: false,
+  });
+  return response.data?.Entities ?? [];
+}
