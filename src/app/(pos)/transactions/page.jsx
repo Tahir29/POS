@@ -69,6 +69,7 @@ import {
   Hash,
   IndianRupee,
   AlertCircle,
+  Check,
 }                                          from 'lucide-react';
 
 import {
@@ -89,8 +90,13 @@ import {
 }                                          from '@/hooks/transactions/useTransactionMutations';
 import { usePaymentModes }                from '@/hooks/checkout/usePaymentModes';
 import { useURDMasterItem }                from '@/hooks/transactions/useURDMasterItem';
+import { useSoldItems }                    from '@/hooks/transactions/useSoldItems';
 import { useOrderHeaderConfig }            from '@/hooks/checkout/useOrderHeaderConfig';
 import { buildTransactionHeaderFields }    from '@/services/transactionHeaderService';
+import { calculateReturnItems, calculateBuybackItems } from '@/services/returnItemsService';
+import EmptyState                          from '@/components/shared/EmptyState';
+import ErrorState                          from '@/components/shared/ErrorState';
+import InlineLoader                        from '@/components/shared/InlineLoader';
 import ItemSearchPicker                    from '@/components/features/transactions/ItemSearchPicker';
 import { selectActiveStoreId }            from '@/store/slices/storeSlice';
 import { selectCartCustomerId, selectCartCustomerName, selectCartCustomerMobile } from '@/store/slices/cartSlice';
@@ -144,150 +150,241 @@ function FormField({ label, required, error, children }) {
 
 // ─── Returns — New form ─────────────────────────────────────────────────────────
 
-const returnLineItemSchema = z.object({
-  item_id:    z.coerce.number().min(1, 'Required'),
-  pieces:     z.coerce.number().min(1, 'Min 1'),
-  item_rate:  z.coerce.number().min(0, 'Required'),
-  net_amount: z.coerce.number().min(0, 'Required'),
+// REBUILT 2026-07-30 to match how a return actually works.
+//
+// The old form asked staff to type item_id / pieces / rate / net_amount by
+// hand and referenced the original invoice by typed transaction_id. That
+// could never succeed: Return/Create requires the ~186-field computed line
+// item from Helpers/SetReturnItems, and hand-built line items produced a
+// long run of opaque 500s. Confirmed by capturing OrnaVerse's own UAT
+// Returns journey — see returnItemsService.js.
+//
+// Real flow (theirs, now ours): pick from what the customer actually BOUGHT
+// (POS/InvoiceItems/List) → price it for return (SetReturnItems) → Create →
+// Post. This is also better UX: no typing item IDs off a printed bill, and
+// the customer can only return things they genuinely purchased.
+// Return and Buy Back are the SAME journey with a different pricing helper
+// and document type — which is exactly how OrnaVerse models it too (their
+// Returns screen has Return / Exchange / Buy Back as three modes sharing one
+// "Sold Item" picker). Configured here rather than duplicated.
+const SOLD_ITEM_FLOWS = {
+  return: {
+    documentTypeId: APP_CONFIG.DOCUMENT_TYPES.RETURN,
+    priceItems:     calculateReturnItems,
+    createHook:     useCreateReturn,
+    postHook:       usePostReturn,
+    itemsLabel:     'Items Being Returned',
+    emptyTitle:     'No purchases found for this customer.',
+    emptyHint:      'Only previously sold items can be returned.',
+    totalLabel:     'Total Return Amount',
+    submitLabel:    'Submit Return',
+    busyLabel:      'Processing Return…',
+    // A return reverses a sale, so backdating stays closed.
+    allowBackdatedEntry: false,
+  },
+  buyback: {
+    documentTypeId: APP_CONFIG.DOCUMENT_TYPES.BUYBACK,
+    priceItems:     calculateBuybackItems,
+    createHook:     useCreateBuyback,
+    postHook:       usePostBuyback,
+    itemsLabel:     'Items Being Bought Back',
+    emptyTitle:     'No purchases found for this customer.',
+    emptyHint:      'Buy Back here covers pieces this store previously sold.',
+    totalLabel:     'Total Buy Back Amount',
+    submitLabel:    'Submit Buy Back',
+    busyLabel:      'Processing Buy Back…',
+    // Their captured BuyBack/Create sends allow_backdated_entry:true —
+    // a buyback can legitimately be dated to when the piece came in.
+    allowBackdatedEntry: true,
+  },
+};
+
+const soldItemFlowSchema = z.object({
+  document_date: z.string().min(1, 'Required'),
+  selected_keys: z.array(z.string()).min(1, 'Select at least one item'),
 });
 
-const returnSchema = z.object({
-  ref_transaction_id: z.coerce.number().min(1, 'Enter the original invoice ID'),
-  document_date:      z.string().min(1, 'Required'),
-  line_items:         z.array(returnLineItemSchema).min(1, 'Add at least one item'),
-  refund_mode_id:     z.coerce.number().min(1, 'Select refund method'),
-});
+// A sold-item row has no single stable id, so identify it the way the
+// document itself does: original document + line number.
+const soldItemKey = (row) => `${row.document_no ?? ''}#${row.item_line_no ?? ''}`;
 
-function ReturnNewForm({ onDone }) {
-  const storeId       = useSelector(selectActiveStoreId);
-  const customerId    = useSelector(selectCartCustomerId);
-  const customerName  = useSelector(selectCartCustomerName);
-  const customerMobile = useSelector(selectCartCustomerMobile);
-  const { paymentModes, isLoading: modesLoading } = usePaymentModes();
-  const headerConfig = useOrderHeaderConfig(APP_CONFIG.DOCUMENT_TYPES.RETURN);
+function SoldItemFlowForm({ flow, onDone }) {
+  const config         = SOLD_ITEM_FLOWS[flow];
+  const storeId        = useSelector(selectActiveStoreId);
+  const customerId     = useSelector(selectCartCustomerId);
+  const customerName   = useSelector(selectCartCustomerName);
+  const headerConfig   = useOrderHeaderConfig(config.documentTypeId);
+  const { soldItems, isLoading: soldLoading, isError: soldError, refetch: refetchSold } =
+    useSoldItems(customerId);
 
-  const createReturn = useCreateReturn({ onSuccess: () => {} });
-  const postReturn    = usePostReturn({ onSuccess: () => onDone() });
+  const createDoc = config.createHook({ onSuccess: () => {} });
+  const postDoc   = config.postHook({ onSuccess: () => onDone() });
+  const [isPricing, setIsPricing] = useState(false);
 
-  const { register, handleSubmit, control, watch, reset, formState: { errors } } = useForm({
-    resolver: zodResolver(returnSchema),
-    defaultValues: {
-      ref_transaction_id: '',
-      document_date:      todayDateString(),
-      line_items: [{ item_id: '', pieces: 1, item_rate: '', net_amount: '' }],
-      refund_mode_id: '',
-    },
+  const { register, handleSubmit, watch, setValue, reset, formState: { errors } } = useForm({
+    resolver: zodResolver(soldItemFlowSchema),
+    defaultValues: { document_date: todayDateString(), selected_keys: [] },
   });
-  const { fields, append, remove } = useFieldArray({ control, name: 'line_items' });
-  const watchedItems = watch('line_items');
-  const total = watchedItems.reduce((sum, i) => sum + (Number(i.net_amount) || 0), 0);
+
+  const selectedKeys = watch('selected_keys');
+  const selectedRows = soldItems.filter((r) => selectedKeys.includes(soldItemKey(r)));
+
+  const toggleItem = (row) => {
+    const key = soldItemKey(row);
+    setValue(
+      'selected_keys',
+      selectedKeys.includes(key)
+        ? selectedKeys.filter((k) => k !== key)
+        : [...selectedKeys, key],
+      { shouldValidate: true },
+    );
+  };
 
   const onSubmit = async (data) => {
-    if (!customerId) return toast.error('Attach a customer to the session before creating a return.');
+    if (!customerId) return toast.error('Attach a customer to the session first.');
     if (!headerConfig.isReady) return toast.error('Store configuration is still loading — try again in a moment.');
     try {
-      const line_items = data.line_items.map((i) => {
-        const netAmount = Number(i.net_amount);
-        return {
-          item_id: Number(i.item_id), pieces: Number(i.pieces),
-          item_rate: Number(i.item_rate), net_amount: netAmount,
-          sub_total: netAmount, taxable_amount: netAmount,
-        };
+      setIsPricing(true);
+      // Pass the sold-item rows through UNMODIFIED — the pricing helper needs
+      // the full nested shape (incl. the ref_* linkage to the original sale).
+      const line_items = await config.priceItems({
+        items: selectedRows,
+        documentDate: new Date(data.document_date),
       });
-      const totalPieces = line_items.reduce((s, i) => s + i.pieces, 0);
+      setIsPricing(false);
+      if (!line_items.length) throw new Error('Could not price the selected items.');
 
-      const createRes = await createReturn.mutateAsync({
+      const sum = (f) => +line_items.reduce((s, li) => s + (li[f] ?? 0), 0).toFixed(2);
+      const subTotal = sum('sub_total');
+      const taxAmount = sum('tax_amount');
+      const netRaw = sum('net_amount');
+
+      const createRes = await createDoc.mutateAsync({
         ...buildTransactionHeaderFields({
-          subTotal: total, taxableAmount: total, taxAmount: 0, netAmount: total,
-          pieces: totalPieces,
-          customerId, customerName, customerMobile,
+          subTotal, taxableAmount: subTotal, taxAmount, netAmount: netRaw,
+          pieces: sum('pieces'), weight: sum('weight'), netWeight: sum('net_weight'),
+          customerId, customerName,
           activeStoreId: storeId,
           headerConfig,
-          documentTypeId: APP_CONFIG.DOCUMENT_TYPES.RETURN,
-          receiptAmount: total,
+          documentTypeId: config.documentTypeId,
+          receiptAmount: Math.round(netRaw),
           documentDate: data.document_date,
+          forReturn: true,
+          allowBackdatedEntry: config.allowBackdatedEntry,
         }),
-        ref_transaction_id: data.ref_transaction_id,
         line_items,
-        // NO receipt_details — confirmed live on UAT 2026-07-29 that sending
-        // it is exactly what made Return/Create 500. receipt_details exists
-        // ONLY on Order and Invoice (the documents where the customer PAYS);
-        // on Return/Exchange/BuyBack/URDPurchase the field is `undefined` on
-        // every real record, and including it is rejected. The selected
-        // refund method is therefore NOT recorded by this call — issuing the
-        // actual money back is a separate Refund/CreditNote document.
+        remark: '',
+        // No receipt_details and no header-level ref_transaction_id — neither
+        // a Return nor a Buy Back carries them (the per-line ref_* fields
+        // already tie back to the original sale). Confirmed against their
+        // captured payloads; sending either is what previously 500'd.
       });
       const transactionId = createRes?.EntityId;
-      if (!transactionId) throw new Error('Return creation failed — no EntityId returned.');
-      await postReturn.mutateAsync(transactionId);
+      if (!transactionId) throw new Error('Creation failed — no EntityId returned.');
+      await postDoc.mutateAsync(transactionId);
       reset();
     } catch (err) {
+      setIsPricing(false);
       toast.error(getErrorMessage(err));
     }
   };
 
-  const isSubmitting = createReturn.isPending || postReturn.isPending;
+  const total = selectedRows.reduce((s, r) => s + (r.net_amount ?? 0), 0);
+
+  const isSubmitting = isPricing || createDoc.isPending || postDoc.isPending;
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5">
       <CustomerAttachedBanner customerId={customerId} customerName={customerName} />
 
-      <FormField label="Original Invoice ID" required error={errors.ref_transaction_id}>
-        <Input type="number" inputMode="numeric" placeholder="transaction_id from invoice" {...register('ref_transaction_id')} className="h-11" />
-        <p className="text-xs text-muted-foreground">Find this on the printed invoice or in the Invoices list.</p>
-      </FormField>
-
-      <FormField label="Return Date" required error={errors.document_date}>
+      <FormField label="Date" required error={errors.document_date}>
         <Input type="date" max={todayDateString()} {...register('document_date')} className="h-11" />
       </FormField>
 
       <div className="flex flex-col gap-2">
-        <div className="flex items-center justify-between">
-          <Label>Items Being Returned <span className="text-destructive">*</span></Label>
-          <Button type="button" variant="outline" size="sm" className="h-8 gap-1 text-xs"
-            onClick={() => append({ item_id: '', pieces: 1, item_rate: '', net_amount: '' })}>
-            <Plus size={12} /> Add Item
-          </Button>
-        </div>
-        {fields.map((field, index) => (
-          <div key={field.id} className="rounded-xl border border-border bg-muted p-3 flex flex-col gap-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-muted-foreground">Item {index + 1}</span>
-              {fields.length > 1 && (
-                <RemoveLineItemButton onClick={() => remove(index)} />
-              )}
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <FormField label="Item ID" required error={errors.line_items?.[index]?.item_id}>
-                <Input type="number" inputMode="numeric" {...register(`line_items.${index}.item_id`)} className="h-9 text-sm" />
-              </FormField>
-              <FormField label="Pieces" required>
-                <Input type="number" inputMode="numeric" min={1} {...register(`line_items.${index}.pieces`)} className="h-9 text-sm" />
-              </FormField>
-              <FormField label="Rate (₹)" required>
-                <Input type="number" inputMode="decimal" {...register(`line_items.${index}.item_rate`)} className="h-9 text-sm" />
-              </FormField>
-              <FormField label="Net Amount (₹)" required>
-                <Input type="number" inputMode="decimal" {...register(`line_items.${index}.net_amount`)} className="h-9 text-sm" />
-              </FormField>
-            </div>
+        <Label>
+          {config.itemsLabel} <span className="text-destructive">*</span>
+        </Label>
+        <p className="text-xs text-muted-foreground -mt-1">
+          Pick from what this customer has purchased — tap to select.
+        </p>
+
+        {!customerId ? (
+          <p className="rounded-xl border border-dashed border-border px-3 py-6 text-center text-sm text-muted-foreground">
+            Attach a customer to see their purchases.
+          </p>
+        ) : soldLoading ? (
+          <InlineLoader className="py-6" label="Loading purchases…" />
+        ) : soldError ? (
+          <ErrorState className="py-6" title="Couldn't load purchases." onRetry={() => refetchSold()} />
+        ) : soldItems.length === 0 ? (
+          <EmptyState
+            className="border-0 py-6"
+            icon={RotateCcw}
+            title={config.emptyTitle}
+            description={config.emptyHint}
+          />
+        ) : (
+          <div className="flex flex-col gap-2">
+            {soldItems.map((row) => {
+              const key = soldItemKey(row);
+              const isSelected = selectedKeys.includes(key);
+              return (
+                <button
+                  type="button"
+                  key={key}
+                  onClick={() => toggleItem(row)}
+                  aria-pressed={isSelected}
+                  className={`flex items-center justify-between gap-3 rounded-xl border p-3 text-left transition-colors min-h-[44px] ${
+                    isSelected
+                      ? 'border-primary bg-primary/5'
+                      : 'border-border bg-muted hover:bg-muted/70'
+                  }`}
+                >
+                  <div className="flex flex-col gap-0.5 min-w-0">
+                    <span className="truncate text-sm font-medium text-foreground">
+                      {row.item_name ?? row.item_code ?? `Item ${row.item_line_no}`}
+                    </span>
+                    <span className="truncate text-xs text-muted-foreground">
+                      {row.sku} · {row.document_no}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-sm font-semibold tabular-nums text-foreground">
+                      {formatINR(row.net_amount)}
+                    </span>
+                    {isSelected && <Check className="h-4 w-4 text-primary" aria-hidden="true" />}
+                  </div>
+                </button>
+              );
+            })}
           </div>
-        ))}
+        )}
+        {errors.selected_keys && (
+          <p className="text-xs text-destructive">{errors.selected_keys.message}</p>
+        )}
       </div>
 
       {total > 0 && (
         <div className="flex justify-between rounded-xl border border-border bg-card px-4 py-3 text-sm font-medium">
-          <span className="text-muted-foreground">Total Return Amount</span>
+          <span className="text-muted-foreground">{config.totalLabel}</span>
           <span className="text-foreground">{formatINR(total)}</span>
         </div>
       )}
 
-      <FormField label="Refund Method" required error={errors.refund_mode_id}>
-        <PaymentModeSelect control={control} name="refund_mode_id" paymentModes={paymentModes} modesLoading={modesLoading} />
-      </FormField>
+      {/* No refund/payout method picker here on purpose. Neither a Return
+          nor a Buy Back carries receipt_details (confirmed against
+          OrnaVerse's own payloads — sending them is rejected); both raise
+          the customer's credit instead. Settling that credit in cash is a
+          separate Refund / Credit Note document, so asking for a mode here
+          would collect a value we'd silently discard. */}
 
-      <Button type="submit" disabled={isSubmitting || !customerId} className="h-12 mt-1">
-        {isSubmitting ? 'Processing Return…' : 'Submit Return'}
+      <Button
+        type="submit"
+        disabled={isSubmitting || !customerId || selectedRows.length === 0}
+        className="h-12 mt-1"
+      >
+        {isSubmitting ? config.busyLabel : config.submitLabel}
       </Button>
     </form>
   );
@@ -320,16 +417,17 @@ const METAL_TYPE_CONFIGS = {
     processingLabel: 'Processing Exchange…',
     documentTypeId: APP_CONFIG.DOCUMENT_TYPES.EXCHANGE,
   },
-  buyback: {
-    amountField: 'amount',
-    hasReceipt:  true,
-    pickerMode:  'search',
-    createHook:  useCreateBuyback,
-    postHook:    usePostBuyback,
-    submitLabel: 'Submit Buyback',
-    processingLabel: 'Processing Buyback…',
-    documentTypeId: APP_CONFIG.DOCUMENT_TYPES.BUYBACK,
-  },
+  // NOTE: no `buyback` entry here any more. Buy Back moved to
+  // SoldItemFlowForm on 2026-07-30 — a buyback is the store re-purchasing a
+  // piece it previously SOLD, so it needs the sold-item picker +
+  // Helpers/SetBuyBackItems, not hand-typed metal weights. Confirmed against
+  // OrnaVerse's own Buy Back journey, which is a mode of their Returns
+  // screen sharing that same picker.
+  //
+  // Exchange stays here for now: their Exchange mode additionally requires
+  // choosing a REPLACEMENT item, which this form doesn't model yet — that's
+  // the next one to capture. URD stays because old-gold purchase genuinely
+  // is hand-entered metal (never sold by us), so this form is right for it.
   urd: {
     amountField: 'amount',
     hasReceipt:  true,
@@ -885,11 +983,11 @@ function TransactionList({ hook: useHook, emptyMessage }) {
 // ─── Tab config ───────────────────────────────────────────────────────────────
 
 const TABS = [
-  { id: 'returns',      label: 'Returns',      icon: RotateCcw,      hook: useReturns,      emptyMessage: 'No return transactions found.',      NewForm: (props) => <ReturnNewForm {...props} /> },
+  { id: 'returns',      label: 'Returns',      icon: RotateCcw,      hook: useReturns,      emptyMessage: 'No return transactions found.',      NewForm: (props) => <SoldItemFlowForm flow="return" {...props} /> },
   { id: 'refunds',      label: 'Refunds',      icon: CreditCard,     hook: useRefunds,      emptyMessage: 'No refund transactions found.',      NewForm: (props) => <RefundNewForm {...props} /> },
   { id: 'credit-notes', label: 'Credit Notes', icon: FileText,       hook: useCreditNotes,  emptyMessage: 'No credit notes found.',             NewForm: (props) => <CreditNoteNewForm {...props} /> },
   { id: 'exchange',     label: 'Exchange',     icon: ArrowLeftRight, hook: useExchanges,    emptyMessage: 'No exchange transactions found.',    NewForm: (props) => <MetalLineItemForm type="exchange" {...props} /> },
-  { id: 'buyback',      label: 'Buyback',      icon: ShoppingBag,    hook: useBuybacks,     emptyMessage: 'No buyback transactions found.',     NewForm: (props) => <MetalLineItemForm type="buyback" {...props} /> },
+  { id: 'buyback',      label: 'Buyback',      icon: ShoppingBag,    hook: useBuybacks,     emptyMessage: 'No buyback transactions found.',     NewForm: (props) => <SoldItemFlowForm flow="buyback" {...props} /> },
   { id: 'urd',          label: 'URD Purchase', icon: Coins,          hook: useURDPurchases, emptyMessage: 'No URD purchase transactions found.',NewForm: (props) => <MetalLineItemForm type="urd" {...props} /> },
 ];
 

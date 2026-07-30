@@ -151,9 +151,29 @@ const API = {
   // (raw metal/stone/labour rate tables) — also unverified, zero callers
   // anywhere in this codebase despite existing since an earlier session.
   // ─────────────────────────────────────────────────────────────────────────
+  // SET_RETURN_ITEMS is the RETURNS counterpart of SET_SALES_ITEMS —
+  // discovered 2026-07-30 by capturing OrnaVerse's own UAT Returns journey.
+  // A return line item CANNOT be hand-built (that was the cause of the long
+  // run of opaque 500s on Return/Create): the server expects the ~186-field
+  // computed object this endpoint returns.
+  //
+  // Confirmed request shape (their own UI):
+  //   POST { selected_products: [ <full sold-item object from
+  //          POS/InvoiceItems/List with get_child:true — 189 fields,
+  //          carrying ref_transaction_id/ref_document_id back to the
+  //          original invoice> ],
+  //          exchange_rate: 1, document_date: <Date.toDateString()>,
+  //          is_tax_applicable: false, calculate_rates: false }
+  //   → { Entities: [ <line item ready to drop into Return/Create> ] }
+  // SET_BUYBACK_ITEMS is the same idea for Buy Back (confirmed 2026-07-30
+  // from the same capture session). Its request omits calculate_rates:
+  //   POST { selected_products: [...], document_date, exchange_rate: 1,
+  //          is_tax_applicable: false }
   HELPERS: {
-    GET_RATE:         'Services/Helpers/GetRate',
-    SET_SALES_ITEMS:  'Services/Helpers/SetSalesItems',
+    GET_RATE:          'Services/Helpers/GetRate',
+    SET_SALES_ITEMS:   'Services/Helpers/SetSalesItems',
+    SET_RETURN_ITEMS:  'Services/Helpers/SetReturnItems',
+    SET_BUYBACK_ITEMS: 'Services/Helpers/SetBuyBackItems',
   },
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -260,15 +280,26 @@ const API = {
 
   // ─────────────────────────────────────────────────────────────────────────
   // RETURNS
-  // Customer returns items from a previous invoice
-  // Flow: Create → Post
+  // Customer returns items from a previous purchase.
+  // Flow (confirmed 2026-07-30 by capturing OrnaVerse's own UAT journey):
+  //   1. SOLD_ITEMS  → what this customer has actually bought (returnable)
+  //   2. HELPERS.SET_RETURN_ITEMS → price the chosen piece(s) for return
+  //   3. CREATE → POST
+  //
+  // SOLD_ITEMS (POS/InvoiceItems/List) confirmed request:
+  //   { Take: 25, party_id, transaction_type: 1, get_child: true,
+  //     IncludeColumns: [item_code,item_line_no,pieces,weight,net_weight,sku,document_no] }
+  // get_child:true is ESSENTIAL — it returns the full nested item
+  // (item_components etc.) that SET_RETURN_ITEMS needs as input.
+  // transaction_type:1 = sold items.
   // ─────────────────────────────────────────────────────────────────────────
   RETURNS: {
-    CREATE:   'Services/POS/Return/Create',
-    POST:     'Services/POS/Return/Post',
-    CANCEL:   'Services/POS/Return/Cancel',
-    RETRIEVE: 'Services/POS/Return/Retrieve',
-    LIST:     'Services/POS/Return/List',
+    CREATE:     'Services/POS/Return/Create',
+    POST:       'Services/POS/Return/Post',
+    CANCEL:     'Services/POS/Return/Cancel',
+    RETRIEVE:   'Services/POS/Return/Retrieve',
+    LIST:       'Services/POS/Return/List',
+    SOLD_ITEMS: 'Services/POS/InvoiceItems/List',
   },
 
   // ─────────────────────────────────────────────────────────────────────────

@@ -61,6 +61,13 @@ export function useOrderHeaderConfig(documentId) {
     isTaxApplicable:         docConfig?.is_tax_applicable ?? true,
     autoPosting:             docConfig?.auto_posting ?? true,
     isDocumentNumberEditable:docConfig?.is_document_number_editable ?? false,
+    // Return headers additionally carry the party's own control ledgers and
+    // the document type's backdating window (see the forReturn branch in
+    // transactionHeaderService). Not present on every DocumentNumbering row,
+    // hence the nullish fallbacks at the point of use.
+    payableLedgerId:         docConfig?.payable_ledger_id ?? null,
+    receivableLedgerId:      docConfig?.receivable_ledger_id ?? null,
+    numberOfBackdatedDays:   docConfig?.number_of_backdated_days ?? null,
     isLoading: finYearQuery.isLoading || docNumQuery.isLoading,
     isReady:   !!currentFinancialYear && !!docConfig,
   };
