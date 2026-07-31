@@ -66,9 +66,15 @@ function normalizeEnrollment(raw) {
     partyId:           raw.party_id,
     partyName:         raw.party_name   ?? '',
     mobile:            raw.mobile       ?? '',
+    email:             raw.email        ?? '',
     schemeId:          raw.scheme_id,
     schemeName:        raw.scheme_display_name ?? raw.scheme_code ?? '',
     schemeCode:        raw.scheme_code  ?? '',
+    // Both appear in OrnaVerse's captured SchemeReceipt/Create payload
+    // (scheme_type:"1", scheme_unique_code:"") — surfaced here so
+    // buildSchemeReceiptPayload() can pass them through.
+    schemeType:        raw.scheme_type,
+    schemeUniqueCode:  raw.scheme_unique_code ?? '',
     status:            isFullyPaid ? 'completed' : 'active',
     hasPendingInstallment,
     documentDate:      raw.document_date,

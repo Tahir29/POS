@@ -100,30 +100,97 @@ export async function getSchemeReceipts({ scheme_enrollment_id, take = 0 } = {})
 }
 
 /**
- * Record a monthly scheme payment from a customer.
+ * Builds the SchemeReceipt/Create Entity.
  *
- * Payload shape confirmed 2026-07-16 via a real SchemeReceipt/List row —
- * mode_id/ledger_id live nested in scheme_receipt_details[], NOT flat on
- * the header (the original version sent mode_id flat, which doesn't match
- * the real schema). ledger_id comes from the selected payment mode's own
- * ledger_id (see usePaymentModes.js), same pattern as Refund details.
+ * SHAPE CAPTURED 2026-07-31 from OrnaVerse's own ERP dialog
+ * (/POS/SchemeReceipt → New Scheme Receipt), after our version had been
+ * returning an opaque 500 for weeks. Two things were wrong:
  *
- * document_id — confirmed 2026-07-28 (was previously blocked by a "Document
- * field is required!" 400): the correct value is 99 (prefix "SPY"), read
- * directly off a real existing SchemeReceipt/List row rather than guessed —
- * see the caller in schemes/page.jsx for the confirming record.
+ *  1. `month_ids` was missing entirely. It is the array of calendar month
+ *     numbers this payment covers (["8"] = August), and their own client
+ *     refuses to save without it — "Select Month before Receipt". A scheme
+ *     receipt has to say WHICH instalment it pays, otherwise the server has
+ *     nothing to mark off.
+ *  2. We were running this through buildTransactionHeaderFields, which is
+ *     built for SALES documents. A scheme receipt is not one — their payload
+ *     carries no sub_total / taxable_amount / tax_amount / net_amount /
+ *     receipt_amount / balance_amount / promotion_details / is_tax_applicable
+ *     at all. It has its own flat shape, built here.
+ *
+ * Everything below appears in their captured payload; nothing is invented.
  *
  * @param {{
- *   scheme_enrollment_id: number,
- *   party_id:             number,
- *   company_id:           number,
- *   document_date:        string,
- *   currency_id:          number,
- *   exchange_rate:        number,
- *   document_id:          number,
- *   amount:               number,
- *   scheme_receipt_details: { mode_id: number, amount: number, ledger_id?: number }[],
- * }} payload
+ *   enrollmentId: number, schemeType?: number|string, schemeUniqueCode?: string,
+ *   partyId: number, partyName: string,
+ *   mobile?: string, email?: string, phoneCode?: string, panNo?: string, address?: string,
+ *   activeStoreId: number, financialYearId: number, ledgerId: number,
+ *   documentDate: string, monthIds: (number|string)[], amount: number,
+ *   goldRate?: number, weight?: number,
+ *   allowBackdatedEntry?: boolean, numberOfBackdatedDays?: number,
+ *   isDocumentNumberEditable?: boolean,
+ *   details: { modeId: number, amount: number, ledgerId?: number,
+ *              ledgerName?: string, modeName?: string, bankPos?: string,
+ *              chequeNo?: string|null, chequeDate?: string|null,
+ *              cardType?: string, refNo?: string }[],
+ * }} params
+ */
+export function buildSchemeReceiptPayload({
+  enrollmentId, schemeType, schemeUniqueCode,
+  partyId, partyName, mobile, email, phoneCode, panNo, address,
+  activeStoreId, financialYearId, ledgerId,
+  documentDate, monthIds, amount, goldRate, weight,
+  allowBackdatedEntry, numberOfBackdatedDays, isDocumentNumberEditable,
+  details,
+}) {
+  return {
+    // document_no deliberately omitted — the server assigns it. Their dialog
+    // pre-fills one, but predicting it is what broke Refund settlement; see
+    // services/refundService.js.
+    document_date: documentDate,
+    document_id:   99,          // POS Scheme Receipt, prefix "SPY"
+    mobile:     mobile ?? '',
+    party_id:   partyId,
+    party_name: partyName,
+    email:      email ?? '',
+    phone_code: phoneCode ?? '',
+    pan_no:     panNo ?? '',
+    address:    address ?? '',
+    scheme_enrollment_id: enrollmentId,
+    month_ids: monthIds.map(String),   // ← the field that was missing
+    amount,
+    gold_rate: goldRate ?? 0,
+    weight:    weight ?? 0,
+    scheme_receipt_details: details.map((d) => ({
+      mode_id:     d.modeId,
+      bank_pos:    d.bankPos ?? '',
+      cheque_no:   d.chequeNo ?? null,
+      cheque_date: d.chequeDate ?? null,
+      card_type:   d.cardType ?? '',
+      ref_no:      d.refNo ?? '',
+      amount:      d.amount,
+      ledger_id:   d.ledgerId,
+      ledger_name: d.ledgerName ?? '',
+      mode_name:   d.modeName ?? '',
+    })),
+    currency_id:   103,
+    exchange_rate: 1,
+    ledger_id:     ledgerId,
+    financial_year_id: financialYearId,
+    company_id:    activeStoreId,
+    user_id:       null,
+    is_document_number_editable: isDocumentNumberEditable ?? false,
+    allow_backdated_entry:       allowBackdatedEntry ?? true,
+    number_of_backdated_days:    numberOfBackdatedDays ?? 1000,
+    scheme_type:        schemeType != null ? String(schemeType) : '',
+    scheme_unique_code: schemeUniqueCode ?? '',
+  };
+}
+
+/**
+ * Record a monthly scheme payment from a customer.
+ * Pass the output of buildSchemeReceiptPayload().
+ *
+ * @param {object} payload
  * @returns {Promise<object>} SaveResponse { EntityId }
  */
 export async function createSchemeReceipt(payload) {

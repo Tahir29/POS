@@ -36,8 +36,17 @@ export function useSchemeMonthlyDetails(enrollmentId) {
     queryFn: async () => {
       const data = await getSchemeMonthlyDetails({ scheme_enrollment_id: enrollmentId });
       const rows = data?.Entities ?? [];
-      // Sort by month_id — API order isn't guaranteed to be chronological.
-      return rows.map(normalizeMonth).sort((a, b) => a.monthId - b.monthId);
+      // Sort by DUE DATE, not month_id. month_id is a calendar month (1-12),
+      // so sorting on it puts a scheme that crosses a year boundary in the
+      // wrong order — a July-2026 enrollment listed as Jan, Feb, Mar, Sep,
+      // Oct, Nov, Dec instead of Sep…Mar. due_date is unambiguous.
+      // Falls back to month_id for rows with no due date.
+      return rows.map(normalizeMonth).sort((a, b) => {
+        if (a.dueDate && b.dueDate) return new Date(a.dueDate) - new Date(b.dueDate);
+        if (a.dueDate) return -1;
+        if (b.dueDate) return 1;
+        return a.monthId - b.monthId;
+      });
     },
     enabled: !!enrollmentId,
   });
