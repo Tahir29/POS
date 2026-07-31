@@ -216,40 +216,79 @@ export async function getSchemeMonthlyDetails({ scheme_enrollment_id }) {
 }
 
 // ─── SCHEME BENEFIT HELPERS ───────────────────────────────────────────────────
+//
+// ALL THREE TAKE THE WHOLE ENROLLMENT, NOT AN ID.
+//
+// Captured 2026-08-01 from OrnaVerse's own enrollment screen
+// (/POS/SchemeEnrollment → Calculate Maturity / Foreclosure / Cancellation):
+//
+//   { "enrollment": { party_id, scheme_id, tenure, scheme_amount,
+//                     scheme_monthly_details: [ …every month row… ],
+//                     invested_amount, benifit_amount, bonus_type,
+//                     scheme_enrollment_id, … } }
+//
+// This matters: these endpoints were written off as broken after five
+// payload variants all returned an identical generic 500 — but every one of
+// those variants sent an ID. The endpoints were fine; the shape was wrong.
+// The server needs the month rows to compute anything, so an ID alone hits
+// an unguarded path and throws.
 
 /**
- * Calculate maturity benefit for a scheme enrollment.
- * Call when customer reaches the end of their tenure.
- * @param {{ scheme_enrollment_id: number }} params
- * @returns {Promise<object>} Maturity benefit calculation
+ * Fetches the full enrollment entity — the input these calculators need.
+ * @param {number} enrollmentId
+ * @returns {Promise<object|null>} the enrollment Entity
  */
-export async function getSchemeMaturityBenefit({ scheme_enrollment_id }) {
-  const response = await axiosInstance.post(API.SCHEMES.MATURITY_BENEFIT, {
-    scheme_enrollment_id,
+export async function getSchemeEnrollmentDetail(enrollmentId) {
+  const response = await axiosInstance.post(API.SCHEMES.ENROLLMENT_RETRIEVE, {
+    EntityId: enrollmentId,
   });
+  return response.data?.Entity ?? null;
+}
+
+async function postBenefitCalc(endpoint, enrollment) {
+  const response = await axiosInstance.post(endpoint, { enrollment });
   return response.data;
 }
 
 /**
- * Calculate foreclose benefit (early exit with partial benefit).
- * @param {{ scheme_enrollment_id: number }} params
- * @returns {Promise<object>} Foreclose benefit calculation
+ * Maturity benefit — the payout at the end of the full tenure.
+ *
+ * PRECONDITION: their UI blocks this with "To Mature Scheme You Need to Pay
+ * Atleast N Installments", where N counts REMAINING instalments — i.e. every
+ * instalment must be paid. Callers should check before calling; see
+ * canMatureEnrollment() below.
+ *
+ * @param {object} enrollment — full entity from getSchemeEnrollmentDetail()
  */
-export async function getSchemeForcloseBenefit({ scheme_enrollment_id }) {
-  const response = await axiosInstance.post(API.SCHEMES.FORECLOSE_BENEFIT, {
-    scheme_enrollment_id,
-  });
-  return response.data;
+export async function getSchemeMaturityBenefit(enrollment) {
+  return postBenefitCalc(API.SCHEMES.MATURITY_BENEFIT, enrollment);
 }
 
 /**
- * Calculate cancellation value (exit with no benefit, refund only).
- * @param {{ scheme_enrollment_id: number }} params
- * @returns {Promise<object>} Cancellation calculation
+ * Foreclose benefit — early exit, partial benefit.
+ * @param {object} enrollment — full entity from getSchemeEnrollmentDetail()
  */
-export async function getSchemeCancellation({ scheme_enrollment_id }) {
-  const response = await axiosInstance.post(API.SCHEMES.CANCELLATION, {
-    scheme_enrollment_id,
-  });
-  return response.data;
+export async function getSchemeForcloseBenefit(enrollment) {
+  return postBenefitCalc(API.SCHEMES.FORECLOSE_BENEFIT, enrollment);
+}
+
+/**
+ * Cancellation value — exit with no benefit, refund only.
+ * @param {object} enrollment — full entity from getSchemeEnrollmentDetail()
+ */
+export async function getSchemeCancellation(enrollment) {
+  return postBenefitCalc(API.SCHEMES.CANCELLATION, enrollment);
+}
+
+/**
+ * Mirrors OrnaVerse's own client-side gate on Calculate Maturity, so staff
+ * see a clear message instead of a server error.
+ *
+ * @param {object} enrollment — full entity (needs scheme_monthly_details)
+ * @returns {{ allowed: boolean, remaining: number }}
+ */
+export function canMatureEnrollment(enrollment) {
+  const rows = enrollment?.scheme_monthly_details ?? [];
+  const remaining = rows.filter((m) => !m.payment_made).length;
+  return { allowed: rows.length > 0 && remaining === 0, remaining };
 }
