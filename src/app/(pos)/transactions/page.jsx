@@ -172,8 +172,9 @@ const SOLD_ITEM_FLOWS = {
   return: {
     documentTypeId: APP_CONFIG.DOCUMENT_TYPES.RETURN,
     priceItems:     calculateReturnItems,
-    createHook:     useCreateReturn,
-    postHook:       usePostReturn,
+    modeLabel:      'Return for Refund',
+    modeHint:       'Customer wants a refund for a previous purchase',
+    modeIcon:       RotateCcw,
     itemsLabel:     'Items Being Returned',
     emptyTitle:     'No purchases found for this customer.',
     emptyHint:      'Only previously sold items can be returned.',
@@ -186,8 +187,9 @@ const SOLD_ITEM_FLOWS = {
   buyback: {
     documentTypeId: APP_CONFIG.DOCUMENT_TYPES.BUYBACK,
     priceItems:     calculateBuybackItems,
-    createHook:     useCreateBuyback,
-    postHook:       usePostBuyback,
+    modeLabel:      'Buy Back Item',
+    modeHint:       'We purchase the item back from the customer',
+    modeIcon:       ShoppingBag,
     itemsLabel:     'Items Being Bought Back',
     emptyTitle:     'No purchases found for this customer.',
     emptyHint:      'Buy Back here covers pieces this store previously sold.',
@@ -207,8 +209,9 @@ const SOLD_ITEM_FLOWS = {
   exchange: {
     documentTypeId: APP_CONFIG.DOCUMENT_TYPES.EXCHANGE,
     priceItems:     calculateExchangeItems,
-    createHook:     useCreateExchange,
-    postHook:       usePostExchange,
+    modeLabel:      'Exchange for Another Item',
+    modeHint:       'Swap for a different item',
+    modeIcon:       ArrowLeftRight,
     itemsLabel:     'Items Being Exchanged',
     emptyTitle:     'No purchases found for this customer.',
     emptyHint:      'Only previously sold pieces can be exchanged.',
@@ -233,7 +236,11 @@ const soldItemFlowSchema = z.object({
 const soldItemKey = (row) => `${row.document_no ?? ''}#${row.item_line_no ?? ''}`;
 
 function SoldItemFlowForm({ flow, onDone }) {
-  const config         = SOLD_ITEM_FLOWS[flow];
+  // The three flows are switchable in-place, mirroring OrnaVerse's own POS
+  // (their Returns screen offers Return / Exchange / Buy Back as modes over
+  // one "Sold Item" picker). The tab you arrived from just sets the default.
+  const [mode, setMode] = useState(flow);
+  const config         = SOLD_ITEM_FLOWS[mode];
   const storeId        = useSelector(selectActiveStoreId);
   const customerId     = useSelector(selectCartCustomerId);
   const customerName   = useSelector(selectCartCustomerName);
@@ -241,8 +248,21 @@ function SoldItemFlowForm({ flow, onDone }) {
   const { soldItems, isLoading: soldLoading, isError: soldError, refetch: refetchSold } =
     useSoldItems(customerId);
 
-  const createDoc = config.createHook({ onSuccess: () => {} });
-  const postDoc   = config.postHook({ onSuccess: () => onDone() });
+  // Hooks can't be called conditionally, so instantiate all three pairs and
+  // pick the active one by mode.
+  const createReturnDoc   = useCreateReturn({ onSuccess: () => {} });
+  const postReturnDoc     = usePostReturn({ onSuccess: () => onDone() });
+  const createBuybackDoc  = useCreateBuyback({ onSuccess: () => {} });
+  const postBuybackDoc    = usePostBuyback({ onSuccess: () => onDone() });
+  const createExchangeDoc = useCreateExchange({ onSuccess: () => {} });
+  const postExchangeDoc   = usePostExchange({ onSuccess: () => onDone() });
+  const byMode = {
+    return:   { create: createReturnDoc,   post: postReturnDoc },
+    buyback:  { create: createBuybackDoc,  post: postBuybackDoc },
+    exchange: { create: createExchangeDoc, post: postExchangeDoc },
+  };
+  const createDoc = byMode[mode].create;
+  const postDoc   = byMode[mode].post;
   const [isPricing, setIsPricing] = useState(false);
 
   const { register, handleSubmit, watch, setValue, reset, formState: { errors } } = useForm({
@@ -327,6 +347,49 @@ function SoldItemFlowForm({ flow, onDone }) {
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5">
       <CustomerAttachedBanner customerId={customerId} customerName={customerName} />
+
+      {/* Return / Exchange / Buy Back all start from the same sold-item
+          picker and differ only in document type + pricing helper, so they're
+          modes here rather than three separate journeys — same as OrnaVerse's
+          own POS. Locked once items are chosen: the three produce different
+          documents, so a half-built selection can't carry across. */}
+      <div className="flex flex-col gap-2">
+        <Label>What&apos;s happening?</Label>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+          {Object.entries(SOLD_ITEM_FLOWS).map(([key, cfg]) => {
+            const ModeIcon = cfg.modeIcon;
+            const isActive = key === mode;
+            const locked   = selectedRows.length > 0 && !isActive;
+            return (
+              <button
+                type="button"
+                key={key}
+                disabled={locked}
+                onClick={() => setMode(key)}
+                aria-pressed={isActive}
+                className={`flex flex-col gap-1 rounded-xl border p-3 text-left transition-colors min-h-[44px] ${
+                  isActive
+                    ? 'border-primary bg-primary/5'
+                    : locked
+                      ? 'cursor-not-allowed border-border bg-muted/40 opacity-50'
+                      : 'border-border bg-muted hover:bg-muted/70'
+                }`}
+              >
+                <span className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+                  <ModeIcon size={14} aria-hidden="true" className="shrink-0" />
+                  {cfg.modeLabel}
+                </span>
+                <span className="text-xs text-muted-foreground">{cfg.modeHint}</span>
+              </button>
+            );
+          })}
+        </div>
+        {selectedRows.length > 0 && (
+          <p className="text-xs text-muted-foreground">
+            Remove the selected items to switch between Return, Exchange and Buy Back.
+          </p>
+        )}
+      </div>
 
       <FormField label="Date" required error={errors.document_date}>
         <Input type="date" max={todayDateString()} {...register('document_date')} className="h-11" />
@@ -456,7 +519,6 @@ function SoldItemFlowForm({ flow, onDone }) {
 const METAL_TYPE_CONFIGS = {
   urd: {
     amountField: 'amount',
-    hasReceipt:  true,
     pickerMode:  'fixed',
     createHook:  useCreateURDPurchase,
     postHook:    usePostURDPurchase,
@@ -480,13 +542,14 @@ function buildMetalLineItemSchema(config) {
   return z.object(shape);
 }
 
+// No payout_mode_id here on purpose — see the note at the payout section in
+// the form body. A URD Purchase carries no receipt_details, so a payout mode
+// collected here could never be submitted.
 function buildMetalFormSchema(config) {
-  const shape = {
+  return z.object({
     document_date: z.string().min(1, 'Required'),
     line_items:    z.array(buildMetalLineItemSchema(config)).min(1, 'Add at least one item'),
-  };
-  if (config.hasReceipt) shape.payout_mode_id = z.coerce.number().min(1, 'Select payment mode');
-  return z.object(shape);
+  });
 }
 
 function emptyMetalLineItem(config) {
@@ -515,7 +578,6 @@ function MetalLineItemForm({ type, onDone }) {
     defaultValues: {
       document_date: todayDateString(),
       line_items: [emptyMetalLineItem(config)],
-      ...(config.hasReceipt ? { payout_mode_id: '' } : {}),
     },
   });
   const { fields, append, remove } = useFieldArray({ control, name: 'line_items' });
@@ -564,16 +626,13 @@ function MetalLineItemForm({ type, onDone }) {
           activeStoreId: storeId,
           headerConfig,
           documentTypeId: config.documentTypeId,
-          receiptAmount: config.hasReceipt ? total : 0,
+          receiptAmount: total,
           documentDate: data.document_date,
         }),
         line_items,
-        // NO receipt_details for ANY of these three — see ReturnNewForm above.
-        // Confirmed live on UAT 2026-07-29: receipt_details exists only on
-        // Order/Invoice; on Exchange/BuyBack/URDPurchase every real record has
-        // it `undefined`, and sending it 500s the Create. config.hasReceipt is
-        // now only used to drive the payout-method FIELD and the header's
-        // receipt_amount — not a receipt_details array.
+        // NO receipt_details. Confirmed live on UAT 2026-07-29 that the field
+        // exists ONLY on Order/Invoice; on URDPurchase every real record has
+        // it `undefined`, and sending it 500s the Create.
       };
       const createRes = await create.mutateAsync(payload);
       const transactionId = createRes?.EntityId;
@@ -668,11 +727,11 @@ function MetalLineItemForm({ type, onDone }) {
         </div>
       )}
 
-      {config.hasReceipt && (
-        <FormField label="Payout Method" required error={errors.payout_mode_id}>
-          <PaymentModeSelect control={control} name="payout_mode_id" paymentModes={paymentModes} modesLoading={modesLoading} />
-        </FormField>
-      )}
+      {/* No "Payout Method" picker. A URD Purchase records the old gold
+          coming in and raises what the store owes the customer; it carries
+          no receipt_details (Order/Invoice only — confirmed live), so a mode
+          chosen here could never be submitted. Paying the customer is a
+          separate Refund, which settles this against a real payout mode. */}
 
       <Button type="submit" disabled={isSubmitting || !customerId} className="h-12 mt-1">
         {isSubmitting ? config.processingLabel : config.submitLabel}
