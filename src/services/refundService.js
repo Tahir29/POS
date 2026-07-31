@@ -67,7 +67,58 @@ function toRefundReceipt(credit, amount) {
 }
 
 /**
- * Creates a refund in ONE call — details[] and receipts[] nested.
+ * Reads back the document number the server actually assigned.
+ * @param {number} transactionId
+ */
+async function retrieveRefund(transactionId) {
+  const response = await axiosInstance.post(API.REFUNDS.RETRIEVE, {
+    EntityId: transactionId,
+  });
+  return response.data?.Entity ?? null;
+}
+
+/**
+ * Second pass that makes the credit actually settle.
+ *
+ * WHY THIS EXISTS: settlement is keyed on `receipts[].ref_document_no`
+ * matching the refund's OWN document_no. OrnaVerse's ERP dialog fills that
+ * in client-side from DocumentNumbering — but on a tenant whose counter has
+ * drifted, the number it predicts is NOT the number the server assigns, the
+ * two disagree, and nothing settles. Verified 2026-07-31: a refund created
+ * through OrnaVerse's own ERP UI (HO-RFD-07-26-5) predicted "-4", was stored
+ * as "-5", and left its credit outstanding.
+ *
+ * So we don't predict. We create, read back the number that was actually
+ * assigned, and stamp it into the receipts. Drift-proof by construction.
+ */
+async function stampRefDocumentNo(transactionId) {
+  const entity = await retrieveRefund(transactionId);
+  if (!entity?.document_no || !entity.receipts?.length) return null;
+
+  const alreadyStamped = entity.receipts.every(
+    (r) => r.ref_document_no === entity.document_no,
+  );
+  if (alreadyStamped) return entity;
+
+  const patched = {
+    ...entity,
+    receipts: entity.receipts.map((r) => ({
+      ...r,
+      ref_document_no: entity.document_no,
+      ref_document_id: 126,
+    })),
+  };
+
+  await axiosInstance.post(API.REFUNDS.UPDATE, { Entity: patched });
+  return patched;
+}
+
+/**
+ * Creates a refund, then settles it.
+ *
+ * Create carries details[] and receipts[] nested (one call — there is no
+ * Post step for document 126). A follow-up Update then stamps the assigned
+ * document number into the receipts, which is what knocks the credit off.
  *
  * @param {{
  *   partyId: number, partyName: string, activeStoreId: number,
@@ -102,6 +153,13 @@ export async function createRefund({
     payable_ledger_id:    167,
     receivable_ledger_id: 167,
     narration: '',
+    // present-but-empty in the ERP's own payload; sent for parity
+    bill_no:   '',
+    bill_date: null,
+    ref_no:    '',
+    ref_date:  null,
+    tax_ledger_id:    null,
+    output_ledger_id: null,
     // HOW the money leaves
     details: [{
       mode_id:       payout.modeId,
@@ -111,6 +169,9 @@ export async function createRefund({
       cheque_no:     payout.chequeNo ?? '',
       cheque_date:   payout.chequeDate ?? null,
       ref_no:        payout.refNo ?? '',
+      mode_name:     payout.modeName ?? undefined,
+      mode_code:     payout.modeCode ?? undefined,
+      mode_type:     payout.modeType ?? undefined,
     }],
     // WHICH credits are knocked off
     receipts: credits.map(({ credit, amount }) => toRefundReceipt(credit, amount)),
@@ -119,5 +180,13 @@ export async function createRefund({
   };
 
   const response = await axiosInstance.post(API.REFUNDS.CREATE, { Entity: entity });
+  const transactionId = response.data?.EntityId;
+
+  // The knock-off only registers once the assigned document number is
+  // stamped back into the receipts. A failure here leaves a created-but-
+  // unsettled refund rather than losing the record, so surface it instead
+  // of swallowing it.
+  if (transactionId) await stampRefDocumentNo(transactionId);
+
   return response.data;
 }
