@@ -9,18 +9,88 @@
 // useSchemeMonthlyDetails.js / useSchemeReceiptHistory.js.
 
 import { useState } from 'react';
-import { AlertCircle, CalendarClock, Receipt } from 'lucide-react';
+import { AlertCircle, CalendarClock, Receipt, Calculator } from 'lucide-react';
 import BottomSheet from '@/components/shared/BottomSheet';
 import PillTabs from '@/components/shared/PillTabs';
 import PaymentStatusBadge, { mapScheduleStatus } from '@/components/shared/PaymentStatusBadge';
 import { useSchemeMonthlyDetails } from '@/hooks/schemes/useSchemeMonthlyDetails';
 import { useSchemeReceiptHistory } from '@/hooks/schemes/useSchemeReceiptHistory';
+import { useSchemeBenefits } from '@/hooks/schemes/useSchemeBenefits';
 import { formatCurrency, formatDate } from '@/lib/schemeFormat';
 
 const TABS = [
   { key: 'schedule', label: 'Schedule' },
   { key: 'payments', label: 'Payments' },
+  { key: 'closure',  label: 'Closure' },
 ];
+
+const CLOSURE_ACTIONS = [
+  {
+    key: 'maturity',
+    label: 'Maturity',
+    hint: 'What the customer receives at the end of the full tenure.',
+  },
+  {
+    key: 'foreclose',
+    label: 'Foreclosure',
+    hint: 'Early exit, with a reduced benefit.',
+  },
+  {
+    key: 'cancellation',
+    label: 'Cancellation',
+    hint: 'Exit with no benefit — refund of what was paid in.',
+  },
+];
+
+// Response shape confirmed live 2026-08-01 against a fully-paid enrollment:
+//   { total_benefit, principal_paid, total_payout, ontime_rate, delayed_rate,
+//     grace_days, Installments: [{ due_date, paid_date, installment_amount,
+//       delay_days, days_held, applied_rate, benefit_amount, is_delayed }] }
+// Unknown keys still render (de-snake-cased) rather than being dropped, in
+// case foreclosure/cancellation return extra fields.
+const BENEFIT_FIELDS = {
+  principal_paid: { label: 'Principal Paid', format: 'money' },
+  total_benefit:  { label: 'Benefit Earned', format: 'money' },
+  total_payout:   { label: 'Total Payout',   format: 'money', emphasis: true },
+  ontime_rate:    { label: 'On-time Rate',   format: 'rate' },
+  delayed_rate:   { label: 'Delayed Rate',   format: 'rate' },
+  grace_days:     { label: 'Grace Period',   format: 'days' },
+  // seen on the enrollment entity itself
+  invested_amount: { label: 'Invested',      format: 'money' },
+  benifit_amount:  { label: 'Benefit',       format: 'money' }, // API's spelling
+  total_payable:   { label: 'Total Payable', format: 'money' },
+};
+
+// Order matters: principal, then what it earned, then the total.
+const BENEFIT_ORDER = [
+  'principal_paid', 'total_benefit', 'total_payout',
+  'ontime_rate', 'delayed_rate', 'grace_days',
+];
+
+function formatBenefitValue(key, value) {
+  switch (BENEFIT_FIELDS[key]?.format) {
+    case 'money': return formatCurrency(value);
+    case 'rate':  return `${(Number(value) * 100).toFixed(2)}%`;
+    case 'days':  return `${value} days`;
+    default:      return String(value);
+  }
+}
+
+function prettyLabel(key) {
+  return BENEFIT_FIELDS[key]?.label
+    ?? key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/** Sorts known fields into a sensible order, unknown ones last. */
+function orderBenefitRows(entries) {
+  return entries.sort(([a], [b]) => {
+    const ia = BENEFIT_ORDER.indexOf(a), ib = BENEFIT_ORDER.indexOf(b);
+    if (ia === -1 && ib === -1) return a.localeCompare(b);
+    if (ia === -1) return 1;
+    if (ib === -1) return -1;
+    return ia - ib;
+  });
+}
 
 function LoadingRow() {
   return (
@@ -119,6 +189,105 @@ function PaymentsTab({ enrollmentId }) {
   );
 }
 
+// ── Closure calculators ───────────────────────────────────────
+// Read-only: these work out what a customer WOULD get. Nothing is closed,
+// cancelled or paid out here.
+function ClosureTab({ enrollmentId }) {
+  const { calculate, kind, result, error, isLoading } = useSchemeBenefits(enrollmentId);
+
+  const payload = result?.Entity ?? result;
+  const rows = payload && typeof payload === 'object'
+    ? orderBenefitRows(
+        Object.entries(payload).filter(([, v]) => v != null && typeof v !== 'object'),
+      )
+    : [];
+  const installments = Array.isArray(payload?.Installments) ? payload.Installments : [];
+  const delayedCount = installments.filter((i) => i.is_delayed).length;
+
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="text-xs text-muted-foreground">
+        These only calculate a figure — nothing is closed or paid out.
+      </p>
+
+      <div className="flex flex-col gap-2">
+        {CLOSURE_ACTIONS.map((action) => (
+          <button
+            key={action.key}
+            type="button"
+            onClick={() => calculate(action.key)}
+            disabled={isLoading}
+            className="flex min-h-11 items-center justify-between gap-3 rounded-xl border border-border bg-card px-3 py-2.5 text-left transition-colors hover:bg-muted disabled:opacity-60"
+          >
+            <span className="min-w-0">
+              <span className="block text-sm font-medium text-foreground">{action.label}</span>
+              <span className="block text-xs text-muted-foreground">{action.hint}</span>
+            </span>
+            <Calculator size={16} className="shrink-0 text-muted-foreground" />
+          </button>
+        ))}
+      </div>
+
+      {isLoading && <LoadingRow />}
+
+      {error && !isLoading && (
+        <div className="flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/5 px-3 py-2.5">
+          <AlertCircle size={16} className="mt-0.5 shrink-0 text-destructive" />
+          <p className="text-sm text-destructive">{error}</p>
+        </div>
+      )}
+
+      {result && !isLoading && !error && (
+        <div className="flex flex-col gap-2 rounded-xl border border-border bg-muted p-3">
+          <p className="text-sm font-medium text-foreground">
+            {CLOSURE_ACTIONS.find((a) => a.key === kind)?.label} calculation
+          </p>
+          {rows.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No figures returned.</p>
+          ) : (
+            <dl className="flex flex-col gap-1">
+              {rows.map(([key, value]) => {
+                const emphasis = BENEFIT_FIELDS[key]?.emphasis;
+                return (
+                  <div
+                    key={key}
+                    className={`flex items-baseline justify-between gap-3 ${
+                      emphasis ? 'mt-1 border-t border-border pt-2' : ''
+                    }`}
+                  >
+                    <dt className={emphasis
+                      ? 'text-sm font-medium text-foreground'
+                      : 'text-xs text-muted-foreground'}>
+                      {prettyLabel(key)}
+                    </dt>
+                    <dd className={`tabular-nums ${
+                      emphasis
+                        ? 'text-base font-semibold text-foreground'
+                        : 'text-sm font-medium text-foreground'
+                    }`}>
+                      {formatBenefitValue(key, value)}
+                    </dd>
+                  </div>
+                );
+              })}
+            </dl>
+          )}
+
+          {installments.length > 0 && (
+            <p className="border-t border-border pt-2 text-xs text-muted-foreground">
+              Calculated across {installments.length} instalment
+              {installments.length === 1 ? '' : 's'}
+              {delayedCount > 0
+                ? ` · ${delayedCount} paid late, charged at the delayed rate`
+                : ' · all paid on time'}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Sheet ──────────────────────────────────────────────────────
 export default function EnrollmentDetailSheet({ enrollment, isOpen, onClose }) {
   const [activeTab, setActiveTab] = useState('schedule');
@@ -142,6 +311,7 @@ export default function EnrollmentDetailSheet({ enrollment, isOpen, onClose }) {
 
         {activeTab === 'schedule' && <ScheduleTab enrollmentId={enrollment.enrollmentId} />}
         {activeTab === 'payments' && <PaymentsTab enrollmentId={enrollment.enrollmentId} />}
+        {activeTab === 'closure'  && <ClosureTab  enrollmentId={enrollment.enrollmentId} />}
       </div>
     </BottomSheet>
   );
