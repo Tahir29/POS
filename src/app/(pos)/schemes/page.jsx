@@ -21,7 +21,8 @@ import { useSchemeEnrollments }  from '@/hooks/schemes/useSchemeEnrollments';
 import { useSchemeReceipt }      from '@/hooks/schemes/useSchemeReceipt';
 import { usePaymentModes }       from '@/hooks/checkout/usePaymentModes';
 import { useOrderHeaderConfig }  from '@/hooks/checkout/useOrderHeaderConfig';
-import { buildTransactionHeaderFields } from '@/services/transactionHeaderService';
+import { useSchemeMonthlyDetails } from '@/hooks/schemes/useSchemeMonthlyDetails';
+import { buildSchemeReceiptPayload } from '@/services/schemeService';
 import { selectActiveStoreId }   from '@/store/slices/storeSlice';
 import { selectCartCustomerId, selectCartCustomerName } from '@/store/slices/cartSlice';
 import APP_CONFIG from '@/constants/appConfig';
@@ -52,11 +53,20 @@ const STATUS_STYLES = {
 };
 
 // ── Receipt payment schema ────────────────────────────────────
+const MONTH_NAMES = [
+  '', 'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+
 const receiptSchema = z.object({
   amount:        z.coerce.number().min(1, 'Enter amount'),
   mode_id:       z.coerce.number().min(1, 'Select payment mode'),
   mode_name:     z.string().optional(),
   document_date: z.string().min(1, 'Required'),
+  // Which instalment(s) this payment covers. OrnaVerse's own dialog refuses
+  // to save without it ("Select Month before Receipt") — see
+  // buildSchemeReceiptPayload() for the captured payload this mirrors.
+  month_ids:     z.array(z.number()).min(1, 'Select at least one month'),
 });
 
 // ── Receipt Sheet ─────────────────────────────────────────────
@@ -64,16 +74,16 @@ function ReceiptSheet({ enrollment, isOpen, onClose }) {
   const storeId = useSelector(selectActiveStoreId);
   const { paymentModes, isLoading: modesLoading } = usePaymentModes();
   const createReceipt = useSchemeReceipt();
-  // HEADER FIELDS (2026-07-28) — same missing-header-fields root cause as
-  // Order/Invoice Create (financial_year_id/ledger_id/document_no/party
-  // identity/receipt+balance), applied here for parity. UNVERIFIED LIVE —
-  // see transactions/page.jsx's header comment for the full context.
   const headerConfig = useOrderHeaderConfig(APP_CONFIG.DOCUMENT_TYPES.SCHEME_RECEIPT);
+  // Unpaid instalments — the month picker's options. Their dialog offers
+  // exactly the same set (the remaining months of the tenure).
+  const { data: months = [] } = useSchemeMonthlyDetails(enrollment?.enrollmentId);
+  const unpaidMonths = months.filter((m) => !m.isPaid);
 
   const today = todayDateString();
 
   const {
-    register, handleSubmit, control, setValue, reset,
+    register, handleSubmit, control, setValue, reset, watch,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(receiptSchema),
@@ -82,8 +92,11 @@ function ReceiptSheet({ enrollment, isOpen, onClose }) {
       mode_id:       '',
       mode_name:     '',
       document_date: today,
+      month_ids:     [],
     },
   });
+
+  const selectedMonths = watch('month_ids');
 
   // This sheet stays mounted across different enrollments (only `isOpen`/
   // `enrollment` change) — RHF's defaultValues only applies at the initial
@@ -97,6 +110,7 @@ function ReceiptSheet({ enrollment, isOpen, onClose }) {
         mode_id:       '',
         mode_name:     '',
         document_date: todayDateString(),
+        month_ids:     [],
       });
     }
   }, [isOpen, enrollment, reset]);
@@ -111,27 +125,36 @@ function ReceiptSheet({ enrollment, isOpen, onClose }) {
 
     if (!headerConfig.isReady) return;
 
-    await createReceipt.mutateAsync({
-      scheme_enrollment_id: enrollment.enrollmentId,
-      ...buildTransactionHeaderFields({
-        subTotal: amount, taxableAmount: amount, taxAmount: 0, netAmount: amount,
-        customerId: enrollment.partyId, customerName: enrollment.partyName,
-        activeStoreId: storeId,
-        headerConfig,
-        // document_id — confirmed 2026-07-28 via a real SchemeReceipt/List
-        // row (Param Deep, enrollment 142): document_no "HO-SPY-07-26-1",
-        // prefix "SPY" matches document_id 99 in DocumentNumbering/List.
-        documentTypeId: APP_CONFIG.DOCUMENT_TYPES.SCHEME_RECEIPT,
-        receiptAmount: amount,
-        documentDate: data.document_date,
-      }),
+    // NOT buildTransactionHeaderFields — that builds a SALES document header
+    // (sub_total / taxable_amount / net_amount / receipt_amount / balance_amount
+    // / promotion_details). OrnaVerse's captured SchemeReceipt payload carries
+    // none of those; sending them is what produced the long-standing opaque
+    // 500. See buildSchemeReceiptPayload() in services/schemeService.js.
+    await createReceipt.mutateAsync(buildSchemeReceiptPayload({
+      enrollmentId:     enrollment.enrollmentId,
+      schemeType:       enrollment.schemeType,
+      schemeUniqueCode: enrollment.schemeUniqueCode,
+      partyId:          enrollment.partyId,
+      partyName:        enrollment.partyName,
+      mobile:           enrollment.mobile,
+      email:            enrollment.email,
+      activeStoreId:    storeId,
+      financialYearId:  headerConfig.financialYearId,
+      ledgerId:         headerConfig.ledgerId,
+      documentDate:     data.document_date,
+      monthIds:         data.month_ids,
       amount,
-      scheme_receipt_details: [{
-        mode_id:   Number(data.mode_id),
+      allowBackdatedEntry:      true,
+      numberOfBackdatedDays:    headerConfig.numberOfBackdatedDays,
+      isDocumentNumberEditable: headerConfig.isDocumentNumberEditable,
+      details: [{
+        modeId:     Number(data.mode_id),
         amount,
-        ledger_id: selectedMode?.ledgerId ?? undefined,
+        ledgerId:   selectedMode?.ledgerId,
+        ledgerName: selectedMode?.ledgerName,
+        modeName:   selectedMode?.modeName,
       }],
-    });
+    }));
     reset();
     onClose();
   };
@@ -169,6 +192,49 @@ function ReceiptSheet({ enrollment, isOpen, onClose }) {
               />
             </div>
             {errors.amount && <p className="text-xs text-destructive">{errors.amount.message}</p>}
+          </div>
+
+          {/* Which instalment(s) this pays */}
+          <div className="flex flex-col gap-1.5">
+            <Label>Paying For <span className="text-destructive">*</span></Label>
+            {unpaidMonths.length === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                Every instalment on this enrollment is already paid.
+              </p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {unpaidMonths.map((m) => {
+                  const isSelected = selectedMonths.includes(m.monthId);
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      aria-pressed={isSelected}
+                      onClick={() =>
+                        setValue(
+                          'month_ids',
+                          isSelected
+                            ? selectedMonths.filter((x) => x !== m.monthId)
+                            : [...selectedMonths, m.monthId],
+                          { shouldValidate: true },
+                        )
+                      }
+                      className={`min-h-11 rounded-xl border px-3 py-2 text-sm transition-colors ${
+                        isSelected
+                          ? 'border-primary bg-primary/10 text-primary font-medium'
+                          : 'border-border bg-card text-foreground hover:bg-muted'
+                      }`}
+                    >
+                      {MONTH_NAMES[m.monthId] ?? `Month ${m.monthId}`}
+                      {m.isOverdue && (
+                        <span className="ml-1.5 text-xs text-destructive">overdue</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            {errors.month_ids && <p className="text-xs text-destructive">{errors.month_ids.message}</p>}
           </div>
 
           {/* Payment mode */}
