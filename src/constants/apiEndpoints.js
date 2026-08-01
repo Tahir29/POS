@@ -391,6 +391,13 @@ const API = {
   // RepairInvoice = billing when item is returned to customer
   // ─────────────────────────────────────────────────────────────────────────
   REPAIR: {
+    // The WORKSHOP repair order (document_id 75, prefix "REP"), created in
+    // Inventory — NOT one of the three POS repair documents below. A Repair In
+    // line item is copied from one of these orders' lines and points back at it
+    // via ref_document_id 75 / ref_transaction_id / ref_transaction_item_id.
+    // Confirmed 2026-08-01 off real posted records; see [[repair-flow-contract]].
+    REPAIR_ORDER_LIST:     'Services/Inventory/Repair/List',
+    REPAIR_ORDER_RETRIEVE: 'Services/Inventory/Repair/Retrieve',
     REPAIR_IN_CREATE:      'Services/POS/RepairIn/Create',
     REPAIR_IN_POST:        'Services/POS/RepairIn/Post',
     REPAIR_IN_CANCEL:      'Services/POS/RepairIn/Cancel',

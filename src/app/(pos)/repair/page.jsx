@@ -48,8 +48,10 @@ import {
 } from '@/hooks/repair/useRepairMutations';
 import { usePaymentModes }     from '@/hooks/checkout/usePaymentModes';
 import { useOrderHeaderConfig } from '@/hooks/checkout/useOrderHeaderConfig';
+import { useRepairOrders, useRepairOrderIntakeLines } from '@/hooks/repair/useRepairOrders';
 import { buildTransactionHeaderFields } from '@/services/transactionHeaderService';
 import ItemSearchPicker        from '@/components/features/transactions/ItemSearchPicker';
+import InlineLoader            from '@/components/shared/InlineLoader';
 import { selectActiveStoreId } from '@/store/slices/storeSlice';
 import { selectCartCustomerId, selectCartCustomerName, selectCartCustomerMobile } from '@/store/slices/cartSlice';
 import APP_CONFIG               from '@/constants/appConfig';
@@ -139,19 +141,19 @@ function RecordPicker({ records, isLoading, selected, onSelect, emptyMessage }) 
 }
 
 // ─── Repair In — New form ───────────────────────────────────────────────────────
-// Intake: customer drops off an item. Item found by SKU search against the
-// master catalog (same picker used for Exchange/Buyback) since repairs here
-// are on items this store's own catalog tracks.
+// Intake is raised AGAINST a workshop Repair Order (document 75), not typed
+// from scratch. Confirmed 2026-08-01 off real posted records: a Repair In line
+// carries ref_document_id 75 / ref_transaction_id / ref_transaction_item_id
+// pointing at the order line it was copied from, and is a ~47-key object with
+// nested item_components — not something a form can assemble by hand.
+// The old version searched the item master and hand-built a line; that shape
+// isn't what the server stores. See [[repair-flow-contract]].
 
 const repairInSchema = z.object({
-  document_date: z.string().min(1, 'Required'),
-  item: z.object({ item_id: z.number() }).nullable().refine((v) => v !== null, { message: 'Select an item' }),
-  pieces: z.coerce.number().min(1, 'Min 1'),
-  weight: z.coerce.number().min(0, 'Required'),
-  bag_no: z.string().optional(),
-  certificate_no: z.string().optional(),
-  huid: z.string().optional(),
-  narration: z.string().optional(),
+  document_date:   z.string().min(1, 'Required'),
+  repair_order_id: z.number({ invalid_type_error: 'Select a repair order' })
+                    .min(1, 'Select a repair order'),
+  narration:       z.string().optional(),
 });
 
 function RepairInNewForm({ onDone }) {
@@ -164,47 +166,43 @@ function RepairInNewForm({ onDone }) {
   const create = useCreateRepairIn({ onSuccess: () => {} });
   const post   = usePostRepairIn({ onSuccess: () => onDone() });
 
-  const { register, handleSubmit, control, setValue, reset, formState: { errors } } = useForm({
+  const { register, handleSubmit, setValue, reset, watch, formState: { errors } } = useForm({
     resolver: zodResolver(repairInSchema),
-    defaultValues: {
-      document_date: todayDateString(), item: null, pieces: 1, weight: '',
-      bag_no: '', certificate_no: '', huid: '', narration: '',
-    },
+    defaultValues: { document_date: todayDateString(), repair_order_id: 0, narration: '' },
   });
 
-  const handleItemSelect = (item) => {
-    setValue('item', item);
-    setValue('weight', item.weight ?? item.net_weight ?? '');
-  };
+  const selectedOrderId = watch('repair_order_id');
+  // Orders for the attached customer; falls back to the whole store's list so
+  // staff can still find a job raised against a different party record.
+  const { orders, isLoading: ordersLoading } = useRepairOrders({ partyId: customerId });
+  const { order, lines, isLoading: linesLoading } =
+    useRepairOrderIntakeLines(selectedOrderId || null);
 
   const onSubmit = async (data) => {
     if (!customerId) return toast.error('Attach a customer to the session before submitting.');
     if (!headerConfig.isReady) return toast.error('Store configuration is still loading — try again in a moment.');
+    if (!lines.length) return toast.error('That repair order has no items to take in.');
     try {
-      const pieces = Number(data.pieces);
-      const weight = Number(data.weight);
+      // Aggregates come from the order's own lines, not from typed input.
+      const pieces    = lines.reduce((s, l) => s + (Number(l.pieces) || 0), 0);
+      const weight    = +lines.reduce((s, l) => s + (Number(l.weight) || 0), 0).toFixed(3);
+      const netWeight = +lines.reduce((s, l) => s + (Number(l.net_weight) || 0), 0).toFixed(3);
       const createRes = await create.mutateAsync({
         ...buildTransactionHeaderFields({
           // Intake has no charge yet — pure item tracking until Repair Out/Invoice.
           subTotal: 0, taxableAmount: 0, taxAmount: 0, netAmount: 0,
-          pieces, weight, netWeight: weight,
+          pieces, weight, netWeight,
           customerId, customerName, customerMobile,
           activeStoreId: storeId,
           headerConfig,
           documentTypeId: APP_CONFIG.DOCUMENT_TYPES.REPAIR_IN,
           documentDate: data.document_date,
         }),
-        line_items: [{
-          item_id:        data.item.item_id,
-          item_code:      data.item.item_code,
-          item_name:      data.item.item_name,
-          pieces,
-          weight,
-          bag_no:         data.bag_no || undefined,
-          certificate_no: data.certificate_no || undefined,
-          huid:           data.huid || undefined,
-          narration:      data.narration || undefined,
-        }],
+        // Ties the intake to the workshop order it came from.
+        ref_document_id:    75,
+        ref_transaction_id: order?.transaction_id,
+        narration:          data.narration || undefined,
+        line_items:         lines,
       });
       const transactionId = createRes?.EntityId;
       if (!transactionId) throw new Error('Repair intake failed — no EntityId returned.');
@@ -229,47 +227,81 @@ function RepairInNewForm({ onDone }) {
         <Input type="date" max={todayDateString()} {...register('document_date')} className="h-11" />
       </FormField>
 
-      <FormField label="Item" required error={errors.item}>
-        <Controller
-          name="item"
-          control={control}
-          render={({ field }) => (
-            <ItemSearchPicker
-              selectedItem={field.value}
-              onSelect={handleItemSelect}
-              onClear={() => setValue('item', null)}
-            />
-          )}
-        />
+      <FormField label="Repair Order" required error={errors.repair_order_id}>
+        {ordersLoading ? (
+          <InlineLoader label="Loading repair orders…" />
+        ) : orders.length === 0 ? (
+          <p className="text-xs text-muted-foreground">
+            No repair orders for this customer. The workshop raises the order first;
+            the intake is recorded against it.
+          </p>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {orders.map((o) => {
+              const isSelected = selectedOrderId === o.transactionId;
+              return (
+                <button
+                  key={o.transactionId}
+                  type="button"
+                  aria-pressed={isSelected}
+                  onClick={() =>
+                    setValue('repair_order_id', isSelected ? 0 : o.transactionId,
+                             { shouldValidate: true })
+                  }
+                  className={`flex min-h-11 items-center justify-between gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors ${
+                    isSelected
+                      ? 'border-primary bg-primary/10'
+                      : 'border-border bg-card hover:bg-muted'
+                  }`}
+                >
+                  <span className="min-w-0">
+                    <span className="block text-sm font-medium text-foreground">{o.documentNo}</span>
+                    <span className="block text-xs text-muted-foreground">
+                      {formatDate(o.documentDate)} · {o.pieces} pc · {o.weight} g
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </FormField>
 
-      <div className="grid grid-cols-2 gap-2">
-        <FormField label="Pieces" required error={errors.pieces}>
-          <Input type="number" inputMode="numeric" min={1} {...register('pieces')} className="h-9 text-sm" />
-        </FormField>
-        <FormField label="Weight (g)" required error={errors.weight}>
-          <Input type="number" inputMode="decimal" step="0.001" {...register('weight')} className="h-9 text-sm" />
-        </FormField>
-      </div>
-
-      <div className="rounded-xl border border-border bg-muted p-3 flex flex-col gap-3">
-        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Tracking (optional)</p>
-        <FormField label="Bag No.">
-          <Input {...register('bag_no')} className="h-9 text-sm" placeholder="e.g. BAG314" />
-        </FormField>
-        <FormField label="Certificate No.">
-          <Input {...register('certificate_no')} className="h-9 text-sm" />
-        </FormField>
-        <FormField label="HUID">
-          <Input {...register('huid')} className="h-9 text-sm" />
-        </FormField>
-      </div>
+      {selectedOrderId > 0 && (
+        <div className="rounded-xl border border-border bg-muted p-3">
+          {linesLoading ? (
+            <InlineLoader label="Loading items…" />
+          ) : (
+            <>
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Items being taken in
+              </p>
+              <ul className="mt-2 flex flex-col gap-1">
+                {lines.map((l, i) => (
+                  <li key={l.ref_transaction_item_id ?? i} className="flex justify-between gap-3 text-sm">
+                    <span className="min-w-0 truncate text-foreground">
+                      {l.item_name || l.item_code || l.sku}
+                    </span>
+                    <span className="shrink-0 text-muted-foreground tabular-nums">
+                      {l.pieces} pc · {l.weight} g
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
+      )}
 
       <FormField label="Narration (optional)">
         <Input {...register('narration')} className="h-11" placeholder="What needs repair" />
       </FormField>
 
-      <Button type="submit" disabled={isSubmitting || !customerId} className="h-12 mt-1">
+      <Button
+        type="submit"
+        disabled={isSubmitting || !customerId || !selectedOrderId || linesLoading}
+        className="h-12 mt-1"
+      >
         {isSubmitting ? 'Recording Intake…' : 'Record Repair Intake'}
       </Button>
     </form>

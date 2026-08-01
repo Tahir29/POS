@@ -169,6 +169,10 @@ export const QUERY_KEYS = {
 
   // ── REPAIR ───────────────────────────────────────────────────────────────
   REPAIR: {
+    // Workshop repair orders (document 75) — the source an intake is raised
+    // against. Distinct from the three POS repair documents below.
+    ORDERS:              (params)          => ['repair', 'orders', params],
+    ORDER_DETAIL:        (transactionId)   => ['repair', 'order-detail', transactionId],
     REPAIR_INS:          (params)          => ['repair', 'repair-ins', params],
     REPAIR_IN_DETAIL:    (transactionId)   => ['repair', 'repair-in-detail', transactionId],
     REPAIR_OUTS:         (params)          => ['repair', 'repair-outs', params],
