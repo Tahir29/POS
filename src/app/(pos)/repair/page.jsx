@@ -208,7 +208,11 @@ function RepairInNewForm({ onDone }) {
       });
       const transactionId = createRes?.EntityId;
       if (!transactionId) throw new Error('Repair intake failed — no EntityId returned.');
-      await post.mutateAsync(transactionId);
+      // Only post when the document doesn't post itself. Confirmed 2026-08-01
+      // off real posted records: RepairIn (117) and RepairInvoice (119) are
+      // auto_posting FALSE and genuinely need this; RepairOut (118) is
+      // auto_posting TRUE, so posting it again returns AlreadyPosted.
+      if (!headerConfig.autoPosting) await post.mutateAsync(transactionId);
       reset();
     } catch (err) {
       toast.error(getErrorMessage(err));
@@ -331,7 +335,8 @@ function RepairOutNewForm({ onDone }) {
       });
       const transactionId = createRes?.EntityId;
       if (!transactionId) throw new Error('Repair-out failed — no EntityId returned.');
-      await post.mutateAsync(transactionId);
+      // RepairOut (118) is auto_posting TRUE — Create already posted it.
+      if (!headerConfig.autoPosting) await post.mutateAsync(transactionId);
       reset();
       setSelectedIn(null);
     } catch (err) {
@@ -438,7 +443,8 @@ function RepairInvoiceNewForm({ onDone }) {
       });
       const transactionId = createRes?.EntityId;
       if (!transactionId) throw new Error('Repair invoice failed — no EntityId returned.');
-      await post.mutateAsync(transactionId);
+      // RepairInvoice (119) is auto_posting FALSE, so this normally runs.
+      if (!headerConfig.autoPosting) await post.mutateAsync(transactionId);
 
       // ledger_id sourced from the selected mode — same pattern as Refund
       // and Scheme Receipt (see usePaymentModes.js normalizeMode).
