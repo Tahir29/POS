@@ -56,9 +56,16 @@ const APP_CONFIG = {
     // each endpoint's own List response (ground truth, not guessed from
     // DocumentNumbering's prefix text) — see [[transactions-duplicate-implementations]]
     // memory for the broader context on these transaction flows.
-    RETURN:          55,  // prefix "PSR" (List also returns CreditNote-identical
-                           // rows in this data set — unconfirmed whether
-                           // standalone CreditNote/Create uses a different id)
+    RETURN:          55,  // prefix "PSR"
+    // CONFIRMED 2026-08-01 off OrnaVerse's own New CreditNote form — Credit
+    // Note is its OWN document type, not a Return. The old note here guessed
+    // they might share id 55; they don't.
+    //   • auto_posting: TRUE → Create also posts. Do NOT call CreditNote/Post
+    //     after Create or it fails AlreadyPosted (same bug fixed on 5 flows).
+    //   • is_tax_applicable: TRUE → the party MUST have a tax_reg_type set,
+    //     or OrnaVerse rejects it. See [[credit-notes-findings]].
+    //   • ledger_id 129, number_of_backdated_days 60.
+    CREDIT_NOTE:     123, // prefix "CRN"
     REFUND:          126, // prefix "RFD"
     EXCHANGE:        56,  // prefix "EXC"
     BUYBACK:         97,  // prefix "BYB"
