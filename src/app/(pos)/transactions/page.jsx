@@ -757,11 +757,10 @@ function CreditNoteNewForm({ onDone }) {
   const customerId    = useSelector(selectCartCustomerId);
   const customerName  = useSelector(selectCartCustomerName);
   const customerMobile = useSelector(selectCartCustomerMobile);
-  // document_id — reusing RETURN's (55/"PSR"): CreditNote/List returned rows
-  // identical to Return/List in the confirmed live sample, so standalone
-  // CreditNote/Create's own document_id is unconfirmed. See
-  // [[transactions-duplicate-implementations]].
-  const headerConfig = useOrderHeaderConfig(APP_CONFIG.DOCUMENT_TYPES.RETURN);
+  // document_id 123 ("CRN") — CONFIRMED 2026-08-01 off OrnaVerse's own New
+  // CreditNote form. This previously reused RETURN's 55, on the assumption
+  // the two shared a type because their List rows looked alike. They don't.
+  const headerConfig = useOrderHeaderConfig(APP_CONFIG.DOCUMENT_TYPES.CREDIT_NOTE);
 
   const create = useCreateCreditNote({ onSuccess: () => {} });
   const post   = usePostCreditNote({ onSuccess: () => onDone() });
@@ -782,7 +781,7 @@ function CreditNoteNewForm({ onDone }) {
           customerId, customerName, customerMobile,
           activeStoreId: storeId,
           headerConfig,
-          documentTypeId: APP_CONFIG.DOCUMENT_TYPES.RETURN,
+          documentTypeId: APP_CONFIG.DOCUMENT_TYPES.CREDIT_NOTE,
           documentDate: data.document_date,
         }),
         ref_transaction_id: data.ref_transaction_id ? Number(data.ref_transaction_id) : undefined,
@@ -790,7 +789,11 @@ function CreditNoteNewForm({ onDone }) {
       });
       const transactionId = createRes?.EntityId;
       if (!transactionId) throw new Error('Credit note creation failed — no EntityId returned.');
-      await post.mutateAsync(transactionId);
+      // Document 123 has auto_posting TRUE, so Create already posted it —
+      // posting again returns AlreadyPosted. Only post when the store's own
+      // config says the document doesn't self-post.
+      if (!headerConfig.autoPosting) await post.mutateAsync(transactionId);
+      onDone();
       reset();
     } catch (err) {
       toast.error(getErrorMessage(err));
