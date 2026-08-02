@@ -7,14 +7,14 @@
 //   Repair Out — item sent to the craftsman/workshop
 //   Repair Invoice — item back, customer billed and paid
 //
-// Confirmed 2026-07-16 via real API data: each stage's line item carries a
-// real catalog item_id (repairs here are on items this store actually
-// sold/tracks, found by SKU) — RepairOut references the RepairIn
-// transaction it came from (ref_transaction_id), and RepairInvoice
-// references the RepairOut it's billing. Reuses ItemSearchPicker from the
-// Exchange/Buyback rebuild for the intake item lookup, and a lightweight
-// "pick from recent records" list for the Out/Invoice stages instead of
-// re-searching the catalog (staff pick the specific job, not an item).
+// Each stage references the one before it: Repair In is raised against a
+// workshop Repair Order (document 75) and copies its line, RepairOut
+// references the RepairIn it came from (ref_transaction_id), and
+// RepairInvoice references the RepairOut it's billing. Every stage picks an
+// existing record rather than searching the catalogue — staff pick the
+// specific job, not an item. (The intake used to use ItemSearchPicker and
+// hand-build a line; that shape isn't what the server stores. Corrected
+// 2026-08-01, see [[repair-flow-contract]].)
 //
 // HEADER FIELDS (2026-07-28) — the "AccessDenied" framing above is STALE.
 // Confirmed live 2026-07-28 that this whole family of Create endpoints
@@ -29,7 +29,7 @@
 
 import { Suspense, useState } from 'react';
 import { useSelector }        from 'react-redux';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import { zodResolver }        from '@hookform/resolvers/zod';
 import { z }                  from 'zod';
 import { toast }              from 'react-toastify';
@@ -50,7 +50,6 @@ import { usePaymentModes }     from '@/hooks/checkout/usePaymentModes';
 import { useOrderHeaderConfig } from '@/hooks/checkout/useOrderHeaderConfig';
 import { useRepairOrders, useRepairOrderIntakeLines } from '@/hooks/repair/useRepairOrders';
 import { buildTransactionHeaderFields } from '@/services/transactionHeaderService';
-import ItemSearchPicker        from '@/components/features/transactions/ItemSearchPicker';
 import InlineLoader            from '@/components/shared/InlineLoader';
 import { selectActiveStoreId } from '@/store/slices/storeSlice';
 import { selectCartCustomerId, selectCartCustomerName, selectCartCustomerMobile } from '@/store/slices/cartSlice';
