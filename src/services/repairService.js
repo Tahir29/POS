@@ -90,6 +90,28 @@ export async function priceRepairItems({ selectedProducts, companyId }) {
 }
 
 /**
+ * Resolves the stock location a repair lands in.
+ *
+ * Every real Repair Order on this tenant carries `location_id: 2`, which
+ * `CompanyWiseLocations/List` names "Repair". Matched by name rather than
+ * hardcoded, since the id is per-tenant. Falls back to the first location.
+ *
+ * @param {number} companyId
+ * @returns {Promise<number|null>}
+ */
+export async function getRepairLocationId(companyId) {
+  const response = await axiosInstance.post(API.REPAIR.COMPANY_LOCATIONS, {
+    Take: 50,
+    company_id: companyId,
+  });
+  const rows = response.data?.Entities ?? [];
+  const repairLocation = rows.find(
+    (l) => /^repair$/i.test((l.location_name ?? l.name ?? '').trim()),
+  );
+  return (repairLocation ?? rows[0])?.location_id ?? null;
+}
+
+/**
  * Builds the Inventory/Repair Entity.
  *
  * Field list transcribed from their own `RepairForm` definition

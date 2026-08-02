@@ -7,7 +7,12 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { useSelector } from 'react-redux';
-import { getRepairOrders, getRepairOrderAsIntakeLines } from '@/services/repairService';
+import {
+  getRepairOrders,
+  getRepairOrderAsIntakeLines,
+  getRepairableSoldItems,
+  getRepairLocationId,
+} from '@/services/repairService';
 import { selectActiveStoreId } from '@/store/slices/storeSlice';
 import { QUERY_KEYS } from '@/constants/queryKeys';
 import APP_CONFIG from '@/constants/appConfig';
@@ -49,6 +54,45 @@ export function useRepairOrders({ partyId } = {}) {
     isError:   query.isError,
     refetch:   query.refetch,
   };
+}
+
+/**
+ * Items this customer bought that can be sent for repair.
+ * Uses transaction_type 3 — the repair-specific filter.
+ *
+ * @param {number|null} partyId
+ */
+export function useRepairableSoldItems(partyId) {
+  const storeId = useSelector(selectActiveStoreId);
+
+  const query = useQuery({
+    queryKey: QUERY_KEYS.REPAIR.SOLD_ITEMS({ storeId, partyId: partyId ?? null }),
+    queryFn:  () => getRepairableSoldItems({ partyId, companyId: storeId }),
+    enabled:  !!partyId && !!storeId,
+    staleTime: APP_CONFIG.STALE_TIME.ORDERS,
+  });
+
+  return {
+    items:     query.data ?? [],
+    isLoading: query.isLoading,
+    isError:   query.isError,
+  };
+}
+
+/**
+ * The stock location a repair lands in ("Repair" on this tenant).
+ */
+export function useRepairLocationId() {
+  const storeId = useSelector(selectActiveStoreId);
+
+  const query = useQuery({
+    queryKey: QUERY_KEYS.REPAIR.LOCATION(storeId),
+    queryFn:  () => getRepairLocationId(storeId),
+    enabled:  !!storeId,
+    staleTime: Infinity,   // stock locations don't change during a shift
+  });
+
+  return query.data ?? null;
 }
 
 /**

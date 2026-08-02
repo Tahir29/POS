@@ -173,6 +173,8 @@ export const QUERY_KEYS = {
     // against. Distinct from the three POS repair documents below.
     ORDERS:              (params)          => ['repair', 'orders', params],
     ORDER_DETAIL:        (transactionId)   => ['repair', 'order-detail', transactionId],
+    SOLD_ITEMS:          (params)          => ['repair', 'sold-items', params],
+    LOCATION:            (companyId)       => ['repair', 'location', companyId],
     REPAIR_INS:          (params)          => ['repair', 'repair-ins', params],
     REPAIR_IN_DETAIL:    (transactionId)   => ['repair', 'repair-in-detail', transactionId],
     REPAIR_OUTS:         (params)          => ['repair', 'repair-outs', params],
