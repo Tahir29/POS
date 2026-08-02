@@ -92,17 +92,49 @@ successful save in their ERP would name it.
 
 ---
 
-## 4. Repair In — built, not yet live-verified
+## 4. Repair — their "Save Repair Order" silently does nothing
 
-**Status:** ours to finish; needs suitable test data.
+**Status:** blocked on OrnaVerse for the payload. Two real findings for us.
 
-Repair In now raises an intake **against a workshop Repair Order**
-(document 75) rather than hand-building a line, which matches how OrnaVerse
-actually stores it. Not yet exercised end-to-end because the Repair Orders on
-UAT belong to parties other than our test customer.
+### 4a. We're modelling the wrong document at the counter
 
-**To verify:** raise a Repair Order in `/Inventory/RepairOrder` against a
-customer we can attach in our POS, then run our Repair In form against it.
+Their POS counter's **Repair (F5)** tab creates a **Repair Order**
+(document 75) — the button literally reads *"Save Repair Order"* and the tab
+badge reads "Order". Repair In (117) and Repair Out (118) are **workshop-side**
+documents raised as the job moves through the workshop, not at the counter.
+
+**Our Repair module builds a Repair In from the counter. That's the wrong
+document for that journey.** The intake screen should create a Repair Order.
+
+### 4b. Their Save button doesn't work
+
+With a valid customer and a priced item, clicking **Save Repair Order** fires
+the config calls (`Documents/GetDocumentById`, `DocumentNumbering/List`,
+`ExchangeRate/GetExchangeRate`, `Company/Retrieve`,
+`CompanyWiseLocations/List`) and then **no Create is ever sent** — no error,
+no dialog, no console message. Confirmed nothing was created: Repair Order
+count stayed at 62, Repair In count at 20.
+
+So the Create payload still can't be captured.
+
+### What we DID get — the pricing helper
+
+Adding a sold item to a Repair Order calls **`Helpers/SetReturnItems`** — the
+same helper Return uses:
+
+```json
+{ "selected_products": [ ...rows from POS/InvoiceItems/List... ],
+  "is_labour_applicable": false, "is_tax_applicable": false,
+  "document_id": 75, "exchange_rate": 1, "company_id": 1 }
+```
+
+That answers the "which Set*Items helper prices repair lines" question.
+
+### Consistent with this: our own RepairIn/Create 500s
+
+Tried twice — a ~24-field whitelist off the order line, and the full line
+passed through intact. Both returned a generic 500. Given 4a, that may be
+because we're posting the wrong document type for this journey entirely.
 
 ---
 
