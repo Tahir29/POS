@@ -42,13 +42,21 @@ import {
   useRepairIns, useRepairOuts, useRepairInvoices,
 } from '@/hooks/repair/useRepairLists';
 import {
+  useCreateRepairOrder,   usePostRepairOrder,
   useCreateRepairIn,      usePostRepairIn,
   useCreateRepairOut,     usePostRepairOut,
   useCreateRepairInvoice, usePostRepairInvoice, useCreateRepairInvoiceReceipt,
 } from '@/hooks/repair/useRepairMutations';
 import { usePaymentModes }     from '@/hooks/checkout/usePaymentModes';
 import { useOrderHeaderConfig } from '@/hooks/checkout/useOrderHeaderConfig';
-import { useRepairOrders, useRepairOrderIntakeLines } from '@/hooks/repair/useRepairOrders';
+import {
+  useRepairOrders, useRepairOrderIntakeLines,
+  useRepairableSoldItems, useRepairLocationId,
+} from '@/hooks/repair/useRepairOrders';
+import {
+  priceRepairItems, buildRepairOrderPayload,
+  REPAIR_TYPE, REPAIR_LOCATION_TYPE,
+} from '@/services/repairService';
 import { buildTransactionHeaderFields } from '@/services/transactionHeaderService';
 import InlineLoader            from '@/components/shared/InlineLoader';
 import { selectActiveStoreId } from '@/store/slices/storeSlice';
@@ -139,89 +147,113 @@ function RecordPicker({ records, isLoading, selected, onSelect, emptyMessage }) 
   );
 }
 
-// ─── Repair In — New form ───────────────────────────────────────────────────────
-// Intake is raised AGAINST a workshop Repair Order (document 75), not typed
-// from scratch. Confirmed 2026-08-01 off real posted records: a Repair In line
-// carries ref_document_id 75 / ref_transaction_id / ref_transaction_item_id
-// pointing at the order line it was copied from, and is a ~47-key object with
-// nested item_components — not something a form can assemble by hand.
-// The old version searched the item master and hand-built a line; that shape
-// isn't what the server stores. See [[repair-flow-contract]].
+// ─── Accept for Repair — raises a REPAIR ORDER ─────────────────────────────────
+// The counter raises a Repair Order (document 75), not a Repair In. Confirmed
+// 2026-08-01 against OrnaVerse's own POS Repair (F5) tab, whose button reads
+// "Save Repair Order". Repair In (117) / Repair Out (118) are workshop-side
+// documents raised as the job moves through the workshop.
+//
+// Staff pick the customer's own sold items (transaction_type 3 — the repair
+// filter; Return/Buyback/Exchange use 1, Credit Note uses 4), those get priced
+// by Helpers/SetReturnItems, and the result becomes the order's line_items.
+// See [[repair-flow-contract]].
 
-const repairInSchema = z.object({
-  document_date:   z.string().min(1, 'Required'),
-  repair_order_id: z.number({ invalid_type_error: 'Select a repair order' })
-                    .min(1, 'Select a repair order'),
-  narration:       z.string().optional(),
+const repairOrderSchema = z.object({
+  document_date:  z.string().min(1, 'Required'),
+  delivery_date:  z.string().optional(),
+  item_keys:      z.array(z.string()).min(1, 'Pick at least one item'),
+  repair_at_ho:   z.boolean().optional(),
+  narration:      z.string().optional(),
 });
+
+const soldItemKey = (row) =>
+  `${row.document_no ?? ''}#${row.item_line_no ?? ''}#${row.transaction_item_id ?? ''}`;
 
 function RepairInNewForm({ onDone }) {
   const storeId       = useSelector(selectActiveStoreId);
   const customerId    = useSelector(selectCartCustomerId);
   const customerName  = useSelector(selectCartCustomerName);
-  const customerMobile = useSelector(selectCartCustomerMobile);
-  const headerConfig = useOrderHeaderConfig(APP_CONFIG.DOCUMENT_TYPES.REPAIR_IN);
+  const headerConfig  = useOrderHeaderConfig(APP_CONFIG.DOCUMENT_TYPES.REPAIR_IN);
 
-  const create = useCreateRepairIn({ onSuccess: () => {} });
-  const post   = usePostRepairIn({ onSuccess: () => onDone() });
+  const create = useCreateRepairOrder({ onSuccess: () => {} });
+  const post   = usePostRepairOrder({ onSuccess: () => onDone() });
 
   const { register, handleSubmit, setValue, reset, watch, formState: { errors } } = useForm({
-    resolver: zodResolver(repairInSchema),
-    defaultValues: { document_date: todayDateString(), repair_order_id: 0, narration: '' },
+    resolver: zodResolver(repairOrderSchema),
+    defaultValues: {
+      document_date: todayDateString(), delivery_date: '',
+      item_keys: [], repair_at_ho: false, narration: '',
+    },
   });
 
-  const selectedOrderId = watch('repair_order_id');
-  // NOTE: party_id is sent but OrnaVerse's Inventory/Repair/List ignores it —
-  // verified live 2026-08-01, the list is identical with and without a
-  // customer attached (same quirk as POS/InvoiceItems/List). So this is the
-  // whole store's open repair jobs, not the attached customer's. Left as-is
-  // because workshop orders are raised against internal/vendor parties rather
-  // than the retail customer, so filtering by the attached customer would
-  // mostly return nothing.
-  const { orders, isLoading: ordersLoading } = useRepairOrders({ partyId: customerId });
-  const { order, lines, isLoading: linesLoading } =
-    useRepairOrderIntakeLines(selectedOrderId || null);
+  const selectedKeys = watch('item_keys');
+  const repairAtHo   = watch('repair_at_ho');
+  const { items: soldItems, isLoading: itemsLoading } = useRepairableSoldItems(customerId);
+  const repairLocationId = useRepairLocationId();
+  const [isPricing, setIsPricing] = useState(false);
+
+  const selectedRows = soldItems.filter((r) => selectedKeys.includes(soldItemKey(r)));
+
+  const toggleItem = (row) => {
+    const key = soldItemKey(row);
+    setValue(
+      'item_keys',
+      selectedKeys.includes(key)
+        ? selectedKeys.filter((k) => k !== key)
+        : [...selectedKeys, key],
+      { shouldValidate: true },
+    );
+  };
 
   const onSubmit = async (data) => {
     if (!customerId) return toast.error('Attach a customer to the session before submitting.');
     if (!headerConfig.isReady) return toast.error('Store configuration is still loading — try again in a moment.');
-    if (!lines.length) return toast.error('That repair order has no items to take in.');
+    if (!selectedRows.length) return toast.error('Pick at least one item to send for repair.');
     try {
-      // Aggregates come from the order's own lines, not from typed input.
-      const pieces    = lines.reduce((s, l) => s + (Number(l.pieces) || 0), 0);
-      const weight    = +lines.reduce((s, l) => s + (Number(l.weight) || 0), 0).toFixed(3);
-      const netWeight = +lines.reduce((s, l) => s + (Number(l.net_weight) || 0), 0).toFixed(3);
-      const createRes = await create.mutateAsync({
-        ...buildTransactionHeaderFields({
-          // Intake has no charge yet — pure item tracking until Repair Out/Invoice.
-          subTotal: 0, taxableAmount: 0, taxAmount: 0, netAmount: 0,
-          pieces, weight, netWeight,
-          customerId, customerName, customerMobile,
-          activeStoreId: storeId,
-          headerConfig,
-          documentTypeId: APP_CONFIG.DOCUMENT_TYPES.REPAIR_IN,
-          documentDate: data.document_date,
-        }),
-        // Ties the intake to the workshop order it came from.
-        ref_document_id:    75,
-        ref_transaction_id: order?.transaction_id,
-        narration:          data.narration || undefined,
-        line_items:         lines,
+      // Line items are server-computed — priced by the same helper Return uses.
+      setIsPricing(true);
+      const lineItems = await priceRepairItems({
+        selectedProducts: selectedRows,
+        companyId: storeId,
       });
+      setIsPricing(false);
+      if (!lineItems.length) throw new Error('Pricing returned no line items.');
+
+      const createRes = await create.mutateAsync(
+        buildRepairOrderPayload({
+          partyId: customerId, partyName: customerName,
+          companyId: storeId,
+          financialYearId: headerConfig.financialYearId,
+          ledgerId: headerConfig.ledgerId,
+          documentDate: data.document_date,
+          deliveryDate: data.delivery_date || null,
+          repairType: REPAIR_TYPE.CUSTOMER_ITEM,
+          repairLocationType: data.repair_at_ho
+            ? REPAIR_LOCATION_TYPE.HEAD_OFFICE
+            : REPAIR_LOCATION_TYPE.OUR_WORKSHOP,
+          repairLocation: storeId,
+          locationId: repairLocationId,
+          lineItems,
+          narration: data.narration,
+          allowBackdatedEntry:      true,
+          numberOfBackdatedDays:    headerConfig.numberOfBackdatedDays,
+          isDocumentNumberEditable: headerConfig.isDocumentNumberEditable,
+          autoPosting:              headerConfig.autoPosting,
+        }),
+      );
       const transactionId = createRes?.EntityId;
-      if (!transactionId) throw new Error('Repair intake failed — no EntityId returned.');
-      // Only post when the document doesn't post itself. Confirmed 2026-08-01
-      // off real posted records: RepairIn (117) and RepairInvoice (119) are
-      // auto_posting FALSE and genuinely need this; RepairOut (118) is
-      // auto_posting TRUE, so posting it again returns AlreadyPosted.
+      if (!transactionId) throw new Error('Repair order failed — no EntityId returned.');
+      // Document 75 is auto_posting TRUE, so Create already posted it.
       if (!headerConfig.autoPosting) await post.mutateAsync(transactionId);
+      else onDone();
       reset();
     } catch (err) {
+      setIsPricing(false);
       toast.error(getErrorMessage(err));
     }
   };
 
-  const isSubmitting = create.isPending || post.isPending;
+  const isSubmitting = isPricing || create.isPending || post.isPending;
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5">
@@ -231,27 +263,51 @@ function RepairInNewForm({ onDone }) {
         <Input type="date" max={todayDateString()} {...register('document_date')} className="h-11" />
       </FormField>
 
-      <FormField label="Repair Order" required error={errors.repair_order_id}>
-        {ordersLoading ? (
-          <InlineLoader label="Loading repair orders…" />
-        ) : orders.length === 0 ? (
+      <FormField label="Where will this be repaired?">
+        <div className="flex gap-2">
+          {[
+            { ho: false, label: 'At our workshop' },
+            { ho: true,  label: 'Send to Head Office' },
+          ].map((opt) => (
+            <button
+              key={opt.label}
+              type="button"
+              aria-pressed={!!repairAtHo === opt.ho}
+              onClick={() => setValue('repair_at_ho', opt.ho)}
+              className={`min-h-11 flex-1 rounded-xl border px-3 py-2.5 text-sm transition-colors ${
+                !!repairAtHo === opt.ho
+                  ? 'border-primary bg-primary/10 font-medium text-primary'
+                  : 'border-border bg-card text-foreground hover:bg-muted'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </FormField>
+
+      <FormField label="Items for Repair" required error={errors.item_keys}>
+        {!customerId ? (
           <p className="text-xs text-muted-foreground">
-            No repair orders for this customer. The workshop raises the order first;
-            the intake is recorded against it.
+            Attach a customer to see what they&apos;ve bought.
+          </p>
+        ) : itemsLoading ? (
+          <InlineLoader label="Loading their purchases…" />
+        ) : soldItems.length === 0 ? (
+          <p className="text-xs text-muted-foreground">
+            Nothing of this customer&apos;s is eligible for repair.
           </p>
         ) : (
           <div className="flex flex-col gap-2">
-            {orders.map((o) => {
-              const isSelected = selectedOrderId === o.transactionId;
+            {soldItems.map((row) => {
+              const key = soldItemKey(row);
+              const isSelected = selectedKeys.includes(key);
               return (
                 <button
-                  key={o.transactionId}
+                  key={key}
                   type="button"
                   aria-pressed={isSelected}
-                  onClick={() =>
-                    setValue('repair_order_id', isSelected ? 0 : o.transactionId,
-                             { shouldValidate: true })
-                  }
+                  onClick={() => toggleItem(row)}
                   className={`flex min-h-11 items-center justify-between gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors ${
                     isSelected
                       ? 'border-primary bg-primary/10'
@@ -259,10 +315,15 @@ function RepairInNewForm({ onDone }) {
                   }`}
                 >
                   <span className="min-w-0">
-                    <span className="block text-sm font-medium text-foreground">{o.documentNo}</span>
-                    <span className="block text-xs text-muted-foreground">
-                      {formatDate(o.documentDate)} · {o.pieces} pc · {o.weight} g
+                    <span className="block truncate text-sm font-medium text-foreground">
+                      {row.item_name || row.item_code}
                     </span>
+                    <span className="block text-xs text-muted-foreground">
+                      {row.sku} · {row.document_no}
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+                    {row.pieces} pc · {row.weight} g
                   </span>
                 </button>
               );
@@ -271,31 +332,9 @@ function RepairInNewForm({ onDone }) {
         )}
       </FormField>
 
-      {selectedOrderId > 0 && (
-        <div className="rounded-xl border border-border bg-muted p-3">
-          {linesLoading ? (
-            <InlineLoader label="Loading items…" />
-          ) : (
-            <>
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Items being taken in
-              </p>
-              <ul className="mt-2 flex flex-col gap-1">
-                {lines.map((l, i) => (
-                  <li key={l.ref_transaction_item_id ?? i} className="flex justify-between gap-3 text-sm">
-                    <span className="min-w-0 truncate text-foreground">
-                      {l.item_name || l.item_code || l.sku}
-                    </span>
-                    <span className="shrink-0 text-muted-foreground tabular-nums">
-                      {l.pieces} pc · {l.weight} g
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
-        </div>
-      )}
+      <FormField label="Promised Delivery (optional)">
+        <Input type="date" {...register('delivery_date')} className="h-11" />
+      </FormField>
 
       <FormField label="Narration (optional)">
         <Input {...register('narration')} className="h-11" placeholder="What needs repair" />
@@ -303,10 +342,10 @@ function RepairInNewForm({ onDone }) {
 
       <Button
         type="submit"
-        disabled={isSubmitting || !customerId || !selectedOrderId || linesLoading}
+        disabled={isSubmitting || !customerId || selectedKeys.length === 0}
         className="h-12 mt-1"
       >
-        {isSubmitting ? 'Recording Intake…' : 'Record Repair Intake'}
+        {isPricing ? 'Pricing items…' : isSubmitting ? 'Saving…' : 'Save Repair Order'}
       </Button>
     </form>
   );

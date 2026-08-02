@@ -404,6 +404,9 @@ const API = {
     // Sold items eligible for repair. NOTE transaction_type 3 — Return/Buyback/
     // Exchange use 1 and Credit Note uses 4. Three journeys, three values.
     REPAIR_SOLD_ITEMS:     'Services/POS/InvoiceItems/List',
+    // Stock locations per company. A repair lands in the one named "Repair"
+    // (location_id 2 on this tenant) — matches every real Repair Order record.
+    COMPANY_LOCATIONS:     'Services/Administration/CompanyWiseLocations/List',
     REPAIR_IN_CREATE:      'Services/POS/RepairIn/Create',
     REPAIR_IN_POST:        'Services/POS/RepairIn/Post',
     REPAIR_IN_CANCEL:      'Services/POS/RepairIn/Cancel',

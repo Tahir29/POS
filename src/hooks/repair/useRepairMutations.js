@@ -11,6 +11,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-toastify';
 import {
+  createRepairOrder,   postRepairOrder,
   createRepairIn,      postRepairIn,      cancelRepairIn,
   createRepairOut,     postRepairOut,
   createRepairInvoice, postRepairInvoice, createRepairInvoiceReceipt,
@@ -26,6 +27,44 @@ function getErrorMessage(error) {
     error?.message ??
     'Something went wrong.'
   );
+}
+
+// ─── REPAIR ORDER (what the counter actually raises) ──────────────────────────
+// OrnaVerse's own POS Repair tab creates a Repair Order (document 75) — its
+// button reads "Save Repair Order". Repair In/Out are workshop-side documents
+// raised later. See [[repair-flow-contract]].
+
+export function useCreateRepairOrder({ onSuccess } = {}) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload) => createRepairOrder(payload),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['repair', 'orders'] });
+      toast.success(TOAST.REPAIR.INTAKE_CREATED);
+      tracker.track(EVENTS.REPAIR_IN_CREATED, { transactionId: data?.EntityId });
+      onSuccess?.(data);
+    },
+    onError: (error) => {
+      toast.error(getErrorMessage(error));
+      tracker.track(EVENTS.REPAIR_IN_FAILED, { stage: 'create', error: getErrorMessage(error) });
+    },
+  });
+}
+
+export function usePostRepairOrder({ onSuccess } = {}) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (transactionId) => postRepairOrder(transactionId),
+    onSuccess: (data, transactionId) => {
+      queryClient.invalidateQueries({ queryKey: ['repair', 'orders'] });
+      tracker.track(EVENTS.REPAIR_IN_POSTED, { transactionId });
+      onSuccess?.(data);
+    },
+    onError: (error) => {
+      toast.error(getErrorMessage(error));
+      tracker.track(EVENTS.REPAIR_IN_FAILED, { stage: 'post', error: getErrorMessage(error) });
+    },
+  });
 }
 
 // ─── REPAIR IN ────────────────────────────────────────────────────────────────
