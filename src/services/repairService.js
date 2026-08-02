@@ -32,6 +32,165 @@ import APP_CONFIG from '@/constants/appConfig';
 const REPAIR_ORDER_DOCUMENT_ID = 75;
 
 /**
+ * repair_type — read out of OrnaVerse's own bundle (RepairForm,
+ * formKey "Inventory.Repair"). It drives which items can be picked.
+ */
+export const REPAIR_TYPE = {
+  STOCK_ITEM:    1,  // repairing a piece from our own stock
+  CUSTOMER_ITEM: 2,  // repairing something the customer bought from us
+};
+
+/** "Where will this be repaired?" — their counter's toggle. */
+export const REPAIR_LOCATION_TYPE = {
+  OUR_WORKSHOP: 1,
+  HEAD_OFFICE:  2,
+};
+
+/**
+ * Sold items eligible for repair.
+ *
+ * `transaction_type: 3` is the repair-specific value — Return/Buyback/
+ * Exchange use 1 and Credit Note uses 4. Confirmed from their client source,
+ * which also refuses with "Please select Party to proceed" when repair_type
+ * is CUSTOMER_ITEM and no party is set.
+ *
+ * @param {{ partyId: number, companyId: number, take?: number }} params
+ */
+export async function getRepairableSoldItems({ partyId, companyId, take = 25 }) {
+  if (!partyId) return [];
+  const response = await axiosInstance.post(API.REPAIR.REPAIR_SOLD_ITEMS, {
+    Take: take,
+    party_id: partyId,
+    company_id: companyId,
+    transaction_type: 3,
+    get_child: true,
+  });
+  return response.data?.Entities ?? [];
+}
+
+/**
+ * Prices picked items for a Repair Order.
+ *
+ * Captured live 2026-08-01: their counter calls Helpers/SetReturnItems — the
+ * SAME helper Return uses — with document_id 75 and labour/tax off. Line
+ * items are server-computed, so this is the only correct way to build them.
+ *
+ * @param {{ selectedProducts: object[], companyId: number }} params
+ */
+export async function priceRepairItems({ selectedProducts, companyId }) {
+  const response = await axiosInstance.post(API.HELPERS.SET_RETURN_ITEMS, {
+    selected_products:    selectedProducts,
+    is_labour_applicable: false,
+    is_tax_applicable:    false,
+    document_id:          REPAIR_ORDER_DOCUMENT_ID,
+    exchange_rate:        1,
+    company_id:           companyId,
+  });
+  return response.data?.Entities ?? response.data ?? [];
+}
+
+/**
+ * Builds the Inventory/Repair Entity.
+ *
+ * Field list transcribed from their own `RepairForm` definition
+ * (formKey "Inventory.Repair", 49 fields) in
+ * /esm/_chunks/chunk-CJSQNCGC.js — their Save button never fires a Create on
+ * this tenant, so the payload could not be captured from traffic.
+ * See [[repair-flow-contract]].
+ */
+export function buildRepairOrderPayload({
+  partyId, partyName, phoneCode, address, stateName,
+  companyId, financialYearId, ledgerId,
+  documentDate, deliveryDate,
+  repairType = REPAIR_TYPE.CUSTOMER_ITEM,
+  repairLocationType = REPAIR_LOCATION_TYPE.OUR_WORKSHOP,
+  repairLocation, locationId,
+  lineItems, narration, remark,
+  allowBackdatedEntry, numberOfBackdatedDays, isDocumentNumberEditable,
+  autoPosting, isTaxApplicable,
+}) {
+  const sum = (field) =>
+    +lineItems.reduce((s, l) => s + (Number(l[field]) || 0), 0).toFixed(3);
+  const money = (field) =>
+    +lineItems.reduce((s, l) => s + (Number(l[field]) || 0), 0).toFixed(2);
+
+  const subTotal = money('sub_total');
+  const netAmount = money('net_amount') || subTotal;
+
+  return {
+    // document_no deliberately omitted — the server assigns it.
+    document_id:   REPAIR_ORDER_DOCUMENT_ID,
+    document_date: documentDate,
+    delivery_date: deliveryDate ?? null,
+    party_id:      partyId,
+    party_name:    partyName ?? '',
+    phone_code:    phoneCode ?? '',
+    address:       address ?? '',
+    state_name:    stateName ?? '',
+    company_id:        companyId,
+    financial_year_id: financialYearId,
+    ledger_id:         ledgerId,
+    currency_id:   103,
+    exchange_rate: 1,
+    user_id:       null,
+    ref_transaction_id: 0,
+    // what kind of repair, and where it happens
+    repair_type:          repairType,
+    repair_location_type: repairLocationType,
+    repair_location:      repairLocation,
+    location_id:          locationId,
+    is_transferred:       false,
+    // aggregates, summed from the priced lines
+    pieces:     sum('pieces'),
+    weight:     sum('weight'),
+    net_weight: sum('net_weight'),
+    sub_total:      subTotal,
+    base_sub_total: subTotal,
+    taxable_amount: money('taxable_amount') || subTotal,
+    tax_amount:     money('tax_amount'),
+    discount:       money('discount'),
+    additional_charges: 0,
+    round_off:      0,
+    net_amount:      netAmount,
+    base_net_amount: netAmount,
+    bill_no: '', bill_date: null, challan_no: '', challan_date: null,
+    narration: narration ?? '',
+    remark:    remark ?? '',
+    payable_ledger_id:    155,
+    receivable_ledger_id: 173,
+    is_document_number_editable: isDocumentNumberEditable ?? false,
+    allow_backdated_entry:       allowBackdatedEntry ?? true,
+    number_of_backdated_days:    numberOfBackdatedDays ?? 60,
+    auto_posting:      autoPosting ?? true,
+    is_tax_applicable: isTaxApplicable ?? false,
+    line_items: lineItems,
+  };
+}
+
+/**
+ * Creates a Repair Order (document 75).
+ * @param {object} entity — output of buildRepairOrderPayload()
+ */
+export async function createRepairOrder(entity) {
+  const response = await axiosInstance.post(API.REPAIR.REPAIR_ORDER_CREATE, {
+    Entity: entity,
+  });
+  return response.data;
+}
+
+/**
+ * Posts a Repair Order. Document 75 is auto_posting TRUE on this tenant, so
+ * callers should gate on their own header config rather than calling blindly.
+ * @param {number} transactionId
+ */
+export async function postRepairOrder(transactionId) {
+  const response = await axiosInstance.post(API.REPAIR.REPAIR_ORDER_POST, {
+    EntityId: transactionId,
+  });
+  return response.data;
+}
+
+/**
  * Repair orders available to raise an intake against.
  * @param {{ partyId?: number, take?: number, company_id?: number }} params
  * @returns {Promise<object[]>}
