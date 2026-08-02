@@ -2,8 +2,21 @@
 
 As of **2026-08-01**, branch `repair-creditnote_01082026`.
 
-All of these were established by capturing real traffic from OrnaVerse's own
-ERP on UAT, or by reading real posted records — not by guessing payloads.
+Everything here was established by capturing real traffic from OrnaVerse's own
+UAT app, reading real posted records, or reading their own client bundle —
+not by guessing payloads.
+
+## Summary
+
+| # | Flow | Status |
+|---|---|---|
+| 1 | Refund settlement | **Blocked** — their own ERP refund fails too |
+| 2 | Scheme close-out | **Blocked** — record locks; no API call is reachable |
+| 3 | Credit Note | **Blocked** — their item picker returns nothing, for anyone |
+| 4 | Repair | **Solved our side** — but their own Save sends no Create |
+
+Items 1–3 need OrnaVerse to answer. Item 4 is working for us and is reported
+because it's a defect in their product.
 
 ---
 
@@ -92,35 +105,38 @@ successful save in their ERP would name it.
 
 ---
 
-## 4. Repair — their "Save Repair Order" silently does nothing
+## 4. Repair — SOLVED on our side, still broken on theirs
 
-**Status:** blocked on OrnaVerse for the payload. Two real findings for us.
+**Status:** working for us. Worth reporting to them because **their own POS
+cannot do it.**
 
-### 4a. We're modelling the wrong document at the counter
-
-Their POS counter's **Repair (F5)** tab creates a **Repair Order**
-(document 75) — the button literally reads *"Save Repair Order"* and the tab
-badge reads "Order". Repair In (117) and Repair Out (118) are **workshop-side**
-documents raised as the job moves through the workshop, not at the counter.
-
-**Our Repair module builds a Repair In from the counter. That's the wrong
-document for that journey.** The intake screen should create a Repair Order.
-
-### 4b. Their Save button doesn't work
+### Their "Save Repair Order" sends nothing
 
 With a valid customer and a priced item, clicking **Save Repair Order** fires
 the config calls (`Documents/GetDocumentById`, `DocumentNumbering/List`,
 `ExchangeRate/GetExchangeRate`, `Company/Retrieve`,
 `CompanyWiseLocations/List`) and then **no Create is ever sent** — no error,
-no dialog, no console message. Confirmed nothing was created: Repair Order
-count stayed at 62, Repair In count at 20.
+no dialog, no console message. The form even resets as if it saved.
+Confirmed via their own service counts, unchanged before and after:
+Repair Order 62, Repair In 20, Repair Out 13, Repair Invoice 4.
 
-So the Create payload still can't be captured.
+### The root cause on our side (fixed)
 
-### What we DID get — the pricing helper
+Our counter was building a **Repair In (117)**. It should build a **Repair
+Order (75)** — their own button reads *"Save Repair Order"*, and Repair In /
+Repair Out are **workshop-side** documents raised later as the job moves
+through the workshop. That mismatch, not a payload shape, is why
+`RepairIn/Create` kept returning a generic 500.
 
-Adding a sold item to a Repair Order calls **`Helpers/SetReturnItems`** — the
-same helper Return uses:
+### How the contract was obtained without a capture
+
+Their traffic never produced a Create to copy, so it came from two places:
+
+1. **Their client bundle** — `/esm/_chunks/chunk-CJSQNCGC.js` defines
+   `RepairForm`, `formKey: "Inventory.Repair"`, via `initFormType`: the full
+   **49-field** contract, transcribed verbatim.
+2. **Captured off their counter** — line items are priced by
+   **`Helpers/SetReturnItems`**, the same helper Return uses:
 
 ```json
 { "selected_products": [ ...rows from POS/InvoiceItems/List... ],
@@ -128,13 +144,17 @@ same helper Return uses:
   "document_id": 75, "exchange_rate": 1, "company_id": 1 }
 ```
 
-That answers the "which Set*Items helper prices repair lines" question.
+Also from their source: `repair_type` 1 = stock item, 2 = customer's sold
+item; and the repair sold-item filter is **`transaction_type: 3`** —
+Return/Buyback/Exchange use 1, Credit Note uses 4.
 
-### Consistent with this: our own RepairIn/Create 500s
+### Verified live
 
-Tried twice — a ~24-field whitelist off the order line, and the full line
-passed through intact. Both returned a generic 500. Given 4a, that may be
-because we're posting the wrong document type for this journey entirely.
+`SetReturnItems` 200 → `Inventory/Repair/Create` **200 EntityId 130** →
+`Post` 200. Repair Order count **62 → 63**, record reads
+`HO-REP-08-26-1 | Tahir Kutty | 1pc 1.507g | Posted`.
+
+**Our app creates a Repair Order that their own POS cannot.**
 
 ---
 
