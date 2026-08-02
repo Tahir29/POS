@@ -103,6 +103,16 @@ export async function buildPricedLineItems({ items, activeStoreId, salesPersonId
       item_size_id:    item.sizeId ?? undefined,
       company_id:      activeStoreId,
       sales_person_id: salesPersonId,
+      // SetSalesItems does NOT return item_cost, but Invoice/Create rejects a
+      // line without it — "<item> Item cost must be a valid non-negative
+      // amount" (live 400, 2026-08-01). OrnaVerse's own client fills it in the
+      // same way after its Set*Items call: `y.item_cost = 0`.
+      //
+      // Zero rather than item_rate on purpose: item_cost is the PURCHASE cost,
+      // not the sale rate, and nothing in the pricing response tells us what it
+      // is. Copying the sale rate into it would silently report every sale at
+      // zero margin.
+      item_cost:       0,
     };
   });
 }
