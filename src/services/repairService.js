@@ -56,33 +56,46 @@ export async function getRepairOrderDetail(transactionId) {
   return response.data?.Entity ?? null;
 }
 
-// Fields observed on a real Repair In line item (REPI-06-26-027, txn 39).
-// Copied verbatim from the Repair Order line; anything not in this list is
-// either server-assigned or absent from the intake.
-const REPAIR_IN_LINE_FIELDS = [
-  'item_id', 'item_attribute_id', 'item_line_no', 'item_code', 'item_name',
-  'sku', 'huid', 'certificate_no', 'bag_no', 'new_bag_no',
-  'pieces', 'weight', 'net_weight', 'pure_weight', 'purity',
-  'diamond_pieces', 'diamond_weight',
-  'parts', 'is_bom', 'location_id',
-  'sales_costing_id', 'purchase_costing_id',
-  'supplier_batch', 'supplier_style',
+// Identity the intake must NOT inherit from the order — the server assigns
+// its own, or the value becomes a back-reference instead.
+const ORDER_OWNED_LINE_FIELDS = [
+  'transaction_item_id', 'transaction_id',
+  'document_no', 'document_date', 'document_status',
+  'is_posted', 'posting_date', 'row_version',
 ];
 
 /**
- * Projects a Repair Order line into the Repair In line the server expects,
- * carrying the back-references that tie the intake to its order.
+ * Projects a Repair Order line into the Repair In line the server expects.
+ *
+ * The line is passed through LARGELY INTACT — including nested
+ * `item_components[]` — rather than rebuilt from a field whitelist. A first
+ * attempt copied ~24 selected fields and `RepairIn/Create` returned a generic
+ * 500: these are server-computed objects (a real intake line has 47 keys with
+ * nested components), and trimming them is the same mistake that broke
+ * Order/Return/Exchange before the Set*Items helpers were found. The order's
+ * own object is the closest thing to ground truth we have, so it is what gets
+ * sent, minus the identity the intake can't inherit.
  *
  * @param {object} orderLine — a line_items[] entry from getRepairOrderDetail()
  * @param {object} order     — the parent order entity
  */
 export function mapOrderLineToRepairInLine(orderLine, order) {
-  const line = {};
-  for (const field of REPAIR_IN_LINE_FIELDS) {
-    if (orderLine[field] !== undefined) line[field] = orderLine[field];
+  const line = { ...orderLine };
+  for (const field of ORDER_OWNED_LINE_FIELDS) delete line[field];
+
+  // Nested components carry the ORDER line's ids; drop them so the server
+  // re-keys them against the intake it is creating.
+  if (Array.isArray(orderLine.item_components)) {
+    line.item_components = orderLine.item_components.map((c) => {
+      const comp = { ...c };
+      delete comp.transaction_item_id;
+      delete comp.transaction_bom_id;
+      return comp;
+    });
   }
+
   // bag_no on the intake mirrors the order's new_bag_no when present.
-  if (line.bag_no == null && orderLine.new_bag_no) line.bag_no = orderLine.new_bag_no;
+  if (!line.bag_no && orderLine.new_bag_no) line.bag_no = orderLine.new_bag_no;
 
   return {
     ...line,

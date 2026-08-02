@@ -171,8 +171,13 @@ function RepairInNewForm({ onDone }) {
   });
 
   const selectedOrderId = watch('repair_order_id');
-  // Orders for the attached customer; falls back to the whole store's list so
-  // staff can still find a job raised against a different party record.
+  // NOTE: party_id is sent but OrnaVerse's Inventory/Repair/List ignores it —
+  // verified live 2026-08-01, the list is identical with and without a
+  // customer attached (same quirk as POS/InvoiceItems/List). So this is the
+  // whole store's open repair jobs, not the attached customer's. Left as-is
+  // because workshop orders are raised against internal/vendor parties rather
+  // than the retail customer, so filtering by the attached customer would
+  // mostly return nothing.
   const { orders, isLoading: ordersLoading } = useRepairOrders({ partyId: customerId });
   const { order, lines, isLoading: linesLoading } =
     useRepairOrderIntakeLines(selectedOrderId || null);
