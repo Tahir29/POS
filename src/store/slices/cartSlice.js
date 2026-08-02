@@ -160,22 +160,33 @@ const cartSlice = createSlice({
   // no appliedPromos array at all — without this, the first push()/reduce()
   // call on the missing array would throw. Migrates the old single promo
   // into the new array shape so an in-progress cart isn't lost on upgrade.
+  //
+  // MUST return the whole slice, not mutate one field. The previous version
+  // only assigned state.appliedPromos, and the rest of the persisted cart —
+  // items and the attached customer — never made it back. Symptom: a hard
+  // refresh mid-sale emptied the basket and dropped the customer, then wrote
+  // the empty cart back over the good one. Verified 2026-08-01: auth and
+  // store rehydrated fine; cart was the only slice with a REHYDRATE handler,
+  // and the only one that lost its state.
   extraReducers: (builder) => {
     builder.addCase(REHYDRATE, (state, action) => {
       const persistedCart = action.payload?.cart;
-      if (!persistedCart) return;
+      if (!persistedCart) return state;
 
+      let appliedPromos;
       if (Array.isArray(persistedCart.appliedPromos)) {
-        state.appliedPromos = persistedCart.appliedPromos;
+        appliedPromos = persistedCart.appliedPromos;
       } else if (persistedCart.appliedPromoCode) {
-        state.appliedPromos = [{
+        appliedPromos = [{
           promoCode:      persistedCart.appliedPromoCode,
           promoDetails:   persistedCart.appliedPromoDetails ?? null,
           discountAmount: persistedCart.discountAmount ?? 0,
         }];
       } else {
-        state.appliedPromos = [];
+        appliedPromos = [];
       }
+
+      return { ...state, ...persistedCart, appliedPromos };
     });
   },
 });
