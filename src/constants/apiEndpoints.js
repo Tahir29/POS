@@ -398,6 +398,12 @@ const API = {
     // Confirmed 2026-08-01 off real posted records; see [[repair-flow-contract]].
     REPAIR_ORDER_LIST:     'Services/Inventory/Repair/List',
     REPAIR_ORDER_RETRIEVE: 'Services/Inventory/Repair/Retrieve',
+    REPAIR_ORDER_CREATE:   'Services/Inventory/Repair/Create',
+    REPAIR_ORDER_POST:     'Services/Inventory/Repair/Post',
+    REPAIR_ORDER_CANCEL:   'Services/Inventory/Repair/Cancel',
+    // Sold items eligible for repair. NOTE transaction_type 3 — Return/Buyback/
+    // Exchange use 1 and Credit Note uses 4. Three journeys, three values.
+    REPAIR_SOLD_ITEMS:     'Services/POS/InvoiceItems/List',
     REPAIR_IN_CREATE:      'Services/POS/RepairIn/Create',
     REPAIR_IN_POST:        'Services/POS/RepairIn/Post',
     REPAIR_IN_CANCEL:      'Services/POS/RepairIn/Cancel',
