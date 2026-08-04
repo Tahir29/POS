@@ -1,6 +1,54 @@
 # Where we're stuck — OrnaVerse integration
 
-As of **2026-08-01**, branch `repair-creditnote_01082026`.
+As of **2026-08-05**, branch `repair-creditnote_01082026`.
+
+## 0. Checkout — SOLVED 2026-08-05 (was: every sale rejected)
+
+Invoice/Create rejected every sale with *"Not enough stock of &lt;code&gt; can not
+Save"*, for items that demonstrably had stock. Root-caused by capturing
+OrnaVerse's own UAT Invoice counter end to end.
+
+**We were billing the catalog PRODUCT; a sale consumes a physical PIECE.**
+Their own UI makes the split explicit — the Estimation tab browses "Catalog",
+the Invoice tab browses "Stock", listing one row per piece with its own SKU
+and LINE#. The journey they actually run:
+
+1. `Inventory/StockJournal/List` `{ item_id, company_id, has_sku: true }`
+   → one row per piece, already carrying `item_line_no`, `sku`,
+   `location_id`, `item_attribute_id` and a real `item_cost`.
+2. `Helpers/SetSalesItems` `{ selected_products: [those rows], document_id: 54 }`
+   → prices them; every identity field above passes through untouched.
+3. `POS/Invoice/Create` → 200. The only field added after pricing is
+   `sales_person_id` (verified by diffing their two payloads key by key).
+
+Three fields we had been fabricating are now simply correct:
+`item_line_no` (the stock line, e.g. 2844 — not a 1..n counter, which is what
+failed the lookup), `sku` (the piece's stock SKU, not the item code), and
+`item_cost` (its real cost — previously hardcoded 0).
+
+**Also fixed, and independently serious:** the cart quoted the item master's
+stale static `item_rate` while the invoice was raised at the live price.
+ADJLR00826 showed ₹48,704.82 in the catalog and priced at ₹107,840.02 — the
+stored rate omits ₹60,888 of diamond. The counter would have undercharged by
+₹57,674, and OrnaVerse rejected the short-paid sale with *"No credit facility
+is allowed for …"*. Checkout now prices the real pieces up front
+(`useCheckoutPricing`) and collects against that figure.
+
+Verified live: `HO-LJ-0826-003` and `HO-LJ-0826-004`, both posted, fully paid,
+balance ₹0, correct stock line and cost on the line item.
+
+### Still open for OrnaVerse
+
+- **Silver925 prices to ₹0.** `SetSalesItems` returns a computed `item_rate`
+  (e.g. 680.64) but `sub_total`/`net_amount`/`tax_amount` all 0 for every
+  Silver925 item. **Their own POS does the same** — an estimate for
+  LJ11253988 in their UI reads "Estimate Total ₹0.00" — so this is their data
+  or rate config, not our payload. Gold prices correctly through the identical
+  call. A sale of a silver item will post at zero value until they fix it.
+- **`item_cost` still sent as 0 on Orders.** It arrives on stock rows for
+  invoices, so invoices are correct; nothing exposes it for the catalog path.
+
+---
 
 Everything here was established by capturing real traffic from OrnaVerse's own
 UAT app, reading real posted records, or reading their own client bundle —

@@ -20,3 +20,30 @@ export const getStock = (itemCode) =>
  */
 export const getStockByStores = (itemId) =>
   axiosInstance.post(API.CATALOG.GET_STOCK_BY_STORES, { item_id: itemId });
+
+/**
+ * The individual PHYSICAL PIECES of an item held at a store — one row per
+ * piece, each with its own SKU, stock line number, location and cost.
+ *
+ * This is what OrnaVerse's own POS Invoice tab lists under "Browse Stock"
+ * (captured from their UAT counter 2026-08-05). It is a different thing from
+ * the product catalog: the catalog describes a PRODUCT, this returns the
+ * actual items on the shelf. Billing needs the latter — see
+ * checkoutPricingService for why.
+ *
+ * `has_sku: true` restricts to pieces that have been given a stock SKU, i.e.
+ * real sellable inventory. `company_id` is essential: this table spans every
+ * branch (1992 rows for HO alone), so omitting it can hand back a piece
+ * sitting in another store.
+ *
+ * @param {{ itemId: number, companyId: number, take?: number }} params
+ * @returns {Promise<import('axios').AxiosResponse>} { Entities: StockJournalRow[] }
+ */
+export const getStockPieces = ({ itemId, companyId, take = 50 }) =>
+  axiosInstance.post(API.INVENTORY.STOCK_JOURNAL_LIST, {
+    Skip:       0,
+    Take:       take,
+    item_id:    itemId,
+    company_id: companyId,
+    has_sku:    true,
+  });

@@ -53,3 +53,46 @@ export async function calculateItemRates(items) {
 
   return response.data?.Entities ?? [];
 }
+
+/**
+ * Prices actual STOCK PIECES for a sale — the checkout counterpart of
+ * calculateItemRates.
+ *
+ * Captured verbatim from OrnaVerse's own UAT Invoice counter 2026-08-05.
+ * Two things differ from the catalog-preview call above, and both matter:
+ *
+ *   • `selected_products` are StockJournal rows (real pieces), not item
+ *     master records. SetSalesItems passes their identity fields straight
+ *     through — item_line_no, sku, location_id, item_attribute_id and
+ *     item_cost all survive into the response untouched, which is precisely
+ *     how the Create payload comes to carry them. Feed it a master record
+ *     instead and every one of those fields is absent or wrong.
+ *   • `document_id` is the real document type (54 = POS Invoice), not the
+ *     Estimation type 52 used for browsing. Their call also omits
+ *     is_labour_applicable/is_purchase entirely.
+ *
+ * `pieces` is NOT forced to 1 here (unlike calculateItemRates): a stock row
+ * already describes exactly one physical piece.
+ *
+ * @param {object[]} stockRows — rows from inventoryService.getStockPieces,
+ *   passed through unmodified.
+ * @param {number} documentId — the document type being raised.
+ * @returns {Promise<object[]>} priced rows, ready to become line_items.
+ */
+export async function priceStockPiecesForSale(stockRows, documentId) {
+  if (!stockRows?.length) return [];
+
+  const response = await axiosInstance.post(API.HELPERS.SET_SALES_ITEMS, {
+    selected_products: stockRows,
+    price_list_id:     0,
+    calculate_rates:   true,
+    document_date:     new Date().toUTCString(),
+    document_id:       documentId,
+    exchange_rate:     1,
+    generate_line_no:  false,
+    generate_lot_no:   false,
+    is_tax_applicable: true,
+  });
+
+  return response.data?.Entities ?? [];
+}

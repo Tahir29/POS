@@ -205,12 +205,49 @@ const handleLogout = (store) => {
 
 // ── NORMALIZE ERROR ───────────────────────────────────────────
 /**
+ * Pulls the human-readable reason out of an OrnaVerse error body.
+ *
+ * OrnaVerse is a Serenity app: it reports both field validation AND business
+ * rules as `{ "Error": { "Code": "...", "Message": "..." } }` — capital E,
+ * capital M. Nothing here is at `data.message`, which is what this function
+ * used to look for, so EVERY OrnaVerse reason was silently dropped and the
+ * operator only ever saw the generic fallback below.
+ *
+ * That is how failures like "21278E2 Item cost must be a valid non-negative
+ * amount" and "Not enough stock of 21278E2 can not Save" reached the counter
+ * as nothing more than "Failed to create invoice. Please try again." — the
+ * server was saying exactly what was wrong and we were discarding it.
+ *
+ * These messages are written for a shop operator, not a developer ("Not
+ * enough stock of <sku>"), so showing them is the correct behaviour, not a
+ * debug leak.
+ */
+const extractServerMessage = (data) => {
+  if (!data) return null;
+  if (typeof data === 'string') return data.trim() || null;
+  return (
+    data.Error?.Message ??      // Serenity business rule / validation
+    data.error_description ??   // OAuth token endpoint
+    data.Message ??             // bare ASP.NET fault
+    data.message ??             // generic JSON API
+    null
+  );
+};
+
+/**
  * Converts any Axios error into a consistent normalized shape.
  * Raw API errors never reach the UI — components receive this object.
  * Source of truth: ARCHITECTURE.md Section 24 (Error Handling)
  *
+ * `serverMessage` carries OrnaVerse's own reason when it sent one, so callers
+ * can show the actual cause instead of a generic retry prompt. `response` is
+ * passed through deliberately: callers already reach for
+ * `error.response.data.Error.Message`, and stripping it made those reads
+ * silently undefined.
+ *
  * @param {import('axios').AxiosError} error
- * @returns {{ code: number, message: string, details: string|null, retryable: boolean }}
+ * @returns {{ code: number, message: string, details: string|null,
+ *             retryable: boolean, serverMessage: string|null, response?: object }}
  */
 const normalizeError = (error) => {
   // TEMP DEBUG — remove once the live 500 (Invoice/Create) and 400
@@ -229,44 +266,60 @@ const normalizeError = (error) => {
   // Network error — no response received
   if (!error.response) {
     return {
-      code:      0,
-      message:   'Network error. Please check your connection.',
-      details:   error.message ?? null,
-      retryable: true,
+      code:          0,
+      message:       'Network error. Please check your connection.',
+      details:       error.message ?? null,
+      retryable:     true,
+      serverMessage: null,
     };
   }
 
   const { status, data } = error.response;
+  const serverMessage = extractServerMessage(data);
 
+  // Session/permission problems are about the session, not the payload — the
+  // server's wording there ("invalid_grant") is worse than ours, so those two
+  // keep the fixed copy. Everywhere else OrnaVerse's own reason wins.
   const errorMap = {
-    400: { message: data?.message ?? 'Invalid request. Please check your inputs.',   retryable: false },
-    401: { message: 'Your session has expired. Please log in again.',                retryable: false },
+    400: { message: serverMessage ?? 'Invalid request. Please check your inputs.',    retryable: false },
+    401: { message: 'Your session has expired. Please log in again.',                 retryable: false },
     403: { message: 'You do not have permission to perform this action.',             retryable: false },
-    404: { message: 'The requested resource was not found.',                         retryable: false },
-    422: { message: data?.message ?? 'Validation failed. Please check your inputs.', retryable: false },
-    429: { message: 'Too many requests. Please wait a moment and try again.',        retryable: true  },
+    404: { message: serverMessage ?? 'The requested resource was not found.',         retryable: false },
+    422: { message: serverMessage ?? 'Validation failed. Please check your inputs.',  retryable: false },
+    429: { message: 'Too many requests. Please wait a moment and try again.',         retryable: true  },
   };
 
   const mapped = errorMap[status];
 
   if (mapped) {
-    return { code: status, details: null, ...mapped };
+    return {
+      code: status, details: serverMessage, serverMessage,
+      response: error.response, ...mapped,
+    };
   }
 
-  // 5xx and anything else
+  // 5xx — OrnaVerse returns business-rule rejections as 500 with a real
+  // reason in the body ("Not enough stock of <sku> can not Save"), so prefer
+  // it over the generic retry prompt. A 500 with no body stays retryable;
+  // one that named a cause is a rejection, not a blip, and retrying it
+  // unchanged will fail identically.
   if (status >= 500) {
     return {
-      code:      status,
-      message:   'Server error. Please try again in a moment.',
-      details:   null,
-      retryable: true,
+      code:          status,
+      message:       serverMessage ?? 'Server error. Please try again in a moment.',
+      details:       serverMessage,
+      retryable:     !serverMessage,
+      serverMessage,
+      response:      error.response,
     };
   }
 
   return {
-    code:      status,
-    message:   'Something went wrong. Please try again.',
-    details:   null,
-    retryable: true,
+    code:          status,
+    message:       serverMessage ?? 'Something went wrong. Please try again.',
+    details:       serverMessage,
+    retryable:     true,
+    serverMessage,
+    response:      error.response,
   };
 };
