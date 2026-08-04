@@ -35,16 +35,18 @@ import { useCartTotals }              from '@/hooks/cart/useCartTotals';
 import { useCustomerSession }         from '@/hooks/customer/useCustomerSession';
 import { useRedirectOnCustomerChange } from '@/hooks/checkout/useRedirectOnCustomerChange';
 import { useCreateInvoice }           from '@/hooks/checkout/useCreateInvoice';
+import { useCheckoutPricing }         from '@/hooks/checkout/useCheckoutPricing';
 import { useBackGuard } from '@/contexts/NavigationGuardContext';
 import { useSmartBack }  from '@/hooks/navigation/useSmartBack';
 import { checkoutSchema }             from '@/validators/checkoutSchema';
 import { selectActiveStoreId } from '@/store/slices/storeSlice';
+import APP_CONFIG from '@/constants/appConfig';
 import tracker from '@/lib/analytics/tracker';
 import EVENTS, { GA_ECOMMERCE_EVENTS } from '@/lib/analytics/events';
 
 function CheckoutScreen() {
   const router  = useRouter();
-  const { items, isEmpty } = useCart();
+  const { items, isEmpty, clearCart } = useCart();
   const { total }          = useCartTotals();
   const { customerId }     = useCustomerSession();
   const activeStoreId      = useSelector(selectActiveStoreId);
@@ -56,6 +58,21 @@ function CheckoutScreen() {
     invoiceResult,
     reset: resetInvoice,
   } = useCreateInvoice();
+
+  // Prices the real stock pieces up front. `amountDue` — not the cart's
+  // catalog-derived total — is what the customer is asked to pay, because
+  // the catalog figure can omit stone value entirely and would leave the
+  // invoice short-paid (see useCheckoutPricing).
+  const {
+    lineItems: pricedLineItems,
+    amountDue,
+    isLoading: isPricing,
+    error: pricingError,
+  } = useCheckoutPricing(APP_CONFIG.DOCUMENT_TYPES.POS_INVOICE);
+
+  // Until pricing resolves there is no trustworthy figure to collect
+  // against, so fall back to the cart estimate only for display.
+  const payableTotal = amountDue ?? total;
 
   const [payments, setPayments]     = useState([]);
   const [salesPersonId, setSalesPersonId] = useState(null);
@@ -96,6 +113,17 @@ function CheckoutScreen() {
     }
   }, [isEmpty, isConfirmed, router]);
 
+  // Clear the basket only once the sale is confirmed and this screen has
+  // committed to showing the confirmation. Doing it inside the mutation's
+  // onSuccess (where it used to live) dropped the customer one render too
+  // early and the navigation guards above bounced the operator to /cart
+  // before the invoice number was ever displayed.
+  useEffect(() => {
+    if (isConfirmed && !isEmpty) {
+      clearCart();
+    }
+  }, [isConfirmed, isEmpty, clearCart]);
+
   // Fire begin_checkout once per visit to this screen with items in cart
   useEffect(() => {
     if (isEmpty) return;
@@ -131,15 +159,17 @@ function CheckoutScreen() {
     customerId,
     salesPersonId,
     paymentModes: payments,
-    totalAmount:  total,
-    cartTotal:    total,
+    totalAmount:  payableTotal,
+    cartTotal:    payableTotal,
     panNumber,
   });
-  const isValid = validation.success;
+  // Never allow a sale to be submitted against the provisional cart figure —
+  // it can differ from the invoice by the value of the stones.
+  const isValid = validation.success && !!pricedLineItems && !isPricing && !pricingError;
 
   const handlePlaceOrder = async () => {
     if (!isValid || isPlacingInvoice) return;
-    await placeInvoice({ paymentModes: payments, salesPersonId });
+    await placeInvoice({ paymentModes: payments, salesPersonId, pricedLineItems });
   };
 
   // ── Confirmation screen ────────────────────────────────────────────────────
@@ -205,7 +235,20 @@ function CheckoutScreen() {
           </section>
 
           {/* Payment modes + invoice helper balances */}
-          <CheckoutPaymentSection onChange={setPayments} />
+          <CheckoutPaymentSection onChange={setPayments} amountDue={amountDue} />
+
+          {/* Pricing state — the operator must know the figure isn't final
+              yet, and must not be left guessing if it fails outright. */}
+          {isPricing && (
+            <p className="text-xs text-muted-foreground">
+              Pricing items against today's rates…
+            </p>
+          )}
+          {pricingError && (
+            <p className="text-sm text-status-error">
+              {pricingError.serverMessage ?? pricingError.message}
+            </p>
+          )}
         </div>
       </div>
 
@@ -219,6 +262,8 @@ function CheckoutScreen() {
             isValid={isValid}
             isPlacingOrder={isPlacingInvoice}
             onPlaceOrder={handlePlaceOrder}
+            amountDue={amountDue}
+            isPricing={isPricing}
           />
           <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <ShieldCheck size={13} className="text-accent" aria-hidden="true" />

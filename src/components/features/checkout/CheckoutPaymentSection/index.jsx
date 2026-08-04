@@ -60,8 +60,16 @@ function HelperBalanceRow({ label, amount, modeCode, isApplied, onToggle, isLoad
 }
 
 // ── CheckoutPaymentSection ────────────────────────────────────────────────────
-export default function CheckoutPaymentSection({ onChange }) {
-  const { total } = useCartTotals();
+/**
+ * @param {{ onChange: Function, amountDue?: number }} props
+ *   amountDue — the live-priced invoice total. Payment must be collected
+ *   against this, not the cart's catalog estimate, which can omit stone
+ *   value and leave the invoice short-paid. Falls back to the cart total
+ *   only while pricing is still resolving.
+ */
+export default function CheckoutPaymentSection({ onChange, amountDue }) {
+  const { total: cartTotal } = useCartTotals();
+  const total = amountDue ?? cartTotal;
   const { paymentModes, isLoading: modesLoading, isError: modesError } = usePaymentModes();
   const { customerId } = useCustomerSession();
   const activeStoreId  = useSelector(selectActiveStoreId);

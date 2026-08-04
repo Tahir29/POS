@@ -199,7 +199,7 @@ function buildInvoiceEntity({
 
 export function useCreateInvoice() {
   const queryClient = useQueryClient();
-  const { items, clearCart } = useCart();
+  const { items } = useCart();
   const { discount, total } = useCartTotals();
   const { customerId, customerName, customerMobile } = useCustomerSession();
   const activeStoreId = useSelector(selectActiveStoreId);
@@ -214,12 +214,22 @@ export function useCreateInvoice() {
      *   salesPersonId: number,
      * }} params
      */
-    mutationFn: async ({ paymentModes, narration, salesPersonId }) => {
+    mutationFn: async ({ paymentModes, narration, salesPersonId, pricedLineItems }) => {
       if (!headerConfig.isReady) {
         throw new Error('Store configuration is still loading — please try again in a moment');
       }
 
-      const lineItems = await buildPricedLineItems({ items, activeStoreId, salesPersonId });
+      // Prefer the lines the checkout screen already priced and quoted from
+      // (useCheckoutPricing). Re-pricing here would risk billing a different
+      // figure than the one the customer was just shown and charged, and
+      // would repeat the slowest call in the flow. Falls back to pricing
+      // now for any caller that doesn't pre-price.
+      const lineItems = pricedLineItems
+        ? pricedLineItems.map((row) => ({ ...row, sales_person_id: salesPersonId }))
+        : await buildPricedLineItems({
+            items, activeStoreId, salesPersonId,
+            documentId: APP_CONFIG.DOCUMENT_TYPES.POS_INVOICE,
+          });
 
       const entity = buildInvoiceEntity({
         lineItems, discount,
@@ -230,12 +240,24 @@ export function useCreateInvoice() {
         headerConfig,
       });
 
-      // Step 1: Create draft invoice
-      const createResponse = await createInvoice(entity);
-      const transactionId  = createResponse?.EntityId;
+      // Step 1: Create draft invoice.
+      // `stage` is stamped on the error rather than sniffed out of the
+      // message afterwards — the old check (`message.includes('post')`)
+      // tested the NORMALIZED message, which never contains the word, so
+      // every post-stage failure was misreported as a create failure.
+      let createResponse;
+      try {
+        createResponse = await createInvoice(entity);
+      } catch (err) {
+        err.stage = 'create';
+        throw err;
+      }
+      const transactionId = createResponse?.EntityId;
 
       if (!transactionId) {
-        throw new Error('Invoice creation failed — no EntityId returned');
+        const err = new Error('Invoice creation failed — no EntityId returned');
+        err.stage = 'create';
+        throw err;
       }
 
       // Step 2: Post (finalise) — triggers stock deduction + accounting.
@@ -245,9 +267,16 @@ export function useCreateInvoice() {
       // comes back with posting_date/posted_by populated — and a follow-up
       // Post fails with {"Code":"AlreadyPosted"}. Posting twice isn't just
       // redundant, it surfaces as a failed sale to the operator.
-      const postResponse = headerConfig.autoPosting
-        ? null
-        : await postInvoice(transactionId);
+      let postResponse = null;
+      if (!headerConfig.autoPosting) {
+        try {
+          postResponse = await postInvoice(transactionId);
+        } catch (err) {
+          err.stage = 'post';
+          err.transactionId = transactionId;
+          throw err;
+        }
+      }
 
       return { transactionId, createResponse, postResponse };
     },
@@ -262,8 +291,13 @@ export function useCreateInvoice() {
         items:          toGAItems(items),
       });
 
-      clearCart();
-      // Invalidate invoice + order list caches5
+      // NOT clearing the cart here. Clearing resets the attached customer,
+      // and the checkout screen's own guards (redirect-on-customer-change,
+      // redirect-when-cart-empty) are switched off by `invoiceResult` being
+      // set — which React Query only does AFTER this callback. That one
+      // render in between was enough to bounce the operator to /cart and
+      // they never saw the confirmation screen or the invoice number.
+      // The screen clears the cart itself once confirmation is on screen.
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
       queryClient.invalidateQueries({ queryKey: ['orders'] });
     },
@@ -271,20 +305,27 @@ export function useCreateInvoice() {
     onError: (error) => {
       console.error('[useCreateInvoice]', error);
 
-      const failedAtPost = error?.message?.includes('post');
+      const failedAtPost = error?.stage === 'post';
+      // normalizeError (lib/axios/interceptors.js) lifts OrnaVerse's own
+      // `Error.Message` onto serverMessage. Show it: "Not enough stock of
+      // 21278E2 can not Save" tells the counter what to do next, whereas
+      // "Please try again" invites them to retry something that cannot
+      // succeed.
+      const reason = error?.serverMessage ?? error?.message ?? null;
+
       tracker.track(EVENTS.ORDER_FAILED, {
         stage: failedAtPost ? 'post' : 'create',
         value: total,
-        error: error?.response?.data?.Error?.Message ?? error?.message ?? 'unknown',
+        error: reason ?? 'unknown',
       });
 
       // If create succeeded but post failed, the draft sits on the server.
       // The user can re-attempt posting from the invoices list.
-      if (failedAtPost) {
-        toast.error(TOAST.INVOICES.POST_FAILED);
-      } else {
-        toast.error(TOAST.INVOICES.CREATE_FAILED);
-      }
+      const fallback = failedAtPost
+        ? TOAST.INVOICES.POST_FAILED
+        : TOAST.INVOICES.CREATE_FAILED;
+
+      toast.error(reason ?? fallback);
     },
   });
 

@@ -130,7 +130,10 @@ export function useCreateOrder() {
         throw new Error('Store configuration is still loading — please try again in a moment');
       }
 
-      const lineItems = await buildPricedLineItems({ items, activeStoreId, salesPersonId });
+      const lineItems = await buildPricedLineItems({
+        items, activeStoreId, salesPersonId,
+        documentId: APP_CONFIG.DOCUMENT_TYPES.POS_ORDER,
+      });
 
       const entity = buildOrderEntity({
         lineItems, discount,
@@ -139,21 +142,38 @@ export function useCreateOrder() {
         salesPersonId, exchangeRate, headerConfig,
       });
 
-      // Step 1: Create draft order
-      const createResponse = await createOrder(entity);
-      const transactionId  = createResponse?.EntityId;
+      // Step 1: Create draft order. `stage` is stamped on the error so the
+      // handler can tell create from post without sniffing the message —
+      // see useCreateInvoice.js for why that sniffing never worked.
+      let createResponse;
+      try {
+        createResponse = await createOrder(entity);
+      } catch (err) {
+        err.stage = 'create';
+        throw err;
+      }
+      const transactionId = createResponse?.EntityId;
 
       if (!transactionId) {
-        throw new Error('Order creation failed — no EntityId returned');
+        const err = new Error('Order creation failed — no EntityId returned');
+        err.stage = 'create';
+        throw err;
       }
 
       // Step 2: Post (finalise) — skipped when the document type auto-posts.
       // See useCreateInvoice.js for the full note: with auto_posting:true,
       // Create already posts and a follow-up Post returns
       // {"Code":"AlreadyPosted"}, which would surface as a failed order.
-      const postResponse = headerConfig.autoPosting
-        ? null
-        : await postOrder(transactionId);
+      let postResponse = null;
+      if (!headerConfig.autoPosting) {
+        try {
+          postResponse = await postOrder(transactionId);
+        } catch (err) {
+          err.stage = 'post';
+          err.transactionId = transactionId;
+          throw err;
+        }
+      }
       return { transactionId, createResponse, postResponse };
     },
 
@@ -166,7 +186,14 @@ export function useCreateOrder() {
 
     onError: (error) => {
       console.error('[useCreateOrder]', error);
-      toast.error(TOAST.ORDERS.CREATE_FAILED);
+
+      // Show OrnaVerse's own reason when it sent one — see useCreateInvoice.js.
+      const reason = error?.serverMessage ?? error?.message ?? null;
+      const fallback = error?.stage === 'post'
+        ? TOAST.ORDERS.POST_FAILED
+        : TOAST.ORDERS.CREATE_FAILED;
+
+      toast.error(reason ?? fallback);
     },
   });
 
