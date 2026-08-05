@@ -23,7 +23,6 @@ import { useCart } from '@/hooks/cart/useCart';
 import { useCartTotals } from '@/hooks/cart/useCartTotals';
 import {
   isPromotionActive,
-  computePromotionDiscount,
   getPromotionDiscountType,
 } from '@/lib/normalizers/promotion';
 import tracker from '@/lib/analytics/tracker';
@@ -69,10 +68,12 @@ export function usePromoValidation() {
         return;
       }
 
+      // discountAmount is not sent here — cartSlice.recalculateTotals derives
+      // it fresh from promoDetails + the current subtotal (and keeps it
+      // fresh as the cart changes afterward). See cartSlice.js.
       applyPromo({
-        promoCode:     promotion.promotion_code,
-        promoDetails:  promotion,
-        discountAmount: computePromotionDiscount(promotion, subtotal),
+        promoCode:    promotion.promotion_code,
+        promoDetails: promotion,
       });
     },
 

@@ -10,11 +10,21 @@
 
 import { useCart } from '@/hooks/cart/useCart';
 import { usePromoValidation } from '@/hooks/checkout/usePromoValidation';
+import { computePromotionDiscount } from '@/lib/normalizers/promotion';
 import PromoCodeInput from '@/components/features/checkout/PromoCodeInput';
 import PromoCodeSheet from '@/components/features/checkout/PromoCodeSheet';
 import AppliedPromoTag from '@/components/shared/AppliedPromoTag';
 
-export default function CheckoutDiscountSection() {
+/**
+ * @param {{ realSubtotal?: number }} props
+ *   realSubtotal — the server-priced (stock-piece) subtotal from
+ *   useCheckoutPricing. When provided, each promo's displayed "you saved ₹X"
+ *   is recomputed against it rather than promo.discountAmount (which is
+ *   computed against the cart's catalog-estimated subtotal) — otherwise this
+ *   figure disagrees with the discount actually subtracted from the invoice
+ *   (see useCheckoutPricing.js).
+ */
+export default function CheckoutDiscountSection({ realSubtotal } = {}) {
   const { appliedPromos, removePromo } = useCart();
   const { validatePromo, isValidating } = usePromoValidation();
 
@@ -22,14 +32,19 @@ export default function CheckoutDiscountSection() {
     <section className="flex flex-col gap-3 rounded-xl border border-border bg-card p-5 shadow-sm">
       <h2 className="text-sm font-bold text-foreground">Discount</h2>
 
-      {appliedPromos.map((promo) => (
-        <AppliedPromoTag
-          key={promo.promoCode}
-          promoCode={promo.promoCode}
-          discountAmount={promo.discountAmount}
-          onRemove={() => removePromo(promo.promoCode)}
-        />
-      ))}
+      {appliedPromos.map((promo) => {
+        const displayAmount = realSubtotal != null
+          ? computePromotionDiscount(promo.promoDetails, realSubtotal)
+          : promo.discountAmount;
+        return (
+          <AppliedPromoTag
+            key={promo.promoCode}
+            promoCode={promo.promoCode}
+            discountAmount={displayAmount}
+            onRemove={() => removePromo(promo.promoCode)}
+          />
+        );
+      })}
 
       <PromoCodeInput onApply={validatePromo} isValidating={isValidating} />
       <PromoCodeSheet onApply={validatePromo} isApplying={isValidating} appliedPromos={appliedPromos} />

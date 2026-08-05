@@ -6,6 +6,7 @@
 import { createSlice } from '@reduxjs/toolkit';
 import { REHYDRATE } from 'redux-persist';
 import APP_CONFIG from '@/constants/appConfig';
+import { computePromotionDiscount } from '@/lib/normalizers/promotion';
 
 const initialState = {
   items:               [],    // CartItem[]
@@ -26,13 +27,30 @@ const initialState = {
 };
 
 // ── HELPERS ──────────────────────────────────────────────────
-// Recalculates subtotal, tax and total after any cart mutation.
-// Called at the end of every reducer that modifies items or discount.
+// Recalculates subtotal, discount, tax and total after any cart mutation.
+// Called at the end of every reducer that modifies items or promos.
+//
+// DISCOUNT IS RECOMPUTED HERE, NOT TRUSTED FROM THE PROMO PAYLOAD — a
+// percentage promo is "X% of the subtotal", not a fixed rupee figure. It used
+// to be computed once, when the promo was applied, and stored as a frozen
+// amount that never changed again — so adding/removing items (or just the
+// subtotal moving) after applying a promo silently drifted the discount away
+// from the promised percentage. Recomputing on every mutation keeps it
+// correct against whatever the subtotal is right now. (Checkout goes
+// further still: it recomputes AGAIN against the real stock-piece subtotal,
+// which can differ from this catalog-based one — see useCheckoutPricing.)
 const recalculateTotals = (state) => {
   state.subtotal = state.items.reduce(
     (sum, item) => sum + item.unitPrice * item.quantity,
     0
   );
+
+  state.appliedPromos = state.appliedPromos.map((p) => ({
+    ...p,
+    discountAmount: computePromotionDiscount(p.promoDetails, state.subtotal),
+  }));
+  state.discountAmount = state.appliedPromos.reduce((sum, p) => sum + p.discountAmount, 0);
+
   const taxableValue = Math.max(0, state.subtotal - state.discountAmount);
   state.taxAmount = +(taxableValue * APP_CONFIG.TAX.GST_RATE).toFixed(2);
   state.total = +(taxableValue + state.taxAmount).toFixed(2);
@@ -116,25 +134,25 @@ const cartSlice = createSlice({
       state.customerAddress = null;
     },
 
-    // Apply a validated promo code and its discount — appends to the list.
-    // "Similar" (same discount-type) conflicts are checked before dispatch
-    // (see usePromoValidation); this only guards against the exact same
-    // code being added twice.
+    // Apply a validated promo code — appends to the list. discountAmount is
+    // NOT trusted from the payload; recalculateTotals computes it fresh
+    // against the current subtotal (and keeps it fresh afterward too). This
+    // only guards against the exact same code being added twice — "similar"
+    // (same discount-type) conflicts are checked before dispatch, see
+    // usePromoValidation.
     applyPromo: (state, action) => {
-      const { promoCode, promoDetails, discountAmount } = action.payload;
+      const { promoCode, promoDetails } = action.payload;
       const alreadyApplied = state.appliedPromos.some((p) => p.promoCode === promoCode);
       if (alreadyApplied) return;
 
-      state.appliedPromos.push({ promoCode, promoDetails, discountAmount });
-      state.discountAmount = state.appliedPromos.reduce((sum, p) => sum + p.discountAmount, 0);
+      state.appliedPromos.push({ promoCode, promoDetails, discountAmount: 0 });
       recalculateTotals(state);
     },
 
     // Remove one applied promo by code
     removePromo: (state, action) => {
       const promoCode = action.payload;
-      state.appliedPromos  = state.appliedPromos.filter((p) => p.promoCode !== promoCode);
-      state.discountAmount = state.appliedPromos.reduce((sum, p) => sum + p.discountAmount, 0);
+      state.appliedPromos = state.appliedPromos.filter((p) => p.promoCode !== promoCode);
       recalculateTotals(state);
     },
 
@@ -186,7 +204,12 @@ const cartSlice = createSlice({
         appliedPromos = [];
       }
 
-      return { ...state, ...persistedCart, appliedPromos };
+      const merged = { ...state, ...persistedCart, appliedPromos };
+      // Re-derive rather than trust the persisted figures verbatim — cheap
+      // insurance that a cart resumed after a refresh has self-consistent
+      // totals even if it was persisted mid-recompute.
+      recalculateTotals(merged);
+      return merged;
     });
   },
 });

@@ -12,12 +12,15 @@
 import { useCartTotals } from '@/hooks/cart/useCartTotals';
 
 /**
- * @param {{ totals?: {subTotal, taxAmount, netAmount}|null, isPricing?: boolean }} props
+ * @param {{ totals?: {subTotal, taxAmount, netAmount, discount}|null, isPricing?: boolean }} props
  *   totals — server-priced figures for the ACTUAL stock pieces
  *   (useCheckoutPricing). When present these win over the cart's own
  *   estimate, because they are what the invoice is raised at and what the
  *   customer is charged. Showing the cart estimate next to a Place Order
  *   button carrying the real figure is exactly the mismatch this prevents.
+ *   totals.discount is likewise the promo discount recomputed against the
+ *   REAL subtotal (not the cart's catalog-based one) — see
+ *   useCheckoutPricing — so it agrees with the total shown alongside it.
  */
 export default function CartSummary({ totals = null, isPricing = false }) {
   const cart = useCartTotals();
@@ -25,7 +28,7 @@ export default function CartSummary({ totals = null, isPricing = false }) {
   const subtotal = totals ? totals.subTotal  : cart.subtotal;
   const tax      = totals ? totals.taxAmount : cart.tax;
   const total    = totals ? Math.round(totals.netAmount) : cart.total;
-  const discount = cart.discount;
+  const discount = totals ? totals.discount  : cart.discount;
 
   return (
     <div className="flex flex-col gap-2 py-3" aria-busy={isPricing || undefined}>

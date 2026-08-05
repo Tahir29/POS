@@ -8,6 +8,14 @@
 // showing a plain "N ×" static label instead — used to reuse this exact
 // row on the Checkout "Order Items" summary (per instruction: no need to
 // build a second item-list component there) where editing doesn't belong.
+//
+// displayUnitPrice (new): on checkout, item.unitPrice is the catalog price
+// cached at add-to-cart time — it can differ from the real stock-piece price
+// checkout actually bills (useCheckoutPricing) by 2-3x when the catalog's
+// stored rate is stale (see useCheckoutPricing.js). Showing item.unitPrice
+// here while Order Summary below shows the real figure is a visible mismatch
+// on the same screen. When provided, this overrides item.unitPrice for
+// display only — item.unitPrice itself (and cart state) is untouched.
 
 import { useState } from 'react';
 import Image from 'next/image';
@@ -21,12 +29,14 @@ import { resolveImageSrc } from '@/lib/resolveImageSrc';
  *   onUpdateQuantity?: (item: object, quantity: number) => void,
  *   onRemove?: (item: object) => void,
  *   readOnly?: boolean,
+ *   displayUnitPrice?: number,
  * }} props
  */
-export default function CartItemRow({ item, onUpdateQuantity, onRemove, readOnly = false }) {
+export default function CartItemRow({ item, onUpdateQuantity, onRemove, readOnly = false, displayUnitPrice }) {
   const [imgError, setImgError] = useState(false);
 
-  const lineTotal = item.unitPrice * item.quantity;
+  const unitPrice = displayUnitPrice ?? item.unitPrice;
+  const lineTotal = unitPrice * item.quantity;
   const imageSrc = resolveImageSrc(item.image);
   const showImage = imageSrc && !imgError;
 
@@ -99,7 +109,7 @@ export default function CartItemRow({ item, onUpdateQuantity, onRemove, readOnly
                 (226444.105), and the default shows 3 — "₹2,26,444.105 each"
                 reads like a rendering fault next to a rounded total. */}
             <p className="text-xs text-muted-foreground">
-              ₹{item.unitPrice.toLocaleString('en-IN', { maximumFractionDigits: 2 })} each
+              ₹{unitPrice.toLocaleString('en-IN', { maximumFractionDigits: 2 })} each
             </p>
             <p className="text-sm font-bold text-foreground">
               ₹{lineTotal.toLocaleString('en-IN', { maximumFractionDigits: 2 })}

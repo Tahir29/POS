@@ -123,20 +123,30 @@ export function useCreateOrder() {
 
   const mutation = useMutation({
     /**
-     * @param {{ paymentModes: {modeId, modeCode, modeName, amount}[], salesPersonId: number }} params
+     * @param {{
+     *   paymentModes:  {modeId, modeCode, modeName, amount}[],
+     *   salesPersonId: number,
+     *   pricedLineItems?: object[], — pre-priced lines from useCheckoutPricing,
+     *     see useCreateInvoice.js for why this is preferred over re-pricing.
+     *   discount?:     number, — see useCreateInvoice.js: prefer the
+     *     checkout screen's own discount (computed against the real
+     *     stock-piece subtotal) over this hook's cart-estimate `discount`.
+     * }} params
      */
-    mutationFn: async ({ paymentModes, salesPersonId }) => {
+    mutationFn: async ({ paymentModes, salesPersonId, pricedLineItems, discount: discountOverride }) => {
       if (!headerConfig.isReady) {
         throw new Error('Store configuration is still loading — please try again in a moment');
       }
 
-      const lineItems = await buildPricedLineItems({
-        items, activeStoreId, salesPersonId,
-        documentId: APP_CONFIG.DOCUMENT_TYPES.POS_ORDER,
-      });
+      const lineItems = pricedLineItems
+        ? pricedLineItems.map((row) => ({ ...row, sales_person_id: salesPersonId }))
+        : await buildPricedLineItems({
+            items, activeStoreId, salesPersonId,
+            documentId: APP_CONFIG.DOCUMENT_TYPES.POS_ORDER,
+          });
 
       const entity = buildOrderEntity({
-        lineItems, discount,
+        lineItems, discount: discountOverride ?? discount,
         customerId, customerName, customerMobile,
         activeStoreId, paymentModes,
         salesPersonId, exchangeRate, headerConfig,

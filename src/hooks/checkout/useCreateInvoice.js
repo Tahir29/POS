@@ -212,9 +212,15 @@ export function useCreateInvoice() {
      *   paymentModes:  { modeId, modeCode, modeName, amount }[],
      *   narration?:    string,
      *   salesPersonId: number,
+     *   discount?:     number, — the figure already shown/validated at
+     *     checkout (useCheckoutPricing), computed against the REAL
+     *     stock-piece subtotal. Preferred over this hook's own `discount`
+     *     (from useCartTotals, the cart's catalog-based estimate) — for a
+     *     percentage promo those two can be genuinely different rupee
+     *     amounts, and billing must match what the operator was shown.
      * }} params
      */
-    mutationFn: async ({ paymentModes, narration, salesPersonId, pricedLineItems }) => {
+    mutationFn: async ({ paymentModes, narration, salesPersonId, pricedLineItems, discount: discountOverride }) => {
       if (!headerConfig.isReady) {
         throw new Error('Store configuration is still loading — please try again in a moment');
       }
@@ -232,7 +238,7 @@ export function useCreateInvoice() {
           });
 
       const entity = buildInvoiceEntity({
-        lineItems, discount,
+        lineItems, discount: discountOverride ?? discount,
         customerId, customerName, customerMobile,
         activeStoreId,
         paymentModes, narration,

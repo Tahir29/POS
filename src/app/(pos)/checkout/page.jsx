@@ -75,6 +75,21 @@ function CheckoutScreen() {
   // against, so fall back to the cart estimate only for display.
   const payableTotal = amountDue ?? total;
 
+  // Per-item priced totals from the SAME real stock-piece pricing that
+  // Order Summary reads (pricedTotals) — so "Order Items" above it can never
+  // show the stale catalog price next to the real total below it. Grouped by
+  // item_id: buildPricedLineItems returns one row per physical piece, so a
+  // cart line for qty 3 becomes 3 rows here, summed back into one line.
+  const pricedNetByItemId = useMemo(() => {
+    if (!pricedLineItems) return null;
+    const map = new Map();
+    for (const row of pricedLineItems) {
+      const prev = map.get(row.item_id) ?? { net: 0, count: 0 };
+      map.set(row.item_id, { net: prev.net + (row.net_amount ?? 0), count: prev.count + 1 });
+    }
+    return map;
+  }, [pricedLineItems]);
+
   const [payments, setPayments]     = useState([]);
   const [salesPersonId, setSalesPersonId] = useState(null);
   const [panNumber, setPanNumber]   = useState(null);
@@ -170,7 +185,17 @@ function CheckoutScreen() {
 
   const handlePlaceOrder = async () => {
     if (!isValid || isPlacingInvoice) return;
-    await placeInvoice({ paymentModes: payments, salesPersonId, pricedLineItems });
+    // discount: the SAME figure already shown as the Total/Discount here and
+    // validated by checkoutSchema — computed against the real stock-piece
+    // subtotal (useCheckoutPricing), not cartSlice's catalog-based estimate.
+    // Passed explicitly so useCreateInvoice bills exactly what was quoted,
+    // rather than re-deriving a different (wrong-basis) figure internally.
+    await placeInvoice({
+      paymentModes: payments,
+      salesPersonId,
+      pricedLineItems,
+      discount: pricedTotals?.discount ?? 0,
+    });
   };
 
   // ── Confirmation screen ────────────────────────────────────────────────────
@@ -209,8 +234,10 @@ function CheckoutScreen() {
             />
           </section>
 
-          {/* Promo code / discount */}
-          <CheckoutDiscountSection />
+          {/* Promo code / discount — shown against the real stock-piece
+              subtotal so "you saved ₹X" here matches what's actually
+              subtracted from the invoice (see useCheckoutPricing). */}
+          <CheckoutDiscountSection realSubtotal={pricedTotals?.subTotal} />
         </div>
         <div className="flex flex-col gap-5 w-full">
           {/* Order items — same CartItemRow used on the Cart page, read-only here */}
@@ -219,13 +246,18 @@ function CheckoutScreen() {
               Order Items <span className="text-muted-foreground font-normal text-xs">({items.length} item{items.length !== 1 ? 's' : ''})</span>
             </h2>
             <div>
-              {items.map((item) => (
-                <CartItemRow
-                  key={`${item.itemId}-${item.sizeId}-${item.styleId}`}
-                  item={item}
-                  readOnly
-                />
-              ))}
+              {items.map((item) => {
+                const priced = pricedNetByItemId?.get(item.itemId);
+                const displayUnitPrice = priced ? priced.net / (priced.count || 1) : undefined;
+                return (
+                  <CartItemRow
+                    key={`${item.itemId}-${item.sizeId}-${item.styleId}`}
+                    item={item}
+                    readOnly
+                    displayUnitPrice={displayUnitPrice}
+                  />
+                );
+              })}
             </div>
           </section>
 

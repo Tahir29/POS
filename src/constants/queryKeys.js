@@ -65,7 +65,14 @@ export const QUERY_KEYS = {
     ATTRIBUTES:      (typeId)  => ['items', 'attributes', typeId],
     DESIGN_VARIANTS: (styleId) => ['items', 'design-variants', styleId],
     MASTER_SEARCH:   (query)   => ['items', 'master-search', query],
-    PRICING:         (itemId)  => ['items', 'pricing', itemId],
+    // Keyed on more than itemId: a Made-to-Order pseudo-variant (see
+    // CustomizeSheet's mtoFallback) reuses the BASE product's item_id with
+    // only karat/metal/size swapped in — keying on itemId alone let that
+    // pseudo-variant's price query collide with the base item's own cached
+    // entry, silently returning the wrong (base-SKU) price. See
+    // useVariantPricing.js.
+    PRICING: (itemId, karatId, metalColorId, sizeId) =>
+      ['items', 'pricing', itemId, karatId ?? null, metalColorId ?? null, sizeId ?? null],
     SEARCH: (params) => ['items', 'search', {
       q:    params.item_search,
       grp:  params.item_group_ids,

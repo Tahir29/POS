@@ -53,6 +53,14 @@ export default function OrderConfirmationScreen({ transactionId, invoiceNo }) {
     router.push('/catalog');
   };
 
+  // Checkout raises this as an Invoice (POS/Invoice/Create), not a POS
+  // "Order" — so the Orders panel is where it now shows up too (Orders and
+  // Invoices are merged there, see useAllOrders), but staff previously had
+  // no path from here to either list and had to already know to look.
+  const handleViewOrders = () => {
+    router.push('/orders');
+  };
+
   return (
     <div className="flex flex-col items-center gap-6 px-4 py-10 text-center">
       {/* Success icon */}
@@ -133,6 +141,14 @@ export default function OrderConfirmationScreen({ transactionId, invoiceNo }) {
           className="h-12 w-full text-base font-semibold"
         >
           New Sale
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={handleViewOrders}
+          className="h-12 w-full text-base font-semibold"
+        >
+          View in Orders
         </Button>
       </div>
     </div>
