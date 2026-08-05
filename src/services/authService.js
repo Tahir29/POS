@@ -26,6 +26,43 @@ export async function generateToken(username, password) {
 }
 
 /**
+ * Establishes the operator's OrnaVerse COOKIE session, used only for
+ * rendering invoice reports.
+ *
+ * Called with the same credentials that just produced the access token.
+ * /Print/Render is cookie-authenticated and ignores bearer tokens entirely,
+ * so without this the invoice formats OrnaVerse offers can't be fetched —
+ * see lib/ornaverse/reportSession.js for why this beats a stored service
+ * account. The password goes to our own server route and no further; the
+ * session id comes back as an httpOnly cookie this code never sees.
+ *
+ * NEVER let this reject into the login flow: printing is the only thing that
+ * depends on it, and a POS that won't open because a report session failed is
+ * far worse than one that can't print until the next sign-in.
+ *
+ * @returns {Promise<boolean>} whether printing will be available this session
+ */
+export async function createReportSession(username, password) {
+  try {
+    const response = await fetch('/api/auth/report-session', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ username, password }),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+/** Tears down the report cookie session. Best-effort, never throws. */
+export async function destroyReportSession() {
+  try {
+    await fetch('/api/auth/report-session', { method: 'DELETE' });
+  } catch { /* signing out locally matters more than the server-side sweep */ }
+}
+
+/**
  * Obtains a new access token using a valid refresh token.
  * NOTE: not currently called anywhere — the actual token refresh on 401 is
  * handled inline in src/lib/axios/interceptors.js, which duplicates this logic.

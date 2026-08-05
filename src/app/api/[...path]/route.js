@@ -39,19 +39,10 @@
 // stays unset and the Basic Auth injection below is correctly skipped for
 // UAT. Don't go hunting for a UAT secret — there isn't one.
 
-const ACTIVE_ENV = 'UAT'; // 'LIVE' | 'UAT'
-
-const UPSTREAM = (
-  (ACTIVE_ENV === 'LIVE'
-    ? process.env.NEXT_PUBLIC_ORNAVERSE_BASE_URL_LIVE
-    : process.env.NEXT_PUBLIC_ORNAVERSE_BASE_URL_UAT) || ''
-).replace(/\/+$/, '');
-
-const CLIENT_SECRET = (
-  ACTIVE_ENV === 'LIVE'
-    ? process.env.ORNAVERSE_LIVE_CLIENT_SECRET
-    : process.env.ORNAVERSE_UAT_CLIENT_SECRET
-) || '';
+// ACTIVE_ENV / UPSTREAM / CLIENT_SECRET now live in lib/ornaverse/upstream.js
+// so the report renderer (api/report/render) resolves the same environment.
+// Switch environments there, not here.
+import { UPSTREAM, CLIENT_SECRET } from '@/lib/ornaverse/upstream';
 
 async function proxy(request, { params }) {
   const { path } = await params;
