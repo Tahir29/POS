@@ -17,9 +17,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { getLivePricesForItems } from '@/services/catalogService';
 
-const DEBOUNCE_MS   = 200;
-const CHUNK_SIZE     = 24; // matches ProductCatalog/List's real per-request cap
-const CONCURRENCY    = 3;
+const DEBOUNCE_MS = 200;
+// Smaller than ProductCatalog/List's 24-row page on purpose: EVERY item now
+// needs live pricing (the stored item_rate was retired — see the PRICING note
+// in catalogService.js), and SetSalesItems takes 6-7+ seconds per ~15 full
+// master records. Smaller batches return sooner, fail smaller, and let prices
+// appear progressively instead of a page at a time.
+const CHUNK_SIZE  = 8;
+const CONCURRENCY = 3;
+// An item is retried only if the server never answered for it (network/500).
+// A priced-at-0 verdict is final, so this cap only bounds real failures.
+const MAX_ATTEMPTS = 3;
 
 async function fetchInChunks(ids, onChunkResolved) {
   const chunks = [];
@@ -29,8 +37,8 @@ async function fetchInChunks(ids, onChunkResolved) {
   async function worker() {
     while (cursor < chunks.length) {
       const chunk = chunks[cursor++];
-      const result = await getLivePricesForItems(chunk);
-      onChunkResolved(chunk, result);
+      const { prices, answered } = await getLivePricesForItems(chunk);
+      onChunkResolved(chunk, prices, answered);
     }
   }
   await Promise.all(
@@ -41,12 +49,21 @@ async function fetchInChunks(ids, onChunkResolved) {
 /**
  * @param {object[]} products — current display list (ProductCatalogRow[]),
  *   `price` may be null for items still needing the live-pricing tier.
- * @returns {Map<number, number>} item_id -> live price, filled in over time.
+ * @returns {{
+ *   priceById:  Map<number, number>,  // item_id -> live price
+ *   settledIds: Set<number>,          // server has given a verdict (priced or not)
+ * }}
+ *   Callers need both: a card with no price is "Pricing…" until its id is
+ *   settled, and "Price unavailable" after.
  */
 export function useLiveCatalogPrices(products) {
   const [priceById, setPriceById] = useState(() => new Map());
-  const resolvedRef = useRef(new Set()); // item_ids already settled (priced or confirmed unpriceable)
+  // Mirrors resolvedRef as STATE so a verdict re-renders the cards — a ref
+  // alone would leave "Pricing…" on screen forever for unpriceable items.
+  const [settledIds, setSettledIds] = useState(() => new Set());
+  const resolvedRef = useRef(new Set()); // item_ids the server answered for (priced or confirmed unpriceable)
   const pendingRef  = useRef(new Set()); // item_ids queued/in-flight for the next batch
+  const attemptsRef = useRef(new Map()); // item_id -> failed attempts, for bounded retry
   const timerRef    = useRef(null);
 
   const idsNeeding = useMemo(
@@ -58,7 +75,9 @@ export function useLiveCatalogPrices(products) {
 
   useEffect(() => {
     const fresh = idsNeeding.filter(
-      (id) => !resolvedRef.current.has(id) && !pendingRef.current.has(id)
+      (id) => !resolvedRef.current.has(id)
+        && !pendingRef.current.has(id)
+        && (attemptsRef.current.get(id) ?? 0) < MAX_ATTEMPTS
     );
     if (!fresh.length) return;
 
@@ -67,21 +86,41 @@ export function useLiveCatalogPrices(products) {
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => {
       const idsToFetch = [...pendingRef.current];
-      fetchInChunks(idsToFetch, (chunkIds, result) => {
+      fetchInChunks(idsToFetch, (chunkIds, prices, answered) => {
+        const justSettled = [];
+        for (const id of chunkIds) {
+          pendingRef.current.delete(id);
+          if (answered.has(id)) {
+            // Settled for good — either it has a price, or the server
+            // priced it at 0 and it genuinely cannot be sold.
+            resolvedRef.current.add(id);
+            justSettled.push(id);
+          } else {
+            // The call failed before reaching a verdict. Previously these
+            // were marked resolved anyway, so one transient 500 left a
+            // whole page permanently blank with no way to recover short of
+            // a remount. Count the attempt and let a later render retry.
+            attemptsRef.current.set(id, (attemptsRef.current.get(id) ?? 0) + 1);
+          }
+        }
+
         setPriceById((prev) => {
           const next = new Map(prev);
-          for (const id of chunkIds) {
-            resolvedRef.current.add(id);
-            pendingRef.current.delete(id);
-            if (result.has(id)) next.set(id, result.get(id));
-          }
+          for (const [id, value] of prices) next.set(id, value);
           return next;
         });
+        if (justSettled.length) {
+          setSettledIds((prev) => {
+            const next = new Set(prev);
+            for (const id of justSettled) next.add(id);
+            return next;
+          });
+        }
       });
     }, DEBOUNCE_MS);
 
     return () => clearTimeout(timerRef.current);
   }, [idsNeeding]);
 
-  return priceById;
+  return { priceById, settledIds };
 }

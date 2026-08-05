@@ -17,9 +17,10 @@ import AddToCartButton   from '@/components/features/products/AddToCartButton';
 // reasonable ceiling to stop the +/- control scrolling forever.
 const QUANTITY_CEILING = 99;
 
+// Whole rupees, matching the headline price on the page behind this bar.
 function formatINR(value) {
   if (value == null) return null;
-  return `₹${Number(value).toLocaleString('en-IN')}`;
+  return `₹${Number(value).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
 }
 
 /**

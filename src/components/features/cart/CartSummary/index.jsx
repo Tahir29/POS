@@ -32,7 +32,7 @@ export default function CartSummary({ totals = null, isPricing = false }) {
       <div className="flex items-center justify-between text-sm text-muted-foreground">
         <span>Subtotal</span>
         <span className="font-medium text-foreground">
-          ₹{subtotal.toLocaleString('en-IN')}
+          ₹{subtotal.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
         </span>
       </div>
 

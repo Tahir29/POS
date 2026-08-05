@@ -323,14 +323,16 @@ function CatalogScreen() {
   // Live (SetSalesItems) prices for items whose price couldn't come from the
   // fast tier — fetched in the background so they never hold up the page
   // itself; see useLiveCatalogPrices for why this had to be split out.
-  const livePriceById = useLiveCatalogPrices(displayProducts);
+  const { priceById: livePriceById, settledIds } = useLiveCatalogPrices(displayProducts);
   const pricedDisplayProducts = useMemo(
-    () => displayProducts.map((p) => (
-      p.price == null && livePriceById.has(p.item_id)
-        ? { ...p, price: livePriceById.get(p.item_id) }
-        : p
-    )),
-    [displayProducts, livePriceById],
+    () => displayProducts.map((p) => {
+      const price = p.price ?? livePriceById.get(p.item_id) ?? null;
+      // is_pricing distinguishes "the number is still coming" from "there
+      // will never be a number", so a card can say which instead of
+      // rendering an empty space where the price belongs.
+      return { ...p, price, is_pricing: price == null && !settledIds.has(p.item_id) };
+    }),
+    [displayProducts, livePriceById, settledIds],
   );
 
   // ── Barcode handler ───────────────────────────────────────────────────────
