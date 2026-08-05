@@ -300,19 +300,23 @@ export default function CustomizeSheet({
   // ── Live price for the matched variant ────────────────────────────────────
   // Only for a real exact-variant match — the MTO fallback is a pseudo-item
   // with no real item_components[] BOM, so there's nothing for
-  // SetSalesItems to price. item_rate === 0 means this SKU floats with
-  // today's metal rate rather than having a static one (see
-  // pricingService.js / apiEndpoints.js HELPERS block).
-  const needsLivePricing = !!exactVariant && (exactVariant.item_rate ?? 0) === 0;
+  // SetSalesItems to price.
+  //
+  // Priced live REGARDLESS of item_rate. This used to fall back to the
+  // stored item_rate whenever it was non-zero; that rate understates the
+  // piece by 2-3x because it omits stone value (measured on UAT
+  // 2026-08-05), and this price flows into the cart. See
+  // catalogService.attachStaticPrice.
+  const needsLivePricing = !!exactVariant;
   const {
     data:      livePricing,
     isLoading: pricingLoading,
     isError:   pricingError,
     refetch:   refetchPricing,
   } = useVariantPricing(needsLivePricing ? exactVariant : null);
-  const matchedVariantPrice = needsLivePricing
-    ? formatPrice(livePricing?.sub_total)
-    : formatPrice(matchedVariant?.item_rate);
+  // No item_rate fallback: an unpriceable variant shows no price rather than
+  // a wrong one.
+  const matchedVariantPrice = formatPrice(livePricing?.sub_total);
 
   // ── In-stock store list for the currently matched variant ────────────────
   // MTO (no real exact-variant match, or zero stock everywhere) always hides

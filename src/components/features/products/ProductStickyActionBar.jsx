@@ -88,9 +88,9 @@ export default function ProductStickyActionBar({
             />
 
             {/* Add to Cart — always enabled regardless of stock vs quantity,
-                EXCEPT when there's no price: item_rate === 0 means this
-                variant was never costed, and adding it would silently put a
-                ₹0 line item into a real sale. */}
+                EXCEPT when there's no price: the item couldn't be priced
+                live, and adding it would silently put a ₹0 line item into a
+                real sale. */}
             <AddToCartButton
               product={product}
               quantity={quantity}

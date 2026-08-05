@@ -10,15 +10,11 @@
 //   net_amount   — total (NOT total_amount)
 //   document_date — invoice date
 
-import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { CheckCircle2, Loader2, FileDown } from 'lucide-react';
-import { toast } from 'react-toastify';
+import { CheckCircle2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import PrintInvoiceButton from '@/components/features/checkout/PrintInvoiceButton';
+import InvoiceReportButton from '@/components/features/checkout/InvoiceReportButton';
 import { useInvoiceDetail } from '@/hooks/checkout/useInvoiceDetail';
-import { generateInvoicePDF } from '@/services/orderService';
-import TOAST from '@/constants/toastMessages';
 import APP_CONFIG from '@/constants/appConfig';
 
 function fmt(amount) {
@@ -41,7 +37,6 @@ function fmtDate(iso) {
 export default function OrderConfirmationScreen({ transactionId, invoiceNo }) {
   const router = useRouter();
   const { invoice, isLoading } = useInvoiceDetail(transactionId);
-  const [isPDFLoading, setIsPDFLoading] = useState(false);
 
   // Use confirmed field names from InvoiceRow schema
   const displayNo   = invoice?.document_no  ?? invoiceNo ?? transactionId;
@@ -53,26 +48,6 @@ export default function OrderConfirmationScreen({ transactionId, invoiceNo }) {
   // Server-computed GST — see useCreateInvoice.js header (not calculated
   // client-side; read back whatever the server computed per line item).
   const taxAmount   = invoice?.tax_amount ?? null;
-
-  const handleDownloadPDF = async () => {
-    if (!transactionId) return;
-    setIsPDFLoading(true);
-    try {
-      const result = await generateInvoicePDF(transactionId);
-      // Response may be a URL string or binary — handle URL case
-      const pdfUrl = result?.url ?? result?.Entity?.url ?? null;
-      if (pdfUrl) {
-        window.open(pdfUrl, '_blank');
-        toast.success(TOAST.INVOICES.PDF_SUCCESS);
-      } else {
-        toast.error(TOAST.INVOICES.PDF_FAILED);
-      }
-    } catch {
-      toast.error(TOAST.INVOICES.PDF_FAILED);
-    } finally {
-      setIsPDFLoading(false);
-    }
-  };
 
   const handleNewSale = () => {
     router.push('/catalog');
@@ -146,21 +121,12 @@ export default function OrderConfirmationScreen({ transactionId, invoiceNo }) {
         )}
       </div>
 
-      {/* Actions */}
+      {/* Actions — the invoice formats OrnaVerse itself offers for this
+          document type. The old "Download Invoice PDF" button is gone:
+          Services/POS/Invoice/GeneratePDF returns 500 on UAT, so it never
+          worked. See InvoiceReportButton. */}
       <div className="flex w-full max-w-md flex-col gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={handleDownloadPDF}
-          disabled={isPDFLoading || !transactionId}
-          className="h-11 w-full gap-2"
-        >
-          {isPDFLoading
-            ? <><Loader2 size={16} className="animate-spin" /> Generating PDF…</>
-            : <><FileDown size={16} /> Download Invoice PDF</>
-          }
-        </Button>
-        <PrintInvoiceButton />
+        <InvoiceReportButton transactionId={transactionId} />
         <Button
           type="button"
           onClick={handleNewSale}
