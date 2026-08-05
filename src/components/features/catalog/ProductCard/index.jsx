@@ -68,9 +68,13 @@ function formatWeight(grams) {
 }
 
 // ── Price formatter ────────────────────────────────────────────────────────────
+// Whole rupees, matching lib/priceUtils.formatPrice on the product page.
+// Live prices carry fractional paise (sub_total 226444.105), and
+// toLocaleString's default shows up to 3 decimals — "₹2,26,444.105" on a
+// price tag reads like a bug.
 function formatINR(value) {
   if (value == null) return null;
-  return `₹${Number(value).toLocaleString('en-IN')}`;
+  return `₹${Number(value).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
 }
 
 // ── No-image placeholder ──────────────────────────────────────────────────────
@@ -128,6 +132,9 @@ export default function ProductCard({ product, showStockBadge = false }) {
     image_url,
     image_1,
     price,
+    // Set by the catalog page: the live price hasn't come back yet, as
+    // opposed to having come back with no sellable price.
+    is_pricing: isPricing = false,
     style_id,
   } = product;
 
@@ -214,11 +221,18 @@ export default function ProductCard({ product, showStockBadge = false }) {
           </div>
         )}
 
-        {/* Price — real offer price, no slashed/original price (no such
-            field exists anywhere in the API — see header note) */}
-        {price != null && (
+        {/* Price. Live-priced, so it arrives a moment after the card — say
+            what's happening instead of leaving a gap where a number belongs,
+            which reads as a broken card. A card that stays unpriced is a real
+            state, not a glitch: the server priced it at 0 and it cannot be
+            sold (currently every Silver925 item on this tenant). */}
+        {price != null ? (
           <p className="font-sans text-lg font-bold text-foreground">
             {formatINR(price)}
+          </p>
+        ) : (
+          <p className="font-sans text-sm font-medium text-muted-foreground">
+            {isPricing ? 'Pricing…' : 'Price unavailable'}
           </p>
         )}
 

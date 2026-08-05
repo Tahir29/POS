@@ -171,11 +171,8 @@ async function getItemDetailsByIds(itemIds) {
  * @returns {Promise<Map<number, number>>} item_id -> live price
  */
 export async function getLivePricesForItems(itemIds) {
-  if (!itemIds?.length) return new Map();
-
-  const usable = (rows) => new Map(
-    rows.filter((r) => (r.sub_total ?? 0) > 0).map((r) => [r.item_id, r.sub_total])
-  );
+  const empty = { prices: new Map(), answered: new Set() };
+  if (!itemIds?.length) return empty;
 
   let toPrice;
   try {
@@ -186,29 +183,49 @@ export async function getLivePricesForItems(itemIds) {
     toPrice = [...detailById.values()];
   } catch (err) {
     console.error('[catalogService] getLivePricesForItems: item lookup failed', err);
-    return new Map();
+    return empty;
   }
-  if (!toPrice.length) return new Map();
+
+  // Items/List omits records with no weight/karat/metal at all. Those can
+  // never be priced, so count them as answered rather than retrying forever.
+  const returnedIds = new Set(toPrice.map((d) => d.item_id));
+  const answered = new Set(itemIds.filter((id) => !returnedIds.has(id)));
+  if (!toPrice.length) return { prices: new Map(), answered };
+
+  const prices = new Map();
+  const collect = (rows) => {
+    for (const r of rows ?? []) {
+      // The server ANSWERED for this item even when it priced it at 0 — that
+      // is a real "cannot be sold" verdict (currently every Silver925 item),
+      // not a failure, so it must not be retried. Distinguishing the two is
+      // the point of returning `answered` separately from `prices`.
+      answered.add(r.item_id);
+      if ((r.sub_total ?? 0) > 0) prices.set(r.item_id, r.sub_total);
+    }
+  };
 
   try {
-    return usable(await calculateItemRates(toPrice));
+    collect(await calculateItemRates(toPrice));
+    return { prices, answered };
   } catch (err) {
     // SetSalesItems can 500 on a single malformed master record (confirmed
-    // live 2026-07-22), and it prices the batch as a unit — so one bad item
-    // used to cost the whole page its prices. That was survivable when only
-    // BOM items came through here; now that every item does, it would blank
-    // a whole screen of products. Re-price individually so the damage is
-    // limited to the item that actually fails.
+    // live 2026-07-22) and it prices the batch as a unit, so one bad item
+    // costs the whole batch. Survivable when only BOM items came here; now
+    // that every item does, it would blank a whole screen. Re-price
+    // individually, in small waves, so the damage is limited to the item
+    // that actually fails and we don't fire 24 parallel heavy calls.
     console.error('[catalogService] batch pricing failed, retrying individually', err);
 
-    const settled = await Promise.allSettled(
-      toPrice.map((item) => calculateItemRates([item]))
-    );
-    return usable(
-      settled
-        .filter((r) => r.status === 'fulfilled')
-        .flatMap((r) => r.value ?? [])
-    );
+    const WAVE = 4;
+    for (let i = 0; i < toPrice.length; i += WAVE) {
+      const settled = await Promise.allSettled(
+        toPrice.slice(i, i + WAVE).map((item) => calculateItemRates([item]))
+      );
+      for (const r of settled) {
+        if (r.status === 'fulfilled') collect(r.value);
+      }
+    }
+    return { prices, answered };
   }
 }
 

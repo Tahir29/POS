@@ -95,11 +95,14 @@ export default function CartItemRow({ item, onUpdateQuantity, onRemove, readOnly
           )}
 
           <div className="text-right">
+            {/* Capped at 2dp: live prices carry fractional paise
+                (226444.105), and the default shows 3 — "₹2,26,444.105 each"
+                reads like a rendering fault next to a rounded total. */}
             <p className="text-xs text-muted-foreground">
-              ₹{item.unitPrice.toLocaleString('en-IN')} each
+              ₹{item.unitPrice.toLocaleString('en-IN', { maximumFractionDigits: 2 })} each
             </p>
             <p className="text-sm font-bold text-foreground">
-              ₹{lineTotal.toLocaleString('en-IN')}
+              ₹{lineTotal.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
             </p>
           </div>
         </div>
