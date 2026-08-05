@@ -65,6 +65,7 @@ function CheckoutScreen() {
   // invoice short-paid (see useCheckoutPricing).
   const {
     lineItems: pricedLineItems,
+    totals: pricedTotals,
     amountDue,
     isLoading: isPricing,
     error: pricingError,
@@ -231,7 +232,9 @@ function CheckoutScreen() {
           {/* Order summary */}
           <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
             <h2 className="text-sm font-bold text-foreground mb-1">Order Summary</h2>
-            <CartSummary />
+            {/* Driven by the priced stock pieces, so this reads the same
+                figure as the Place Order button and the amount collected. */}
+            <CartSummary totals={pricedTotals} isPricing={isPricing} />
           </section>
 
           {/* Payment modes + invoice helper balances */}

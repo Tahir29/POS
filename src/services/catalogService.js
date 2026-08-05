@@ -4,8 +4,11 @@
 //
 // SCHEMA — Inventory.ProductCatalogRow key fields (confirmed v1.json):
 //   item_id, item_code, item_name
-//   price          — sale price (NOT item_rate — that's on OrderItemsRow)
-//   compare_price  — original/MRP price for strikethrough display
+//   price          — NOT populated on this environment; the app ignores it
+//                    and prices live instead (see the PRICING note below)
+//   compare_price  — stored "original/MRP" figure. Deliberately unused: it's
+//                    another stale master value, and a strikethrough against
+//                    a price that no longer matches what's charged misleads.
 //   style_id       — links to StyleRow (which has external_product_id for Shopify)
 //   has_stock      — boolean
 //   current_company_pieces — stock count at active store
@@ -85,16 +88,14 @@ export async function searchItems(params) {
  * Batch-fetches full item detail (including item_rate and item_components[]
  * BOM) for a set of item_ids via Items/List.
  *
- * ProductCatalogRow does NOT reliably return a `price` field on this
- * environment (confirmed 2026-07-15 — Services/Inventory/ProductCatalog/List
- * omits it entirely for every product in at least one store's catalog).
- * item_rate — computed at item creation/costing time — is the first-choice
- * price source. Items/List supports filtering by `item_ids`, confirmed via
- * direct testing — but confirmed live 2026-07-22 it silently OMITS items
- * with no weight/karat/metal/components at all (genuinely incomplete master
- * records — e.g. a raw-stone entry never given real specs). That's a
- * separate, unfixable-client-side case from item_rate:0 BOM items (which DO
- * come back from this call, just needing live pricing — see enrichWithPrice).
+ * This exists to feed the live price calculator, NOT to read item_rate off
+ * the result — that rate is not a usable price, see the PRICING note below.
+ *
+ * Items/List supports filtering by `item_ids`, confirmed via direct testing
+ * — but confirmed live 2026-07-22 it silently OMITS items with no
+ * weight/karat/metal/components at all (genuinely incomplete master records
+ * — e.g. a raw-stone entry never given real specs). Those items can't be
+ * priced at all and simply stay priceless.
  *
  * @param {number[]} itemIds
  * @returns {Promise<Map<number, object>>} item_id -> full ItemRow
@@ -113,53 +114,53 @@ async function getItemDetailsByIds(itemIds) {
   return new Map(entities.map((e) => [e.item_id, e]));
 }
 
-/**
- * Attaches `price` to each ProductCatalogRow from the two FAST tiers only:
- *   1. The catalog row's own `price` field, when present.
- *   2. item_rate from Items/List, when it's a real positive number.
- * Items whose only option is tier 3 (live SetSalesItems pricing — see
- * getLivePricesForItems below) are left with `price: null` here on purpose.
- *
- * SPLIT FROM live pricing 2026-07-28: confirmed live that
- * Services/Helpers/SetSalesItems takes 6-7+ SECONDS per call for a page's
- * worth of BOM items (~15 items), and the old enrichWithPrice awaited it
- * inline before returning ANY of the page's entities — so a catalog page
- * with a typical mix of BOM items took 30+ seconds to appear while
- * scrolling, even though the actual catalog fetch (ProductCatalog/List +
- * Items/List) is consistently under 250ms. This function now only does the
- * fast lookup; live pricing is fetched separately, in the background, by
- * useLiveCatalogPrices, so pages render immediately and BOM items' prices
- * fill in a moment later instead of blocking the whole page.
- *
- * @param {object[]} entities — ProductCatalogRow[]
- * @returns {Promise<object[]>}
- */
-async function attachStaticPrice(entities) {
-  if (!entities.length) return entities;
-
-  const needsRate = entities.some((e) => e.price == null);
-  if (!needsRate) return entities;
-
-  const itemIds    = entities.map((e) => e.item_id).filter(Boolean);
-  const detailById = await getItemDetailsByIds(itemIds);
-
-  return entities.map((e) => {
-    if (e.price != null) return e;
-    const staticRate = detailById.get(e.item_id)?.item_rate;
-    // item_rate === 0 is "not costed yet", not "free" — only trust a real
-    // positive static rate; leave null (not 0) for the live-pricing tier.
-    const price = (staticRate && staticRate > 0) ? staticRate : null;
-    return { ...e, price };
-  });
-}
+// ── PRICING: ONE SOURCE, NOT A TIER LIST ────────────────────────────────────
+//
+// Catalog rows leave here with `price: null`. Every price the app shows or
+// charges comes from Helpers/SetSalesItems, filled in out-of-band by
+// useLiveCatalogPrices → getLivePricesForItems below.
+//
+// There used to be an attachStaticPrice() tier in front of that, which took
+// the item master's stored `item_rate` whenever it was non-zero. It is gone.
+// That rate is stale and understates the piece, usually because it predates
+// or omits the stone value — measured on UAT 2026-08-05 against what
+// SetSalesItems actually charges:
+//
+//     ADJLR00826              48,704.82  ->  107,840.02   (2.21x)
+//     LJ-BR0034-14YGLGD-2.4   54,924.49  ->  109,139.92   (1.99x)
+//     LJ-BR0119-14YGLGD-7     13,268.91  ->   40,281.12   (3.04x)
+//
+// Most items carry item_rate 0 and were already priced live, so this stayed
+// invisible until an item with a stale non-zero rate was sold: the counter
+// quoted the stale figure, the invoice was raised at the real one, and
+// OrnaVerse rejected the short-paid sale ("No credit facility is allowed for
+// …"). Undercharging by ~57,000 on one bracelet is the failure mode.
+//
+// A stored rate that disagrees with the live calculator by 2-3x is not a
+// usable price at any tier, so it is no longer offered as one anywhere —
+// see also CustomizeSheet and the product detail page, which had the same
+// fallback and lost it for the same reason.
+//
+// The cost is that every item now waits on the background fill-in. That path
+// is debounced, chunked and concurrent precisely because SetSalesItems takes
+// 6-7+ seconds per ~15-item batch (confirmed 2026-07-28); pages render
+// immediately and prices arrive a moment later.
 
 /**
  * Live-computes price for a set of item_ids via Services/Helpers/SetSalesItems
- * (see pricingService.calculateItemRates) — the slow tier split out of
- * attachStaticPrice above. Only items that are genuinely BOM-priced (item_rate
- * 0 but real item_components[]) come back with a price; anything else in the
- * input is simply absent from the returned Map, same "can't be priced, stays
- * priceless" contract as before.
+ * (see pricingService.calculateItemRates). This is now the ONLY price source
+ * for the catalog — see the PRICING note above for why the stored item_rate
+ * was retired.
+ *
+ * Returns `sub_total` (pre-tax) deliberately: the cart adds GST itself, so a
+ * pre-tax unit price makes the cart total land on the invoice's net_amount
+ * rather than taxing an already-taxed figure. Confirmed on ADJLR00826 —
+ * sub_total 104,699.04 + 3% = 107,840, exactly the invoice's net_amount.
+ *
+ * A returned 0 is treated as "cannot be priced", not "free", and is left out
+ * of the Map. That is the existing contract for uncosted items, and it also
+ * keeps Silver925 stock — which OrnaVerse currently prices at 0 in their own
+ * POS too — from being displayed, and sold, at nothing.
  *
  * Best-effort: if SetSalesItems has a transient failure (confirmed live
  * 2026-07-22 it can occasionally throw a generic 500), callers get back
@@ -172,18 +173,42 @@ async function attachStaticPrice(entities) {
 export async function getLivePricesForItems(itemIds) {
   if (!itemIds?.length) return new Map();
 
+  const usable = (rows) => new Map(
+    rows.filter((r) => (r.sub_total ?? 0) > 0).map((r) => [r.item_id, r.sub_total])
+  );
+
+  let toPrice;
   try {
     const detailById = await getItemDetailsByIds(itemIds);
-    const unpricedWithBom = [...detailById.values()]
-      .filter((d) => (d.item_rate ?? 0) === 0 && d.item_components?.length > 0);
-
-    if (!unpricedWithBom.length) return new Map();
-
-    const liveRates = await calculateItemRates(unpricedWithBom);
-    return new Map(liveRates.map((r) => [r.item_id, r.sub_total]));
+    // Every item that came back with a usable master record goes to the
+    // calculator. The old filter here (item_rate 0 AND has components) is
+    // what let stale non-zero rates through unchecked.
+    toPrice = [...detailById.values()];
   } catch (err) {
-    console.error('[catalogService] getLivePricesForItems: live pricing failed', err);
+    console.error('[catalogService] getLivePricesForItems: item lookup failed', err);
     return new Map();
+  }
+  if (!toPrice.length) return new Map();
+
+  try {
+    return usable(await calculateItemRates(toPrice));
+  } catch (err) {
+    // SetSalesItems can 500 on a single malformed master record (confirmed
+    // live 2026-07-22), and it prices the batch as a unit — so one bad item
+    // used to cost the whole page its prices. That was survivable when only
+    // BOM items came through here; now that every item does, it would blank
+    // a whole screen of products. Re-price individually so the damage is
+    // limited to the item that actually fails.
+    console.error('[catalogService] batch pricing failed, retrying individually', err);
+
+    const settled = await Promise.allSettled(
+      toPrice.map((item) => calculateItemRates([item]))
+    );
+    return usable(
+      settled
+        .filter((r) => r.status === 'fulfilled')
+        .flatMap((r) => r.value ?? [])
+    );
   }
 }
 
@@ -216,8 +241,8 @@ export async function getProducts(params) {
     ...rest,
   });
 
-  const entities = response.data?.Entities ?? [];
-  return { ...response.data, Entities: await attachStaticPrice(entities) };
+  // Entities pass through unpriced — see the PRICING note above.
+  return { ...response.data, Entities: response.data?.Entities ?? [] };
 }
 
 /**
@@ -302,8 +327,8 @@ async function fetchEntireStoreCatalog(storeId, onProgress) {
  * @returns {Promise<object[]>} ProductCatalogRow[]
  */
 export async function getAllProducts(storeId, onProgress) {
-  const entities = await fetchEntireStoreCatalog(storeId, onProgress);
-  return attachStaticPrice(entities);
+  // Unpriced — see the PRICING note above.
+  return fetchEntireStoreCatalog(storeId, onProgress);
 }
 
 /**
@@ -361,7 +386,10 @@ export async function searchBySku({ query, storeId, signal }) {
         weight:           stock.weight     ?? c.weight,
         net_weight:       stock.net_weight ?? c.net_weight,
         image:            c.image,
-        price:            c.item_rate || null,
+        // null, never item_rate — the stored rate understates the piece by
+        // 2-3x (see the PRICING note above). Leaving it null routes this list
+        // through the same live tier as the main catalog.
+        price:            null,
         has_stock:              stock.pieces > 0,
         current_company_pieces: stock.pieces ?? 0,
       };

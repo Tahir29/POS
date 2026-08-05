@@ -18,7 +18,7 @@
 //   - Static trust/certification sections (ProductTrustSection) — NOT
 //     per-product data, see that component's header comment
 
-import { Suspense, useState, useEffect, useCallback, useMemo } from 'react';
+import { Suspense, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { useSelector } from 'react-redux';
 import { toast }     from 'react-toastify';
@@ -151,29 +151,6 @@ function ProductDetailScreen() {
     if (detailError) toast.error(TOAST.GENERIC.SOMETHING_WRONG);
   }, [detailError]);
 
-  // view_item — fires once per product once its detail has actually loaded
-  useEffect(() => {
-    if (!product) return;
-    const unitPrice =
-      product.item_rate  ||
-      product.sale_price ||
-      product.price      ||
-      product.mrp        ||
-      product.rate       ||
-      null;
-
-    tracker.trackEcommerce(GA_ECOMMERCE_EVENTS.VIEW_ITEM, EVENTS.PRODUCT_VIEWED, {
-      currency: 'INR',
-      value:    unitPrice ?? undefined,
-      items: [{
-        item_id:   String(product.item_id),
-        item_name: product.item_name ?? 'Unknown Product',
-        item_sku:  product.item_code ?? '',
-        price:     unitPrice,
-      }],
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [product?.item_id]);
 
   // ── Derived ───────────────────────────────────────────────────────────────
   // Base product's stock status at the CURRENT store — derived from the
@@ -223,45 +200,60 @@ function ProductDetailScreen() {
     (activeSize ? ` · Size ${activeSize}` : '');
   const activeCode = activeItem?.item_code ?? null;
 
-  // item_rate === 0 means this SKU was never given a static price — its
-  // real sell price floats with today's metal rate (see pricingService.js
-  // / apiEndpoints.js HELPERS block). Fetch it live via SetSalesItems
-  // rather than falling through to stale fields (Shopify-synced `price` is
-  // a snapshot, not today's rate — confirmed live 2026-07-22 the two can
-  // differ by ~12%).
-  const needsLivePricing = !!activeItem && (activeItem.item_rate ?? 0) === 0;
+  // ALWAYS price live. This used to be conditional on item_rate === 0, on
+  // the assumption that a non-zero item_rate was a real static price. It
+  // isn't: measured on UAT 2026-08-05, stored rates understate the piece by
+  // 2-3x because they omit stone value (ADJLR00826 48,704.82 stored vs
+  // 107,840.02 charged). Because this is the number that becomes the cart's
+  // unitPrice, a stale rate here is what the customer gets quoted — and the
+  // invoice is then raised at the real figure and rejected as short-paid.
+  // Shopify-synced `price` is likewise a snapshot, not today's rate
+  // (confirmed 2026-07-22, ~12% drift). SetSalesItems is the only source
+  // that agrees with what checkout actually bills.
   const {
     data:      livePricing,
     isLoading: pricingLoading,
     isError:   pricingError,
     refetch:   refetchPricing,
-  } = useVariantPricing(needsLivePricing ? activeItem : null);
+  } = useVariantPricing(activeItem ?? null);
 
-  // sub_total (rate + labour, pre-tax) is the analog of item_rate here —
-  // matches how item_rate itself is pre-tax for statically-priced items
-  // (is_tax_inclusive: false), so this doesn't change the existing
-  // tax-exclusive display convention.
-  const effectiveRate = needsLivePricing ? livePricing?.sub_total : activeItem?.item_rate;
+  // sub_total is rate + labour, PRE-TAX — the cart adds GST itself, so this
+  // keeps the display tax-exclusive and makes the cart total land exactly on
+  // the invoice's net_amount.
+  //
+  // There is deliberately NO fallback to item_rate/sale_price/price/mrp/rate.
+  // Every one of those is a stale snapshot: quoting one and then billing the
+  // live figure is precisely the mismatch this path exists to prevent. If
+  // pricing hasn't resolved — or the server priced it at 0, as it currently
+  // does for every Silver925 item — the price stays null, AddToCartButton
+  // stays disabled, and nothing wrong is ever shown or charged.
+  const numericUnitPrice = (livePricing?.sub_total ?? 0) > 0
+    ? livePricing.sub_total
+    : null;
 
-  const price = formatPrice(
-    effectiveRate          ??
-    activeItem?.sale_price ??
-    activeItem?.price      ??
-    activeItem?.mrp        ??
-    activeItem?.rate
-  );
+  const price = formatPrice(numericUnitPrice);
 
-  const numericUnitPrice =
-    effectiveRate          ||
-    activeItem?.sale_price ||
-    activeItem?.price      ||
-    activeItem?.mrp        ||
-    activeItem?.rate       ||
-    null;
+  // view_item — once per product, and only once the live price is in.
+  // It used to fire on load with the stale item_rate/sale_price/mrp chain,
+  // which reported a figure to analytics that the shop never charges. Waiting
+  // costs a beat but keeps reported value equal to real value.
+  const trackedItemIdRef = useRef(null);
+  useEffect(() => {
+    if (!product || numericUnitPrice == null) return;
+    if (trackedItemIdRef.current === product.item_id) return;
+    trackedItemIdRef.current = product.item_id;
 
-  const hasDiscount = !!(activeItem?.compare_price && numericUnitPrice && activeItem.compare_price > numericUnitPrice);
-  const discountPct = hasDiscount ? Math.round((1 - numericUnitPrice / activeItem.compare_price) * 100) : null;
-  const saveAmount  = hasDiscount ? formatPrice(activeItem.compare_price - numericUnitPrice) : null;
+    tracker.trackEcommerce(GA_ECOMMERCE_EVENTS.VIEW_ITEM, EVENTS.PRODUCT_VIEWED, {
+      currency: 'INR',
+      value:    numericUnitPrice,
+      items: [{
+        item_id:   String(product.item_id),
+        item_name: product.item_name ?? 'Unknown Product',
+        item_sku:  product.item_code ?? '',
+        price:     numericUnitPrice,
+      }],
+    });
+  }, [product, numericUnitPrice]);
 
   // No stock-based ceiling — quantity is only bounded by QuantitySelector's
   // own internal sane default (99) inside ProductStickyActionBar.
@@ -309,14 +301,17 @@ function ProductDetailScreen() {
               {product.item_name ?? 'Product'}
             </h1>
 
-            {/* Price + discount */}
+            {/* Price. No strikethrough/"% OFF" pair: compare_price is another
+                stale master field, and showing a discount against a figure
+                that no longer matches what's charged is worse than showing
+                none. */}
             <div>
               <div className="flex items-baseline gap-2">
-                {needsLivePricing && pricingLoading ? (
+                {pricingLoading ? (
                   <p className="text-sm font-medium text-muted-foreground">Calculating live price…</p>
                 ) : price ? (
                   <p className="font-heading text-3xl text-primary">{price}</p>
-                ) : needsLivePricing && pricingError ? (
+                ) : pricingError ? (
                   <p className="flex items-center gap-2 text-sm font-medium text-status-made-order">
                     Could not calculate live price
                     <button
@@ -328,31 +323,15 @@ function ProductDetailScreen() {
                     </button>
                   </p>
                 ) : (
-                  // Live pricing came back empty, or this SKU has no static
-                  // rate and isn't a BOM item live pricing could resolve —
-                  // say so explicitly rather than leaving a blank where the
-                  // price should be, since a customized selection implies
-                  // real purchase intent.
+                  // Priced at 0 by the server, so it can't be sold — currently
+                  // every Silver925 item on this tenant, which OrnaVerse's own
+                  // POS also totals at 0. Say so rather than leaving a blank
+                  // where the price should be.
                   <p className="text-sm font-medium text-status-made-order">
                     Price not available for this option — needs costing before it can be sold
                   </p>
                 )}
-                {hasDiscount && (
-                  <>
-                    <p className="text-base text-muted-foreground line-through">
-                      {formatPrice(activeItem.compare_price)}
-                    </p>
-                    <span className="text-sm font-semibold text-status-in-stock">
-                      {discountPct}% OFF
-                    </span>
-                  </>
-                )}
               </div>
-              {hasDiscount && saveAmount && (
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Save {saveAmount}
-                </p>
-              )}
             </div>
 
             {/* In-stock-at-current-store banner */}

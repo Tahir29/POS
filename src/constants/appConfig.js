@@ -88,6 +88,17 @@ const APP_CONFIG = {
   // store/scheme the way PAYMENT_MODES is.
   COMPLIANCE: {
     PAN_MANDATORY_THRESHOLD: 200000,
+    // Income Tax s.269ST: cash receipts from one person in a single day may
+    // not reach ₹2,00,000, so the largest acceptable amount is 1,99,999.
+    // OrnaVerse enforces this server-side and reports it as "Cannot accept
+    // Cash above 199999.00" — matched here so the counter can see the limit
+    // before submitting rather than after.
+    //
+    // Confirmed live 2026-08-05 that their check is on the PARTY'S RUNNING
+    // DAILY TOTAL (POSInvoice/GetPartyDailyCash), not on the payment being
+    // made: a customer at 3,60,950.66 for the day had a fully-UPI invoice
+    // refused with the same cash message.
+    CASH_DAILY_LIMIT: 199999,
   },
 
   // ── TAX ───────────────────────────────────────────────────────────────────

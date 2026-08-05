@@ -1,8 +1,11 @@
 // src/hooks/products/useVariantPricing.js
-// Live price for a single item/variant via Services/Helpers/SetSalesItems
-// — only needed when the item's own item_rate is 0 (BOM-priced items whose
-// real sell price floats with today's metal rate rather than being stored
-// statically). See pricingService.js / apiEndpoints.js HELPERS block for
+// Live price for a single item/variant via Services/Helpers/SetSalesItems.
+//
+// Called for EVERY item, not just item_rate === 0 ones. The stored item_rate
+// is not a usable price — it understates the piece by 2-3x where it's set at
+// all (see the PRICING note in catalogService.js) — and this hook's result is
+// what becomes the cart's unitPrice, so anything else quotes one figure and
+// bills another. See pricingService.js / apiEndpoints.js HELPERS block for
 // the confirmed contract.
 
 import { useQuery } from '@tanstack/react-query';

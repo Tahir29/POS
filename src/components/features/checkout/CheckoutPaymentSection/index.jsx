@@ -82,6 +82,25 @@ export default function CheckoutPaymentSection({ onChange, amountDue }) {
   // payments: { modeId?, modeCode, modeName, amount (string), isHelper? }[]
   const [payments, setPayments] = useState([]);
 
+  // ── Statutory cash ceiling ────────────────────────────────────────────────
+  // OrnaVerse rejects the sale with "Cannot accept Cash above 199999.00" once
+  // a party's cash receipts for the day reach the limit (s.269ST). Two things
+  // make that error unusable at the counter, both confirmed live 2026-08-05:
+  //
+  //   • It is an AGGREGATE-PER-PARTY-PER-DAY check, not a check on this
+  //     payment. GetPartyDailyCash read 3,60,950.66 for a customer whose
+  //     invoice was being paid entirely by UPI, and the sale was still
+  //     refused — cash on THIS invoice was zero.
+  //   • The message names "Cash" either way, so an operator paying by card
+  //     or UPI is told to fix something that isn't there.
+  //
+  // Surfacing the party's own running total turns an unexplainable rejection
+  // into a fact the operator can act on (take a different tender, or split
+  // the sale across days).
+  const dailyCashTaken = helpers.dailyCash?.amount ?? 0;
+  const cashHeadroom   = Math.max(0, APP_CONFIG.COMPLIANCE.CASH_DAILY_LIMIT - dailyCashTaken);
+  const isCashBlocked  = !helpers.dailyCash?.isLoading && cashHeadroom <= 0;
+
   const selectedModeIds    = payments.filter((p) => p.modeId).map((p) => p.modeId);
   const appliedHelperCodes = payments.filter((p) => p.isHelper).map((p) => p.modeCode);
 
@@ -233,6 +252,30 @@ export default function CheckoutPaymentSection({ onChange, amountDue }) {
 
       {/* Standard payment modes */}
       <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Payment Method</p>
+
+      {/* Cash ceiling — see the note beside cashHeadroom above. Stated before
+          the operator picks a tender, because OrnaVerse's own rejection
+          arrives after Place Order and blames "Cash" even when none was
+          taken. */}
+      {isCashBlocked ? (
+        <p className="rounded-lg border border-status-error/30 bg-status-error/10 px-3 py-2 text-xs text-status-error">
+          This customer has already taken{' '}
+          {APP_CONFIG.CURRENCY.INR_SYMBOL}
+          {dailyCashTaken.toLocaleString('en-IN', { maximumFractionDigits: 2 })} in cash today,
+          so no further cash can be accepted (limit{' '}
+          {APP_CONFIG.CURRENCY.INR_SYMBOL}
+          {APP_CONFIG.COMPLIANCE.CASH_DAILY_LIMIT.toLocaleString('en-IN')}).
+          OrnaVerse will refuse this sale until the cash total resets tomorrow —
+          including when it is paid entirely by another method.
+        </p>
+      ) : dailyCashTaken > 0 && (
+        <p className="text-xs text-muted-foreground">
+          Cash available for this customer today:{' '}
+          {APP_CONFIG.CURRENCY.INR_SYMBOL}
+          {cashHeadroom.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+        </p>
+      )}
+
       <PaymentModeSelector
         paymentModes={paymentModes}
         selectedModeIds={selectedModeIds}

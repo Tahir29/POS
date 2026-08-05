@@ -7,19 +7,18 @@
 //
 // Enabled by default — out of stock items can be added as made-to-order.
 // Stock status display is handled separately by StockStatusBadge.
-// Disabled when there's no valid price (item_rate === 0 means this variant
-// was never costed) — adding it would silently put a ₹0 line item into a
-// real sale, which only gets caught much later at checkout.
+// Disabled when there's no valid price — the item couldn't be priced live,
+// so adding it would silently put a ₹0 line item into a real sale, caught
+// only much later at checkout. On this tenant that currently covers every
+// Silver925 item, which OrnaVerse itself prices at 0.
 //
-// FIX (2026-07-26): `unitPrice` is now a required prop, resolved once by
-// the page (product/[itemId]/page.jsx handles live-priced items via
-// SetSalesItems there) and passed down through ProductStickyActionBar.
-// This component used to re-derive its own price straight from
-// `product.item_rate` — for any item needing live pricing, item_rate is
-// always 0, so that recomputation always came back null and permanently
-// disabled the button even when a real live price was showing on-screen
-// and had already been added to the cart total. Never recompute price
-// here; always trust the caller's resolved value.
+// FIX (2026-07-26): `unitPrice` is a required prop, resolved once by the
+// page (product/[itemId]/page.jsx prices via SetSalesItems) and passed down
+// through ProductStickyActionBar. This component used to re-derive its own
+// price from `product.item_rate`. Never do that — item_rate is not a usable
+// price (see the PRICING note in catalogService.js), and it is 0 for most
+// items, which used to permanently disable the button even while a real
+// price was on screen. Always trust the caller's resolved value.
 
 import { useDispatch } from 'react-redux';
 import { toast } from 'react-toastify';

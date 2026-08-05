@@ -2,10 +2,13 @@
 
 // src/components/features/catalog/ProductCard/index.jsx
 //
-// SCHEMA: ProductCatalogRow doesn't reliably return a price field at all on
-// this environment — catalogService.enrichWithPrice fills it in from
-// Items/List's item_rate (see that file for details). `price` here is
-// always that real, single offer price.
+// SCHEMA: ProductCatalogRow doesn't return a usable price on this
+// environment. `price` here is filled in out-of-band by useLiveCatalogPrices
+// from Helpers/SetSalesItems — the same calculator checkout bills from, so
+// what's on the card is what the customer pays (plus GST). It is null until
+// that resolves, and stays null for anything that can't be priced; render
+// no price rather than a wrong one. See the PRICING note in
+// catalogService.js for why the stored item_rate is never used.
 //
 // Fields used: item_id, item_code, item_name, has_stock, weight, net_weight,
 // metal_id, karat_id, image/image_1, price.

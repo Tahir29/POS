@@ -533,6 +533,40 @@ const API = {
   DOCUMENT_CONFIG: {
     FINANCIAL_YEAR_LIST:   'Services/Administration/FinancialYear/List',
     DOCUMENT_NUMBERING_LIST: 'Services/Administration/DocumentNumbering/List',
+    // The print/preview formats configured for a document type. Captured
+    // from OrnaVerse's own POS 2026-08-05: immediately after Invoice/Create
+    // they call this with { document_id, is_disabled: false } and offer the
+    // operator a "Select Report" choice. For POS Invoice (54) this tenant
+    // returns three — "E Certificate", "New Invoice Format" and
+    // "New Invoice Format WO Header".
+    //
+    // There is no GeneratePDF: Services/POS/Invoice/GeneratePDF, which this
+    // app used to call, returns 500 on UAT. Rendering goes through
+    // REPORT_RENDER below instead.
+    DOCUMENT_REPORTS_LIST: 'Services/Administration/DocumentReports/List',
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // REPORT RENDERING
+  //
+  // NOTE THE MISSING "Services/" — these are MVC endpoints on the OrnaVerse
+  // web app, not the OAuth-protected JSON API, and they are COOKIE
+  // authenticated. Posting a bearer token to them returns the ERP's own
+  // "Login to your account" page (verified 2026-08-05), so they cannot be
+  // called through our axios instance. Their own client posts a plain form
+  // to them from the browser; see InvoiceReportButton for how we do the same.
+  //
+  // Body (application/x-www-form-urlencoded), all four from the
+  // DocumentReports row:
+  //   key, opt (JSON params, e.g. {"transaction_id":1207}),
+  //   reportFile, reportFolder, reportSubFolder
+  //
+  // RENDER returns an HTML document their UI shows in an iframe preview;
+  // PRINT_RENDER is the print variant.
+  // ─────────────────────────────────────────────────────────────────────────
+  REPORTS: {
+    RENDER:       'Print/Render',
+    PRINT_RENDER: 'Print/PrintRender',
   },
 
   // ─────────────────────────────────────────────────────────────────────────

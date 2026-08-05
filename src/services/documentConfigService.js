@@ -8,6 +8,26 @@ import axiosInstance from '@/lib/axios/axiosInstance';
 import API from '@/constants/apiEndpoints';
 
 /**
+ * The print/preview formats configured for a document type.
+ *
+ * Captured from OrnaVerse's own POS 2026-08-05: this is the call they make
+ * immediately after Invoice/Create, to offer the operator a "Select Report"
+ * choice. Which formats exist is per-tenant configuration, so they're read
+ * rather than hardcoded — this tenant returns three for POS Invoice (54).
+ *
+ * @param {number} documentId
+ * @returns {Promise<{report_id, report_name, report_key, report_file,
+ *                    report_folder, report_sub_folder?}[]>}
+ */
+export async function getDocumentReports(documentId) {
+  const response = await axiosInstance.post(API.DOCUMENT_CONFIG.DOCUMENT_REPORTS_LIST, {
+    document_id: documentId,
+    is_disabled: false,
+  });
+  return response.data?.Entities ?? [];
+}
+
+/**
  * All financial year rows (no company/document scoping — same list applies
  * everywhere). Resolve the CURRENT one client-side by matching today against
  * [from_date, to_date].
