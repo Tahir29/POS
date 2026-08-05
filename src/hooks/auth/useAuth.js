@@ -10,7 +10,7 @@ import { useRouter } from 'next/navigation';
 import { useCallback } from 'react';
 import { toast } from 'react-toastify';
 
-import { generateToken }       from '@/services/authService';
+import { generateToken, createReportSession, destroyReportSession } from '@/services/authService';
 import { getUserStores }       from '@/services/storeService';
 import { checkMetalRateToday } from '@/services/settingsService';
 
@@ -45,6 +45,12 @@ export function useAuth() {
 
   const login = useCallback(async (username, password) => {
     const tokenData = await generateToken(username, password);
+
+    // Also establish the OrnaVerse cookie session that invoice printing
+    // needs — /Print/Render ignores the bearer token above. Deliberately not
+    // awaited into the critical path and it cannot throw: if it fails, the
+    // POS works normally and only printing is unavailable until next sign-in.
+    createReportSession(username, password);
 
     dispatch(
       setTokens({
@@ -116,6 +122,10 @@ export function useAuth() {
   }, [dispatch, router]);
 
   const logout = useCallback(() => {
+    // Drop the operator's OrnaVerse cookie session server-side too, so
+    // signing out actually ends it rather than leaving it to age out.
+    destroyReportSession();
+
     if (tracker.isSessionActive()) {
       tracker.endSession('agent_logout');
     }
