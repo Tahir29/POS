@@ -18,20 +18,43 @@ import APP_CONFIG from '@/constants/appConfig';
 import API from '@/constants/apiEndpoints';
 
 // ── TOKEN REFRESH STATE ───────────────────────────────────────
-// Prevents multiple simultaneous refresh calls when parallel
-// requests all get a 401 at the same time.
-let isRefreshing = false;
-let pendingQueue = []; // requests waiting for refresh to complete
+// ONE in-flight refresh promise, shared by BOTH the request interceptor's
+// proactive refresh (token nearing expiry) and the response interceptor's
+// reactive refresh (401 came back). These used to be two independent code
+// paths — the reactive one had a lock (an isRefreshing flag + a pending
+// queue), the proactive one had none at all.
+//
+// That gap is exactly what caused a healthy session to get logged out right
+// after checkout: checkout is the one flow that reliably fires several
+// requests at once (useInvoiceHelpers' 6 balance calls on mount, then the
+// invalidateQueries(['invoices'|'orders']) burst the instant Create/Post
+// succeeds), and its own submit chain is slow enough (sequential stock
+// claims, multi-second SetSalesItems, ApplyPromotions, Create, Post) to let
+// the token age into its 5-minute refresh window by the time that second
+// burst lands. With no lock, every one of those concurrent requests
+// independently POSTed grant_type=refresh_token with the SAME refresh
+// token. OrnaVerse's refresh token is single-use: only the first of those
+// calls succeeds, the rest come back invalid_grant — and since each was
+// swallowed silently (see the old `catch {}` this replaced), the "losing"
+// requests sailed on with the stale access token, got a real 401, and the
+// response interceptor's own refresh attempt then ALSO failed (the refresh
+// token had already been rotated/consumed by the winning proactive call) —
+// which is what actually called handleLogout(). One coordinator for both
+// paths means at most one refresh call is ever in flight, so this race
+// cannot happen no matter how many requests need a refresh at once.
+let refreshPromise = null;
 
-const processPendingQueue = (error, token = null) => {
-  pendingQueue.forEach(({ resolve, reject }) => {
-    if (error) {
-      reject(error);
-    } else {
-      resolve(token);
-    }
-  });
-  pendingQueue = [];
+/**
+ * Returns the token from the currently in-flight refresh, starting one if
+ * none is running. Every caller — proactive or reactive, however many fire
+ * concurrently — awaits this SAME promise and gets the same outcome.
+ */
+const getRefreshedToken = (instance, refreshToken, store) => {
+  if (!refreshPromise) {
+    refreshPromise = refreshAccessToken(instance, refreshToken, store)
+      .finally(() => { refreshPromise = null; });
+  }
+  return refreshPromise;
 };
 
 // ── STORE REFERENCE ───────────────────────────────────────────
@@ -64,7 +87,11 @@ export const attachInterceptors = (instance) => {
         return config;
       }
 
-      // Proactively refresh if token is within the threshold window
+      // Proactively refresh if token is within the threshold window. Routed
+      // through the shared coordinator (see getRefreshedToken above) — if
+      // another request already started this refresh, this one waits for
+      // and reuses that SAME call rather than firing its own with the same
+      // (single-use) refresh token.
       if (
         accessToken &&
         tokenExpiry &&
@@ -72,7 +99,7 @@ export const attachInterceptors = (instance) => {
         Date.now() >= tokenExpiry - APP_CONFIG.AUTH.TOKEN_REFRESH_THRESHOLD_MS
       ) {
         try {
-          const newToken = await refreshAccessToken(instance, refreshToken, store);
+          const newToken = await getRefreshedToken(instance, refreshToken, store);
           config.headers['Authorization'] = `Bearer ${newToken}`;
           return config;
         } catch {
@@ -113,29 +140,16 @@ export const attachInterceptors = (instance) => {
           return Promise.reject(normalizeError(error));
         }
 
-        // Another refresh is already in progress — queue this request
-        if (isRefreshing) {
-          return new Promise((resolve, reject) => {
-            pendingQueue.push({ resolve, reject });
-          }).then((token) => {
-            originalRequest.headers['Authorization'] = `Bearer ${token}`;
-            return instance(originalRequest);
-          }).catch((err) => Promise.reject(err));
-        }
-
-        isRefreshing = true;
-
+        // Shared coordinator — if a proactive refresh (or another request's
+        // reactive one) is already in flight, this awaits that SAME call
+        // instead of starting a second one with the same refresh token.
         try {
-          const newToken = await refreshAccessToken(instance, refreshToken, store);
-          processPendingQueue(null, newToken);
+          const newToken = await getRefreshedToken(instance, refreshToken, store);
           originalRequest.headers['Authorization'] = `Bearer ${newToken}`;
           return instance(originalRequest);
         } catch (refreshError) {
-          processPendingQueue(refreshError, null);
           handleLogout(store);
           return Promise.reject(normalizeError(refreshError));
-        } finally {
-          isRefreshing = false;
         }
       }
 
