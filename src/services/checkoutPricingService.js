@@ -140,15 +140,10 @@ async function claimStockPieces({ item, activeStoreId, claimed }) {
   const available = rows.filter((r) => !claimed.has(r.stock_journal_id));
   const wanted = item.quantity ?? 1;
 
-  if (available.length < wanted) {
-    // Say which product and how short we are. The server's own message names
-    // only the item code and no numbers, which leaves staff guessing.
-    throw new Error(
-      available.length === 0
-        ? `"${item.itemName}" is not in stock at this store — it can't be billed here.`
-        : `Only ${available.length} of "${item.itemName}" ${available.length === 1 ? 'is' : 'are'} in stock — ${wanted} requested.`
-    );
-  }
+  // Short stock is NOT an error here any more. The counter no longer asks the
+  // operator to declare up front whether this is a bill or a booking, so a
+  // basket the shelf can't fill simply becomes an order instead of a dead end.
+  if (available.length < wanted) return null;
 
   const taken = available.slice(0, wanted);
   for (const row of taken) claimed.add(row.stock_journal_id);
@@ -195,18 +190,15 @@ async function resolveFullItem({ itemId, styleId }) {
 }
 
 /**
- * Prices an ORDER's lines from the CATALOG ITEM MASTER, not from stock.
+ * Prices from the CATALOG ITEM MASTER — the made-to-order path.
  *
- * An order is a booking, frequently for a piece the store does not have —
- * their own counter labels exactly this case "(MTO)", made to order. Doc 53
- * does not check stock, and their Order journey makes NO StockJournal call
- * at all: it sends the item master straight to SetSalesItems with
+ * Used only when the shelf can't supply the basket. An order is a booking,
+ * frequently for a piece the store doesn't have (their counter labels this
+ * "(MTO)"). Doc 53 doesn't check stock, and their Order journey makes NO
+ * StockJournal call at all: the master goes straight to SetSalesItems with
  * document_id 53. Confirmed 2026-08-05 by capturing that journey end to end.
  *
- * Routing an order through the invoice's stock-piece path would refuse every
- * made-to-order item — which is most of what orders exist for.
- *
- * @returns {Promise<object[]>} one priced line per cart line
+ * @returns {Promise<object[]>} one priced line per piece
  */
 async function buildOrderLineItems({ items, documentId }) {
   const masters = [];
@@ -227,35 +219,71 @@ async function buildOrderLineItems({ items, documentId }) {
   return priced;
 }
 
-export async function buildPricedLineItems({ items, activeStoreId, salesPersonId, documentId }) {
-  // ORDER (53) books a catalog item; INVOICE (54) consumes a physical piece.
-  // See buildOrderLineItems for why these cannot share a path.
-  if (documentId === APP_CONFIG.DOCUMENT_TYPES.POS_ORDER) {
-    const orderLines = await buildOrderLineItems({ items, documentId });
-    return salesPersonId == null
-      ? orderLines
-      : orderLines.map((row) => ({ ...row, sales_person_id: salesPersonId }));
-  }
-
+/**
+ * Prices the basket ONCE, and works out for itself what it is pricing.
+ *
+ * THE COUNTER NO LONGER ASKS. There used to be a "Complete as" choice —
+ * Bill Now or Place Order — which meant the operator had to classify a sale
+ * before knowing how it would be paid, and the two modes quoted different
+ * figures for the same item. Two prices on one screen is a trust problem in
+ * front of a customer, so the choice is gone.
+ *
+ * What's left is a fact, not a preference: either the shelf can supply this
+ * basket or it can't.
+ *
+ *   every line in stock  → price the PHYSICAL PIECES (doc 54). This is the
+ *     only shape an invoice can be raised from — a master-built invoice is
+ *     refused with "Not enough stock of <code> can not Save", because it
+ *     never names the piece leaving the shelf.
+ *   anything short       → price the MASTERS (doc 53). Made-to-order; there
+ *     is no piece to name, and only an order can be raised.
+ *
+ * The document type then follows from what was collected, at submit time.
+ * Both are priced by the same server call against today's rates, so the
+ * figure the customer is quoted is the figure they are charged either way.
+ *
+ * @param {{
+ *   items: {itemId, itemName, styleId, quantity}[],
+ *   activeStoreId: number,
+ *   salesPersonId?: number,
+ * }} params
+ * @returns {Promise<{ lineItems: object[], isStockBacked: boolean }>}
+ */
+export async function buildPricedLineItems({ items, activeStoreId, salesPersonId }) {
   const claimed = new Set();
 
   // Sequential, not Promise.all — `claimed` is what stops two cart lines
   // claiming the same piece, and it only works if the claims don't race.
   const stockRows = [];
+  let isStockBacked = true;
   for (const item of items) {
-    stockRows.push(...await claimStockPieces({ item, activeStoreId, claimed }));
+    const taken = await claimStockPieces({ item, activeStoreId, claimed });
+    if (!taken) { isStockBacked = false; break; }
+    stockRows.push(...taken);
   }
 
-  const priced = await priceStockPiecesForSale(stockRows, documentId);
+  const documentId = isStockBacked
+    ? APP_CONFIG.DOCUMENT_TYPES.POS_INVOICE
+    : APP_CONFIG.DOCUMENT_TYPES.POS_ORDER;
 
-  if (priced.length !== stockRows.length) {
-    throw new Error('Live pricing failed — the server priced a different number of pieces than were sent.');
+  const priced = isStockBacked
+    ? await priceStockPiecesForSale(stockRows, documentId)
+    : await buildOrderLineItems({ items, documentId });
+
+  const expected = isStockBacked
+    ? stockRows.length
+    : items.reduce((sum, item) => sum + (item.quantity ?? 1), 0);
+
+  if (priced.length !== expected) {
+    throw new Error('Live pricing failed — the server priced a different number of items than were sent.');
   }
 
   // sales_person_id is the only field their client adds after pricing.
-  return salesPersonId == null
+  const lineItems = salesPersonId == null
     ? priced
     : priced.map((row) => ({ ...row, sales_person_id: salesPersonId }));
+
+  return { lineItems, isStockBacked };
 }
 
 /**
@@ -266,6 +294,45 @@ export async function buildPricedLineItems({ items, activeStoreId, salesPersonId
  * still 500'd even after every other header field was correct).
  * @param {object[]} lineItems — output of buildPricedLineItems
  */
+/**
+ * Maps priced line items back onto the cart lines that produced them.
+ *
+ * Both pricing paths emit ONE ROW PER PIECE, in cart order, expanding a cart
+ * line of N into N consecutive rows — so the rows for cart line i are a
+ * contiguous slice. This is what lets the checkout screen show each line at
+ * the price it is really being sold for, and name the physical piece.
+ *
+ * @param {object[]} items      — cart items, in order
+ * @param {object[]} lineItems  — buildPricedLineItems output
+ * @returns {Map<number, { lineTotal: number, unitPrice: number, skus: string[] }>}
+ *   keyed by cart index; empty when the two don't line up (never guess a
+ *   mapping — showing the cart's own figure is better than the wrong piece's)
+ */
+export function mapPricedLinesToCart(items, lineItems) {
+  const byCartIndex = new Map();
+  if (!items?.length || !lineItems?.length) return byCartIndex;
+
+  const expected = items.reduce((sum, item) => sum + (item.quantity ?? 1), 0);
+  if (expected !== lineItems.length) return byCartIndex;
+
+  let cursor = 0;
+  items.forEach((item, index) => {
+    const quantity = item.quantity ?? 1;
+    const rows = lineItems.slice(cursor, cursor + quantity);
+    cursor += quantity;
+
+    const lineTotal = +rows.reduce((sum, r) => sum + (r.sub_total ?? 0), 0).toFixed(2);
+    byCartIndex.set(index, {
+      lineTotal,
+      unitPrice: +(lineTotal / quantity).toFixed(2),
+      // Only invoices claim stock rows, so this is empty for an order.
+      skus: rows.map((r) => r.sku).filter(Boolean),
+    });
+  });
+
+  return byCartIndex;
+}
+
 export function summarizeLineItems(lineItems) {
   const sum = (field) => +lineItems.reduce((s, li) => s + (li[field] ?? 0), 0).toFixed(2);
   return {

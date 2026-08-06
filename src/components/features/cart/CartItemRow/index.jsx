@@ -21,12 +21,27 @@ import { resolveImageSrc } from '@/lib/resolveImageSrc';
  *   onUpdateQuantity?: (item: object, quantity: number) => void,
  *   onRemove?: (item: object) => void,
  *   readOnly?: boolean,
+ *   priced?: { lineTotal: number, unitPrice: number, skus: string[] } | null,
  * }} props
+ *   priced — what this line is ACTUALLY being sold at, from
+ *   useCheckoutPricing. It must win over the cart's own figure.
+ *
+ *   The cart price is the item MASTER's — a nominal spec. A sale bills the
+ *   physical piece, whose real weight decides the price: the master for
+ *   LJ-BR0121-14YGLGD-7 is 2.030g net → ₹30,877.20, while the two bracelets
+ *   actually in the case weigh 1.349g → ₹23,507.56 and 1.620g → ₹26,742.80
+ *   (metal is ₹9,440 per net gram in all three; verified on UAT 2026-08-05).
+ *   Showing "₹30,877.20 each" beside a total of ₹23,507.56 reads as a bug
+ *   and misquotes the customer — hence the SKU of the actual piece is shown
+ *   too, so the counter knows which one it is billing.
  */
-export default function CartItemRow({ item, onUpdateQuantity, onRemove, readOnly = false }) {
+export default function CartItemRow({
+  item, onUpdateQuantity, onRemove, readOnly = false, priced = null,
+}) {
   const [imgError, setImgError] = useState(false);
 
-  const lineTotal = item.unitPrice * item.quantity;
+  const unitPrice = priced ? priced.unitPrice : item.unitPrice;
+  const lineTotal = priced ? priced.lineTotal : item.unitPrice * item.quantity;
   const imageSrc = resolveImageSrc(item.image);
   const showImage = imageSrc && !imgError;
 
@@ -77,6 +92,15 @@ export default function CartItemRow({ item, onUpdateQuantity, onRemove, readOnly
           <p className="text-xs text-muted-foreground">SKU: {item.sku}</p>
         )}
 
+        {/* The physical piece(s) this line will consume. Only an invoice
+            claims stock — an order is a booking, so there is nothing to name
+            and `priced.skus` comes back empty. */}
+        {priced?.skus?.length > 0 && (
+          <p className="text-xs text-muted-foreground">
+            Piece{priced.skus.length > 1 ? 's' : ''}: {priced.skus.join(', ')}
+          </p>
+        )}
+
         {metaParts.length > 0 && (
           <p className="text-xs text-muted-foreground">{metaParts.join(' • ')}</p>
         )}
@@ -99,7 +123,7 @@ export default function CartItemRow({ item, onUpdateQuantity, onRemove, readOnly
                 (226444.105), and the default shows 3 — "₹2,26,444.105 each"
                 reads like a rendering fault next to a rounded total. */}
             <p className="text-xs text-muted-foreground">
-              ₹{item.unitPrice.toLocaleString('en-IN', { maximumFractionDigits: 2 })} each
+              ₹{unitPrice.toLocaleString('en-IN', { maximumFractionDigits: 2 })} each
             </p>
             <p className="text-sm font-bold text-foreground">
               ₹{lineTotal.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
