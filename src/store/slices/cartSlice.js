@@ -16,10 +16,12 @@ const initialState = {
                                // shipping_address/billing_address at order creation
   appliedPromos:       [],    // { promoCode, promoDetails, discountAmount }[] — multiple
                                // promos can stack; "similar" (same discount type) ones are
-                               // blocked before dispatch, see usePromoValidation
+                               // blocked before dispatch, see usePromoValidation.
+                               // discountAmount here is DERIVED (see recalculateTotals),
+                               // display-only, and against the CART subtotal.
   appliedGiftCard:     null,
   appliedGiftVoucher:  null,
-  discountAmount:      0,     // sum of appliedPromos[].discountAmount
+  discountAmount:      0,     // derived from appliedPromos against the current subtotal
   subtotal:            0,
   taxAmount:           0,     // 3% GST on the taxable value (subtotal - discount)
   total:               0,
@@ -27,15 +29,33 @@ const initialState = {
 
 // ── HELPERS ──────────────────────────────────────────────────
 // Recalculates subtotal, tax and total after any cart mutation.
-// Called at the end of every reducer that modifies items or discount.
+//
+// THE CART DOES NOT KNOW WHAT A PROMOTION IS WORTH, and no longer pretends
+// to. Captured from OrnaVerse's own counter 2026-08-05: a promotion's
+// percentage applies to a COMPONENT of the item chosen by `discount_calc_on`
+// — the diamond value, the making charges, or the whole value. "20% Off
+// Diamond" on a ₹1,04,699 piece is 20% of its ₹60,888 of diamond, not of the
+// subtotal. Only Helper/ApplyPromotions, over server-priced line items, can
+// work that out, and it re-taxes the line afterwards.
+//
+// So `discountAmount` stays 0 here and the cart shows the promo as applied
+// without a rupee figure. The real number appears at checkout, from the
+// server (see useCheckoutPricing). Inventing one here produced a saving the
+// customer was then not given — worse than showing none.
 const recalculateTotals = (state) => {
   state.subtotal = state.items.reduce(
     (sum, item) => sum + item.unitPrice * item.quantity,
     0
   );
-  const taxableValue = Math.max(0, state.subtotal - state.discountAmount);
-  state.taxAmount = +(taxableValue * APP_CONFIG.TAX.GST_RATE).toFixed(2);
-  state.total = +(taxableValue + state.taxAmount).toFixed(2);
+
+  state.discountAmount = 0;
+  state.appliedPromos = state.appliedPromos.map((promo) => ({
+    ...promo,
+    discountAmount: 0,
+  }));
+
+  state.taxAmount = +(state.subtotal * APP_CONFIG.TAX.GST_RATE).toFixed(2);
+  state.total = +(state.subtotal + state.taxAmount).toFixed(2);
 };
 
 const cartSlice = createSlice({
@@ -120,21 +140,22 @@ const cartSlice = createSlice({
     // "Similar" (same discount-type) conflicts are checked before dispatch
     // (see usePromoValidation); this only guards against the exact same
     // code being added twice.
+    // The payload's discountAmount is deliberately ignored — recalculateTotals
+    // derives it from promoDetails against the live subtotal. It stays on the
+    // action only because the analytics middleware reports it.
     applyPromo: (state, action) => {
-      const { promoCode, promoDetails, discountAmount } = action.payload;
+      const { promoCode, promoDetails } = action.payload;
       const alreadyApplied = state.appliedPromos.some((p) => p.promoCode === promoCode);
       if (alreadyApplied) return;
 
-      state.appliedPromos.push({ promoCode, promoDetails, discountAmount });
-      state.discountAmount = state.appliedPromos.reduce((sum, p) => sum + p.discountAmount, 0);
+      state.appliedPromos.push({ promoCode, promoDetails, discountAmount: 0 });
       recalculateTotals(state);
     },
 
     // Remove one applied promo by code
     removePromo: (state, action) => {
       const promoCode = action.payload;
-      state.appliedPromos  = state.appliedPromos.filter((p) => p.promoCode !== promoCode);
-      state.discountAmount = state.appliedPromos.reduce((sum, p) => sum + p.discountAmount, 0);
+      state.appliedPromos = state.appliedPromos.filter((p) => p.promoCode !== promoCode);
       recalculateTotals(state);
     },
 
@@ -186,7 +207,14 @@ const cartSlice = createSlice({
         appliedPromos = [];
       }
 
-      return { ...state, ...persistedCart, appliedPromos };
+      // Recompute rather than trust the persisted subtotal/discount/total. A
+      // cart persisted before the discount became derived carries a frozen
+      // figure costed against whatever the subtotal was when the promo was
+      // typed in; restoring it verbatim would put a stale discount straight
+      // back into a live basket.
+      const rehydrated = { ...state, ...persistedCart, appliedPromos };
+      recalculateTotals(rehydrated);
+      return rehydrated;
     });
   },
 });

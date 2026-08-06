@@ -1,14 +1,26 @@
 'use client';
 
 // src/app/(pos)/checkout/page.jsx
-// Checkout screen — direct POS billing via POS/Invoice/Create → Post.
+// Checkout screen — raises ONE of two POS documents, chosen by the operator.
+//
+//   BILL NOW    → POS/Invoice/Create (54). Cash-and-carry. Paid in full;
+//                 OrnaVerse refuses a short-paid invoice outright.
+//   PLACE ORDER → POS/Order/Create (53). A booking the customer leaves an
+//                 ADVANCE against; the remainder rides as balance_amount and
+//                 is collected when the piece is handed over.
+//
+// Both are real documents in the ERP and each appears in its own directory
+// (/invoices, /orders). Exactly one is raised per sale — raising both would
+// book the same goods twice.
 //
 // FLOW:
 //   1. Customer must be attached (checkoutSchema enforces this)
-//   2. Payment modes selected + amounts balanced to cart total
-//   3. Optional narration/notes for the invoice
-//   4. placeInvoice({ paymentModes, narration }) → Create → Post
-//   5. On success → OrderConfirmationScreen with transactionId
+//   2. Pieces priced live (useCheckoutPricing) — the ONLY source of any
+//      figure shown, collected, or submitted, including the promo discount
+//   3. Payment modes selected; balanced to the payable (invoice) or any
+//      amount up to it (order)
+//   4. place*({ paymentModes, discount, promoCodes, pricedLineItems })
+//   5. On success → OrderConfirmationScreen for that document type
 //
 // NAVIGATION GUARD:
 //   - Redirects to /cart if cart is empty and no sale placed
@@ -35,6 +47,7 @@ import { useCartTotals }              from '@/hooks/cart/useCartTotals';
 import { useCustomerSession }         from '@/hooks/customer/useCustomerSession';
 import { useRedirectOnCustomerChange } from '@/hooks/checkout/useRedirectOnCustomerChange';
 import { useCreateInvoice }           from '@/hooks/checkout/useCreateInvoice';
+import { useCreateOrder }             from '@/hooks/checkout/useCreateOrder';
 import { useCheckoutPricing }         from '@/hooks/checkout/useCheckoutPricing';
 import { useBackGuard } from '@/contexts/NavigationGuardContext';
 import { useSmartBack }  from '@/hooks/navigation/useSmartBack';
@@ -52,24 +65,38 @@ function CheckoutScreen() {
   const activeStoreId      = useSelector(selectActiveStoreId);
   const { goBack, clearGuard } = useSmartBack();
 
+  // 'invoice' = bill now (doc 54) · 'order' = booking with an advance (doc 53)
+  const [documentType, setDocumentType] = useState('invoice');
+  const isOrderMode = documentType === 'order';
+
   const {
     placeInvoice,
     isPlacingInvoice,
     invoiceResult,
-    reset: resetInvoice,
   } = useCreateInvoice();
 
-  // Prices the real stock pieces up front. `amountDue` — not the cart's
-  // catalog-derived total — is what the customer is asked to pay, because
-  // the catalog figure can omit stone value entirely and would leave the
-  // invoice short-paid (see useCheckoutPricing).
+  const {
+    placeOrder,
+    isPlacingOrder,
+    orderResult,
+  } = useCreateOrder();
+
+  // Prices the real stock pieces up front and resolves the promo against
+  // them. `amountDue` — not the cart's catalog-derived total — is what the
+  // customer is asked to pay, because the catalog figure can omit stone value
+  // entirely and would leave the document short-paid (see useCheckoutPricing).
   const {
     lineItems: pricedLineItems,
     totals: pricedTotals,
+    promotionDetails,
     amountDue,
     isLoading: isPricing,
     error: pricingError,
-  } = useCheckoutPricing(APP_CONFIG.DOCUMENT_TYPES.POS_INVOICE);
+  } = useCheckoutPricing(
+    isOrderMode
+      ? APP_CONFIG.DOCUMENT_TYPES.POS_ORDER
+      : APP_CONFIG.DOCUMENT_TYPES.POS_INVOICE
+  );
 
   // Until pricing resolves there is no trustworthy figure to collect
   // against, so fall back to the cart estimate only for display.
@@ -80,8 +107,12 @@ function CheckoutScreen() {
   const [panNumber, setPanNumber]   = useState(null);
   const [isBackConfirmOpen, setIsBackConfirmOpen] = useState(false);
 
+  const amountCollected = payments.reduce((sum, p) => sum + (p.amount ?? 0), 0);
+  const isSubmitting = isPlacingInvoice || isPlacingOrder;
+
   // Track whether a sale has been successfully completed
-  const isConfirmed = !!invoiceResult;
+  const result = isOrderMode ? orderResult : invoiceResult;
+  const isConfirmed = !!result;
 
   // Intercept the GLOBAL back button (Header) when there are unsaved
   // payment selections — shows the "Leave checkout?" dialog instead of
@@ -163,23 +194,41 @@ function CheckoutScreen() {
     totalAmount:  payableTotal,
     cartTotal:    payableTotal,
     panNumber,
+    // An order is a booking against an advance, so anything up to the total
+    // is valid; an invoice must settle exactly. See checkoutSchema.
+    allowPartialPayment: isOrderMode,
   });
   // Never allow a sale to be submitted against the provisional cart figure —
-  // it can differ from the invoice by the value of the stones.
+  // it can differ from the document by the value of the stones.
   const isValid = validation.success && !!pricedLineItems && !isPricing && !pricingError;
 
   const handlePlaceOrder = async () => {
-    if (!isValid || isPlacingInvoice) return;
-    await placeInvoice({ paymentModes: payments, salesPersonId, pricedLineItems });
+    if (!isValid || isSubmitting) return;
+
+    // The lines already carry the promotion (applied and re-taxed by
+    // Helper/ApplyPromotions inside useCheckoutPricing), and promotionDetails
+    // is the server's own row for the document. Both go in exactly as
+    // received — the same resolution that quoted the figure the operator just
+    // collected against.
+    const submission = {
+      paymentModes: payments,
+      salesPersonId,
+      pricedLineItems,
+      promotionDetails,
+    };
+
+    if (isOrderMode) await placeOrder(submission);
+    else             await placeInvoice(submission);
   };
 
   // ── Confirmation screen ────────────────────────────────────────────────────
-  if (isConfirmed && invoiceResult) {
+  if (isConfirmed && result) {
     return (
       <OrderConfirmationScreen
-        transactionId={invoiceResult.transactionId}
-        // document_no will be loaded by useInvoiceDetail inside the screen
-        // but pass the EntityId so it can fetch immediately
+        transactionId={result.transactionId}
+        documentType={documentType}
+        // document_no is loaded by the screen's own Retrieve; the EntityId is
+        // passed so it can fetch immediately.
       />
     );
   }
@@ -189,13 +238,48 @@ function CheckoutScreen() {
     <div className="flex flex-col gap-6 max-w-6xl mx-auto w-full pb-32 p-4 md:p-6">
       <p className="text-sm text-muted-foreground -mb-2">Review your order and complete the payment</p>
 
+      {/* Which document this sale raises. Two different records in the ERP,
+          each with its own directory — so the choice is made deliberately,
+          before payment, rather than implied by how much is collected. */}
+      <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
+        <h2 className="text-sm font-bold text-foreground mb-3">Complete as</h2>
+        <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Document type">
+          {[
+            { value: 'invoice', label: 'Bill Now',    hint: 'Paid in full · Invoice' },
+            { value: 'order',   label: 'Place Order', hint: 'Advance · Balance on collection' },
+          ].map((option) => {
+            const isSelected = documentType === option.value;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                role="radio"
+                aria-checked={isSelected}
+                onClick={() => setDocumentType(option.value)}
+                className={`rounded-lg border px-3 py-2.5 text-left transition-colors ${
+                  isSelected
+                    ? 'border-primary/40 bg-primary/5'
+                    : 'border-border bg-muted hover:bg-muted/70'
+                }`}
+              >
+                <span className="block text-sm font-semibold text-foreground">{option.label}</span>
+                <span className="block text-xs text-muted-foreground mt-0.5">{option.hint}</span>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
       <div className='grid grid-cols-1 items-start gap-5 lg:grid-cols-2'>
         <div className="flex flex-col gap-5 w-full">
           {/* Customer attached to this sale */}
           <CheckoutCustomerSummary />
 
-          {/* Mandatory PAN once the order crosses the statutory threshold */}
-          <CheckoutPanCapture totalAmount={total} onPanResolved={setPanNumber} />
+          {/* Mandatory PAN once the sale crosses the statutory threshold.
+              Judged on the PRICED payable — against the cart's catalog
+              estimate a sale worth well over the threshold could read as
+              under it, and the PAN would never be asked for. */}
+          <CheckoutPanCapture totalAmount={payableTotal} onPanResolved={setPanNumber} />
 
           {/* Sales person — required, mirrors the vendor's own POS Sale screen */}
           <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
@@ -209,8 +293,12 @@ function CheckoutScreen() {
             />
           </section>
 
-          {/* Promo code / discount */}
-          <CheckoutDiscountSection />
+          {/* Promo code / discount — the saving shown per promo is the
+              server's own promotion_amount, not a local estimate. */}
+          <CheckoutDiscountSection
+            promotionDetails={promotionDetails}
+            isPricing={isPricing}
+          />
         </div>
         <div className="flex flex-col gap-5 w-full">
           {/* Order items — same CartItemRow used on the Cart page, read-only here */}
@@ -238,7 +326,11 @@ function CheckoutScreen() {
           </section>
 
           {/* Payment modes + invoice helper balances */}
-          <CheckoutPaymentSection onChange={setPayments} amountDue={amountDue} />
+          <CheckoutPaymentSection
+            onChange={setPayments}
+            amountDue={amountDue}
+            allowPartial={isOrderMode}
+          />
 
           {/* Pricing state — the operator must know the figure isn't final
               yet, and must not be left guessing if it fails outright. */}
@@ -263,10 +355,12 @@ function CheckoutScreen() {
         <div className="max-w-6xl mx-auto w-full flex flex-col items-center gap-2">
           <PlaceOrderButton
             isValid={isValid}
-            isPlacingOrder={isPlacingInvoice}
+            isPlacingOrder={isSubmitting}
             onPlaceOrder={handlePlaceOrder}
             amountDue={amountDue}
+            amountCollected={amountCollected}
             isPricing={isPricing}
+            documentType={documentType}
           />
           <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <ShieldCheck size={13} className="text-accent" aria-hidden="true" />

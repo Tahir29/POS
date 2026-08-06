@@ -3,17 +3,31 @@
 // Replaces the old MarketPlace/Order/Generate approach entirely.
 // POS_CHANNEL_ID blocker is gone — no channel field required.
 //
-// TWO FLOWS (both available, defaulting to Invoice):
+// TWO FLOWS, and the checkout screen now offers BOTH as an explicit choice:
 //
-//   ORDER FLOW  (deposit/reserve — collect later):
+//   ORDER FLOW  (deposit/reserve — collect later):  ← this hook
 //     createOrder(entity) → SaveResponse { EntityId }
 //     postOrder(EntityId) → finalises stock deduction
 //
-//   INVOICE FLOW (immediate sale — use useCreateInvoice instead):
+//   INVOICE FLOW (immediate sale):
 //     See useCreateInvoice.js
 //
-// This hook handles the ORDER flow.
-// Use useCreateInvoice for the primary checkout (direct billing).
+// WHY THIS HOOK HAD NO CALLERS, AND WHY THAT MATTERED
+//
+// When checkout moved to direct billing, this hook was left wired to nothing
+// — so POS/Order/Create stopped being called by the app at all, and the
+// Orders screen (which lists POS/Order/List, document type 53) stopped
+// receiving anything. It still showed the last order raised before the
+// switch, which read exactly like sales silently failing to save. They
+// hadn't: they were being filed as invoices, under Invoices.
+//
+// The two documents are not interchangeable and raising both for one sale
+// would double-count it, so checkout picks one per sale:
+//   • Invoice (54) — cash-and-carry. Must be paid in full; OrnaVerse rejects
+//     a short-paid one outright.
+//   • Order (53) — a booking the customer leaves an ADVANCE against. Partial
+//     payment is the point, and the remainder rides as balance_amount.
+//     Confirmed: doc 53 does not check stock, unlike 54.
 //
 // PAYLOAD — OrderRow key fields (confirmed v1.json):
 //   party_id       — customer (required)
@@ -27,9 +41,13 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSelector } from 'react-redux';
 import { toast } from 'react-toastify';
 import { createOrder, postOrder } from '@/services/orderService';
-import { buildPricedLineItems, summarizeLineItems } from '@/services/checkoutPricingService';
+import {
+  buildPricedLineItems,
+  applyPromotionsToLines,
+  summarizeLineItems,
+} from '@/services/checkoutPricingService';
+import { localDocumentDate, buildReceiptDetails } from '@/lib/checkout/documentFields';
 import { useCart } from '@/hooks/cart/useCart';
-import { useCartTotals } from '@/hooks/cart/useCartTotals';
 import { useCustomerSession } from '@/hooks/customer/useCustomerSession';
 import { useExchangeRate } from '@/hooks/checkout/useExchangeRate';
 import { useOrderHeaderConfig } from '@/hooks/checkout/useOrderHeaderConfig';
@@ -45,33 +63,33 @@ import TOAST from '@/constants/toastMessages';
  * employee_id/sales_person_id + exchange_rate — see useCreateInvoice.js
  * header for the full rationale (same schema, same findings 2026-07-16).
  *
- * HEADER FIELDS (financial_year_id, ledger_id, is_tax_applicable,
- * auto_posting, is_document_number_editable, round_off, backdating flags,
- * document_id/document_no) + LINE ITEMS (full SetSalesItems computed shape,
- * not a hand-rolled summary) — see useCreateInvoice.js's header comment for
- * the full root-cause story (confirmed live 2026-07-28); same fix applied
- * here for parity.
+ * HEADER FIELDS + LINE ITEMS + PROMOTIONS + RECEIPT DETAILS — see
+ * useCreateInvoice.js's header comment for the full root-cause story. This
+ * document type is the one that was actually captured, on 2026-08-05:
+ * POS/Order/Create → EntityId 259, HO-RPO-08-26-00001, and every field below
+ * was diffed against that payload.
  */
 function buildOrderEntity({
-  lineItems, discount,
+  lineItems, promotionDetails,
   customerId, customerName, customerMobile,
-  activeStoreId, paymentModes,
+  activeStoreId, paymentModes, narration,
   salesPersonId, exchangeRate, headerConfig,
 }) {
-  const today = new Date().toISOString();
-  const { subTotal, taxableAmount, taxAmount, netAmount, pieces, weight, netWeight } =
-    summarizeLineItems(lineItems);
+  const today = localDocumentDate();
+  const {
+    subTotal, discount, taxableAmount, taxAmount, netAmount,
+    pieces, weight, netWeight,
+  } = summarizeLineItems(lineItems);
 
-  const discountedNet = +Math.max(0, netAmount - (discount ?? 0)).toFixed(2);
-  const roundedNet = Math.round(discountedNet);
-  const round_off  = +(roundedNet - discountedNet).toFixed(2);
+  // Summed straight from the lines, which ApplyPromotions already discounted
+  // and re-taxed. Reference capture: sub_total 104699.04, discount 12177.6,
+  // taxable_amount 92521.44, tax_amount 2775.64, net_amount 95297.
+  const roundedNet = Math.round(netAmount);
+  const round_off  = +(roundedNet - netAmount).toFixed(2);
 
-  const receipt_details = paymentModes.map((p) => ({
-    mode_id:   p.modeId,
-    mode_code: p.modeCode ?? '',
-    mode_name: p.modeName,
-    amount:    p.amount,
-  }));
+  const receipt_details = buildReceiptDetails({
+    paymentModes, customerId, activeStoreId, exchangeRate, headerConfig,
+  });
   const receiptAmount = +receipt_details.reduce((s, r) => s + (r.amount ?? 0), 0).toFixed(2);
 
   return {
@@ -96,7 +114,10 @@ function buildOrderEntity({
     base_tax_amount: taxAmount,
     round_off,
     receipt_amount: receiptAmount,
+    // Positive on an order taken with an advance — that is the balance the
+    // customer settles on collection, not an error.
     balance_amount: +(roundedNet - receiptAmount).toFixed(2),
+    narration:     narration ?? undefined,
     document_id:                 APP_CONFIG.DOCUMENT_TYPES.POS_ORDER,
     financial_year_id:           headerConfig.financialYearId,
     ledger_id:                   headerConfig.ledgerId,
@@ -104,18 +125,19 @@ function buildOrderEntity({
     auto_posting:                headerConfig.autoPosting,
     is_document_number_editable: headerConfig.isDocumentNumberEditable,
     allow_backdated_entry:       false,
-    number_of_backdated_days:    0,
+    number_of_backdated_days:    headerConfig.numberOfBackdatedDays ?? 0,
     is_einvoice:                 false,
     line_items: lineItems,
     receipt_details,
-    promotion_details: [],
+    // The invoice_promotions[] rows from Helper/ApplyPromotions, passed
+    // through untouched — see useCreateInvoice.js.
+    promotion_details: promotionDetails ?? [],
   };
 }
 
 export function useCreateOrder() {
   const queryClient = useQueryClient();
-  const { items, clearCart } = useCart();
-  const { discount } = useCartTotals();
+  const { items, appliedPromos } = useCart();
   const { customerId, customerName, customerMobile } = useCustomerSession();
   const activeStoreId = useSelector(selectActiveStoreId);
   const { exchangeRate } = useExchangeRate();
@@ -123,22 +145,49 @@ export function useCreateOrder() {
 
   const mutation = useMutation({
     /**
-     * @param {{ paymentModes: {modeId, modeCode, modeName, amount}[], salesPersonId: number }} params
+     * @param {{
+     *   paymentModes:  {modeId, modeCode, modeName, amount, ledgerId?, raw?}[],
+     *   salesPersonId: number,
+     *   pricedLineItems?:  object[],  // post-promotion lines from useCheckoutPricing
+     *   promotionDetails?: object[],  // its invoice_promotions rows
+     *   narration?:    string,
+     * }} params
      */
-    mutationFn: async ({ paymentModes, salesPersonId }) => {
+    mutationFn: async ({
+      paymentModes, salesPersonId, pricedLineItems,
+      promotionDetails: promotionDetailsArg, narration,
+    }) => {
       if (!headerConfig.isReady) {
         throw new Error('Store configuration is still loading — please try again in a moment');
       }
 
-      const lineItems = await buildPricedLineItems({
-        items, activeStoreId, salesPersonId,
-        documentId: APP_CONFIG.DOCUMENT_TYPES.POS_ORDER,
-      });
+      const documentId = APP_CONFIG.DOCUMENT_TYPES.POS_ORDER;
+
+      // Reuse the lines the checkout screen already priced and quoted from,
+      // exactly as the invoice flow does — re-pricing here would risk booking
+      // a different figure than the one the customer was just quoted, and
+      // repeat the slowest calls in the flow.
+      let lineItems;
+      let promotionDetails;
+
+      if (pricedLineItems) {
+        lineItems = pricedLineItems.map((row) => ({ ...row, sales_person_id: salesPersonId }));
+        promotionDetails = promotionDetailsArg ?? [];
+      } else {
+        const priced = await buildPricedLineItems({
+          items, activeStoreId, salesPersonId, documentId,
+        });
+        const promoted = await applyPromotionsToLines({
+          lineItems: priced, appliedPromos, documentId, exchangeRate,
+        });
+        lineItems = promoted.lineItems;
+        promotionDetails = promoted.promotionDetails;
+      }
 
       const entity = buildOrderEntity({
-        lineItems, discount,
+        lineItems, promotionDetails,
         customerId, customerName, customerMobile,
-        activeStoreId, paymentModes,
+        activeStoreId, paymentModes, narration,
         salesPersonId, exchangeRate, headerConfig,
       });
 
@@ -174,13 +223,20 @@ export function useCreateOrder() {
           throw err;
         }
       }
-      return { transactionId, createResponse, postResponse };
+      return {
+        transactionId, createResponse, postResponse,
+        netAmount:     entity.net_amount,
+        balanceAmount: entity.balance_amount,
+      };
     },
 
     onSuccess: ({ transactionId }) => {
       toast.success(TOAST.ORDERS.CREATED(transactionId));
-      clearCart();
-      // Invalidate order list so it reflects the new order
+      // NOT clearing the cart here — same reason as useCreateInvoice: clearing
+      // drops the attached customer a render before `orderResult` is set, and
+      // the checkout screen's own guards bounce the operator to /cart before
+      // they ever see the order number. The screen clears it once the
+      // confirmation is on screen.
       queryClient.invalidateQueries({ queryKey: ['orders'] });
     },
 

@@ -564,10 +564,12 @@ const API = {
   // RENDER returns an HTML document their UI shows in an iframe preview;
   // PRINT_RENDER is the print variant.
   // ─────────────────────────────────────────────────────────────────────────
-  REPORTS: {
-    RENDER:       'Print/Render',
-    PRINT_RENDER: 'Print/PrintRender',
-  },
+  // Merged into the REPORTS block at the bottom of this file. They were a
+  // SECOND `REPORTS:` key in the same object literal, so the later one
+  // silently replaced this one and API.REPORTS.RENDER was undefined — a trap
+  // for the next caller, which InvoiceReportButton only escaped by hardcoding
+  // the path.
+
 
   // ─────────────────────────────────────────────────────────────────────────
   // EXCHANGE RATE
@@ -590,6 +592,12 @@ const API = {
   // REPORTS (Operational POS reports)
   // ─────────────────────────────────────────────────────────────────────────
   REPORTS: {
+    // Report RENDERING (cookie-authenticated MVC endpoints — note the missing
+    // "Services/"; see the REPORT RENDERING block above for why these cannot
+    // go through axiosInstance).
+    RENDER:       'Print/Render',
+    PRINT_RENDER: 'Print/PrintRender',
+    // Operational POS reports (OAuth JSON API).
     POS_RECEIPTS:          'Services/Reports/POSReceiptsReport/List',
     POS_RECEIPTS_DETAILED: 'Services/Reports/POSReceiptsDetailedReport/List',
     POS_TAX_DETAILS:       'Services/Reports/POSTaxDetails/List',

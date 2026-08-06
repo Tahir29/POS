@@ -22,25 +22,20 @@ export function isPromotionActive(promotion) {
   return now >= from && now <= to;
 }
 
-/**
- * Computes the discount amount in rupees for a promotion against a cart
- * subtotal. Percentage takes priority when set; otherwise falls back to a
- * flat discount_amount. Confirmed real field names 2026-07-15 — the older
- * discount_type/discount_value/min_order_value guesses in this codebase
- * never matched the actual API response.
- * @param {object} promotion — PromotionRow
- * @param {number} subtotal
- * @returns {number}
- */
-export function computePromotionDiscount(promotion, subtotal) {
-  const pct = Number(promotion?.discount_percentage) || 0;
-  const amt = Number(promotion?.discount_amount) || 0;
-  const raw = pct > 0 ? (subtotal * pct) / 100 : amt;
-  const clamped = Math.min(Math.max(0, raw), subtotal);
-  // Round to paisa — a percentage-of-subtotal multiplication routinely
-  // produces more than 2 decimal places, which is never valid for currency.
-  return Math.round(clamped * 100) / 100;
-}
+// NO DISCOUNT CALCULATOR LIVES HERE ANY MORE, deliberately.
+//
+// This file used to export computePromotionDiscount(promotion, subtotal) —
+// percentage of the subtotal, or a flat amount. Captured from OrnaVerse's own
+// counter on 2026-08-05, that is wrong for nearly every promotion on this
+// tenant: `discount_calc_on` selects which COMPONENT the percentage applies
+// to (3 = diamond, 6 = making charges, 1 = whole value), and the server
+// re-taxes the line afterwards. "20% Off Diamond" on a ₹1,04,699 piece is 20%
+// of its ₹60,888 of diamond — ₹12,177.60, where the old formula said ₹20,939.
+//
+// The rupee value comes from Helper/ApplyPromotions and nowhere else. See
+// promotionService.applyPromotions and checkoutPricingService.
+// applyPromotionsToLines. Re-adding a local calculator here would silently
+// reintroduce a wrong number into a customer's bill.
 
 /**
  * Short human-readable summary of what a promotion gives — "20% off" or

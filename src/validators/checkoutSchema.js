@@ -9,7 +9,13 @@ import APP_CONFIG from '@/constants/appConfig';
  *
  * - customerId: a customer session must be attached before order submission
  * - paymentModes: at least one payment mode with a positive amount
- * - totalAmount / cartTotal: split payment amounts must sum to the cart total
+ * - totalAmount / cartTotal: split payment amounts must sum to the total
+ * - allowPartialPayment: true when raising an ORDER (doc 53) rather than an
+ *   invoice. An order is a booking against which the customer leaves an
+ *   advance, so anything from one rupee up to the full value is valid and the
+ *   remainder is carried as balance_amount. An INVOICE has no such latitude —
+ *   OrnaVerse refuses a short-paid one outright ("No credit facility is
+ *   allowed for …"), so it still has to balance to the rupee.
  * - panNumber: mandatory once totalAmount crosses the statutory PAN
  *   threshold (Income Tax Rule 114B) — see APP_CONFIG.COMPLIANCE. Either
  *   already on the customer's record or entered fresh at checkout; the page
@@ -42,9 +48,11 @@ export const checkoutSchema = z
         message: 'Select a sales person before placing the order',
       }),
 
-    paymentModes: z
-      .array(paymentModeSchema)
-      .min(1, { message: 'Select at least one payment mode' }),
+    // Emptiness is checked in superRefine, not here: an ORDER may legitimately
+    // be placed with no payment at all — their own counter says so outright
+    // ("No advance required — you can place the order without collecting
+    // payment"). An INVOICE still needs at least one mode.
+    paymentModes: z.array(paymentModeSchema),
 
     totalAmount: z.number().nonnegative(),
 
@@ -53,18 +61,43 @@ export const checkoutSchema = z
     // Already-on-file or freshly-entered-and-valid PAN — null is fine below
     // the statutory threshold, required above it.
     panNumber: z.string().nullable(),
+
+    allowPartialPayment: z.boolean().optional().default(false),
   })
-  .refine(
-    (data) => {
-      const paidTotal = data.paymentModes.reduce((sum, p) => sum + p.amount, 0);
-      // Allow up to 1 paisa of float rounding drift
-      return Math.abs(paidTotal - data.cartTotal) < 0.01;
-    },
-    {
-      message: 'Payment amounts must add up to the order total',
-      path: ['paymentModes'],
+  .superRefine((data, ctx) => {
+    const paidTotal = data.paymentModes.reduce((sum, p) => sum + p.amount, 0);
+
+    // Allow up to 1 paisa of float rounding drift throughout.
+    if (data.allowPartialPayment) {
+      // Zero is fine — the whole value is then carried as balance_amount and
+      // collected when the piece is handed over.
+      if (paidTotal > data.cartTotal + 0.01) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Advance cannot be more than the order total',
+          path: ['paymentModes'],
+        });
+      }
+      return;
     }
-  )
+
+    if (data.paymentModes.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Select at least one payment mode',
+        path: ['paymentModes'],
+      });
+      return;
+    }
+
+    if (Math.abs(paidTotal - data.cartTotal) >= 0.01) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Payment amounts must add up to the order total',
+        path: ['paymentModes'],
+      });
+    }
+  })
   .refine(
     (data) => Math.abs(data.totalAmount - data.cartTotal) < 0.01,
     {

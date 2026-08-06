@@ -19,20 +19,59 @@ export function listPromotions() {
 }
 
 /**
- * Apply promotions to a transaction (order/invoice in draft).
- * OrnaVerse calculates and returns the applicable discount.
+ * Prices a promotion against LINE ITEMS — the discount calculator, and the
+ * only thing that knows what a promotion is actually worth.
+ *
+ * CAPTURED VERBATIM from OrnaVerse's own POS Order counter 2026-08-05. The
+ * previous signature here ({ transaction_id, company_id, party_id }) was a
+ * guess and was wrong in the way that mattered most: this is a PRE-Create
+ * helper over line items, not something you call on a saved draft. That
+ * mistake is why the discount was being computed client-side at all.
+ *
+ * WHY IT CANNOT BE DONE LOCALLY. A promotion's percentage does NOT apply to
+ * the subtotal. `discount_calc_on` selects the base — 3 = the diamond
+ * component, 6 = making charges, 1 = the whole value — so "20% Off Diamond"
+ * on a ₹1,04,699 line is 20% of its ₹60,888 of diamond = ₹12,177.60, not
+ * ₹20,939. Nearly every promotion on this tenant is component-scoped.
+ * The server also RE-TAXES: taxable_amount drops by the discount and
+ * tax_amount/net_amount are recomputed, while base_* keep the pre-discount
+ * figures.
+ *
+ * Request (confirmed):
+ *   { selected_products: [ <priced line items> ],
+ *     promotion:  <full PromotionRow from Promotion/List, UNMODIFIED>,
+ *     promotions: [ <invoice_promotions accumulated so far> ],
+ *     gift_voucher_number: '', exchange_rate: 1, document_id }
+ * Response: { items: [ <re-priced lines> ], invoice_promotions: [ <row> ] }
+ *
+ * `invoice_promotions` is the document's `promotion_details[]` — their client
+ * passes it through untouched. STACKING is a sequential fold: feed the
+ * previous round's `items` back in as selected_products and its
+ * `invoice_promotions` in as `promotions`. Verified live: 0 → 12,177.60 →
+ * 17,412.55 cumulative line discount, tax recomputed each round. Note the
+ * response returns only the NEW promotion's row, so the caller accumulates.
+ *
  * @param {{
- *   transaction_id: number,
- *   company_id:     number,
- *   party_id?:      number
+ *   selected_products: object[],
+ *   promotion:         object,
+ *   promotions?:       object[],
+ *   document_id:       number,
+ *   exchange_rate?:    number,
+ *   gift_voucher_number?: string,
  * }} params
  * @returns {Promise<import('axios').AxiosResponse>}
  */
-export function applyPromotions({ transaction_id, company_id, party_id }) {
+export function applyPromotions({
+  selected_products, promotion, promotions = [],
+  document_id, exchange_rate = 1, gift_voucher_number = '',
+}) {
   return axiosInstance.post(API.CRM.APPLY_PROMOTIONS, {
-    transaction_id,
-    company_id,
-    party_id: party_id ?? undefined,
+    selected_products,
+    promotion,
+    promotions,
+    gift_voucher_number,
+    exchange_rate,
+    document_id,
   });
 }
 

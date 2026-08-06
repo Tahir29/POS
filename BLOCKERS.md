@@ -50,6 +50,93 @@ balance ₹0, correct stock line and cost on the line item.
 
 ---
 
+## 0b. Promotions & the Order counter — SOLVED 2026-08-05 by capture
+
+Nothing here is outstanding; recorded because it corrects several earlier
+conclusions in this file and in the code.
+
+**The Orders screen was never broken.** Checkout only ever raised Invoices
+(54); `/orders` lists Order/List (53), and `useCreateOrder` had no callers, so
+document 53 stopped being created. Their own POS has separate **Estimation /
+Invoice / Order** counters, so checkout now offers the choice explicitly. On
+their Order counter payment is literally labelled *"Payment (optional) — no
+advance required"*, so an order may be placed with zero or partial payment.
+
+**An Order does NOT consume stock, and must not be priced like an invoice.**
+Their Order journey makes **no `StockJournal/List` call at all** — the item
+MASTER goes straight to `SetSalesItems` with `document_id: 53`, in exactly the
+shape our catalog-preview call already used. Orders are routinely for pieces
+the store doesn't hold; their counter marks these "(MTO)". Pricing an order
+through the invoice's stock-piece path refuses every made-to-order item, which
+is most of what orders are for. `buildPricedLineItems` now branches:
+53 → item master, 54 → physical stock row.
+
+**A promotion's value cannot be computed client-side.** `discount_calc_on`
+selects the component the percentage applies to — 3 = diamond, 6 = making
+charges, 1 = whole value. "20% Off Diamond" on a ₹1,04,699 line is 20% of its
+₹60,888 of diamond = **₹12,177.60**, not ₹20,939. Most promotions on this
+tenant are component-scoped.
+
+**`Helper/ApplyPromotions` is a PRE-Create helper over line items**, not
+something called on a saved draft — which is what this codebase assumed, and
+why it concluded the discount had to be computed locally.
+
+```
+{ selected_products: [priced lines], promotion: <full PromotionRow>,
+  promotions: [rows so far], gift_voucher_number: '', exchange_rate, document_id }
+→ { items: [re-priced lines], invoice_promotions: [row] }
+```
+
+`invoice_promotions` **is** the document's `promotion_details[]`, passed
+through untouched. Stacking is a sequential fold (feed `items` back in,
+accumulate the rows — only the newest is returned each round). The server
+**re-taxes**: taxable 1,04,699.04 → 92,521.44, tax 3,140.98 → 2,775.64, net
+95,297.08. So the earlier worry that GST would be assessed pre-discount does
+not arise.
+
+Three further corrections from the same capture:
+
+- **`document_no` is overridden by the server.** Their client sent
+  `HO-RPO-08-26-000001`; the stored record is `HO-RPO-08-26-00001`. Omitting
+  it, as we do, is correct.
+- **`receipt_details[]` carries 15 fields, not 4** — notably `ledger_id` (the
+  account the receipt posts against, 150 for Cash), `mode_type` and
+  `mode_sub_type`. All were already on the PaymentReceiptMode row we fetch.
+- **`document_date` is LOCAL time with no `Z`.** `toISOString()` would file a
+  00:30 IST sale under the previous day.
+
+Reference: `POS/Order/Create` → EntityId **259**, `HO-RPO-08-26-00001`,
+Tahir Kutty, net ₹95,297, discount ₹12,177.60, advance ₹25,000, balance
+₹70,297. Our payload was diffed field for field against it.
+
+**Verified live from our own app**, same item and promotion: `HO-RPO-08-26-00002`
+(EntityId 260), POSTED, `sub_total` 1,04,699.04 · `discount` 12,177.60 ·
+`taxable_amount` 92,521.44 · `tax_amount` 2,775.64 · `net_amount` 95,297 —
+identical to theirs on every money field. `Order/Retrieve` shows the promotion
+persisted as its own row (`transaction_promo_id` 326, `is_posted: true`),
+where it previously went out empty.
+
+Also seen and NOT implemented: their Order counter offers a **Gold Rate Lock**
+on eligible orders (policy `gold_rate_lock`, from `Costing/Policy/List`). We
+decline it; worth raising as a product question.
+
+### Two unrelated problems this session surfaced (not investigated)
+
+- **Every invoice-helper balance 500s for us.** `POSInvoice/GetAdvances`,
+  `GetCreditNote`, `GetExchange`, `GetOldGold` and `GetScheme` all return
+  `{"Code":"Exception"}` on the checkout screen, so the "Available Balances"
+  panel is always empty — while their own POS shows this same customer's
+  ₹2,10,443 credit. Worth chasing: it silently hides money the customer could
+  be spending.
+- **Our catalog can't finish indexing this store.** `ProductCatalog/List` caps
+  at 24 rows per request and the store reports ~103,000 items, so
+  `fetchEntireStoreCatalog` hits its 500-page safety cap and logs
+  *"its real catalog may be larger than what was fetched"* — name search never
+  covers the whole catalog. Their own browse sends **`master_only: true`**,
+  which we don't; that is the obvious first thing to try.
+
+---
+
 Everything here was established by capturing real traffic from OrnaVerse's own
 UAT app, reading real posted records, or reading their own client bundle —
 not by guessing payloads.
