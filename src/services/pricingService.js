@@ -8,7 +8,9 @@
 // (price_list_id, document_id, exchange_rate, etc.) are safe constants.
 
 import axiosInstance from '@/lib/axios/axiosInstance';
+import { getStockPieces } from '@/services/inventoryService';
 import API from '@/constants/apiEndpoints';
+import APP_CONFIG from '@/constants/appConfig';
 
 /**
  * Recomputes rate/labour/tax/net_amount for one or more items against
@@ -57,6 +59,53 @@ export async function calculateItemRates(items, documentId = 52) {
   });
 
   return response.data?.Entities ?? [];
+}
+
+/**
+ * Prices ONE item the way it will actually be SOLD — the single source of the
+ * figure a customer is shown, from the catalog through to the posted document.
+ *
+ * WHY THIS EXISTS. The product page used to price the item MASTER while
+ * checkout priced the physical PIECE, so the same bracelet read ₹30,877.20 on
+ * the product page, in the cart and in the mini cart, and ₹23,507.56 at
+ * checkout. The master is a nominal design spec — 2.030g net — and the two
+ * bracelets actually in the case weigh 1.349g and 1.620g. Metal is charged per
+ * net gram (₹9,440 at 14KT), so the real piece is simply worth less, and it is
+ * the real piece that gets billed.
+ *
+ * That gap is not cosmetic: the cart's unitPrice is persisted in Redux and
+ * shown to the customer, so quoting the master means quoting a number no
+ * document will ever carry — in the other direction it is far worse
+ * (ADJLR00826: ₹48,704 master vs ₹1,07,840 real, which OrnaVerse rejected as
+ * short-paid).
+ *
+ * So: price the piece the counter would claim when the shelf has one, and the
+ * master only when it genuinely has nothing to sell (made to order). The
+ * document ids match what checkout raises in each case, so the figure is
+ * identical end to end.
+ *
+ * @param {{ item: object, companyId?: number }} params
+ * @returns {Promise<object|null>} the priced row (its `sku` is set when a real
+ *   piece was priced, absent for made-to-order)
+ */
+export async function priceItemAsSold({ item, companyId }) {
+  if (!item?.item_id) return null;
+
+  if (companyId) {
+    // The first available row is the one claimStockPieces would take, so the
+    // quote matches the piece that will actually be billed.
+    const response = await getStockPieces({ itemId: item.item_id, companyId, take: 1 });
+    const [row] = response?.data?.Entities ?? [];
+    if (row) {
+      const [priced] = await priceStockPiecesForSale(
+        [row], APP_CONFIG.DOCUMENT_TYPES.POS_INVOICE
+      );
+      if (priced) return priced;
+    }
+  }
+
+  const [priced] = await calculateItemRates([item], APP_CONFIG.DOCUMENT_TYPES.POS_ORDER);
+  return priced ?? null;
 }
 
 /**
