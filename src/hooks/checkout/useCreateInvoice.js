@@ -260,8 +260,8 @@ export function useCreateInvoice() {
         lineItems = pricedLineItems.map((row) => ({ ...row, sales_person_id: salesPersonId }));
         promotionDetails = promotionDetailsArg ?? [];
       } else {
-        const priced = await buildPricedLineItems({
-          items, activeStoreId, salesPersonId, documentId,
+        const { lineItems: priced } = await buildPricedLineItems({
+          items, activeStoreId, salesPersonId,
         });
         const promoted = await applyPromotionsToLines({
           lineItems: priced, appliedPromos, documentId, exchangeRate,

@@ -3,7 +3,9 @@
 // Replaces the old MarketPlace/Order/Generate approach entirely.
 // POS_CHANNEL_ID blocker is gone — no channel field required.
 //
-// TWO FLOWS, and the checkout screen now offers BOTH as an explicit choice:
+// TWO DOCUMENTS, chosen for the operator rather than by them — the checkout
+// screen has no mode selector; what the customer pays decides which is
+// raised (see checkout/page.jsx):
 //
 //   ORDER FLOW  (deposit/reserve — collect later):  ← this hook
 //     createOrder(entity) → SaveResponse { EntityId }
@@ -22,11 +24,12 @@
 // hadn't: they were being filed as invoices, under Invoices.
 //
 // The two documents are not interchangeable and raising both for one sale
-// would double-count it, so checkout picks one per sale:
-//   • Invoice (54) — cash-and-carry. Must be paid in full; OrnaVerse rejects
-//     a short-paid one outright.
-//   • Order (53) — a booking the customer leaves an ADVANCE against. Partial
-//     payment is the point, and the remainder rides as balance_amount.
+// would double-count it, so checkout raises exactly one:
+//   • Invoice (54) — everything in stock AND settled in full. OrnaVerse
+//     rejects a short-paid invoice outright, and a master-built one with
+//     "Not enough stock", so both conditions are required.
+//   • Order (53) — anything else: an advance, nothing collected, or a
+//     made-to-order piece. The remainder rides as balance_amount.
 //     Confirmed: doc 53 does not check stock, unlike 54.
 //
 // PAYLOAD — OrderRow key fields (confirmed v1.json):
@@ -174,8 +177,8 @@ export function useCreateOrder() {
         lineItems = pricedLineItems.map((row) => ({ ...row, sales_person_id: salesPersonId }));
         promotionDetails = promotionDetailsArg ?? [];
       } else {
-        const priced = await buildPricedLineItems({
-          items, activeStoreId, salesPersonId, documentId,
+        const { lineItems: priced } = await buildPricedLineItems({
+          items, activeStoreId, salesPersonId,
         });
         const promoted = await applyPromotionsToLines({
           lineItems: priced, appliedPromos, documentId, exchangeRate,

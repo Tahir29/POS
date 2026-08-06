@@ -1,26 +1,38 @@
 'use client';
 
 // src/app/(pos)/checkout/page.jsx
-// Checkout screen — raises ONE of two POS documents, chosen by the operator.
+// Checkout screen — ONE price, ONE flow, no mode to choose.
 //
-//   BILL NOW    → POS/Invoice/Create (54). Cash-and-carry. Paid in full;
-//                 OrnaVerse refuses a short-paid invoice outright.
-//   PLACE ORDER → POS/Order/Create (53). A booking the customer leaves an
-//                 ADVANCE against; the remainder rides as balance_amount and
-//                 is collected when the piece is handed over.
+// THERE IS DELIBERATELY NO "COMPLETE AS" CHOICE. A Bill Now / Place Order
+// selector briefly lived here and was removed: it made the operator classify
+// a sale before knowing how it would be paid, and — because the two modes
+// priced different things — showed two different figures for the same item
+// on the same screen. In front of a customer that is a trust problem, not a
+// UX wrinkle.
 //
-// Both are real documents in the ERP and each appears in its own directory
-// (/invoices, /orders). Exactly one is raised per sale — raising both would
-// book the same goods twice.
+// Nothing is lost by removing it, because neither half was ever really the
+// operator's decision:
+//
+//   WHAT IT COSTS  is a fact about the goods. Priced once by
+//     useCheckoutPricing, from the physical piece when the shelf can supply
+//     the basket and from the item master when it can't (made-to-order).
+//     Same figure from catalog through to the posted document.
+//
+//   WHICH DOCUMENT is a consequence of what the customer pays:
+//     in stock + paid in full  → POS/Invoice/Create (54)
+//     advance, nothing, or MTO → POS/Order/Create (53), balance carried
+//
+// Exactly one document per sale — raising both would book the same goods
+// twice. (Their ERP can later fulfil an order into an invoice via "Fulfill
+// from order"; that contract is uncaptured, so it isn't wired here.)
 //
 // FLOW:
 //   1. Customer must be attached (checkoutSchema enforces this)
-//   2. Pieces priced live (useCheckoutPricing) — the ONLY source of any
-//      figure shown, collected, or submitted, including the promo discount
-//   3. Payment modes selected; balanced to the payable (invoice) or any
-//      amount up to it (order)
-//   4. place*({ paymentModes, discount, promoCodes, pricedLineItems })
-//   5. On success → OrderConfirmationScreen for that document type
+//   2. Basket priced live — the ONLY source of any figure shown, collected,
+//      or submitted, including the promo discount
+//   3. Payment collected: anything from nothing up to the total
+//   4. place*({ paymentModes, pricedLineItems, promotionDetails })
+//   5. On success → OrderConfirmationScreen for whichever document was raised
 //
 // NAVIGATION GUARD:
 //   - Redirects to /cart if cart is empty and no sale placed
@@ -49,11 +61,11 @@ import { useRedirectOnCustomerChange } from '@/hooks/checkout/useRedirectOnCusto
 import { useCreateInvoice }           from '@/hooks/checkout/useCreateInvoice';
 import { useCreateOrder }             from '@/hooks/checkout/useCreateOrder';
 import { useCheckoutPricing }         from '@/hooks/checkout/useCheckoutPricing';
+import { mapPricedLinesToCart }       from '@/services/checkoutPricingService';
 import { useBackGuard } from '@/contexts/NavigationGuardContext';
 import { useSmartBack }  from '@/hooks/navigation/useSmartBack';
 import { checkoutSchema }             from '@/validators/checkoutSchema';
 import { selectActiveStoreId } from '@/store/slices/storeSlice';
-import APP_CONFIG from '@/constants/appConfig';
 import tracker from '@/lib/analytics/tracker';
 import EVENTS, { GA_ECOMMERCE_EVENTS } from '@/lib/analytics/events';
 
@@ -64,10 +76,6 @@ function CheckoutScreen() {
   const { customerId }     = useCustomerSession();
   const activeStoreId      = useSelector(selectActiveStoreId);
   const { goBack, clearGuard } = useSmartBack();
-
-  // 'invoice' = bill now (doc 54) · 'order' = booking with an advance (doc 53)
-  const [documentType, setDocumentType] = useState('invoice');
-  const isOrderMode = documentType === 'order';
 
   const {
     placeInvoice,
@@ -89,14 +97,11 @@ function CheckoutScreen() {
     lineItems: pricedLineItems,
     totals: pricedTotals,
     promotionDetails,
+    isStockBacked,
     amountDue,
     isLoading: isPricing,
     error: pricingError,
-  } = useCheckoutPricing(
-    isOrderMode
-      ? APP_CONFIG.DOCUMENT_TYPES.POS_ORDER
-      : APP_CONFIG.DOCUMENT_TYPES.POS_INVOICE
-  );
+  } = useCheckoutPricing();
 
   // Until pricing resolves there is no trustworthy figure to collect
   // against, so fall back to the cart estimate only for display.
@@ -107,12 +112,27 @@ function CheckoutScreen() {
   const [panNumber, setPanNumber]   = useState(null);
   const [isBackConfirmOpen, setIsBackConfirmOpen] = useState(false);
 
+  const pricedByCartIndex = useMemo(
+    () => mapPricedLinesToCart(items, pricedLineItems),
+    [items, pricedLineItems]
+  );
+
   const amountCollected = payments.reduce((sum, p) => sum + (p.amount ?? 0), 0);
   const isSubmitting = isPlacingInvoice || isPlacingOrder;
 
+  // The document follows from the money, not from a mode the operator picked.
+  // Settled in full against goods the shelf can actually supply → invoice;
+  // anything else (part-paid, unpaid, or made-to-order) → order, with the
+  // remainder carried as balance_amount.
+  const isPaidInFull = payableTotal > 0
+    && Math.abs(amountCollected - payableTotal) < 0.01;
+  const isOrderMode  = !isStockBacked || !isPaidInFull;
+  const documentType = isOrderMode ? 'order' : 'invoice';
+
   // Track whether a sale has been successfully completed
-  const result = isOrderMode ? orderResult : invoiceResult;
+  const result = orderResult ?? invoiceResult;
   const isConfirmed = !!result;
+  const confirmedType = orderResult ? 'order' : 'invoice';
 
   // Intercept the GLOBAL back button (Header) when there are unsaved
   // payment selections — shows the "Leave checkout?" dialog instead of
@@ -194,9 +214,10 @@ function CheckoutScreen() {
     totalAmount:  payableTotal,
     cartTotal:    payableTotal,
     panNumber,
-    // An order is a booking against an advance, so anything up to the total
-    // is valid; an invoice must settle exactly. See checkoutSchema.
-    allowPartialPayment: isOrderMode,
+    // Any amount from nothing up to the total is acceptable — how much is
+    // collected is what decides which document gets raised, so there is no
+    // "wrong" amount to block on. Overpaying still is.
+    allowPartialPayment: true,
   });
   // Never allow a sale to be submitted against the provisional cart figure —
   // it can differ from the document by the value of the stones.
@@ -226,7 +247,7 @@ function CheckoutScreen() {
     return (
       <OrderConfirmationScreen
         transactionId={result.transactionId}
-        documentType={documentType}
+        documentType={confirmedType}
         // document_no is loaded by the screen's own Retrieve; the EntityId is
         // passed so it can fetch immediately.
       />
@@ -237,38 +258,6 @@ function CheckoutScreen() {
   return (
     <div className="flex flex-col gap-6 max-w-6xl mx-auto w-full pb-32 p-4 md:p-6">
       <p className="text-sm text-muted-foreground -mb-2">Review your order and complete the payment</p>
-
-      {/* Which document this sale raises. Two different records in the ERP,
-          each with its own directory — so the choice is made deliberately,
-          before payment, rather than implied by how much is collected. */}
-      <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
-        <h2 className="text-sm font-bold text-foreground mb-3">Complete as</h2>
-        <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Document type">
-          {[
-            { value: 'invoice', label: 'Bill Now',    hint: 'Paid in full · Invoice' },
-            { value: 'order',   label: 'Place Order', hint: 'Advance · Balance on collection' },
-          ].map((option) => {
-            const isSelected = documentType === option.value;
-            return (
-              <button
-                key={option.value}
-                type="button"
-                role="radio"
-                aria-checked={isSelected}
-                onClick={() => setDocumentType(option.value)}
-                className={`rounded-lg border px-3 py-2.5 text-left transition-colors ${
-                  isSelected
-                    ? 'border-primary/40 bg-primary/5'
-                    : 'border-border bg-muted hover:bg-muted/70'
-                }`}
-              >
-                <span className="block text-sm font-semibold text-foreground">{option.label}</span>
-                <span className="block text-xs text-muted-foreground mt-0.5">{option.hint}</span>
-              </button>
-            );
-          })}
-        </div>
-      </section>
 
       <div className='grid grid-cols-1 items-start gap-5 lg:grid-cols-2'>
         <div className="flex flex-col gap-5 w-full">
@@ -307,11 +296,16 @@ function CheckoutScreen() {
               Order Items <span className="text-muted-foreground font-normal text-xs">({items.length} item{items.length !== 1 ? 's' : ''})</span>
             </h2>
             <div>
-              {items.map((item) => (
+              {items.map((item, index) => (
                 <CartItemRow
                   key={`${item.itemId}-${item.sizeId}-${item.styleId}`}
                   item={item}
                   readOnly
+                  // What this line is really being sold at. The cart's own
+                  // figure is the item master's nominal spec; an invoice
+                  // bills a physical piece whose actual weight sets the
+                  // price. See CartItemRow for the worked example.
+                  priced={pricedByCartIndex.get(index) ?? null}
                 />
               ))}
             </div>
@@ -329,14 +323,25 @@ function CheckoutScreen() {
           <CheckoutPaymentSection
             onChange={setPayments}
             amountDue={amountDue}
-            allowPartial={isOrderMode}
+            allowPartial
           />
+
+          {/* Made-to-order is stated, not asked. The operator can't invoice a
+              piece that isn't on the shelf, so this explains up front why the
+              sale will be booked as an order however it's paid — rather than
+              letting them find out at the confirmation screen. */}
+          {!isPricing && !!pricedLineItems && !isStockBacked && (
+            <p className="rounded-lg border border-border bg-muted px-3 py-2 text-xs text-muted-foreground">
+              Not in stock at this store — this will be booked as an order and
+              billed when the piece arrives.
+            </p>
+          )}
 
           {/* Pricing state — the operator must know the figure isn't final
               yet, and must not be left guessing if it fails outright. */}
           {isPricing && (
             <p className="text-xs text-muted-foreground">
-              Pricing items against today's rates…
+              Pricing items against today&apos;s rates…
             </p>
           )}
           {pricingError && (

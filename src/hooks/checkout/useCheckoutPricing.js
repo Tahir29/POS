@@ -53,13 +53,19 @@ import {
 } from '@/services/checkoutPricingService';
 import { selectActiveStoreId } from '@/store/slices/storeSlice';
 import { useCart } from '@/hooks/cart/useCart';
+import APP_CONFIG from '@/constants/appConfig';
 
 /**
- * @param {number} documentId — document type being raised (54 invoice / 53 order)
+ * Prices the basket once. Takes no document type — it works out whether the
+ * shelf can supply the basket and prices accordingly, and the document that
+ * gets raised follows from what the customer pays. See buildPricedLineItems.
+ *
  * @returns {{
  *   lineItems: object[]|null,   // post-promotion, ready for Create
  *   totals:    object|null,     // header figures, summed from those lines
  *   promotionDetails: object[], // the document's promotion_details[]
+ *   isStockBacked: boolean,     // true = can be invoiced; false = order only
+ *   documentId: number|null,    // what this basket was priced as
  *   discount:  number,          // server-computed promotion value
  *   promoCodes:string[],
  *   amountDue: number|null,     // what the customer must actually pay
@@ -67,7 +73,7 @@ import { useCart } from '@/hooks/cart/useCart';
  *   error:     Error|null,
  * }}
  */
-export function useCheckoutPricing(documentId) {
+export function useCheckoutPricing() {
   const { items, appliedPromos } = useCart();
   const activeStoreId = useSelector(selectActiveStoreId);
 
@@ -78,17 +84,21 @@ export function useCheckoutPricing(documentId) {
   const promoKey = appliedPromos.map((p) => p.promoCode).join('|');
 
   const query = useQuery({
-    queryKey: ['checkout-pricing', activeStoreId, documentId, cartKey, promoKey],
+    queryKey: ['checkout-pricing', activeStoreId, cartKey, promoKey],
     enabled:  items.length > 0 && !!activeStoreId,
     // Rates move intraday, but not within the seconds a checkout takes;
     // re-fetching mid-payment would change the amount under the operator.
     staleTime: 5 * 60 * 1000,
     retry: false,
     queryFn: async () => {
-      const priced = await buildPricedLineItems({ items, activeStoreId, documentId });
-      return applyPromotionsToLines({
-        lineItems: priced, appliedPromos, documentId,
+      const { lineItems, isStockBacked } = await buildPricedLineItems({ items, activeStoreId });
+      const documentId = isStockBacked
+        ? APP_CONFIG.DOCUMENT_TYPES.POS_INVOICE
+        : APP_CONFIG.DOCUMENT_TYPES.POS_ORDER;
+      const promoted = await applyPromotionsToLines({
+        lineItems, appliedPromos, documentId,
       });
+      return { ...promoted, isStockBacked, documentId };
     },
   });
 
@@ -100,6 +110,8 @@ export function useCheckoutPricing(documentId) {
     lineItems,
     totals,
     promotionDetails,
+    isStockBacked: query.data?.isStockBacked ?? false,
+    documentId:    query.data?.documentId ?? null,
     // Already net of the promotion — the lines came back discounted and
     // re-taxed, so there is nothing further to subtract here.
     discount:   totals?.discount ?? 0,

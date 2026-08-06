@@ -57,10 +57,23 @@ conclusions in this file and in the code.
 
 **The Orders screen was never broken.** Checkout only ever raised Invoices
 (54); `/orders` lists Order/List (53), and `useCreateOrder` had no callers, so
-document 53 stopped being created. Their own POS has separate **Estimation /
-Invoice / Order** counters, so checkout now offers the choice explicitly. On
-their Order counter payment is literally labelled *"Payment (optional) — no
-advance required"*, so an order may be placed with zero or partial payment.
+document 53 stopped being created.
+
+**Checkout has NO mode selector.** A "Complete as / Bill Now / Place Order"
+choice was tried and removed: it made the operator classify a sale before
+knowing how it would be paid, and the two modes quoted different figures for
+the same item — two prices on one screen in front of a customer. Neither half
+was really a choice, so both are now derived:
+
+- **Price** — one figure from catalog to posted document. The physical piece
+  when the shelf can supply the basket, the item master when it can't.
+- **Document** — in stock *and* settled in full → Invoice (54); an advance,
+  nothing collected, or made-to-order → Order (53). On their Order counter
+  payment is labelled *"Payment (optional) — no advance required"*, so zero is
+  valid.
+
+Both conditions are needed for an invoice: OrnaVerse rejects a short-paid one
+outright, and a master-built one with *"Not enough stock"*.
 
 **An Order does NOT consume stock, and must not be priced like an invoice.**
 Their Order journey makes **no `StockJournal/List` call at all** — the item

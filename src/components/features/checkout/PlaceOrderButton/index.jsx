@@ -2,12 +2,13 @@
 
 // src/components/features/checkout/PlaceOrderButton/index.jsx
 // Submits the sale via useCreateInvoice or useCreateOrder. Disabled until
-// checkoutSchema validation passes (customer attached, payments balanced).
+// checkoutSchema validation passes (customer attached, sales person picked).
 //
-// The button states what is about to happen and for how much. On an ORDER
-// that is the advance being taken now, not the order's value — the operator
-// is about to collect the smaller figure, and labelling it with the total
-// would misstate what the customer is handing over.
+// The button REPORTS the outcome, it does not offer a choice — there is no
+// mode selector on this screen any more (see checkout/page.jsx). It says what
+// is about to be raised and for how much money is changing hands right now:
+// on an order that is the advance being taken, not the order's value, because
+// the smaller figure is what the customer is actually handing over.
 
 import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -60,9 +61,9 @@ export default function PlaceOrderButton({
         // No advance is a legitimate order, so don't label it "Advance ₹0".
         chargeable > 0
           ? `Place Order · Advance ${money(chargeable)}`
-          : `Place Order · No advance`
+          : 'Place Order · No advance'
       ) : (
-        `Bill Now · ${money(chargeable)}`
+        `Complete Sale · ${money(chargeable)}`
       )}
     </Button>
   );
