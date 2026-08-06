@@ -65,7 +65,9 @@ export const QUERY_KEYS = {
     ATTRIBUTES:      (typeId)  => ['items', 'attributes', typeId],
     DESIGN_VARIANTS: (styleId) => ['items', 'design-variants', styleId],
     MASTER_SEARCH:   (query)   => ['items', 'master-search', query],
-    PRICING:         (itemId)  => ['items', 'pricing', itemId],
+    // companyId is part of the key because the price depends on WHICH
+    // physical piece this store has on the shelf — see priceItemAsSold.
+    PRICING:         (itemId, companyId) => ['items', 'pricing', itemId, companyId],
     SEARCH: (params) => ['items', 'search', {
       q:    params.item_search,
       grp:  params.item_group_ids,

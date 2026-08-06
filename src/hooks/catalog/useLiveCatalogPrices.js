@@ -15,7 +15,9 @@
 // resolves (progressive fill-in) rather than waiting on the whole set.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSelector } from 'react-redux';
 import { getLivePricesForItems } from '@/services/catalogService';
+import { selectActiveStoreId } from '@/store/slices/storeSlice';
 
 const DEBOUNCE_MS = 200;
 // Smaller than ProductCatalog/List's 24-row page on purpose: EVERY item now
@@ -29,7 +31,7 @@ const CONCURRENCY = 3;
 // A priced-at-0 verdict is final, so this cap only bounds real failures.
 const MAX_ATTEMPTS = 3;
 
-async function fetchInChunks(ids, onChunkResolved) {
+async function fetchInChunks(ids, companyId, onChunkResolved) {
   const chunks = [];
   for (let i = 0; i < ids.length; i += CHUNK_SIZE) chunks.push(ids.slice(i, i + CHUNK_SIZE));
 
@@ -37,7 +39,7 @@ async function fetchInChunks(ids, onChunkResolved) {
   async function worker() {
     while (cursor < chunks.length) {
       const chunk = chunks[cursor++];
-      const { prices, answered } = await getLivePricesForItems(chunk);
+      const { prices, answered } = await getLivePricesForItems(chunk, companyId);
       onChunkResolved(chunk, prices, answered);
     }
   }
@@ -57,6 +59,9 @@ async function fetchInChunks(ids, onChunkResolved) {
  *   settled, and "Price unavailable" after.
  */
 export function useLiveCatalogPrices(products) {
+  // The store decides WHICH physical piece a card is priced against, so a
+  // price is only meaningful alongside it. See getLivePricesForItems.
+  const activeStoreId = useSelector(selectActiveStoreId);
   const [priceById, setPriceById] = useState(() => new Map());
   // Mirrors resolvedRef as STATE so a verdict re-renders the cards — a ref
   // alone would leave "Pricing…" on screen forever for unpriceable items.
@@ -86,7 +91,7 @@ export function useLiveCatalogPrices(products) {
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => {
       const idsToFetch = [...pendingRef.current];
-      fetchInChunks(idsToFetch, (chunkIds, prices, answered) => {
+      fetchInChunks(idsToFetch, activeStoreId, (chunkIds, prices, answered) => {
         const justSettled = [];
         for (const id of chunkIds) {
           pendingRef.current.delete(id);
@@ -120,7 +125,7 @@ export function useLiveCatalogPrices(products) {
     }, DEBOUNCE_MS);
 
     return () => clearTimeout(timerRef.current);
-  }, [idsNeeding]);
+  }, [idsNeeding, activeStoreId]);
 
   return { priceById, settledIds };
 }

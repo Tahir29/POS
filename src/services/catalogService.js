@@ -20,7 +20,12 @@
 import axiosInstance from '@/lib/axios/axiosInstance';
 import API from '@/constants/apiEndpoints';
 import APP_CONFIG from '@/constants/appConfig';
-import { calculateItemRates } from '@/services/pricingService';
+import {
+  calculateItemRates,
+  priceStockPiecesForSale,
+  priceItemAsSold,
+} from '@/services/pricingService';
+import { getStockPieces } from '@/services/inventoryService';
 
 // ─── ITEMS (Master catalogue) ─────────────────────────────────────────────────
 
@@ -170,7 +175,7 @@ async function getItemDetailsByIds(itemIds) {
  * @param {number[]} itemIds
  * @returns {Promise<Map<number, number>>} item_id -> live price
  */
-export async function getLivePricesForItems(itemIds) {
+export async function getLivePricesForItems(itemIds, companyId) {
   const empty = { prices: new Map(), answered: new Set() };
   if (!itemIds?.length) return empty;
 
@@ -204,8 +209,44 @@ export async function getLivePricesForItems(itemIds) {
     }
   };
 
+  // Price against the PHYSICAL PIECE wherever the shelf has one, so a card
+  // shows the figure the customer will actually be charged. The master is a
+  // nominal spec and routinely differs — the same bracelet is 2.030g net on
+  // the master and 1.349g in the case, ₹30,877.20 vs ₹23,507.56. Showing the
+  // master here and the piece at checkout is the inconsistency this closes.
+  //
+  // One extra call for the whole batch, not one per card: StockJournal's
+  // `item_ids` plural filter is honoured (verified on UAT 2026-08-05).
+  let stockRowByItemId = new Map();
+  if (companyId) {
+    try {
+      const response = await getStockPieces({
+        itemIds: toPrice.map((d) => d.item_id), companyId, take: 200,
+      });
+      for (const row of response?.data?.Entities ?? []) {
+        // First row per item — the one claimStockPieces would take.
+        if (!stockRowByItemId.has(row.item_id)) stockRowByItemId.set(row.item_id, row);
+      }
+    } catch (err) {
+      // Best-effort: fall back to master pricing rather than blanking the grid.
+      console.error('[catalogService] stock lookup failed, pricing masters', err);
+    }
+  }
+
+  const stockRows = [...stockRowByItemId.values()];
+  const masters   = toPrice.filter((d) => !stockRowByItemId.has(d.item_id));
+
   try {
-    collect(await calculateItemRates(toPrice));
+    const [pricedPieces, pricedMasters] = await Promise.all([
+      stockRows.length
+        ? priceStockPiecesForSale(stockRows, APP_CONFIG.DOCUMENT_TYPES.POS_INVOICE)
+        : [],
+      masters.length
+        ? calculateItemRates(masters, APP_CONFIG.DOCUMENT_TYPES.POS_ORDER)
+        : [],
+    ]);
+    collect(pricedPieces);
+    collect(pricedMasters);
     return { prices, answered };
   } catch (err) {
     // SetSalesItems can 500 on a single malformed master record (confirmed
@@ -219,10 +260,13 @@ export async function getLivePricesForItems(itemIds) {
     const WAVE = 4;
     for (let i = 0; i < toPrice.length; i += WAVE) {
       const settled = await Promise.allSettled(
-        toPrice.slice(i, i + WAVE).map((item) => calculateItemRates([item]))
+        // Same rule as the batch path — piece first, master only if the shelf
+        // has nothing — so a card that falls back here still can't disagree
+        // with the price checkout will charge for it.
+        toPrice.slice(i, i + WAVE).map((item) => priceItemAsSold({ item, companyId }))
       );
       for (const r of settled) {
-        if (r.status === 'fulfilled') collect(r.value);
+        if (r.status === 'fulfilled' && r.value) collect([r.value]);
       }
     }
     return { prices, answered };
