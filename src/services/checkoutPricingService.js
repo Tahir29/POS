@@ -46,9 +46,77 @@
 //
 // Re-pricing still happens at SUBMISSION time rather than trusting whatever
 // was computed at add-to-cart, since metal rates move intraday.
+//
+// ── ORDERS TAKE A DIFFERENT PATH ENTIRELY ────────────────────────────────
+//
+// Everything above is the INVOICE journey. An ORDER (document 53) is a
+// booking, usually for a piece that is NOT on the shelf — their own counter
+// marks it "(MTO)", made to order — and doc 53 does not check stock. Their
+// Order journey, captured 2026-08-05, makes NO StockJournal call at all: the
+// item MASTER goes straight to SetSalesItems with document_id 53. So
+// buildPricedLineItems branches on the document type; see buildOrderLineItems.
 
 import { getStockPieces } from '@/services/inventoryService';
-import { priceStockPiecesForSale } from '@/services/pricingService';
+import { getItemDetail, getDesignVariants } from '@/services/itemService';
+import { priceStockPiecesForSale, calculateItemRates } from '@/services/pricingService';
+import { applyPromotions } from '@/services/promotionService';
+import APP_CONFIG from '@/constants/appConfig';
+
+/**
+ * Applies every selected promotion to already-priced lines, through
+ * OrnaVerse's own calculator.
+ *
+ * A promotion's value is not something this client can work out — the
+ * percentage applies to a COMPONENT of the item chosen by
+ * `discount_calc_on` (diamond / making charges / whole value), and the
+ * server re-taxes the line afterwards. See promotionService.applyPromotions
+ * for the captured contract and the numbers that prove it.
+ *
+ * Promotions fold in sequence: each round is handed the previous round's
+ * lines and the promotion rows raised so far, exactly as their POS does it.
+ * Only the newest row comes back each time, so they are accumulated here.
+ *
+ * @param {{
+ *   lineItems: object[],
+ *   appliedPromos: {promoCode: string, promoDetails: object}[],
+ *   documentId: number,
+ *   exchangeRate?: number,
+ * }} params
+ * @returns {Promise<{ lineItems: object[], promotionDetails: object[] }>}
+ */
+export async function applyPromotionsToLines({
+  lineItems, appliedPromos, documentId, exchangeRate = 1,
+}) {
+  if (!appliedPromos?.length) return { lineItems, promotionDetails: [] };
+
+  let lines = lineItems;
+  let promotionDetails = [];
+
+  for (const promo of appliedPromos) {
+    if (!promo?.promoDetails) continue;
+
+    const response = await applyPromotions({
+      selected_products: lines,
+      promotion:         promo.promoDetails,
+      promotions:        promotionDetails,
+      document_id:       documentId,
+      exchange_rate:     exchangeRate,
+    });
+
+    const items = response?.data?.items;
+    const rows  = response?.data?.invoice_promotions ?? [];
+
+    // A promotion the server declines to price (not applicable to anything in
+    // the basket) comes back with no items. Leave the lines as they were
+    // rather than dropping the basket on the floor.
+    if (!Array.isArray(items) || items.length !== lines.length) continue;
+
+    lines = items;
+    promotionDetails = [...promotionDetails, ...rows];
+  }
+
+  return { lineItems: lines, promotionDetails };
+}
 
 /**
  * Claims the physical pieces a cart line will consume.
@@ -108,7 +176,67 @@ async function claimStockPieces({ item, activeStoreId, claimed }) {
  * }} params
  * @returns {Promise<object[]>} line_items ready to attach to the Entity
  */
+/**
+ * Resolves a cart item back to its FULL master record — the Style variant
+ * when we know the style, else the plain Items/Retrieve Entity. Both shapes
+ * carry the item_components[] BOM that SetSalesItems recomputes against.
+ */
+async function resolveFullItem({ itemId, styleId }) {
+  if (styleId) {
+    const response = await getDesignVariants(styleId);
+    const variants = response?.data?.Entity?.style_variants ?? [];
+    const variant = variants.find((v) => v.item_id === itemId);
+    if (variant) return variant;
+    // Fall through rather than failing checkout outright for an item whose
+    // style lookup didn't happen to include it.
+  }
+  const response = await getItemDetail(itemId);
+  return response?.data?.Entity ?? null;
+}
+
+/**
+ * Prices an ORDER's lines from the CATALOG ITEM MASTER, not from stock.
+ *
+ * An order is a booking, frequently for a piece the store does not have —
+ * their own counter labels exactly this case "(MTO)", made to order. Doc 53
+ * does not check stock, and their Order journey makes NO StockJournal call
+ * at all: it sends the item master straight to SetSalesItems with
+ * document_id 53. Confirmed 2026-08-05 by capturing that journey end to end.
+ *
+ * Routing an order through the invoice's stock-piece path would refuse every
+ * made-to-order item — which is most of what orders exist for.
+ *
+ * @returns {Promise<object[]>} one priced line per cart line
+ */
+async function buildOrderLineItems({ items, documentId }) {
+  const masters = [];
+  for (const item of items) {
+    const master = await resolveFullItem({ itemId: item.itemId, styleId: item.styleId });
+    if (!master) {
+      throw new Error(`"${item.itemName}" could not be priced — its product record was not found.`);
+    }
+    // One line per piece, matching how the invoice path models a sale and
+    // how the header's `pieces` aggregate is summed.
+    for (let i = 0; i < (item.quantity ?? 1); i += 1) masters.push(master);
+  }
+
+  const priced = await calculateItemRates(masters, documentId);
+  if (priced.length !== masters.length) {
+    throw new Error('Live pricing failed — the server priced a different number of items than were sent.');
+  }
+  return priced;
+}
+
 export async function buildPricedLineItems({ items, activeStoreId, salesPersonId, documentId }) {
+  // ORDER (53) books a catalog item; INVOICE (54) consumes a physical piece.
+  // See buildOrderLineItems for why these cannot share a path.
+  if (documentId === APP_CONFIG.DOCUMENT_TYPES.POS_ORDER) {
+    const orderLines = await buildOrderLineItems({ items, documentId });
+    return salesPersonId == null
+      ? orderLines
+      : orderLines.map((row) => ({ ...row, sales_person_id: salesPersonId }));
+  }
+
   const claimed = new Set();
 
   // Sequential, not Promise.all — `claimed` is what stops two cart lines
@@ -142,6 +270,13 @@ export function summarizeLineItems(lineItems) {
   const sum = (field) => +lineItems.reduce((s, li) => s + (li[field] ?? 0), 0).toFixed(2);
   return {
     subTotal:      sum('sub_total'),
+    // Post-promotion figures when ApplyPromotions has run: it writes the
+    // discount onto each line and recomputes taxable_amount/tax_amount/
+    // net_amount around it, leaving base_* holding the pre-discount values.
+    // Summing what the lines actually carry is therefore correct either way,
+    // and is what their own header does — confirmed field for field against a
+    // real Order/Create (discount 12177.6, taxable 92521.44, tax 2775.64).
+    discount:      sum('discount'),
     taxableAmount: sum('taxable_amount'),
     taxAmount:     sum('tax_amount'),
     netAmount:     sum('net_amount'),

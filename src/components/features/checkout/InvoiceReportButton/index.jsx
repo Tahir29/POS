@@ -35,11 +35,17 @@ import { getDocumentReports } from '@/services/documentConfigService';
 import APP_CONFIG from '@/constants/appConfig';
 
 /**
- * @param {{ transactionId: number, documentId?: number }} props
+ * @param {{ transactionId: number, documentId?: number, documentLabel?: string }} props
+ *   documentLabel — what this document is called in the UI ("Invoice",
+ *   "Order"). The formats themselves come from whatever DocumentReports has
+ *   configured for documentId, and the control hides itself when that's
+ *   nothing — so an order simply shows no print option if this tenant has no
+ *   order format set up, rather than a button that renders an error.
  */
 export default function InvoiceReportButton({
   transactionId,
   documentId = APP_CONFIG.DOCUMENT_TYPES.POS_INVOICE,
+  documentLabel = 'Invoice',
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [html, setHtml] = useState(null);
@@ -110,9 +116,9 @@ export default function InvoiceReportButton({
         {isLoading ? (
           <><Loader2 size={18} className="animate-spin" aria-hidden="true" /> Loading formats…</>
         ) : isRendering ? (
-          <><Loader2 size={18} className="animate-spin" aria-hidden="true" /> Preparing invoice…</>
+          <><Loader2 size={18} className="animate-spin" aria-hidden="true" /> Preparing {documentLabel.toLowerCase()}…</>
         ) : (
-          <><Printer size={18} aria-hidden="true" /> Print Invoice</>
+          <><Printer size={18} aria-hidden="true" /> Print {documentLabel}</>
         )}
       </Button>
 
@@ -144,7 +150,7 @@ export default function InvoiceReportButton({
         <div className="fixed inset-0 z-50 flex flex-col bg-black/60 p-4">
           <div className="mx-auto flex h-full w-full max-w-4xl flex-col overflow-hidden rounded-xl bg-card shadow-lg">
             <div className="flex items-center justify-between border-b border-border px-4 py-3">
-              <h2 className="text-sm font-bold text-foreground">Invoice preview</h2>
+              <h2 className="text-sm font-bold text-foreground">{documentLabel} preview</h2>
               <div className="flex items-center gap-2">
                 <Button type="button" onClick={printReport} className="h-9 gap-2">
                   <Printer size={16} aria-hidden="true" /> Print
@@ -163,7 +169,7 @@ export default function InvoiceReportButton({
             <iframe
               ref={frameRef}
               srcDoc={html}
-              title="Invoice preview"
+              title={`${documentLabel} preview`}
               className="h-full w-full flex-1 bg-white"
               // The document is OrnaVerse's own markup, but it is still
               // third-party HTML being injected into our origin — sandbox it

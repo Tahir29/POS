@@ -23,7 +23,7 @@ import API from '@/constants/apiEndpoints';
  *   sub_total, tax_amount, net_amount, and item_components[].rate/amount
  *   all recomputed against today's rates.
  */
-export async function calculateItemRates(items) {
+export async function calculateItemRates(items, documentId = 52) {
   if (!items?.length) return [];
 
   // `pieces` is overloaded in this codebase: useDesignVariants patches it to
@@ -42,7 +42,12 @@ export async function calculateItemRates(items) {
     price_list_id:        0,
     calculate_rates:      true,
     document_date:        new Date().toUTCString(),
-    document_id:          52,
+    // 52 = Estimation, the browse/preview default. An ORDER (53) prices its
+    // catalog items through this same call — confirmed 2026-08-05 from their
+    // own Order counter, whose SetSalesItems request is byte-for-byte this
+    // shape with document_id 53. Invoices do NOT come through here; they
+    // price physical stock rows (priceStockPiecesForSale below).
+    document_id:          documentId,
     exchange_rate:        1,
     generate_line_no:     false,
     generate_lot_no:      false,

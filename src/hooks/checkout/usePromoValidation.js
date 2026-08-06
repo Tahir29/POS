@@ -20,10 +20,8 @@ import { useMutation } from '@tanstack/react-query';
 import { toast } from 'react-toastify';
 import { listPromotions } from '@/services/promotionService';
 import { useCart } from '@/hooks/cart/useCart';
-import { useCartTotals } from '@/hooks/cart/useCartTotals';
 import {
   isPromotionActive,
-  computePromotionDiscount,
   getPromotionDiscountType,
 } from '@/lib/normalizers/promotion';
 import tracker from '@/lib/analytics/tracker';
@@ -32,7 +30,6 @@ import TOAST from '@/constants/toastMessages';
 
 export function usePromoValidation() {
   const { applyPromo, appliedPromos } = useCart();
-  const { subtotal } = useCartTotals();
 
   const mutation = useMutation({
     mutationFn: async (promoCode) => {
@@ -50,12 +47,13 @@ export function usePromoValidation() {
         return;
       }
 
-      const minOrder = Number(promotion.minimum_sales_amount) || 0;
-      if (minOrder > 0 && subtotal < minOrder) {
-        toast.error(TOAST.CART.PROMO_INVALID(promoCode));
-        return;
-      }
-
+      // NO local minimum-order gate. `minimum_sales_amount` is paired with
+      // `minimum_sales_amount_calc_on`, which selects which value it is
+      // measured against — the same component scoping that makes the discount
+      // itself unknowable here. Checking it against the cart subtotal refused
+      // promos the customer qualified for. Eligibility is the server's call:
+      // Helper/ApplyPromotions simply returns no row for a promo it won't
+      // apply, and checkout says so on the badge.
       const incomingType = getPromotionDiscountType(promotion);
       const hasSimilar = appliedPromos.some(
         (p) => getPromotionDiscountType(p.promoDetails) === incomingType
@@ -69,10 +67,12 @@ export function usePromoValidation() {
         return;
       }
 
+      // No amount is attached. `promoDetails` is the full PromotionRow, which
+      // is what Helper/ApplyPromotions needs as input — the rupee value comes
+      // back from there. See cartSlice.recalculateTotals.
       applyPromo({
-        promoCode:     promotion.promotion_code,
-        promoDetails:  promotion,
-        discountAmount: computePromotionDiscount(promotion, subtotal),
+        promoCode:    promotion.promotion_code,
+        promoDetails: promotion,
       });
     },
 

@@ -110,6 +110,7 @@ export const QUERY_KEYS = {
   ORDERS: {
     LIST:            (params)     => ['orders', 'list', params],
     CUSTOMER_ORDERS: (customerId) => ['orders', 'customer', customerId],
+    DETAIL:          (orderId)    => ['orders', 'detail', orderId],
   },
 
   // ── INVOICES ─────────────────────────────────────────────────────────────

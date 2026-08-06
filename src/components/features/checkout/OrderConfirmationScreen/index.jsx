@@ -2,19 +2,26 @@
 
 // src/components/features/checkout/OrderConfirmationScreen/index.jsx
 // Shown after a successful invoice/order creation.
-// Displays the transaction number, invoice summary, PDF download, and New Sale action.
+// Displays the document number, summary, print formats, and New Sale action.
 //
-// CONFIRMED InvoiceRow field names (v1.json):
-//   document_no  — invoice number (NOT invoice_no)
+// CONFIRMED InvoiceRow / OrderRow field names (v1.json — the two rows share
+// them, see orderService.js):
+//   document_no  — invoice/order number (NOT invoice_no)
 //   party_name   — customer name (NOT customer_name)
 //   net_amount   — total (NOT total_amount)
-//   document_date — invoice date
+//   document_date — document date
+//
+// TWO DOCUMENT TYPES. Checkout can raise either an Invoice (54, paid in full)
+// or an Order (53, an advance against a booking), so nothing here may assume
+// "invoice": a balance outstanding is a defect on one and the entire point of
+// the other, and it reads back from a different Retrieve endpoint.
 
 import { useRouter } from 'next/navigation';
 import { CheckCircle2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import InvoiceReportButton from '@/components/features/checkout/InvoiceReportButton';
 import { useInvoiceDetail } from '@/hooks/checkout/useInvoiceDetail';
+import { useOrderDetail } from '@/hooks/checkout/useOrderDetail';
 import APP_CONFIG from '@/constants/appConfig';
 
 function fmt(amount) {
@@ -32,11 +39,24 @@ function fmtDate(iso) {
  * @param {{
  *   transactionId: number,   — EntityId returned from createInvoice/createOrder
  *   invoiceNo?:    string,   — document_no if already known (optional)
+ *   documentType?: 'invoice'|'order',
  * }} props
  */
-export default function OrderConfirmationScreen({ transactionId, invoiceNo }) {
+export default function OrderConfirmationScreen({
+  transactionId, invoiceNo, documentType = 'invoice',
+}) {
   const router = useRouter();
-  const { invoice, isLoading } = useInvoiceDetail(transactionId);
+  const isOrder = documentType === 'order';
+
+  // Only the relevant Retrieve fires — the other is disabled by a null id
+  // rather than skipped, so the hook order stays fixed across renders.
+  const invoiceQuery = useInvoiceDetail(isOrder ? null : transactionId);
+  const orderQuery   = useOrderDetail(isOrder ? transactionId : null);
+
+  const invoice   = isOrder ? orderQuery.order     : invoiceQuery.invoice;
+  const isLoading = isOrder ? orderQuery.isLoading : invoiceQuery.isLoading;
+
+  const docLabel = isOrder ? 'Order' : 'Invoice';
 
   // Use confirmed field names from InvoiceRow schema
   const displayNo   = invoice?.document_no  ?? invoiceNo ?? transactionId;
@@ -62,8 +82,10 @@ export default function OrderConfirmationScreen({ transactionId, invoiceNo }) {
 
       {/* Header */}
       <div>
-        <h1 className="text-xl font-bold text-foreground">Sale completed</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Invoice #{displayNo}</p>
+        <h1 className="text-xl font-bold text-foreground">
+          {isOrder ? 'Order placed' : 'Sale completed'}
+        </h1>
+        <p className="mt-1 text-sm text-muted-foreground">{docLabel} #{displayNo}</p>
       </div>
 
       {/* Invoice summary */}
@@ -82,7 +104,7 @@ export default function OrderConfirmationScreen({ transactionId, invoiceNo }) {
               </div>
             )}
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Invoice No.</span>
+              <span className="text-muted-foreground">{docLabel} No.</span>
               <span className="font-medium text-foreground">{displayNo}</span>
             </div>
             {customerName && (
@@ -105,14 +127,20 @@ export default function OrderConfirmationScreen({ transactionId, invoiceNo }) {
             )}
             {receiptAmt != null && (
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Paid</span>
+                <span className="text-muted-foreground">{isOrder ? 'Advance paid' : 'Paid'}</span>
                 <span className="text-status-in-stock font-medium">{fmt(receiptAmt)}</span>
               </div>
             )}
+            {/* On an order this is the expected remainder, collected when the
+                piece is handed over — not an error state, so it isn't red. */}
             {balanceAmt != null && balanceAmt > 0 && (
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Balance Due</span>
-                <span className="text-status-error font-medium">{fmt(balanceAmt)}</span>
+                <span className="text-muted-foreground">
+                  {isOrder ? 'Balance on collection' : 'Balance Due'}
+                </span>
+                <span className={`font-medium ${isOrder ? 'text-foreground/80' : 'text-status-error'}`}>
+                  {fmt(balanceAmt)}
+                </span>
               </div>
             )}
           </div>
@@ -126,7 +154,13 @@ export default function OrderConfirmationScreen({ transactionId, invoiceNo }) {
           Services/POS/Invoice/GeneratePDF returns 500 on UAT, so it never
           worked. See InvoiceReportButton. */}
       <div className="flex w-full max-w-md flex-col gap-2">
-        <InvoiceReportButton transactionId={transactionId} />
+        <InvoiceReportButton
+          transactionId={transactionId}
+          documentId={isOrder
+            ? APP_CONFIG.DOCUMENT_TYPES.POS_ORDER
+            : APP_CONFIG.DOCUMENT_TYPES.POS_INVOICE}
+          documentLabel={docLabel}
+        />
         <Button
           type="button"
           onClick={handleNewSale}

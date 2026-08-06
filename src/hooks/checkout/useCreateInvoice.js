@@ -15,12 +15,11 @@
 //   line_items[]   → InvoiceItemsRow (item_id, sku, pieces, item_rate, net_amount, ...)
 //   receipt_details[] → InvoiceReceiptRow (mode_id, mode_code, mode_name, amount)
 //
-// tax — cartSlice now computes a flat 3% GST (the real statutory rate for
-// gold/silver/diamond jewellery in India, not an approximation) on the
-// taxable value (subtotal - discount), single source of truth shared with
-// CartSummary/CheckoutPaymentSection/PlaceOrderButton via useCartTotals. Sent
-// below as tax_amount alongside net_amount (which is tax-inclusive, i.e. the
-// actual amount collected from the customer).
+// MONEY — nothing on this header is computed here. Every figure is summed
+// from the line items, which arrive priced by Helpers/SetSalesItems and then
+// discounted and RE-TAXED by Helper/ApplyPromotions. The cart's flat-3%-GST
+// figure is a display estimate for the cart screen only and never reaches a
+// document. See useCheckoutPricing.
 //
 // employee_id / sales_person_id — confirmed 2026-07-16 the vendor's own POS
 // Sale screen requires selecting an employee before placing the order.
@@ -32,15 +31,13 @@
 // ExchangeRate/GetExchangeRate is a distinct required lookup alongside
 // currency_id (not implied by it) — see useExchangeRate.
 //
-// tax_amount — confirmed 2026-07-16 our POS invoice document type
-// (DocumentNumbering document_id 54) has is_tax_applicable: true, and every
-// Item entity carries its own tax_template_id/is_tax_applicable/
-// is_tax_inclusive, so per-line-item GST is ultimately the server's to
-// compute. In the meantime we now send our own flat-3%-GST total (see
-// cartSlice) as a best-effort tax_amount rather than omitting the field —
-// once Invoice/Create is unblocked, reconcile against whatever
-// Invoice/Retrieve reports back and drop this client-side figure if the
-// server's per-item total disagrees.
+// PROMOTIONS — confirmed 2026-08-05 by capturing their own Order counter.
+// A promotion is priced by Helper/ApplyPromotions over the LINE ITEMS before
+// Create (not on a saved draft, which is what this codebase used to assume),
+// and its `invoice_promotions[]` response IS this document's
+// promotion_details[], passed through untouched. Their reference sale:
+// discount 12,177.60, taxable 1,04,699.04 → 92,521.44, tax 3,140.98 →
+// 2,775.64, net 95,297. See promotionService.applyPromotions.
 //
 // STATUS is DERIVED after posting (balance_amount + receipt_amount) — never sent.
 //
@@ -57,10 +54,11 @@
 //   is_tax_applicable/auto_posting/is_document_number_editable — same
 //     DocumentNumbering row; genuinely per-document-type config, not
 //     universal constants, so sourced from there rather than hardcoded.
-//   round_off — rounding adjustment between computed and collected amount;
-//     we don't round display prices, so 0 is correct here.
-//   allow_backdated_entry/number_of_backdated_days — POS sales are always
-//     same-day; no backdating UI exists, so false/0.
+//   round_off — rounding adjustment between the computed net and the whole
+//     rupee actually recorded.
+//   allow_backdated_entry false (no backdating UI); number_of_backdated_days
+//     comes from the document type's own config — their Order header sends
+//     60, not 0, so it is read from headerConfig rather than hardcoded.
 //   document_id — confirmed live: the document TYPE (not just a
 //     DocumentNumbering lookup key) is a required header field in its own
 //     right. document_no, by contrast, must NOT be sent — the server
@@ -74,17 +72,24 @@
 // checkoutPricingService.buildPricedLineItems, which re-fetches each cart
 // item's master record and re-prices it against TODAY's rates at
 // submission time (not whatever was cached at add-to-cart). Header
-// sub_total/taxable_amount/tax_amount/net_amount are now summed from these
-// authoritative per-line figures (summarizeLineItems) rather than the
-// cart's own flat-3%-GST display estimate — the two should closely agree
-// since 3% IS the real combined CGST+SGST rate for jewellery, but the
-// server's own per-item computation is the one actually submitted.
+// sub_total/discount/taxable_amount/tax_amount/net_amount are summed from
+// these authoritative per-line figures (summarizeLineItems).
+//
+// RECEIPT DETAILS carry fifteen fields, not the four this hook used to send —
+// notably ledger_id, mode_type and mode_sub_type, all of which are already on
+// the PaymentReceiptMode row and were simply being dropped. See
+// lib/checkout/documentFields.
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSelector } from 'react-redux';
 import { toast } from 'react-toastify';
 import { createInvoice, postInvoice } from '@/services/orderService';
-import { buildPricedLineItems, summarizeLineItems } from '@/services/checkoutPricingService';
+import {
+  buildPricedLineItems,
+  applyPromotionsToLines,
+  summarizeLineItems,
+} from '@/services/checkoutPricingService';
+import { localDocumentDate, buildReceiptDetails } from '@/lib/checkout/documentFields';
 import { useCart } from '@/hooks/cart/useCart';
 import { useCartTotals } from '@/hooks/cart/useCartTotals';
 import { useCustomerSession } from '@/hooks/customer/useCustomerSession';
@@ -127,30 +132,29 @@ function toGAItems(items) {
  * }} params
  */
 function buildInvoiceEntity({
-  lineItems, discount,
+  lineItems, promotionDetails,
   customerId, customerName, customerMobile,
   activeStoreId,
   paymentModes, narration,
   salesPersonId, exchangeRate,
   headerConfig,
 }) {
-  const today = new Date().toISOString();
-  const { subTotal, taxableAmount, taxAmount, netAmount, pieces, weight, netWeight } =
-    summarizeLineItems(lineItems);
+  const today = localDocumentDate();
+  const {
+    subTotal, discount, taxableAmount, taxAmount, netAmount,
+    pieces, weight, netWeight,
+  } = summarizeLineItems(lineItems);
 
-  const discountedNet = +Math.max(0, netAmount - (discount ?? 0)).toFixed(2);
-  // round_off — the rounding adjustment between the raw computed total and
-  // the amount actually recorded, mirroring the real captured payload
-  // (base_net_amount 128523.16 → net_amount 128523, round_off -0.16).
-  const roundedNet = Math.round(discountedNet);
-  const round_off  = +(roundedNet - discountedNet).toFixed(2);
+  // Nothing is subtracted here any more. The lines come back from
+  // Helper/ApplyPromotions already discounted and re-taxed, so the header is
+  // a straight sum of them — which is exactly what their own header is,
+  // confirmed field for field against a real Order/Create.
+  const roundedNet = Math.round(netAmount);
+  const round_off  = +(roundedNet - netAmount).toFixed(2);
 
-  const receipt_details = paymentModes.map((p) => ({
-    mode_id:   p.modeId,
-    mode_code: p.modeCode ?? '',
-    mode_name: p.modeName,
-    amount:    p.amount,
-  }));
+  const receipt_details = buildReceiptDetails({
+    paymentModes, customerId, activeStoreId, exchangeRate, headerConfig,
+  });
   const receiptAmount = +receipt_details.reduce((s, r) => s + (r.amount ?? 0), 0).toFixed(2);
 
   return {
@@ -162,6 +166,10 @@ function buildInvoiceEntity({
     // real logged-in staff session — not something to guess further.
     party_name:    customerName ?? undefined,
     mobile:        customerMobile ?? undefined,
+    // NOTE their header also carries `email`. Not sent: the cart session
+    // stores id/name/mobile only, and our documents have always posted
+    // correctly without it. Plumbing a new field through every attach path
+    // for an optional denormalized copy wasn't worth it here.
     user_id:       null,
     company_id:    activeStoreId,
     document_date: today,
@@ -175,6 +183,10 @@ function buildInvoiceEntity({
     taxable_amount: taxableAmount,
     tax_amount:     taxAmount,
     net_amount:     roundedNet,
+    // base_* hold the PRE-discount figures on their payload — the line items
+    // returned by ApplyPromotions carry base_net_amount 107840.02 against
+    // net_amount 95297.08. Header base_sub_total/base_tax_amount mirror the
+    // post-discount values in their capture, so those are summed as-is.
     base_sub_total: subTotal,
     base_net_amount: roundedNet,
     base_tax_amount: taxAmount,
@@ -189,18 +201,26 @@ function buildInvoiceEntity({
     auto_posting:                headerConfig.autoPosting,
     is_document_number_editable: headerConfig.isDocumentNumberEditable,
     allow_backdated_entry:       false,
-    number_of_backdated_days:    0,
+    // From the document type's own config, not hardcoded — their Order header
+    // sends 60, which is document 53's configured backdating window.
+    number_of_backdated_days:    headerConfig.numberOfBackdatedDays ?? 0,
     is_einvoice:                 false,
     line_items: lineItems,
     receipt_details,
-    promotion_details: [],
+    // The `invoice_promotions[]` rows Helper/ApplyPromotions returned, passed
+    // through UNTOUCHED — which is exactly what their client does. This used
+    // to go out empty because the row's shape could not be guessed; it no
+    // longer has to be, because the server hands it to us fully formed.
+    promotion_details: promotionDetails ?? [],
   };
 }
 
 export function useCreateInvoice() {
   const queryClient = useQueryClient();
-  const { items } = useCart();
-  const { discount, total } = useCartTotals();
+  const { items, appliedPromos } = useCart();
+  // Cart total is a FALLBACK for analytics only. Every money figure on the
+  // document now comes from the priced, promotion-applied line items.
+  const { total: cartTotal } = useCartTotals();
   const { customerId, customerName, customerMobile } = useCustomerSession();
   const activeStoreId = useSelector(selectActiveStoreId);
   const { exchangeRate } = useExchangeRate();
@@ -209,30 +229,49 @@ export function useCreateInvoice() {
   const mutation = useMutation({
     /**
      * @param {{
-     *   paymentModes:  { modeId, modeCode, modeName, amount }[],
+     *   paymentModes:  { modeId, modeCode, modeName, amount, ledgerId?, raw? }[],
      *   narration?:    string,
      *   salesPersonId: number,
+     *   pricedLineItems?:  object[],  // post-promotion lines from useCheckoutPricing
+     *   promotionDetails?: object[],  // its invoice_promotions rows
      * }} params
      */
-    mutationFn: async ({ paymentModes, narration, salesPersonId, pricedLineItems }) => {
+    mutationFn: async ({
+      paymentModes, narration, salesPersonId, pricedLineItems,
+      promotionDetails: promotionDetailsArg,
+    }) => {
       if (!headerConfig.isReady) {
         throw new Error('Store configuration is still loading — please try again in a moment');
       }
 
+      const documentId = APP_CONFIG.DOCUMENT_TYPES.POS_INVOICE;
+
       // Prefer the lines the checkout screen already priced and quoted from
-      // (useCheckoutPricing). Re-pricing here would risk billing a different
-      // figure than the one the customer was just shown and charged, and
-      // would repeat the slowest call in the flow. Falls back to pricing
-      // now for any caller that doesn't pre-price.
-      const lineItems = pricedLineItems
-        ? pricedLineItems.map((row) => ({ ...row, sales_person_id: salesPersonId }))
-        : await buildPricedLineItems({
-            items, activeStoreId, salesPersonId,
-            documentId: APP_CONFIG.DOCUMENT_TYPES.POS_INVOICE,
-          });
+      // (useCheckoutPricing) — they already have the promotions applied and
+      // re-taxed. Re-pricing here would risk billing a different figure than
+      // the one the customer was just shown and charged, and would repeat the
+      // two slowest calls in the flow. Falls back for any caller that doesn't
+      // pre-price, in which case the promotions have to be applied here too
+      // or the discount would silently vanish from the document.
+      let lineItems;
+      let promotionDetails;
+
+      if (pricedLineItems) {
+        lineItems = pricedLineItems.map((row) => ({ ...row, sales_person_id: salesPersonId }));
+        promotionDetails = promotionDetailsArg ?? [];
+      } else {
+        const priced = await buildPricedLineItems({
+          items, activeStoreId, salesPersonId, documentId,
+        });
+        const promoted = await applyPromotionsToLines({
+          lineItems: priced, appliedPromos, documentId, exchangeRate,
+        });
+        lineItems = promoted.lineItems;
+        promotionDetails = promoted.promotionDetails;
+      }
 
       const entity = buildInvoiceEntity({
-        lineItems, discount,
+        lineItems, promotionDetails,
         customerId, customerName, customerMobile,
         activeStoreId,
         paymentModes, narration,
@@ -278,15 +317,19 @@ export function useCreateInvoice() {
         }
       }
 
-      return { transactionId, createResponse, postResponse };
+      // net_amount travels back so analytics reports what was actually
+      // invoiced. It used to report the cart's catalog total, which since
+      // checkout started pricing the real pieces has been a different — and
+      // on stone-set items, much smaller — number than the sale.
+      return { transactionId, createResponse, postResponse, netAmount: entity.net_amount };
     },
 
-    onSuccess: ({ transactionId }) => {
+    onSuccess: ({ transactionId, netAmount }) => {
       toast.success(TOAST.INVOICES.CREATED(transactionId));
 
       tracker.trackEcommerce(GA_ECOMMERCE_EVENTS.PURCHASE, EVENTS.ORDER_PLACED, {
         transaction_id: transactionId,
-        value:          total,
+        value:          netAmount,
         currency:       APP_CONFIG.CURRENCY.INR_CODE,
         items:          toGAItems(items),
       });
@@ -302,10 +345,14 @@ export function useCreateInvoice() {
       queryClient.invalidateQueries({ queryKey: ['orders'] });
     },
 
-    onError: (error) => {
+    onError: (error, variables) => {
       console.error('[useCreateInvoice]', error);
 
       const failedAtPost = error?.stage === 'post';
+      // Nothing was invoiced, so report what the counter was trying to
+      // collect rather than the cart's unrelated estimate.
+      const attemptedValue = variables?.paymentModes
+        ?.reduce((sum, p) => sum + (p.amount ?? 0), 0) ?? cartTotal;
       // normalizeError (lib/axios/interceptors.js) lifts OrnaVerse's own
       // `Error.Message` onto serverMessage. Show it: "Not enough stock of
       // 21278E2 can not Save" tells the counter what to do next, whereas
@@ -315,7 +362,7 @@ export function useCreateInvoice() {
 
       tracker.track(EVENTS.ORDER_FAILED, {
         stage: failedAtPost ? 'post' : 'create',
-        value: total,
+        value: attemptedValue,
         error: reason ?? 'unknown',
       });
 

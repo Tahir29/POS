@@ -61,13 +61,17 @@ function HelperBalanceRow({ label, amount, modeCode, isApplied, onToggle, isLoad
 
 // ── CheckoutPaymentSection ────────────────────────────────────────────────────
 /**
- * @param {{ onChange: Function, amountDue?: number }} props
- *   amountDue — the live-priced invoice total. Payment must be collected
- *   against this, not the cart's catalog estimate, which can omit stone
- *   value and leave the invoice short-paid. Falls back to the cart total
- *   only while pricing is still resolving.
+ * @param {{ onChange: Function, amountDue?: number, allowPartial?: boolean }} props
+ *   amountDue — the live-priced total. Payment must be collected against
+ *   this, not the cart's catalog estimate, which can omit stone value and
+ *   leave the document short-paid. Falls back to the cart total only while
+ *   pricing is still resolving.
+ *   allowPartial — true when raising an ORDER, where the customer leaves an
+ *   advance and the rest is due on collection. Only the wording changes: an
+ *   unpaid remainder is a blocking error on an invoice and the normal case on
+ *   an order, so it must not be shown in red as something to fix.
  */
-export default function CheckoutPaymentSection({ onChange, amountDue }) {
+export default function CheckoutPaymentSection({ onChange, amountDue, allowPartial = false }) {
   const { total: cartTotal } = useCartTotals();
   const total = amountDue ?? cartTotal;
   const { paymentModes, isLoading: modesLoading, isError: modesError } = usePaymentModes();
@@ -177,17 +181,27 @@ export default function CheckoutPaymentSection({ onChange, amountDue }) {
     });
   }, [total]);
 
-  // Notify parent
+  // Notify parent.
+  // ledgerId + raw travel with each row because receipt_details[] needs them:
+  // their payload carries the mode's ledger_id (the account the receipt posts
+  // against), mode_type, mode_sub_type and allow_partial, all of which live on
+  // the PaymentReceiptMode row. Flattening to four fields here is what used to
+  // strip them. See lib/checkout/documentFields.buildReceiptDetails.
   useEffect(() => {
     onChange?.(
-      payments.map((p) => ({
-        modeId:   p.modeId   ?? undefined,
-        modeCode: p.modeCode ?? '',
-        modeName: p.modeName,
-        amount:   Number(p.amount) || 0,
-      }))
+      payments.map((p) => {
+        const mode = paymentModes.find((m) => m.modeId === p.modeId);
+        return {
+          modeId:   p.modeId   ?? undefined,
+          modeCode: p.modeCode ?? '',
+          modeName: p.modeName,
+          amount:   Number(p.amount) || 0,
+          ledgerId: mode?.ledgerId ?? null,
+          raw:      mode?.raw ?? null,
+        };
+      })
     );
-  }, [payments]);
+  }, [payments, paymentModes]);
 
   const balancesApplied = payments.filter((p) => p.isHelper)
     .reduce((s, p) => s + (Number(p.amount) || 0), 0);
@@ -318,9 +332,17 @@ export default function CheckoutPaymentSection({ onChange, amountDue }) {
             ) : (
               <div className="flex items-center justify-between font-medium">
                 <span className="text-muted-foreground">
-                  {remaining > 0 ? 'Remaining' : 'Over total'}
+                  {remaining < 0
+                    ? 'Over total'
+                    : allowPartial ? 'Balance on collection' : 'Remaining'}
                 </span>
-                <span className={remaining > 0 ? 'text-destructive' : 'text-status-made-order'}>
+                <span
+                  className={
+                    remaining < 0
+                      ? 'text-status-made-order'
+                      : allowPartial ? 'text-foreground/80' : 'text-destructive'
+                  }
+                >
                   {APP_CONFIG.CURRENCY.INR_SYMBOL}{Math.abs(remaining).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
                 </span>
               </div>
