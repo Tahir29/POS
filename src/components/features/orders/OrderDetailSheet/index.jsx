@@ -151,8 +151,15 @@ export default function OrderDetailSheet({ order, isOpen, onClose }) {
     onClose();
   };
 
-  // Only show cancel for orders with an outstanding balance
-  const isCancellable = !!(raw && (raw.balance_amount ?? 0) > 0 && raw.transaction_id);
+  // Only show cancel for orders with an outstanding balance. Guarded to the
+  // 'order' document type: this action calls POS/Order/Cancel specifically,
+  // and this sheet now also renders Invoice-origin rows (see useAllOrders,
+  // which merges both since checkout can raise either) — cancelling one of
+  // those against the Order endpoint would target the wrong document type.
+  const isCancellable = !!(
+    raw && order?.documentType !== 'invoice' &&
+    (raw.balance_amount ?? 0) > 0 && raw.transaction_id
+  );
 
   const handleConfirmCancel = async () => {
     if (!raw?.transaction_id) return;

@@ -1,24 +1,16 @@
 // src/hooks/orders/useOrders.js
-// Paginated POS orders list — (pos)/orders page.
-// Maps to: POST Services/POS/Order/List
+// Paginated sales list — (pos)/orders page.
 //
-// Reuses the confirmed normalizer from useCustomerOrders.js (Phase 10),
-// which already maps the confirmed Order/List response shape:
-//   transaction_id -> orderId (EntityId for Order/Retrieve)
-//   document_no    -> orderNo
-//   document_date  -> orderDate
-//   party_name     -> customerName
-//   gross_amount   -> totalAmount
-//   status derived from balance_amount / receipt_amount
-//     ('paid' | 'partial' | 'due')
-//
-// Server-side pagination via Take/Skip, same convention as
-// useInvoiceList.js.
+// Paginates CLIENT-SIDE over the same merged Orders+Invoices dataset as
+// useAllOrders (identical query key, so the two hooks share one network
+// round trip when mounted together, as orders/page.jsx does). True
+// server-side pagination isn't possible here: Order/List and Invoice/List
+// are two independently-paginated endpoints, and slicing each separately
+// then concatenating would desync page boundaries from chronological order.
+// See useAllOrders.js for why both document types are included.
 
-import { useQuery } from '@tanstack/react-query';
-import { getOrders } from '@/services/orderService';
-import { normalizeCustomerOrder } from '@/hooks/customer/useCustomerOrders';
-import { QUERY_KEYS } from '@/constants/queryKeys';
+import { useMemo } from 'react';
+import { useAllOrders } from '@/hooks/orders/useAllOrders';
 import APP_CONFIG from '@/constants/appConfig';
 
 /**
@@ -26,27 +18,20 @@ import APP_CONFIG from '@/constants/appConfig';
  */
 export function useOrders({ skip = 0 } = {}) {
   const take = APP_CONFIG.PAGINATION.ORDERS_TAKE;
+  const { allOrders, isLoading, isFetching, isError, refetch } = useAllOrders();
 
-  const query = useQuery({
-    queryKey: QUERY_KEYS.ORDERS.LIST({ skip, take }),
-    queryFn: async () => {
-      const response = await getOrders({ take, skip });
-      const entities = response?.Entities ?? response?.data ?? response?.result ?? [];
-      return {
-        orders: entities.map(normalizeCustomerOrder).filter(Boolean),
-        totalCount: response?.TotalCount ?? entities.length,
-      };
-    },
-    staleTime: APP_CONFIG.STALE_TIME.ORDERS,
-  });
+  const orders = useMemo(
+    () => allOrders.slice(skip, skip + take),
+    [allOrders, skip, take]
+  );
 
   return {
-    orders:     query.data?.orders ?? [],
-    totalCount: query.data?.totalCount ?? 0,
+    orders,
+    totalCount: allOrders.length,
     take,
-    isLoading:  query.isLoading,
-    isFetching: query.isFetching,
-    isError:    query.isError,
-    refetch:    query.refetch,
+    isLoading,
+    isFetching,
+    isError,
+    refetch,
   };
 }
