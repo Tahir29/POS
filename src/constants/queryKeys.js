@@ -88,6 +88,24 @@ export const QUERY_KEYS = {
     CATEGORY_SEARCH:       (typeIds, storeId) => ['catalog', 'category-search', typeIds, storeId],
     STOCK_BY_STORES:       (itemId)  => ['catalog', 'stock-by-stores', itemId],
     STOCK_BY_STORES_BATCH: (itemIds) => ['catalog', 'stock-by-stores-batch', itemIds],
+    // Live SetSalesItems price for ONE catalog card. Per-item (not per-page)
+    // so returning to /catalog reuses every price already fetched instead of
+    // re-running the whole 6-7s-per-batch pipeline — see useLiveCatalogPrices,
+    // which batches the network calls behind these individual keys.
+    //
+    // storeId is part of the key for the same reason as ITEMS.PRICING: the
+    // price depends on which physical piece this store holds.
+    //
+    // epoch is a signature of the canary items' current price (see
+    // usePricingEpoch). It is what lets these entries be cached INDEFINITELY
+    // rather than on a timer: the cached price cannot go wrong while the
+    // epoch holds, and the moment anything moves a real price the epoch
+    // changes, every key below it changes with it, and the whole catalog
+    // reprices. Keep epoch LAST so ['catalog','price'] stays a usable prefix.
+    PRICE:                 (itemId, storeId, epoch) => ['catalog', 'price', itemId, storeId, epoch],
+    // The canary re-price itself. Keyed by the frozen canary id list so a
+    // different canary set can never be mistaken for a price movement.
+    PRICE_EPOCH:           (storeId, canaryIds) => ['catalog', 'price-epoch', storeId, canaryIds],
   },
 
   // ── INVENTORY ─────────────────────────────────────────────────────────────
