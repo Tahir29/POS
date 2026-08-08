@@ -40,6 +40,15 @@ export default function ProductSearchBar({
   const debounceRef    = useRef(null);
   const lastKeyTimeRef = useRef(null);
   const inputRef      = useRef(null);
+  // Debounce for the physical/USB scanner path (handleKeyDown below) — this
+  // path had NO duplicate-suppression at all, unlike the camera path in
+  // BarcodeScannerModal, which already debounces repeat detections of the
+  // same code within 2s. A scanner that sends a double terminator (CR+LF is
+  // common), or one left in continuous/repeat-scan mode, would re-fire
+  // onBarcodeDetected for every repeat with nothing to stop it — confirmed
+  // 2026-08-08: this is what was hitting StockJournal/List repeatedly on a
+  // single physical scan. Mirrors BarcodeScannerModal's own lastScannedRef.
+  const lastScanRef    = useRef(null);
 
   // Sync when URL is cleared externally (e.g. clearFilters)
   useEffect(() => {
@@ -80,6 +89,15 @@ export default function ProductSearchBar({
         : Infinity;
 
       if (timeSinceLastKey <= SCAN_THRESHOLD_MS && onBarcodeDetected) {
+        // Debounce — ignore the same scanned value re-firing within 2s (a
+        // double CR/LF terminator, a scanner still in the beam, or a stray
+        // repeat trigger pull all look identical from here).
+        const prev = lastScanRef.current;
+        if (prev?.code === val && Date.now() - prev.ts < 2000) {
+          return;
+        }
+        lastScanRef.current = { code: val, ts: Date.now() };
+
         // Clear debounced text search — barcode takes over
         clearTimeout(debounceRef.current);
         onBarcodeDetected(val);
@@ -121,7 +139,14 @@ export default function ProductSearchBar({
 
           <Input
             ref={inputRef}
-            type="search"
+            // type="text", not "search" — Chrome/Edge/Safari render their
+            // OWN native clear ("x") button inside a type="search" input
+            // once it has a value, stacking on top of our custom clear
+            // button below and producing two visible "x" icons. inputMode
+            // stays "search" so mobile keyboards still show a search-style
+            // Enter key; that's independent of the native clear-button
+            // behavior, which is keyed off the `type` attribute itself.
+            type="text"
             inputMode="search"
             autoComplete="off"
             autoCorrect="off"

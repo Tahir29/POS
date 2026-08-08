@@ -2,7 +2,9 @@
 // Jewellery savings/instalment scheme management.
 // All functions are pure HTTP wrappers — no business logic.
 //
-// SCHEMA — POS.SchemeEnrollmentRow key fields (confirmed v1.json):
+// SCHEMA — POS.SchemeEnrollmentRow key fields (confirmed v1.json, cross-checked
+// 2026-08-07 against a live SchemeEnrollment/Create capture on Lucira's own
+// UAT tenant — see Lucira_Scheme_Module_Documentation.md §4):
 //   scheme_enrollment_id  — primary key
 //   party_id              — customer
 //   party_name            — customer name
@@ -10,15 +12,24 @@
 //   scheme_id             — linked scheme
 //   scheme_display_name   — scheme name for display
 //   scheme_code           — scheme code
-//   scheme_status         — enum SchemeStatus (active/inactive/matured/etc.)
+//   scheme_status         — enum SchemeStatus: 1 active, 0 cancelled/foreclosed-
+//                           pending, 2 matured-pending, 3 redeemed (terminal)
 //   document_date         — enrollment date
 //   scheme_amount         — monthly instalment amount
 //   tenure                — months
+//   scheme_bonus_value    — cash value of the base bonus (scheme_amount × bonus_value)
+//   max_installment_amount— copied from the scheme master, cap per instalment
 //   invested_amount       — total paid so far
 //   benifit_amount        — ⚠️ API-side typo, preserve EXACTLY — benefit from scheme
 //   total_payable         — total amount customer will receive at maturity
 //   maturity_year/month   — when scheme matures
-//   scheme_monthly_details[] — SchemeMonthlyDetailsRow[]
+//   nominee / nominee_age — optional; confirmed real fields on Create (live
+//                           capture literally sends "nominee": "Test Nominee"),
+//                           not yet confirmed round-tripping back on List/Retrieve
+//   scheme_monthly_details[] — SchemeMonthlyDetailsRow[]; MUST be built and sent
+//                           by the client on Create — the server does NOT
+//                           synthesize these from scheme_amount/tenure alone
+//                           (see buildSchemeMonthlyDetails() below)
 
 import axiosInstance from '@/lib/axios/axiosInstance';
 import API from '@/constants/apiEndpoints';
@@ -64,6 +75,38 @@ export async function getSchemeEnrollmentById(enrollmentId) {
 }
 
 /**
+ * Builds the SchemeEnrollment/Create scheme_monthly_details[] rows.
+ *
+ * CAPTURED 2026-08-07 from a live SchemeEnrollment/Create payload on Lucira's
+ * own UAT tenant (Lucira_Scheme_Module_Documentation.md §4). Previously this
+ * was omitted on the assumption the server would generate it from
+ * scheme_amount/tenure/document_date — that assumption was wrong: the real
+ * client builds and sends every row itself. One row per tenure month, first
+ * due date equal to the enrollment date, one calendar month added per
+ * subsequent row (month_id wraps 12 → 1 the same way Date does).
+ *
+ * @param {string} documentDate  — enrollment date, "YYYY-MM-DD"
+ * @param {number} schemeAmount  — monthly instalment amount
+ * @param {number} tenure        — number of months
+ * @returns {{ month_id: number, month_amount: number, due_date: string, payment_made: boolean }[]}
+ */
+export function buildSchemeMonthlyDetails(documentDate, schemeAmount, tenure) {
+  const base = new Date(`${documentDate}T00:00:00`);
+  const rows = [];
+  for (let i = 0; i < tenure; i++) {
+    const due = new Date(base);
+    due.setMonth(due.getMonth() + i);
+    rows.push({
+      month_id:     due.getMonth() + 1, // calendar month number, 1–12
+      month_amount: schemeAmount,
+      due_date:     due.toISOString(),
+      payment_made: false,
+    });
+  }
+  return rows;
+}
+
+/**
  * Enroll a customer into a scheme.
  * @param {{
  *   party_id:      number,
@@ -72,6 +115,7 @@ export async function getSchemeEnrollmentById(enrollmentId) {
  *   tenure:        number,
  *   company_id:    number,
  *   document_date: string,
+ *   scheme_monthly_details: object[], // build via buildSchemeMonthlyDetails()
  *   nominee?:      string,
  *   nominee_age?:  number
  * }} payload

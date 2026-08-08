@@ -253,7 +253,6 @@ const API = {
     LIST:           'Services/POS/Invoice/List',
     GENERATE_PDF:   'Services/POS/Invoice/GeneratePDF',
     APPLY_DISCOUNT: 'Services/POS/Invoice/ApplyAdditionalDiscount',
-    DAY_WISE_SALES: 'Services/POS/Invoice/DayWiseSalesList',
   },
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -563,12 +562,15 @@ const API = {
   //
   // RENDER returns an HTML document their UI shows in an iframe preview;
   // PRINT_RENDER is the print variant.
+  //
+  // Not currently referenced via these constants — InvoiceReportButton
+  // hardcodes 'Print/Render' directly (see its own header comment for why).
+  // Kept here as the documented contract for that endpoint regardless.
   // ─────────────────────────────────────────────────────────────────────────
-  // Merged into the REPORTS block at the bottom of this file. They were a
-  // SECOND `REPORTS:` key in the same object literal, so the later one
-  // silently replaced this one and API.REPORTS.RENDER was undefined — a trap
-  // for the next caller, which InvoiceReportButton only escaped by hardcoding
-  // the path.
+  REPORT_RENDER: {
+    RENDER:       'Print/Render',
+    PRINT_RENDER: 'Print/PrintRender',
+  },
 
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -588,30 +590,6 @@ const API = {
     ADD_METAL_RATE: 'Services/Costing/MetalRates/Create',
   },
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // REPORTS (Operational POS reports)
-  // ─────────────────────────────────────────────────────────────────────────
-  REPORTS: {
-    // Report RENDERING (cookie-authenticated MVC endpoints — note the missing
-    // "Services/"; see the REPORT RENDERING block above for why these cannot
-    // go through axiosInstance).
-    RENDER:       'Print/Render',
-    PRINT_RENDER: 'Print/PrintRender',
-    // Operational POS reports (OAuth JSON API).
-    POS_RECEIPTS:          'Services/Reports/POSReceiptsReport/List',
-    POS_RECEIPTS_DETAILED: 'Services/Reports/POSReceiptsDetailedReport/List',
-    POS_TAX_DETAILS:       'Services/Reports/POSTaxDetails/List',
-    RETURN_STATUS:         'Services/Reports/ReturnStatusReport/List',
-    EXCHANGE_STATUS:       'Services/Reports/ExchangeStatusReport/List',
-    CREDIT_NOTE_STATUS:    'Services/Reports/CreditNoteStatusReport/List',
-    BUYBACK_STATUS:        'Services/Reports/BuyBackStatusReport/List',
-    URD_PURCHASE_STATUS:   'Services/Reports/URDPurchseStatusReport/List',
-    SCHEME_HISTORY:        'Services/Reports/SchemeHistoryReport/List',
-    INVOICE_REPORT:        'Services/POS/InvoiceReport/List',
-    SALES_WEEKLY:          'Services/POS/SalesFilters/WeeklySales',
-    SALES_MONTHLY:         'Services/POS/SalesFilters/MonthlySales',
-    SALES_QUARTERLY:       'Services/POS/SalesFilters/QuarterlySales',
-  },
 
 };
 

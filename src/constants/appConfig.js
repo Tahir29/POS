@@ -7,7 +7,7 @@
 //   REMOVED: GIFT.CARD_TYPE/VOUCHER_TYPE — vouchers handled via CRM endpoints directly
 //   REMOVED: SETTINGS block — AppSettings endpoint removed from new API spec
 //   ADDED:   PAGINATION entries for new modules
-//   ADDED:   STALE_TIME.ANALYTICS, STALE_TIME.REPORTS
+//   ADDED:   STALE_TIME.ANALYTICS
 //   ADDED:   REPAIR.STAGES, ESTIMATION.STATUSES for UI state tracking
 
 const APP_CONFIG = {
@@ -75,6 +75,11 @@ const APP_CONFIG = {
                            // despite the same prefix text — this store's own config)
     REPAIR_INVOICE:  119, // prefix "RIN"
     SCHEME_RECEIPT:  99,  // prefix "SPY"
+    // CONFIRMED 2026-08-07 off a live SchemeEnrollment/Create capture on
+    // Lucira's own UAT tenant (lucira.uat.ornaverse.in) — see
+    // Lucira_Scheme_Module_Documentation.md §4. Real payload example:
+    // { document_no: "HO-SEN-08-26-12", document_id: 125, ... }
+    SCHEME_ENROLLMENT: 125, // prefix "HO-SEN"
     ESTIMATION:      52,  // prefix "QTN" — same constant pricingService.js
                            // already uses for the stateless SetSalesItems
                            // preview call, confirmed live via the full
@@ -157,7 +162,6 @@ const APP_CONFIG = {
     CUSTOMERS_ALL_TAKE: 5000, // one-off full fetch for name search
     EMPLOYEES_ALL_TAKE: 5000, // one-off full fetch for name search
     ANALYTICS_TAKE:     12,   // months for revenue charts
-    REPORTS_TAKE:       100,
   },
 
   // ── STALE TIMES (milliseconds) ────────────────────────────────────────────
@@ -168,7 +172,6 @@ const APP_CONFIG = {
     ORDERS:     2 * 60 * 1000, // 2 min  — orders, invoices, transactions
     STOCK:      1 * 60 * 1000, // 1 min  — live stock levels
     ANALYTICS: 10 * 60 * 1000, // 10 min — analytics charts (slow-changing)
-    REPORTS:    5 * 60 * 1000, // 5 min  — operational reports
   },
 
   // ── SESSION ───────────────────────────────────────────────────────────────

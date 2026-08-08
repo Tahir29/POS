@@ -337,6 +337,22 @@ async function fetchEntireStoreCatalog(storeId, onProgress) {
   const SAFETY_MAX_PAGES = 500; // ~12,000 items — generous ceiling against a runaway loop
 
   const all = [];
+  // Tracks item_ids already collected. A short/empty page is the expected
+  // "end of data" signal, but confirmed 2026-08-09: this loop was hitting
+  // SAFETY_MAX_PAGES on a store whose real catalog is nowhere near 12,000
+  // items. Root cause — once ANY page in a batch came back short, `done`
+  // was set but the loop kept pushing every OTHER page in that same batch
+  // regardless of content (no `break`), and those pages sit at Skip values
+  // past the true end of data. If the server clamps/wraps an out-of-range
+  // Skip instead of returning empty (common for naive pagination, and
+  // ProductCatalog/List is already documented above as having several other
+  // quirks), those pages come back as full, non-empty — but DUPLICATE —
+  // pages, so `entities.length < PAGE_SIZE` never trips again and the loop
+  // has no way to know it's done short of the hard cap. Tracking seen ids
+  // and stopping when a whole round contributes nothing new is a
+  // duplicate-proof signal that doesn't depend on the server ever
+  // returning a short page at all.
+  const seenIds = new Set();
   let skip = 0;
   let done = false;
   let pagesFetched = 0;
@@ -356,11 +372,22 @@ async function fetchEntireStoreCatalog(storeId, onProgress) {
       )
     );
 
+    let newInRound = 0;
     for (const entities of pages) {
       pagesFetched++;
-      all.push(...entities);
-      if (entities.length < PAGE_SIZE) done = true; // partial/empty page = end of data
+
+      const fresh = entities.filter((e) => e.item_id == null || !seenIds.has(e.item_id));
+      for (const e of fresh) { if (e.item_id != null) seenIds.add(e.item_id); }
+      all.push(...fresh);
+      newInRound += fresh.length;
+
+      if (entities.length < PAGE_SIZE) { done = true; break; } // partial/empty page = end of data — stop processing this round's later (out-of-range) pages
     }
+
+    // A full round that added zero NEW ids means every page in it was
+    // duplicate/wrapped data past the real end — treat that as done too,
+    // even though no page was individually short.
+    if (!done && newInRound === 0) done = true;
 
     onProgress?.(all.length);
     skip += CONCURRENCY * PAGE_SIZE;

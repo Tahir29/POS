@@ -46,7 +46,7 @@ import TOAST      from '@/constants/toastMessages';
 import tracker from '@/lib/analytics/tracker';
 import EVENTS, { GA_ECOMMERCE_EVENTS } from '@/lib/analytics/events';
 import { formatPrice } from '@/lib/priceUtils';
-import { Settings2, CheckCircle2 } from 'lucide-react';
+import { Settings2, CheckCircle2, Copy, Check } from 'lucide-react';
 
 const selectActiveStoreId   = (s) => s.store.activeStoreId;
 const selectActiveStoreName = (s) => s.store.activeStoreName;
@@ -200,6 +200,28 @@ function ProductDetailScreen() {
     (activeSize ? ` · Size ${activeSize}` : '');
   const activeCode = activeItem?.item_code ?? null;
 
+  // Copy-to-clipboard for the SKU line — brief icon swap to a checkmark
+  // (matches the "copied" affordance elsewhere: icon confirms, toast states
+  // it explicitly) rather than only one or the other.
+  const [skuCopied, setSkuCopied] = useState(false);
+  const skuCopyTimeoutRef = useRef(null);
+  useEffect(() => () => clearTimeout(skuCopyTimeoutRef.current), []);
+
+  const handleCopySku = useCallback(async (sku) => {
+    if (!sku) return;
+    try {
+      await navigator.clipboard.writeText(sku);
+      toast.success(TOAST.CATALOG.SKU_COPIED(sku));
+      setSkuCopied(true);
+      clearTimeout(skuCopyTimeoutRef.current);
+      skuCopyTimeoutRef.current = setTimeout(() => setSkuCopied(false), 1500);
+    } catch {
+      // Clipboard access can fail (permissions, insecure context) — say so
+      // rather than leaving the click looking like it did nothing.
+      toast.error(TOAST.CATALOG.COPY_FAILED);
+    }
+  }, []);
+
   // ALWAYS price live. This used to be conditional on item_rate === 0, on
   // the assumption that a non-zero item_rate was a real static price. It
   // isn't: measured on UAT 2026-08-05, stored rates understate the piece by
@@ -291,9 +313,22 @@ function ProductDetailScreen() {
 
             {/* SKU */}
             {product.item_code && (
-              <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                {product.item_code}
-              </p>
+              <div className="flex items-center gap-1.5">
+                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                  {product.item_code}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => handleCopySku(product.item_code)}
+                  aria-label={`Copy SKU ${product.item_code}`}
+                  title="Copy SKU"
+                  className="flex items-center justify-center w-5 h-5 shrink-0 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                >
+                  {skuCopied
+                    ? <Check size={12} className="text-status-in-stock" aria-hidden="true" />
+                    : <Copy size={12} aria-hidden="true" />}
+                </button>
+              </div>
             )}
 
             {/* Product name */}

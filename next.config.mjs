@@ -46,8 +46,15 @@ const nextConfig = {
             value: 'strict-origin-when-cross-origin',
           },
           {
+            // camera=(self) — the Barcode Scanner (BarcodeScannerModal) needs
+            // getUserMedia camera access. A blanket `camera=()` here overrides
+            // any per-site "Allow" the user grants in the browser — the
+            // Permissions-Policy header wins over Chrome's own site setting,
+            // which is why scanning failed with "Camera permission denied"
+            // even when Chrome's camera permission showed Allow. Microphone/
+            // geolocation stay locked down — nothing in the app uses them.
             key: 'Permissions-Policy',
-            value: 'camera=(), microphone=(), geolocation=()',
+            value: 'camera=(self), microphone=(), geolocation=()',
           },
         ],
       },

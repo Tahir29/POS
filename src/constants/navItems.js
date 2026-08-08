@@ -17,7 +17,6 @@ import {
   ArrowLeftRight,
   Bookmark,
   Settings,
-  BarChart2,
   Wrench,
 } from 'lucide-react';
 
@@ -34,7 +33,6 @@ export const NAV_ITEMS = [
   { label: 'Schemes',      href: '/schemes',      icon: BookOpen        },
   // { label: 'Transfers',    href: '/transfers',    icon: ArrowLeftRight  },
   // { label: 'Reservations', href: '/reservations', icon: Bookmark, comingSoon: true },
-  { label: 'Reports',      href: '/reports',      icon: BarChart2       },
 ];
 
 export const BOTTOM_ITEMS = [

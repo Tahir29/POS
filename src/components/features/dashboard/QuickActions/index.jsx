@@ -11,7 +11,6 @@ import {
   FileText,
   BookOpen,
   ClipboardCheck,
-  BarChart2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -95,14 +94,6 @@ const QUICK_ACTIONS = [
     description: 'Close today',
     icon:        ClipboardCheck,
     href:        '/daily-closing',
-    accent:      'bg-card text-foreground border border-border shadow-sm hover:shadow-md hover:border-accent/40 hover:text-accent',
-  },
-  {
-    id:          'reports',
-    label:       'Reports',
-    description: 'View reports',
-    icon:        BarChart2,
-    href:        '/reports',
     accent:      'bg-card text-foreground border border-border shadow-sm hover:shadow-md hover:border-accent/40 hover:text-accent',
   },
 ];

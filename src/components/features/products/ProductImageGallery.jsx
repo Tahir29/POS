@@ -190,88 +190,147 @@ export default function ProductImageGallery({
   const showImage  = !isVideo && current?.src && !imgErrors[safeIndex];
   const showVideo  = isVideo && !!current?.src;
 
+  // Shared per-thumbnail markup — rendered twice below (a horizontal strip
+  // below the image on mobile/desktop, a vertical rail beside it on tablet)
+  // so both layouts share identical behavior instead of drifting apart.
+  const renderThumb = (slide, i) => (
+    <button
+      key={slide.src}
+      role="tab"
+      aria-selected={i === safeIndex}
+      aria-label={slide.type === 'video' ? 'Product video' : `Image ${i + 1}`}
+      onClick={() => setCurrentIndex(i)}
+      className={`relative w-14 h-14 shrink-0 rounded-lg overflow-hidden border-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+        i === safeIndex ? 'border-accent' : 'border-transparent hover:border-border'
+      }`}
+    >
+      {slide.type === 'video' ? (
+        <>
+          {slide.poster ? (
+            <Image src={slide.poster} alt={slide.alt} fill sizes="56px" className="object-cover" />
+          ) : (
+            <div className="h-full w-full bg-stone-800" />
+          )}
+          <span className="absolute inset-0 flex items-center justify-center bg-black/25">
+            <Play size={16} className="fill-white text-white" aria-hidden="true" />
+          </span>
+        </>
+      ) : !imgErrors[i] ? (
+        <Image
+          src={slide.src}
+          alt={slide.alt}
+          fill
+          sizes="56px"
+          className="object-cover"
+          onError={() => handleImgError(i)}
+        />
+      ) : (
+        <div className="w-full h-full bg-muted" />
+      )}
+    </button>
+  );
+
   return (
     <div className="flex flex-col gap-3">
 
-      {/* Main slide */}
-      <div
-        className="relative w-full overflow-hidden rounded-2xl bg-muted"
-        style={{ aspectRatio: '1 / 1' }}
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
-        aria-label="Product media gallery"
-      >
-        {showVideo ? (
-          <video
-            key={current.src}
-            src={current.src}
-            poster={current.poster ?? undefined}
-            controls
-            playsInline
-            autoPlay
-            muted
-            loop
-            className="absolute inset-0 h-full w-full object-cover"
-          />
-        ) : showImage ? (
-          <button
-            type="button"
-            onClick={() => setZoomOpen(true)}
-            aria-label="Tap to zoom image"
-            className="absolute inset-0 h-full w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
-          >
-            <Image
-              key={current.src}
-              src={current.src}
-              alt={current.alt}
-              fill
-              sizes="(max-width: 768px) 100vw, 50vw"
-              className="object-cover"
-              priority
-              onError={() => handleImgError(safeIndex)}
-            />
-          </button>
-        ) : (
-          <NoImagePlaceholder />
-        )}
+      {/* Row wrapper — column on mobile and desktop (thumbnails go in the
+          strip below instead), row ONLY on tablet (md to just under xl,
+          this codebase's tablet band — see BottomSheet/CustomizeSheet for
+          the same convention) so the thumbnail rail sits to the LEFT of
+          the main image at that width and nowhere else. */}
+      <div className="flex flex-col md:flex-row md:items-stretch xl:flex-col gap-3">
 
-        {/* Stock status — floating chip, top-right. Solid frosted backing
-            (not the badge's own translucent tint) so it stays legible over
-            an arbitrary product photo, same technique as the nav/zoom
-            buttons below. */}
-        {stockStatus && (
-          <div className="absolute right-3 top-3 rounded-full bg-white/95 p-0.5 shadow-md ring-1 ring-black/5 backdrop-blur-sm">
-            <StockStatusBadge status={stockStatus} size="sm" />
+        {/* Tablet-only thumbnail rail */}
+        {slides.length > 1 && (
+          <div
+            role="tablist"
+            aria-label="Media thumbnails"
+            className="hidden md:flex xl:hidden flex-col gap-2 overflow-y-auto scrollbar-none shrink-0 px-0.5 py-0.5"
+          >
+            {slides.map((slide, i) => renderThumb(slide, i))}
           </div>
         )}
 
-        {/* Zoom button — image slides only. bg-white/text-stone chrome here
-            is intentional: it floats over arbitrary product-photo content,
-            not the app's own themed background, so it stays fixed-light
-            regardless of .dark. */}
-        {showImage && (
-          <button
-            type="button"
-            onClick={() => setZoomOpen(true)}
-            aria-label="Open image zoom"
-            className="absolute right-2 bottom-2 flex items-center justify-center w-9 h-9 rounded-full bg-white/90 backdrop-blur-sm shadow-sm text-stone-600 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors"
-          >
-            <ZoomIn size={16} />
-          </button>
-        )}
+        {/* Main slide */}
+        <div
+          className="relative w-full flex-1 min-w-0 overflow-hidden rounded-2xl bg-muted"
+          style={{ aspectRatio: '1 / 1' }}
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+          aria-label="Product media gallery"
+        >
+          {showVideo ? (
+            <video
+              key={current.src}
+              src={current.src}
+              poster={current.poster ?? undefined}
+              controls
+              playsInline
+              autoPlay
+              muted
+              loop
+              className="absolute inset-0 h-full w-full object-cover"
+            />
+          ) : showImage ? (
+            <button
+              type="button"
+              onClick={() => setZoomOpen(true)}
+              aria-label="Tap to zoom image"
+              className="absolute inset-0 h-full w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+            >
+              <Image
+                key={current.src}
+                src={current.src}
+                alt={current.alt}
+                fill
+                sizes="(max-width: 768px) 100vw, 50vw"
+                className="object-cover"
+                priority
+                onError={() => handleImgError(safeIndex)}
+              />
+            </button>
+          ) : (
+            <NoImagePlaceholder />
+          )}
 
-        {slides.length > 1 && (
-          <>
-            <button onClick={goPrev} aria-label="Previous"
-              className="absolute left-2 top-1/2 -translate-y-1/2 flex items-center justify-center w-9 h-9 rounded-full bg-white/80 backdrop-blur-sm shadow-sm text-stone-600 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors">
-              <ChevronLeft size={18} />
+          {/* Stock status — floating chip, top-right. Solid frosted backing
+              (not the badge's own translucent tint) so it stays legible over
+              an arbitrary product photo, same technique as the nav/zoom
+              buttons below. */}
+          {stockStatus && (
+            <div className="absolute right-3 top-3 rounded-full bg-white/95 p-0.5 shadow-md ring-1 ring-black/5 backdrop-blur-sm">
+              <StockStatusBadge status={stockStatus} size="sm" />
+            </div>
+          )}
+
+          {/* Zoom button — image slides only. bg-white/text-stone chrome here
+              is intentional: it floats over arbitrary product-photo content,
+              not the app's own themed background, so it stays fixed-light
+              regardless of .dark. */}
+          {showImage && (
+            <button
+              type="button"
+              onClick={() => setZoomOpen(true)}
+              aria-label="Open image zoom"
+              className="absolute right-2 bottom-2 flex items-center justify-center w-9 h-9 rounded-full bg-white/90 backdrop-blur-sm shadow-sm text-stone-600 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors"
+            >
+              <ZoomIn size={16} />
             </button>
-            <button onClick={goNext} aria-label="Next"
-              className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center justify-center w-9 h-9 rounded-full bg-white/80 backdrop-blur-sm shadow-sm text-stone-600 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors">
-              <ChevronRight size={18} />
-            </button>
-          </>
-        )}
+          )}
+
+          {slides.length > 1 && (
+            <>
+              <button onClick={goPrev} aria-label="Previous"
+                className="absolute left-2 top-1/2 -translate-y-1/2 flex items-center justify-center w-9 h-9 rounded-full bg-white/80 backdrop-blur-sm shadow-sm text-stone-600 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors">
+                <ChevronLeft size={18} />
+              </button>
+              <button onClick={goNext} aria-label="Next"
+                className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center justify-center w-9 h-9 rounded-full bg-white/80 backdrop-blur-sm shadow-sm text-stone-600 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors">
+                <ChevronRight size={18} />
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Zoom hint — image slides only */}
@@ -281,50 +340,17 @@ export default function ProductImageGallery({
         </p>
       )}
 
-      {/* Thumbnail strip — replaces dot indicators; video thumbnails show
-          their poster frame with a play-icon overlay */}
+      {/* Mobile + desktop thumbnail strip — replaces dot indicators; hidden
+          on tablet, where the rail above (left of the image) is shown
+          instead. Video thumbnails show their poster frame with a
+          play-icon overlay. */}
       {slides.length > 1 && (
         <div
           role="tablist"
           aria-label="Media thumbnails"
-          className="flex items-center gap-2 overflow-x-auto scrollbar-none px-0.5 py-0.5"
+          className="flex md:hidden xl:flex items-center gap-2 overflow-x-auto scrollbar-none px-0.5 py-0.5"
         >
-          {slides.map((slide, i) => (
-            <button
-              key={slide.src}
-              role="tab"
-              aria-selected={i === safeIndex}
-              aria-label={slide.type === 'video' ? 'Product video' : `Image ${i + 1}`}
-              onClick={() => setCurrentIndex(i)}
-              className={`relative w-14 h-14 shrink-0 rounded-lg overflow-hidden border-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-                i === safeIndex ? 'border-accent' : 'border-transparent hover:border-border'
-              }`}
-            >
-              {slide.type === 'video' ? (
-                <>
-                  {slide.poster ? (
-                    <Image src={slide.poster} alt={slide.alt} fill sizes="56px" className="object-cover" />
-                  ) : (
-                    <div className="h-full w-full bg-stone-800" />
-                  )}
-                  <span className="absolute inset-0 flex items-center justify-center bg-black/25">
-                    <Play size={16} className="fill-white text-white" aria-hidden="true" />
-                  </span>
-                </>
-              ) : !imgErrors[i] ? (
-                <Image
-                  src={slide.src}
-                  alt={slide.alt}
-                  fill
-                  sizes="56px"
-                  className="object-cover"
-                  onError={() => handleImgError(i)}
-                />
-              ) : (
-                <div className="w-full h-full bg-muted" />
-              )}
-            </button>
-          ))}
+          {slides.map((slide, i) => renderThumb(slide, i))}
         </div>
       )}
 

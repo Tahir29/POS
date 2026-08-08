@@ -249,23 +249,6 @@ export const QUERY_KEYS = {
     CANCELLATION:        (enrollmentId)   => ['schemes', 'cancellation', enrollmentId],
   },
 
-  // ── REPORTS ──────────────────────────────────────────────────────────────
-  REPORTS: {
-    POS_RECEIPTS:          (companyId, from, to) => ['reports', 'pos-receipts',           companyId, from, to],
-    POS_RECEIPTS_DETAILED: (companyId, from, to) => ['reports', 'pos-receipts-detailed',  companyId, from, to],
-    POS_TAX_DETAILS:       (companyId, from, to) => ['reports', 'pos-tax-details',        companyId, from, to],
-    RETURN_STATUS:         (companyId, from, to) => ['reports', 'return-status',          companyId, from, to],
-    EXCHANGE_STATUS:       (companyId, from, to) => ['reports', 'exchange-status',        companyId, from, to],
-    CREDIT_NOTE_STATUS:    (companyId, from, to) => ['reports', 'credit-note-status',     companyId, from, to],
-    BUYBACK_STATUS:        (companyId, from, to) => ['reports', 'buyback-status',         companyId, from, to],
-    URD_PURCHASE_STATUS:   (companyId, from, to) => ['reports', 'urd-purchase-status',    companyId, from, to],
-    SCHEME_HISTORY:        (companyId, from, to) => ['reports', 'scheme-history',         companyId, from, to],
-    INVOICE_REPORT:        (params)              => ['reports', 'invoice-report',          params],
-    SALES_WEEKLY:          (companyId)           => ['reports', 'sales-weekly',            companyId],
-    SALES_MONTHLY:         (companyId)           => ['reports', 'sales-monthly',           companyId],
-    SALES_QUARTERLY:       (companyId)           => ['reports', 'sales-quarterly',         companyId],
-  },
-
   // ── SHOPIFY ──────────────────────────────────────────────────────────────
   // external_product_id lives on StyleRow (Style/Retrieve), NOT ProductCatalogRow
   SHOPIFY: {

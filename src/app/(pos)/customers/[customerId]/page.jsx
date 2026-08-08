@@ -323,6 +323,11 @@ function SchemesTab({ customerId }) {
             {e.investedAmount != null && (
               <p className="text-xs text-muted-foreground mt-0.5">Paid: {fmt(e.investedAmount)}</p>
             )}
+            {e.nominee && (
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Nominee: {e.nominee}{e.nomineeAge != null ? ` (${e.nomineeAge} yrs)` : ''}
+              </p>
+            )}
           </div>
           <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${e.hasPendingInstallment ? 'bg-status-in-stock/10 text-status-in-stock' : 'bg-muted text-muted-foreground'}`}>
             {e.hasPendingInstallment ? 'Active' : 'Completed'}

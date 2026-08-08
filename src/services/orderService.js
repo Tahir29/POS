@@ -246,20 +246,6 @@ export async function generateInvoicePDF(transactionId) {
   return response.data;
 }
 
-/**
- * Day-wise sales list — used on the Reports/Dashboard page.
- * @param {{ from_date: string, to_date: string, company_id: number }} params
- * @returns {Promise<object>} OrnaVerse response
- */
-export async function getDayWiseSales({ from_date, to_date, company_id }) {
-  const response = await axiosInstance.post(API.INVOICES.DAY_WISE_SALES, {
-    from_date,
-    to_date,
-    company_id,
-  });
-  return response.data;
-}
-
 // ─── INVOICE HELPERS (checkout balances) ──────────────────────────────────────
 // Call these before rendering the payment section to show what the customer
 // has available to apply toward this invoice.

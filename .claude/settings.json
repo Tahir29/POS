@@ -1,7 +1,12 @@
 {
   "permissions": {
     "allow": [
-      "Bash(xargs -I{} echo {})"
+      "Bash(xargs -I{} echo {})",
+      "Bash(bash 'C:\\\\Users\\\\Admin\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-Admin-Desktop-Tahir-lucira-pos\\\\a8a738c2-5994-4ae7-b8ac-38b739a540d0\\\\scratchpad/check.sh' 'C:\\\\Users\\\\Admin\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-Admin-Desktop-Tahir-lucira-pos\\\\a8a738c2-5994-4ae7-b8ac-38b739a540d0\\\\scratchpad/appconfig_paths.txt' appConfig.js)",
+      "Bash(bash 'C:\\\\Users\\\\Admin\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-Admin-Desktop-Tahir-lucira-pos\\\\a8a738c2-5994-4ae7-b8ac-38b739a540d0\\\\scratchpad/check.sh' 'C:\\\\Users\\\\Admin\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-Admin-Desktop-Tahir-lucira-pos\\\\a8a738c2-5994-4ae7-b8ac-38b739a540d0\\\\scratchpad/querykeys_paths.txt' queryKeys.js)",
+      "Bash(bash 'C:\\\\Users\\\\Admin\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-Admin-Desktop-Tahir-lucira-pos\\\\a8a738c2-5994-4ae7-b8ac-38b739a540d0\\\\scratchpad/check.sh' 'C:\\\\Users\\\\Admin\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-Admin-Desktop-Tahir-lucira-pos\\\\a8a738c2-5994-4ae7-b8ac-38b739a540d0\\\\scratchpad/toast_paths.txt' toastMessages.js)",
+      "Bash(awk '-F\\\\t' '$1==0' 'C:\\\\Users\\\\Admin\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-Admin-Desktop-Tahir-lucira-pos\\\\a8a738c2-5994-4ae7-b8ac-38b739a540d0\\\\scratchpad/appconfig_results.txt')",
+      "Bash(awk '-F\\\\t' '$1==0' 'C:\\\\Users\\\\Admin\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-Admin-Desktop-Tahir-lucira-pos\\\\a8a738c2-5994-4ae7-b8ac-38b739a540d0\\\\scratchpad/querykeys_results.txt')"
     ]
   }
 }

@@ -219,6 +219,8 @@ const TOAST = {
     LOAD_FAILED:  'Failed to load products. Please try again.',
     SEARCH_ERROR: 'Search failed. Please try again.',
     FILTER_ERROR: 'Failed to load filter options.',
+    SKU_COPIED:   (sku) => `SKU ${sku} copied to clipboard.`,
+    COPY_FAILED:  'Could not copy SKU. Please try again.',
   },
 
   // ── GENERIC ───────────────────────────────────────────────────────────────
