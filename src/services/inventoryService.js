@@ -56,3 +56,37 @@ export const getStockPieces = ({ itemId, itemIds, companyId, take = 50 }) =>
     company_id: companyId,
     has_sku:    true,
   });
+
+/**
+ * Resolves a scanned barcode to the physical piece it was printed on, and
+ * the item/product it belongs to.
+ *
+ * The barcode printed on a physical piece encodes `sku` (this row's own
+ * per-piece identifier, e.g. "LJ082611756") — NOT `item_code` (the catalog/
+ * style code, e.g. "LJ-R00604-18YGLGD-10", shared across every piece of that
+ * style). The catalog barcode-scan handler previously matched only against
+ * `item_code`, which is why a real physical-piece scan could never resolve.
+ *
+ * REQUEST SHAPE CONFIRMED 2026-08-09 from a live capture of OrnaVerse's OWN
+ * UAT client performing this exact lookup: `{ sku, Take: 1 }` — nothing
+ * else. Two earlier guesses here (adding `company_id`/`has_sku`, then also
+ * an `EqualityFilter` wrapper) were both OVER-filtered relative to this —
+ * they returned zero rows for a sku confirmed to exist. Mirror the real
+ * shape exactly rather than adding anything back without live proof it
+ * belongs.
+ *
+ * NOT server-side scoped to a store, unlike getStockPieces above — skus are
+ * expected to be unique per physical piece, so this should rarely matter,
+ * but callers that care should check the returned row's own `company_id`
+ * rather than relying on a request-side filter that isn't part of the
+ * confirmed shape.
+ *
+ * @param {{ sku: string }} params
+ * @returns {Promise<import('axios').AxiosResponse>} { Entities: StockJournalRow[] }
+ */
+export const getStockPieceBySku = ({ sku }) =>
+  axiosInstance.post(API.INVENTORY.STOCK_JOURNAL_LIST, {
+    Skip: 0,
+    Take: 1,
+    sku,
+  });

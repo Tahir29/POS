@@ -30,6 +30,7 @@ import {
 
 import { clearCart } from '@/store/slices/cartSlice';
 import { clearAllCookies } from '@/lib/cookies';
+import queryClient from '@/lib/queryClient';
 
 import TOAST   from '@/constants/toastMessages';
 import tracker from '@/lib/analytics/tracker';
@@ -144,6 +145,17 @@ export function useAuth() {
     // the dev-only "clear site data" button did this, so a stale cookie
     // could persist across normal logins indefinitely.
     clearAllCookies();
+    // The three dispatches above wipe Redux (and its persisted localStorage
+    // mirror), but TanStack Query's cache is a separate, module-level
+    // singleton (see lib/queryClient.js) that nothing was ever clearing on
+    // logout. On a shared terminal, a different agent logging in right after
+    // — without a full page reload — would inherit every previously-cached
+    // query still sitting in memory: schemes list, payment modes, sales
+    // persons, financial year/document config, catalog prices, etc. Several
+    // of those aren't even keyed by store id, so they wouldn't self-correct
+    // just because the new agent picks a different store. Clearing here
+    // guarantees the next agent starts from a genuinely empty cache.
+    queryClient.clear();
     toast.info(TOAST.AUTH.LOGOUT_SUCCESS);
     router.replace('/login');
   }, [dispatch, router]);

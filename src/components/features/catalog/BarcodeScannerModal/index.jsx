@@ -34,7 +34,19 @@ export default function BarcodeScannerModal({ isOpen, onDetected, onClose }) {
   const [cameraIndex,   setCameraIndex]   = useState(0);    // which camera is active
   const [error,         setError]         = useState(null); // permission or device error
   const [scanning,      setScanning]      = useState(false);
-  const [lastScanned,   setLastScanned]   = useState(null); // debounce duplicate scans
+  // Debounce bookkeeping only — never rendered, so a ref, not state. It used
+  // to be useState, with onDetected(code) called from INSIDE the setter's
+  // updater function. That's what triggered "Cannot update a component
+  // (ProductSearchBar) while rendering a different component
+  // (BarcodeScannerModal)" — onDetected calls ProductSearchBar's setState,
+  // and doing that from inside this component's own state-updater function
+  // runs it during this component's render, which is exactly what the
+  // warning flags. React can then drop/misorder the resulting updates, which
+  // is why a scan could register here but the product lookup at the end of
+  // the onDetected chain wouldn't reliably fire. A ref removes the updater
+  // function (and the bug) entirely — mutating it is a plain side effect
+  // inside an ordinary callback, not a computation React is mid-render on.
+  const lastScannedRef = useRef(null);
 
   // ── Stop any active stream ─────────────────────────────────────────────────
   const stopStream = useCallback(() => {
@@ -61,11 +73,13 @@ export default function BarcodeScannerModal({ isOpen, onDetected, onClose }) {
           if (result) {
             const code = result.getText();
             // Debounce — ignore same code within 2s to prevent double-fire
-            setLastScanned((prev) => {
-              if (prev?.code === code && Date.now() - prev.ts < 2000) return prev;
+            const prev = lastScannedRef.current;
+            if (prev?.code === code && Date.now() - prev.ts < 2000) {
+              // duplicate within the debounce window — ignore
+            } else {
+              lastScannedRef.current = { code, ts: Date.now() };
               onDetected(code);
-              return { code, ts: Date.now() };
-            });
+            }
           }
           // NotFoundException fires constantly when no barcode in frame — ignore silently
           if (err && err.name !== 'NotFoundException') {
@@ -142,7 +156,7 @@ export default function BarcodeScannerModal({ isOpen, onDetected, onClose }) {
   const handleClose = useCallback(() => {
     stopStream();
     setError(null);
-    setLastScanned(null);
+    lastScannedRef.current = null;
     onClose();
   }, [stopStream, onClose]);
 

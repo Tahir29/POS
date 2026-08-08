@@ -9,6 +9,7 @@ import {
   selectActiveStoreCode,
   selectAvailableStores,
 } from '@/store/slices/storeSlice';
+import queryClient from '@/lib/queryClient';
 
 /**
  * useActiveStore — provides active store context and store switching action.
@@ -31,11 +32,18 @@ export function useActiveStore() {
 
   /**
    * Switches the active store context.
-   * TanStack Query cache invalidation for store-scoped queries
-   * is handled by the component initiating the switch.
+   *
+   * Clears the TanStack Query cache here rather than leaving it to the
+   * caller — the previous contract ("handled by the component initiating
+   * the switch") was never actually honored by StoreSelectionGrid, the only
+   * real caller, so every store-scoped query not keyed by store id (schemes
+   * list, payment modes, sales persons, financial year/document config, ...)
+   * kept serving the PREVIOUS store's cached data after a switch. Doing it
+   * here means it can't be forgotten by a future caller either.
    * @param {{ company_id, company_name, store_code }} store
    */
   const switchStore = useCallback((store) => {
+    queryClient.clear();
     dispatch(
       setActiveStore({
         storeId: store.company_id,

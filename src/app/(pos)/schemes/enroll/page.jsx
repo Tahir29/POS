@@ -4,10 +4,12 @@
 // Enroll the currently-attached customer into a jewellery savings scheme.
 //
 // Requires a customer to be attached to the session (header control).
-// Staff picks a scheme, enters monthly amount and tenure, optionally
-// adds a nominee, then submits.
+// Staff picks a scheme — amount/tenure prefill from the scheme's own
+// defaults (still editable) and a live payment-plan preview renders below,
+// mirroring OrnaVerse's own Scheme Enrollment screen — optionally adds a
+// nominee, then submits.
 
-import { Suspense } from 'react';
+import { Suspense, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSelector } from 'react-redux';
 import { useForm, Controller } from 'react-hook-form';
@@ -17,6 +19,8 @@ import { ChevronLeft } from 'lucide-react';
 
 import { useSchemes }        from '@/hooks/schemes/useSchemes';
 import { useEnrollCustomer } from '@/hooks/schemes/useEnrollCustomer';
+import { useOrderHeaderConfig } from '@/hooks/checkout/useOrderHeaderConfig';
+import { buildSchemeMonthlyDetails } from '@/services/schemeService';
 import { selectActiveStoreId }   from '@/store/slices/storeSlice';
 import {
   selectCartCustomerId,
@@ -57,11 +61,12 @@ function EnrollScreen() {
 
   const { schemes, isLoading: schemesLoading } = useSchemes();
   const enroll = useEnrollCustomer();
+  const headerConfig = useOrderHeaderConfig(APP_CONFIG.DOCUMENT_TYPES.SCHEME_ENROLLMENT);
 
   const today = todayDateString();
 
   const {
-    register, handleSubmit, control, watch,
+    register, handleSubmit, control, watch, setValue,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(enrollSchema),
@@ -76,8 +81,33 @@ function EnrollScreen() {
     },
   });
 
-  const watchedSchemeId = watch('scheme_id');
+  const watchedSchemeId    = watch('scheme_id');
+  const watchedAmount      = watch('scheme_amount');
+  const watchedTenure      = watch('tenure');
+  const watchedDocumentDate = watch('document_date');
   const selectedScheme  = schemes.find((s) => s.scheme_id === Number(watchedSchemeId));
+
+  // Prefill amount/tenure from the scheme's own defaults — mirrors OrnaVerse's
+  // own Scheme Enrollment screen, which loads these the moment a scheme is
+  // picked instead of leaving staff to type in numbers the scheme already
+  // defines (SchemesRow.scheme_amount / .tenure, confirmed live — see
+  // Lucira_Scheme_Module_Documentation.md §2). Still editable after prefill.
+  useEffect(() => {
+    if (!selectedScheme) return;
+    if (selectedScheme.scheme_amount != null) setValue('scheme_amount', selectedScheme.scheme_amount);
+    if (selectedScheme.tenure != null)        setValue('tenure', selectedScheme.tenure);
+  }, [selectedScheme, setValue]);
+
+  // Live payment-plan preview — same month-by-month schedule that gets sent
+  // as scheme_monthly_details[] on submit, so staff see it before committing
+  // instead of only after (mirrors OrnaVerse's own live preview once amount/
+  // tenure/date are filled in).
+  const monthlyPreview = useMemo(() => {
+    const amount = Number(watchedAmount);
+    const tenure = Number(watchedTenure);
+    if (!watchedDocumentDate || !amount || !tenure || tenure < 1) return [];
+    return buildSchemeMonthlyDetails(watchedDocumentDate, amount, tenure);
+  }, [watchedDocumentDate, watchedAmount, watchedTenure]);
 
   const onSubmit = async (data) => {
     if (!customerId || !selectedScheme) return;
@@ -97,6 +127,18 @@ function EnrollScreen() {
       // Total principal committed over the full tenure — monthly amount × months.
       total_amount:  schemeAmount * tenure,
       document_date: data.document_date,
+      // scheme_status: 1 (active) — confirmed sent explicitly on Create, not
+      // left for the server to default (Lucira_Scheme_Module_Documentation.md §4).
+      scheme_status: 1,
+      // scheme_monthly_details[] — confirmed the client MUST build and send
+      // this (was previously guessed to be server-generated and omitted —
+      // that guess was wrong, see buildSchemeMonthlyDetails() header comment).
+      scheme_monthly_details: buildSchemeMonthlyDetails(data.document_date, schemeAmount, tenure),
+      // Document header fields — confirmed present on the live Create capture.
+      document_id:       APP_CONFIG.DOCUMENT_TYPES.SCHEME_ENROLLMENT,
+      financial_year_id: headerConfig.financialYearId ?? undefined,
+      currency_id:       APP_CONFIG.CURRENCY.INR_ID,
+      exchange_rate:     1,
       // Confirmed required on SchemeEnrollmentRow (v1.json) — picked from a
       // store-scoped list (see useSalesPersonOptions.js), mirroring the
       // vendor's own Scheme Enrollment screen.
@@ -109,16 +151,18 @@ function EnrollScreen() {
       bonus_type:    selectedScheme.bonus_type,
       bonus_value:   selectedScheme.bonus_value,
       use_rules:     selectedScheme.use_rules,
+      // scheme_bonus_value / scheme_code / max_installment_amount — confirmed
+      // present on the live Create capture; scheme_bonus_value is the base
+      // bonus's cash value (one bonus-rated instalment), scheme_code/
+      // max_installment_amount are copied straight from the scheme master.
+      scheme_bonus_value:     schemeAmount * (selectedScheme.bonus_value ?? 0),
+      scheme_code:            selectedScheme.scheme_code,
+      max_installment_amount: selectedScheme.max_installment_amount,
       ...(data.nominee    ? { nominee:     data.nominee }               : {}),
       ...(data.nominee_age ? { nominee_age: Number(data.nominee_age) } : {}),
       // NOT sent — no reliable source yet, will not guess:
-      //   scheme_status       — enum 0-3, meaning undocumented anywhere (v1.json gives no labels)
       //   scheme_unique_code  — generation format unknown
-      //   document_id         — meaning unclear ("document reference id"); spec shows a
-      //                         default of 125 but that looks like sample data, not a rule
       //   email, party_code   — not captured anywhere in the customer session today
-      //   scheme_monthly_details[] — likely server-generated from scheme_amount/tenure/
-      //                         document_date; omit unless the next 400 says otherwise
     });
 
     router.push('/schemes');
@@ -231,6 +275,34 @@ function EnrollScreen() {
           <Input id="enroll_date" type="date" {...register('document_date')} className="h-11" max={today} />
           {errors.document_date && <p className="text-xs text-destructive">{errors.document_date.message}</p>}
         </div>
+
+        {/* Payment plan preview — same schedule sent as scheme_monthly_details[] */}
+        {monthlyPreview.length > 0 && (
+          <div className="rounded-xl border border-border bg-muted p-4 flex flex-col gap-2">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              Payment Plan ({monthlyPreview.length} installments)
+            </p>
+            <div className="flex flex-col divide-y divide-border">
+              {monthlyPreview.map((row, idx) => (
+                <div key={idx} className="flex items-center justify-between py-1.5 text-sm">
+                  <span className="text-foreground/80">
+                    Month {idx + 1} · {new Date(row.due_date).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}
+                  </span>
+                  <span className="font-medium text-foreground">
+                    {APP_CONFIG.CURRENCY.INR_SYMBOL}{row.month_amount.toLocaleString('en-IN')}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <div className="flex items-center justify-between pt-2 border-t border-border text-sm font-semibold text-foreground">
+              <span>Total</span>
+              <span>
+                {APP_CONFIG.CURRENCY.INR_SYMBOL}
+                {monthlyPreview.reduce((sum, r) => sum + r.month_amount, 0).toLocaleString('en-IN')}
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* Sales person */}
         <div className="flex flex-col gap-1.5">

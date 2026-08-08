@@ -8,6 +8,9 @@
 //   document_date, scheme_amount, tenure
 //   invested_amount, benifit_amount (⚠️ API typo — preserve exactly)
 //   total_payable, scheme_monthly_details[]
+//   nominee, nominee_age — confirmed real fields sent on SchemeEnrollment/Create
+//   (Lucira_Scheme_Module_Documentation.md §4); not yet independently confirmed
+//   coming back on this List response specifically — normalized defensively below.
 
 import { useQuery } from '@tanstack/react-query';
 import { getSchemeEnrollments } from '@/services/schemeService';
@@ -51,6 +54,8 @@ export function normalizeEnrollment(entity) {
     customerId:      get('party_id'),
     customerName:    get('party_name'),
     customerMobile:  get('mobile'),
+    nominee:         get('nominee'),
+    nomineeAge:      get('nominee_age'),
     raw: entity,
   };
 }

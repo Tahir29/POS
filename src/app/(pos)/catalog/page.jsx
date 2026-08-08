@@ -14,7 +14,7 @@ import { useSkuSearch }          from '@/hooks/catalog/useSkuSearch';
 import { useCategoryNameSearch } from '@/hooks/catalog/useCategoryNameSearch';
 import { useCategories }         from '@/hooks/catalog/useCategoryFilters';
 import { useLiveCatalogPrices }  from '@/hooks/catalog/useLiveCatalogPrices';
-import { searchBySku }           from '@/services/catalogService';
+import { getStockPieceBySku }    from '@/services/inventoryService';
 
 import CategoryFilter        from '@/components/features/catalog/CategoryFilter';
 import ProductGrid           from '@/components/features/catalog/ProductGrid';
@@ -336,39 +336,53 @@ function CatalogScreen() {
   );
 
   // ── Barcode handler ───────────────────────────────────────────────────────
+  // ONLY calls the sku lookup below — no fallback to item_code matching or
+  // to actions.setSearch() anymore. That fallback used to run on every scan
+  // miss, which sets the page's search query and flips isSearchMode on,
+  // which in turn latches hasSearched (see the "Search mode" block above)
+  // and kicks off useAllCatalog's full-catalog background index — a
+  // multi-thousand-row fetch never meant to be triggered by a single failed
+  // barcode scan. Confirmed 2026-08-09: that's exactly why a scan miss
+  // looked like "0 results, indexing full catalog" instead of a clean
+  // "not found". A scan is a targeted, instant lookup; it should say found
+  // or not found and stop there, not silently start an unrelated fetch.
+  //
+  // Request shape confirmed live 2026-08-09 against OrnaVerse's own UAT
+  // client: `{ sku, Take: 1 }`, no company_id — see getStockPieceBySku's
+  // header for why two earlier, more-filtered guesses here were wrong.
+  // Since the request isn't store-scoped server-side, a match is checked
+  // against the active store client-side before being accepted.
   const handleBarcodeDetected = useCallback(async (code) => {
     const trimmed = code.trim();
     if (!trimmed) return;
 
-    // Full catalog already loaded — exact match against it is instant.
-    if (allReady) {
-      const match = allProducts.find(
-        (p) => p.item_code?.toLowerCase() === trimmed.toLowerCase(),
-      );
-      if (match?.item_id) {
-        tracker.track(EVENTS.BARCODE_SCANNED, { code: trimmed, itemId: match.item_id });
-        router.push(`/products/${match.item_id}`);
+    try {
+      const skuResponse = await getStockPieceBySku({ sku: trimmed });
+      const skuMatch = skuResponse.data?.Entities?.[0];
+
+      if (skuMatch?.item_id && (skuMatch.company_id == null || skuMatch.company_id === effectiveStoreId)) {
+        tracker.track(EVENTS.BARCODE_SCANNED, { code: trimmed, itemId: skuMatch.item_id });
+        router.push(`/products/${skuMatch.item_id}`);
         return;
       }
-      tracker.track(EVENTS.BARCODE_SCAN_FAILED, { code: trimmed });
-      actions.setSearch(trimmed);
-      return;
-    }
 
-    // Full catalog still loading — fall back to a live SKU lookup so
-    // barcode scans work even before the background sync finishes.
-    const candidates = await searchBySku({ query: trimmed, storeId: effectiveStoreId });
-    const match = candidates.find(
-      (p) => p.item_code?.toLowerCase() === trimmed.toLowerCase(),
-    );
-    if (match?.item_id) {
-      tracker.track(EVENTS.BARCODE_SCANNED, { code: trimmed, itemId: match.item_id });
-      router.push(`/products/${match.item_id}`);
-    } else {
+      if (skuMatch?.item_id) {
+        // Matched a real piece, just not one this store holds — skus are
+        // expected to be unique per piece, so this should be rare; worth
+        // knowing about if it isn't.
+        console.warn('[BarcodeScanner] sku matched a piece at a different store', {
+          sku: trimmed, matchedCompanyId: skuMatch.company_id, activeStoreId: effectiveStoreId,
+        });
+      }
+
       tracker.track(EVENTS.BARCODE_SCAN_FAILED, { code: trimmed });
-      actions.setSearch(trimmed);
+      toast.error(`No product found for scanned code "${trimmed}".`);
+    } catch (err) {
+      console.error('[BarcodeScanner] sku lookup request failed', { sku: trimmed, err });
+      tracker.track(EVENTS.BARCODE_SCAN_FAILED, { code: trimmed });
+      toast.error('Could not look up the scanned barcode. Please try again.');
     }
-  }, [allReady, allProducts, effectiveStoreId, router, actions]);
+  }, [effectiveStoreId, router]);
 
   // ── Callbacks ─────────────────────────────────────────────────────────────
   const handleSearch = useCallback((q) => {
