@@ -90,3 +90,35 @@ export const getStockPieceBySku = ({ sku }) =>
     Take: 1,
     sku,
   });
+
+/**
+ * Records an "item enquiry" — logs that this physical piece was looked up
+ * (e.g. via barcode scan). CONFIRMED 2026-08-10 via a live network capture
+ * on lucira.uat.ornaverse.in/pos: their own client fires this immediately
+ * after StockJournal/List resolves the scanned sku, built entirely from
+ * fields already present on that same row (item_id, item_attribute_id,
+ * company_id, item_line_no, sku, image) plus a fresh timestamp in
+ * `Date.toUTCString()` format (e.g. "Mon, 10 Aug 2026 10:47:41 GMT").
+ *
+ * This is a logging/analytics side effect on OrnaVerse's side (presumably
+ * feeding an "items enquired about" report), NOT part of the actual scan-
+ * to-product resolution — StockJournal/List alone already answers that.
+ * Callers should fire this best-effort and never let its failure block or
+ * fail the scan itself.
+ *
+ * @param {{ itemId: number, itemAttributeId: number, companyId: number,
+ *   itemLineNo: number, sku: string, image?: string }} params
+ * @returns {Promise<import('axios').AxiosResponse>}
+ */
+export const createItemEnquiry = ({ itemId, itemAttributeId, companyId, itemLineNo, sku, image }) =>
+  axiosInstance.post(API.INVENTORY.ITEM_ENQUIRIES_CREATE, {
+    Entity: {
+      item_id:           itemId,
+      item_attribute_id: itemAttributeId,
+      date:              new Date().toUTCString(),
+      company_id:        companyId,
+      item_line_no:      itemLineNo,
+      sku,
+      image:             image ?? '',
+    },
+  });

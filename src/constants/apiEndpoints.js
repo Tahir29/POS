@@ -115,6 +115,11 @@ const API = {
   INVENTORY: {
     GET_STOCK:          'Services/Inventory/GetStock',
     STOCK_JOURNAL_LIST: 'Services/Inventory/StockJournal/List',
+    // Path is Services/POS/... (not Inventory/...) despite living in this
+    // group — grouped here for cohesion with STOCK_JOURNAL_LIST since it's
+    // fired immediately after it in the barcode-scan flow, confirmed live
+    // 2026-08-10 off lucira.uat.ornaverse.in/pos's own network capture.
+    ITEM_ENQUIRIES_CREATE: 'Services/POS/ItemEnquiries/Create',
   },
 
   // ─────────────────────────────────────────────────────────────────────────
