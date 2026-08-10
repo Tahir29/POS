@@ -14,7 +14,7 @@ import { useSkuSearch }          from '@/hooks/catalog/useSkuSearch';
 import { useCategoryNameSearch } from '@/hooks/catalog/useCategoryNameSearch';
 import { useCategories }         from '@/hooks/catalog/useCategoryFilters';
 import { useLiveCatalogPrices }  from '@/hooks/catalog/useLiveCatalogPrices';
-import { getStockPieceBySku }    from '@/services/inventoryService';
+import { getStockPieceBySku, createItemEnquiry } from '@/services/inventoryService';
 
 import CategoryFilter        from '@/components/features/catalog/CategoryFilter';
 import ProductGrid           from '@/components/features/catalog/ProductGrid';
@@ -362,6 +362,23 @@ function CatalogScreen() {
 
       if (skuMatch?.item_id && (skuMatch.company_id == null || skuMatch.company_id === effectiveStoreId)) {
         tracker.track(EVENTS.BARCODE_SCANNED, { code: trimmed, itemId: skuMatch.item_id });
+
+        // Mirrors OrnaVerse's own POS — fired right after StockJournal/List
+        // resolves the sku, confirmed live 2026-08-10. Best-effort and
+        // fire-and-forget: this is a logging side effect on their end, not
+        // part of resolving the scan, so a failure here must never block or
+        // fail the actual navigation below.
+        createItemEnquiry({
+          itemId:          skuMatch.item_id,
+          itemAttributeId: skuMatch.item_attribute_id,
+          companyId:       skuMatch.company_id ?? effectiveStoreId,
+          itemLineNo:      skuMatch.item_line_no,
+          sku:             skuMatch.sku,
+          image:           skuMatch.image,
+        }).catch((err) => {
+          console.warn('[BarcodeScanner] item enquiry log failed (non-blocking)', { sku: trimmed, err });
+        });
+
         router.push(`/products/${skuMatch.item_id}`);
         return;
       }
