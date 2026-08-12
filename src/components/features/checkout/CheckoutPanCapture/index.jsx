@@ -54,7 +54,7 @@ export default function CheckoutPanCapture({ totalAmount, onPanResolved }) {
 
   if (panOnFile) {
     return (
-      <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
+      <section className="rounded-xl border border-border bg-card p-5">
         <h2 className="text-sm font-bold text-foreground mb-2">
           PAN Details <span className="text-destructive">*</span>
         </h2>
@@ -78,7 +78,7 @@ export default function CheckoutPanCapture({ totalAmount, onPanResolved }) {
   };
 
   return (
-    <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
+    <section className="rounded-xl border border-border bg-card p-5">
       <h2 className="text-sm font-bold text-foreground mb-1">
         PAN Details <span className="text-destructive">*</span>
       </h2>

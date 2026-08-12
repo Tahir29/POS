@@ -55,7 +55,7 @@ function OfferTicket({ promo, isApplied, isApplying, onSelect }) {
       className="
         group relative flex w-full items-stretch overflow-hidden rounded-2xl border border-border
         bg-card text-left shadow-sm transition-all duration-standard ease-premium
-        hover:-translate-y-0.5 hover:shadow-md hover:border-accent/40
+        hover:-translate-y-0.5 hover:shadow-hover hover:border-accent/40
         disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:hover:shadow-sm
       "
     >

@@ -5,6 +5,7 @@
 // Uses the shared BottomSheet primitive (bottom sheet on mobile,
 // right side sheet on tablet).
 
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import BottomSheet from '@/components/shared/BottomSheet';
 import CartItemRow from '@/components/features/cart/CartItemRow';
 import CartEmptyState from '@/components/features/cart/CartEmptyState';
@@ -13,6 +14,7 @@ import CartCustomerTag from '@/components/features/cart/CartCustomerTag';
 import AppliedPromoTag from '@/components/shared/AppliedPromoTag';
 import ProceedToCheckoutButton from '@/components/features/cart/ProceedToCheckoutButton';
 import { useCart } from '@/hooks/cart/useCart';
+import { EASE_PREMIUM, DURATION } from '@/lib/motion';
 
 /**
  * @param {{
@@ -32,6 +34,7 @@ export default function CartDrawer({ isOpen, onClose }) {
     detachCustomer,
     removePromo,
   } = useCart();
+  const reduceMotion = useReducedMotion();
 
   return (
     <BottomSheet
@@ -68,16 +71,31 @@ export default function CartDrawer({ isOpen, onClose }) {
             ))}
           </div>
 
-          {/* Items */}
+          {/* Items — enter/exit + reorder motion (Step C Priority 3). Each
+              row's own key already exists (itemId+sizeId+styleId); wrapping
+              it in a layout-animated motion.div is what actually gives add/
+              remove a transition instead of an instant reflow. Reduced-
+              motion collapses every transition to 0 rather than skipping
+              the wrapper entirely, so layout reflow still happens correctly. */}
           <div className="flex flex-col">
-            {items.map((item) => (
-              <CartItemRow
-                key={`${item.itemId}-${item.sizeId}-${item.styleId}`}
-                item={item}
-                onUpdateQuantity={updateQuantity}
-                onRemove={removeItem}
-              />
-            ))}
+            <AnimatePresence initial={false}>
+              {items.map((item) => (
+                <motion.div
+                  key={`${item.itemId}-${item.sizeId}-${item.styleId}`}
+                  layout={!reduceMotion}
+                  initial={reduceMotion ? false : { opacity: 0, scale: 0.96 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={reduceMotion ? undefined : { opacity: 0, height: 0 }}
+                  transition={{ duration: reduceMotion ? 0 : DURATION.standard, ease: EASE_PREMIUM }}
+                >
+                  <CartItemRow
+                    item={item}
+                    onUpdateQuantity={updateQuantity}
+                    onRemove={removeItem}
+                  />
+                </motion.div>
+              ))}
+            </AnimatePresence>
           </div>
         </div>
       )}

@@ -30,7 +30,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 export default function KPICard({ label, value, trend, sparkline, icon: Icon, isLoading, accent = false }) {
   if (isLoading) {
     return (
-      <div className="rounded-xl border border-border bg-card shadow-sm px-5 py-4">
+      <div className="rounded-xl border border-border bg-card px-5 py-4">
         <Skeleton className="h-3 w-24 mb-3" />
         <Skeleton className="h-7 w-20 mb-4" />
         <Skeleton className="h-8 w-full" />
@@ -53,7 +53,7 @@ export default function KPICard({ label, value, trend, sparkline, icon: Icon, is
   return (
     <div
       className={cn(
-        'flex items-start justify-between gap-3 rounded-xl border bg-card shadow-sm px-5 py-4 transition-shadow duration-standard ease-premium hover:shadow-md',
+        'flex items-start justify-between gap-3 rounded-xl border bg-card px-5 py-4',
         accent ? 'border-accent/30 bg-accent/5' : 'border-border'
       )}
     >

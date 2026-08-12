@@ -94,31 +94,31 @@ function HistoryTab() {
 
           <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
             <span className="text-muted-foreground">Opening</span>
-            <span className="text-right font-medium text-foreground/80">{formatCurrency(c.openingBalance)}</span>
+            <span className="text-right font-medium text-foreground/80 tabular-nums">{formatCurrency(c.openingBalance)}</span>
 
             <span className="text-muted-foreground">Cash Sales</span>
-            <span className="text-right font-medium text-foreground/80">{formatCurrency(c.cashSales)}</span>
+            <span className="text-right font-medium text-foreground/80 tabular-nums">{formatCurrency(c.cashSales)}</span>
 
             <span className="text-muted-foreground">Card Sales</span>
-            <span className="text-right font-medium text-foreground/80">{formatCurrency(c.cardSales)}</span>
+            <span className="text-right font-medium text-foreground/80 tabular-nums">{formatCurrency(c.cardSales)}</span>
 
             <span className="text-muted-foreground">UPI Sales</span>
-            <span className="text-right font-medium text-foreground/80">{formatCurrency(c.upiSales)}</span>
+            <span className="text-right font-medium text-foreground/80 tabular-nums">{formatCurrency(c.upiSales)}</span>
 
             {c.otherSales > 0 && (
               <>
                 <span className="text-muted-foreground">Other</span>
-                <span className="text-right font-medium text-foreground/80">{formatCurrency(c.otherSales)}</span>
+                <span className="text-right font-medium text-foreground/80 tabular-nums">{formatCurrency(c.otherSales)}</span>
               </>
             )}
 
             <span className="text-muted-foreground border-t border-border pt-1 mt-1">Total Sales</span>
-            <span className="text-right font-bold text-foreground border-t border-border pt-1 mt-1">
+            <span className="text-right font-bold text-foreground border-t border-border pt-1 mt-1 tabular-nums">
               {formatCurrency(c.totalSales)}
             </span>
 
             <span className="text-muted-foreground">Closing Balance</span>
-            <span className="text-right font-medium text-foreground/80">{formatCurrency(c.closingBalance)}</span>
+            <span className="text-right font-medium text-foreground/80 tabular-nums">{formatCurrency(c.closingBalance)}</span>
           </div>
 
           {c.notes && (
@@ -235,7 +235,7 @@ function NewClosingTab() {
       <Field id="dc_opening"  label="Opening Cash Balance" name="opening_balance" required />
 
       {/* Sales by mode */}
-      <div className="rounded-xl border border-border bg-muted shadow-sm p-4 flex flex-col gap-4">
+      <div className="rounded-xl border border-border bg-muted p-4 flex flex-col gap-4">
         <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Sales by Payment Mode</p>
         <Field id="dc_cash"  label="Cash Sales"  name="cash_sales"  required />
         <Field id="dc_card"  label="Card Sales"  name="card_sales"  required />
@@ -244,14 +244,14 @@ function NewClosingTab() {
       </div>
 
       {/* Live summary */}
-      <div className="rounded-xl border border-border bg-card shadow-sm px-4 py-3 flex flex-col gap-2 text-sm">
+      <div className="rounded-xl border border-border bg-card px-4 py-3 flex flex-col gap-2 text-sm">
         <div className="flex justify-between">
           <span className="text-muted-foreground">Total Sales</span>
-          <span className="font-semibold text-foreground">{formatCurrency(totalSales)}</span>
+          <span className="font-semibold text-foreground tabular-nums">{formatCurrency(totalSales)}</span>
         </div>
         <div className="flex justify-between border-t border-border pt-2">
           <span className="text-muted-foreground">Closing Cash Balance</span>
-          <span className="font-bold text-foreground">{formatCurrency(closingBalance)}</span>
+          <span className="font-bold text-foreground tabular-nums">{formatCurrency(closingBalance)}</span>
         </div>
         <p className="text-xs text-muted-foreground">Closing balance = opening balance + cash sales</p>
       </div>

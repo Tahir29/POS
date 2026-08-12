@@ -23,7 +23,7 @@ export default function CheckoutCustomerSummary() {
     : null;
 
   return (
-    <section className="flex flex-col gap-3 rounded-xl border border-border bg-card p-5 shadow-sm">
+    <section className="flex flex-col gap-3 rounded-xl border border-border bg-card p-5">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-bold text-foreground">Customer</h2>
         <Button

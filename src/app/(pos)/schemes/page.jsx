@@ -42,13 +42,15 @@ import { formatCurrency, formatDate } from '@/lib/schemeFormat';
 // ── Helpers ───────────────────────────────────────────────────
 
 // Enrollment lifecycle status (not a payment-settlement concept, so this
-// doesn't route through PaymentStatusBadge). completed/matured keep a raw
-// blue — no existing semantic token maps to an "info" state.
+// doesn't route through PaymentStatusBadge). completed/matured now route
+// through --status-info (Visual Language pass, 2026-08-12) — previously a
+// raw Tailwind blue-50/blue-700 literal, the one hardcoded color found in
+// this component tree.
 const STATUS_STYLES = {
   active:    'bg-status-in-stock/10 text-status-in-stock',
-  completed: 'bg-blue-50    text-blue-700',
+  completed: 'bg-status-info/10 text-status-info',
   inactive:  'bg-muted  text-muted-foreground',
-  matured:   'bg-blue-50    text-blue-700',
+  matured:   'bg-status-info/10 text-status-info',
   default:   'bg-muted  text-muted-foreground',
 };
 
@@ -368,24 +370,24 @@ function EnrollmentsTab() {
 
             <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
               <span className="text-muted-foreground">Monthly</span>
-              <span className="text-right font-medium text-foreground/80">
+              <span className="text-right font-medium text-foreground/80 tabular-nums">
                 {formatCurrency(enrollment.schemeAmount)}
               </span>
 
               <span className="text-muted-foreground">Tenure</span>
-              <span className="text-right font-medium text-foreground/80">
+              <span className="text-right font-medium text-foreground/80 tabular-nums">
                 {enrollment.tenure} months
               </span>
 
               <span className="text-muted-foreground">Invested</span>
-              <span className="text-right font-medium text-foreground/80">
+              <span className="text-right font-medium text-foreground/80 tabular-nums">
                 {formatCurrency(enrollment.investedAmount)}
               </span>
 
               {enrollment.benefitAmount > 0 && (
                 <>
                   <span className="text-muted-foreground">Benefit</span>
-                  <span className="text-right font-medium text-status-in-stock">
+                  <span className="text-right font-medium text-status-in-stock tabular-nums">
                     {formatCurrency(enrollment.benefitAmount)}
                   </span>
                 </>

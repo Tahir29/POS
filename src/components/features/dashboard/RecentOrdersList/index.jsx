@@ -75,7 +75,7 @@ export default function RecentOrdersList({ orders = [], isLoading }) {
   const router = useRouter();
 
   return (
-    <div className="rounded-xl border border-border bg-card shadow-sm p-5 h-full">
+    <div className="rounded-xl border border-border bg-card p-5 h-full">
       <div className="flex items-center justify-between mb-1">
         <h2 className="font-heading text-base text-foreground">Recent Orders</h2>
         <button

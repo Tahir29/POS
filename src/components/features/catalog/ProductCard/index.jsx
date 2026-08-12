@@ -32,7 +32,7 @@
 // useStyleExternalProductId.js for why this doesn't add a second network
 // call when the product detail page has already resolved the same style.
 
-import { useState }        from 'react';
+import { useState, useRef } from 'react';
 import Image               from 'next/image';
 import { useRouter }       from 'next/navigation';
 import { Gem } from 'lucide-react';
@@ -44,6 +44,27 @@ import { useStyleExternalProductId } from '@/hooks/products/useStyleExternalProd
 import { useProductReviewSummary }   from '@/hooks/products/useProductReviewSummary';
 import { Badge } from '@/components/ui/badge';
 import { EASE_PREMIUM, DURATION } from '@/lib/motion';
+import { captureCardFlipState } from '@/lib/productFlip';
+
+// Best-effort capture for the Priority-1 card→detail shared-element
+// transition — see src/lib/productFlip.js for the full cross-route
+// contract. gsap/Flip is dynamically imported here (not at module scope)
+// so it's never part of the catalog's own bundle; only fetched the moment
+// a card is actually tapped. NOT awaited by the caller — see handleTap.
+async function tryCaptureFlip(itemId, element) {
+  if (!element) return;
+  try {
+    const [{ gsap }, { Flip }] = await Promise.all([
+      import('gsap'),
+      import('gsap/Flip'),
+    ]);
+    gsap.registerPlugin(Flip);
+    captureCardFlipState(itemId, element, Flip);
+  } catch {
+    // Best-effort only — a failed/slow import just means no transition
+    // plays on the destination page, never a broken tap.
+  }
+}
 
 // ── Metal type label + swatch color ───────────────────────────────────────────
 // Swatch colors are a presentation mapping (not fabricated data) — the
@@ -118,6 +139,7 @@ export default function ProductCard({ product, showStockBadge = false }) {
   const router = useRouter();
   const [imgError, setImgError] = useState(false);
   const reduceMotion = useReducedMotion();
+  const imageBoxRef = useRef(null);
 
   const {
     item_id,
@@ -158,6 +180,12 @@ export default function ProductCard({ product, showStockBadge = false }) {
 
   function handleTap() {
     if (!item_id) return;
+    // Fire-and-forget, never awaited: router.push below must never wait on
+    // this. Skipped outright under reduced-motion since there's no point
+    // capturing a state nothing will ever animate from.
+    if (!reduceMotion) {
+      tryCaptureFlip(item_id, imageBoxRef.current);
+    }
     router.push(`/products/${item_id}`);
   }
 
@@ -168,7 +196,7 @@ export default function ProductCard({ product, showStockBadge = false }) {
       className={[
         'group relative flex flex-col overflow-hidden rounded-2xl border bg-card text-left',
         'shadow-sm transition-all duration-standard ease-premium',
-        'hover:shadow-md hover:border-accent/40',
+        'hover:shadow-hover hover:border-accent/40',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
         !inStock && 'opacity-60',
       ].filter(Boolean).join(' ')}
@@ -178,7 +206,7 @@ export default function ProductCard({ product, showStockBadge = false }) {
       transition={{ duration: DURATION.micro, ease: EASE_PREMIUM }}
     >
       {/* ── Image ─────────────────────────────────────────── */}
-      <div className="relative aspect-square w-full overflow-hidden bg-muted">
+      <div ref={imageBoxRef} className="relative aspect-square w-full overflow-hidden bg-muted">
         {imageSrc ? (
           <Image
             src={imageSrc}
@@ -227,7 +255,7 @@ export default function ProductCard({ product, showStockBadge = false }) {
             state, not a glitch: the server priced it at 0 and it cannot be
             sold (currently every Silver925 item on this tenant). */}
         {price != null ? (
-          <p className="font-sans text-lg font-bold text-foreground">
+          <p className="font-sans text-lg font-bold text-primary tabular-nums">
             {formatINR(price)}
           </p>
         ) : (

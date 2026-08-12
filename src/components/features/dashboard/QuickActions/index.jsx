@@ -30,7 +30,7 @@ const QUICK_ACTIONS = [
     description: 'Browse catalog',
     icon:        ShoppingBag,
     href:        '/catalog',
-    accent:      'bg-secondary text-primary border border-accent/30 shadow-sm hover:shadow-md',
+    accent:      'bg-secondary text-primary border border-accent/30 shadow-sm hover:shadow-hover',
   },
   {
     id:          'new-return',
@@ -38,7 +38,7 @@ const QUICK_ACTIONS = [
     description: 'Process a return',
     icon:        RotateCcw,
     href:        '/transactions?tab=returns',
-    accent:      'bg-card text-foreground border border-border shadow-sm hover:shadow-md hover:border-accent/40 hover:text-accent',
+    accent:      'bg-card text-foreground border border-border shadow-sm hover:shadow-hover hover:border-accent/40 hover:text-accent',
   },
   {
     id:          'refund',
@@ -46,7 +46,7 @@ const QUICK_ACTIONS = [
     description: 'Refund customer',
     icon:        CreditCard,
     href:        '/transactions?tab=refunds',
-    accent:      'bg-card text-foreground border border-border shadow-sm hover:shadow-md hover:border-accent/40 hover:text-accent',
+    accent:      'bg-card text-foreground border border-border shadow-sm hover:shadow-hover hover:border-accent/40 hover:text-accent',
   },
   {
     id:          'credit-note',
@@ -54,7 +54,7 @@ const QUICK_ACTIONS = [
     description: 'Issue store credit',
     icon:        FileText,
     href:        '/transactions?tab=credit-notes',
-    accent:      'bg-card text-foreground border border-border shadow-sm hover:shadow-md hover:border-accent/40 hover:text-accent',
+    accent:      'bg-card text-foreground border border-border shadow-sm hover:shadow-hover hover:border-accent/40 hover:text-accent',
   },
   {
     id:          'exchange',
@@ -62,7 +62,7 @@ const QUICK_ACTIONS = [
     description: 'Item exchange',
     icon:        ArrowLeftRight,
     href:        '/transactions?tab=exchange',
-    accent:      'bg-card text-foreground border border-border shadow-sm hover:shadow-md hover:border-accent/40 hover:text-accent',
+    accent:      'bg-card text-foreground border border-border shadow-sm hover:shadow-hover hover:border-accent/40 hover:text-accent',
   },
   {
     id:          'buyback',
@@ -70,7 +70,7 @@ const QUICK_ACTIONS = [
     description: 'Buy from customer',
     icon:        Gem,
     href:        '/transactions?tab=buyback',
-    accent:      'bg-card text-foreground border border-border shadow-sm hover:shadow-md hover:border-accent/40 hover:text-accent',
+    accent:      'bg-card text-foreground border border-border shadow-sm hover:shadow-hover hover:border-accent/40 hover:text-accent',
   },
   {
     id:          'urd-purchase',
@@ -78,7 +78,7 @@ const QUICK_ACTIONS = [
     description: 'Record purchase',
     icon:        Coins,
     href:        '/transactions?tab=urd',
-    accent:      'bg-card text-foreground border border-border shadow-sm hover:shadow-md hover:border-accent/40 hover:text-accent',
+    accent:      'bg-card text-foreground border border-border shadow-sm hover:shadow-hover hover:border-accent/40 hover:text-accent',
   },
   {
     id:          'scheme-payment',
@@ -86,7 +86,7 @@ const QUICK_ACTIONS = [
     description: 'Collect instalment',
     icon:        BookOpen,
     href:        '/schemes',
-    accent:      'bg-card text-foreground border border-border shadow-sm hover:shadow-md hover:border-accent/40 hover:text-accent',
+    accent:      'bg-card text-foreground border border-border shadow-sm hover:shadow-hover hover:border-accent/40 hover:text-accent',
   },
   {
     id:          'day-close',
@@ -94,7 +94,7 @@ const QUICK_ACTIONS = [
     description: 'Close today',
     icon:        ClipboardCheck,
     href:        '/daily-closing',
-    accent:      'bg-card text-foreground border border-border shadow-sm hover:shadow-md hover:border-accent/40 hover:text-accent',
+    accent:      'bg-card text-foreground border border-border shadow-sm hover:shadow-hover hover:border-accent/40 hover:text-accent',
   },
 ];
 
@@ -134,7 +134,7 @@ export default function QuickActionGrid() {
   };
 
   return (
-    <section aria-labelledby="quick-actions-heading" className="rounded-xl border border-border bg-card shadow-sm p-5 h-full">
+    <section aria-labelledby="quick-actions-heading" className="rounded-xl border border-border bg-card p-5 h-full">
       <h2
         id="quick-actions-heading"
         className="font-heading text-base text-foreground mb-3"
@@ -142,7 +142,10 @@ export default function QuickActionGrid() {
         Quick Actions
       </h2>
 
-      <div className="grid grid-cols-4 gap-2.5">
+      {/* Responsive instead of a fixed 4 columns (2026-08) — was the one
+          grid on this page that didn't reflow with viewport width, unlike
+          the KPI row and everything else on the dashboard. */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
         {QUICK_ACTIONS.map((action) => (
           <QuickActionButton
             key={action.id}

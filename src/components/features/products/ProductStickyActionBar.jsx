@@ -74,7 +74,7 @@ export default function ProductStickyActionBar({
             <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
               Total
             </p>
-            <p className="font-heading text-xl text-foreground leading-tight">
+            <p className="font-heading text-xl text-foreground leading-tight tabular-nums">
               {total != null ? formatINR(total) : (
                 <span className="text-sm font-medium text-status-made-order">Not priced</span>
               )}

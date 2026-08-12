@@ -462,7 +462,7 @@ function SoldItemFlowForm({ flow, onDone }) {
       {total > 0 && (
         <div className="flex justify-between rounded-xl border border-border bg-card px-4 py-3 text-sm font-medium">
           <span className="text-muted-foreground">{config.totalLabel}</span>
-          <span className="text-foreground">{formatINR(total)}</span>
+          <span className="text-foreground tabular-nums">{formatINR(total)}</span>
         </div>
       )}
 
@@ -723,7 +723,7 @@ function MetalLineItemForm({ type, onDone }) {
       {total > 0 && (
         <div className="flex justify-between rounded-xl border border-border bg-card px-4 py-3 text-sm font-medium">
           <span className="text-muted-foreground">Total</span>
-          <span className="text-foreground">{formatINR(total)}</span>
+          <span className="text-foreground tabular-nums">{formatINR(total)}</span>
         </div>
       )}
 
@@ -974,7 +974,7 @@ function RefundNewForm({ onDone }) {
       {total > 0 && (
         <div className="flex justify-between rounded-xl border border-border bg-card px-4 py-3 text-sm font-medium">
           <span className="text-muted-foreground">Total Refund</span>
-          <span className="text-foreground">{formatINR(total)}</span>
+          <span className="text-foreground tabular-nums">{formatINR(total)}</span>
         </div>
       )}
 
@@ -1032,7 +1032,7 @@ function TransactionDetailSheet({ transaction, onClose }) {
                 <Icon className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
                 <div className="flex flex-col gap-0.5 min-w-0">
                   <p className="text-xs text-muted-foreground">{label}</p>
-                  <p className="text-sm font-medium text-foreground break-words">{value}</p>
+                  <p className="text-sm font-medium text-foreground break-words tabular-nums">{value}</p>
                 </div>
               </div>
             ))}

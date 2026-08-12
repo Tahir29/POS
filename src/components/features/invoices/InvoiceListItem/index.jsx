@@ -36,7 +36,7 @@ export default function InvoiceListItem({ invoice, onSelect }) {
       onSelect={onSelect}
       header={invoiceNo || 'Invoice'}
       footer={totalAmount != null && (
-        <p className="text-[18px] font-bold text-foreground">
+        <p className="text-[18px] font-bold text-foreground tabular-nums">
           &#8377;{Number(totalAmount).toLocaleString('en-IN')}
         </p>
       )}

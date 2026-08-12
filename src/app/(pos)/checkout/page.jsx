@@ -39,10 +39,13 @@
 //   - useRedirectOnCustomerChange redirects to /catalog on customer switch
 //   - beforeunload warns on tab close/refresh while cart has items
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSelector } from 'react-redux';
 import { ShieldCheck } from 'lucide-react';
+import { AnimatePresence, motion, useInView, useReducedMotion } from 'motion/react';
+import { EASE_PREMIUM, DURATION } from '@/lib/motion';
+import APP_CONFIG from '@/constants/appConfig';
 import ConfirmDialog    from '@/components/shared/ConfirmDialog';
 import CheckoutCustomerSummary  from '@/components/features/checkout/CheckoutCustomerSummary';
 import CheckoutPanCapture       from '@/components/features/checkout/CheckoutPanCapture';
@@ -111,6 +114,19 @@ function CheckoutScreen() {
   const [salesPersonId, setSalesPersonId] = useState(null);
   const [panNumber, setPanNumber]   = useState(null);
   const [isBackConfirmOpen, setIsBackConfirmOpen] = useState(false);
+  const reduceMotion = useReducedMotion();
+
+  // Persistent total strip (Step C Priority 5) — the full Order Summary
+  // card scrolls out of view once the operator starts filling in payment
+  // below it; this watches for that and shows a slim substitute so the
+  // total stays visible while paying instead of only surviving in the
+  // Place Order button's own compressed label. Only meaningful where the
+  // footer below is itself fixed (mobile, <sm) — at sm+ the footer sits in
+  // normal page flow (see the footer's own sm:static below), so there's no
+  // fixed zone for a strip to dock above there without inventing one that
+  // doesn't match the rest of this page's responsive behavior.
+  const summaryRef = useRef(null);
+  const summaryInView = useInView(summaryRef, { margin: '-72px 0px 0px 0px' });
 
   const pricedByCartIndex = useMemo(
     () => mapPricedLinesToCart(items, pricedLineItems),
@@ -271,7 +287,7 @@ function CheckoutScreen() {
           <CheckoutPanCapture totalAmount={payableTotal} onPanResolved={setPanNumber} />
 
           {/* Sales person — required, mirrors the vendor's own POS Sale screen */}
-          <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
+          <section className="rounded-xl border border-border bg-card p-5">
             <h2 className="text-sm font-bold text-foreground mb-2">
               Sales Person <span className="text-destructive">*</span>
             </h2>
@@ -291,7 +307,7 @@ function CheckoutScreen() {
         </div>
         <div className="flex flex-col gap-5 w-full">
           {/* Order items — same CartItemRow used on the Cart page, read-only here */}
-          <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
+          <section className="rounded-xl border border-border bg-card p-5">
             <h2 className="text-sm font-bold text-foreground mb-1">
               Order Items <span className="text-muted-foreground font-normal text-xs">({items.length} item{items.length !== 1 ? 's' : ''})</span>
             </h2>
@@ -311,8 +327,8 @@ function CheckoutScreen() {
             </div>
           </section>
 
-          {/* Order summary */}
-          <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
+          {/* Order summary — ref watched by the persistent total strip below */}
+          <section ref={summaryRef} className="rounded-xl border border-border bg-card p-5">
             <h2 className="text-sm font-bold text-foreground mb-1">Order Summary</h2>
             {/* Driven by the priced stock pieces, so this reads the same
                 figure as the Place Order button and the amount collected. */}
@@ -355,22 +371,50 @@ function CheckoutScreen() {
       {/* Reassurance strip — exchange/certification/warranty + accepted payment networks */}
       <CheckoutTrustStrip />
 
-      {/* Sticky Place Order button */}
-      <div className="fixed bottom-0 left-0 right-0 border-t border-border bg-card p-4 sm:static sm:border-0 sm:bg-transparent sm:p-0">
-        <div className="max-w-6xl mx-auto w-full flex flex-col items-center gap-2">
-          <PlaceOrderButton
-            isValid={isValid}
-            isPlacingOrder={isSubmitting}
-            onPlaceOrder={handlePlaceOrder}
-            amountDue={amountDue}
-            amountCollected={amountCollected}
-            isPricing={isPricing}
-            documentType={documentType}
-          />
-          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <ShieldCheck size={13} className="text-accent" aria-hidden="true" />
-            Secure checkout · Your data is safe with us
-          </p>
+      {/* Sticky Place Order button, with the persistent total strip (Step C
+          Priority 5) docked directly above it inside the SAME fixed
+          wrapper — one fixed-position group, not two independently
+          positioned elements, so there's no magic pixel offset between
+          them to drift out of sync. The strip only ever shows below sm,
+          matching the footer's own fixed(<sm)/static(sm+) split: at sm+
+          this whole group sits in normal page flow, not floating, so
+          there's no fixed zone for a strip to dock above without inventing
+          one that doesn't match the rest of this page's responsive design. */}
+      <div className="fixed bottom-0 left-0 right-0 bg-card sm:static sm:bg-transparent">
+        <AnimatePresence>
+          {!summaryInView && payableTotal > 0 && (
+            <motion.div
+              initial={reduceMotion ? false : { opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={reduceMotion ? undefined : { opacity: 0, y: 12 }}
+              transition={{ duration: reduceMotion ? 0 : DURATION.standard, ease: EASE_PREMIUM }}
+              className="border-t border-border px-4 py-2.5 sm:hidden"
+            >
+              <div className="max-w-6xl mx-auto w-full flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Total</span>
+                <span className="font-bold text-foreground tabular-nums">
+                  {APP_CONFIG.CURRENCY.INR_SYMBOL}{payableTotal.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                </span>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+        <div className="border-t border-border p-4 sm:static sm:border-0 sm:p-0">
+          <div className="max-w-6xl mx-auto w-full flex flex-col items-center gap-2">
+            <PlaceOrderButton
+              isValid={isValid}
+              isPlacingOrder={isSubmitting}
+              onPlaceOrder={handlePlaceOrder}
+              amountDue={amountDue}
+              amountCollected={amountCollected}
+              isPricing={isPricing}
+              documentType={documentType}
+            />
+            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <ShieldCheck size={13} className="text-accent" aria-hidden="true" />
+              Secure checkout · Your data is safe with us
+            </p>
+          </div>
         </div>
       </div>
 

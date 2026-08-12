@@ -9,9 +9,11 @@
 // accessibility. Standardizes on the 44px minimum.
 
 import { Minus, Plus } from 'lucide-react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { cn } from '@/lib/utils';
+import { EASE_PREMIUM, DURATION } from '@/lib/motion';
 
-const STEP_BUTTON = 'flex items-center justify-center min-w-[44px] min-h-[44px] text-stone-600 hover:bg-stone-50 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors';
+const STEP_BUTTON = 'flex items-center justify-center min-w-[44px] min-h-[44px] text-muted-foreground hover:bg-muted active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors';
 
 /**
  * @param {{
@@ -35,6 +37,8 @@ export default function QuantityStepper({
   trailing,
   className,
 }) {
+  const reduceMotion = useReducedMotion();
+
   return (
     <div
       className={cn('flex items-center gap-1 rounded-lg border border-border bg-card', className)}
@@ -50,12 +54,33 @@ export default function QuantityStepper({
         <Minus size={16} aria-hidden="true" />
       </button>
 
+      {/* aria-live/atomic stay on this OUTER, never-remounted element so
+          screen readers still announce every change — only the INNER span
+          swaps (Step C Priority 3), keyed by the value itself so each
+          change gets its own brief crossfade instead of an instant digit
+          swap. Reduced-motion renders the plain value with no wrapper
+          animation at all. */}
       <span
         aria-live="polite"
         aria-atomic="true"
-        className="flex items-center justify-center min-w-[44px] px-2 text-base font-semibold text-stone-800 tabular-nums select-none"
+        className="relative flex items-center justify-center min-w-[44px] px-2 text-base font-semibold text-foreground overflow-hidden"
       >
-        {quantity}
+        {reduceMotion ? (
+          <span className="tabular-nums select-none">{quantity}</span>
+        ) : (
+          <AnimatePresence mode="popLayout" initial={false}>
+            <motion.span
+              key={quantity}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: DURATION.micro, ease: EASE_PREMIUM }}
+              className="tabular-nums select-none"
+            >
+              {quantity}
+            </motion.span>
+          </AnimatePresence>
+        )}
       </span>
 
       <button

@@ -27,13 +27,15 @@
 // native image fields are null on UAT. Now imports the shared,
 // corrected resolveImageSrc instead of maintaining a second copy.
 
-import { useState, useRef } from 'react';
+import { useState, useRef, forwardRef } from 'react';
 import Image from 'next/image';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { ChevronLeft, ChevronRight, ZoomIn, Gem, Play } from 'lucide-react';
 import ProductImageZoomModal from '@/components/features/products/ProductImageZoomModal';
 import { resolveImageSrc } from '@/lib/resolveImageSrc';
 import { Skeleton } from '@/components/ui/skeleton';
 import StockStatusBadge from '@/components/shared/StockStatusBadge';
+import { EASE_PREMIUM, DURATION } from '@/lib/motion';
 
 // Known colour keywords used in Shopify image `alt` text. Anything whose alt
 // doesn't match one of these (e.g. "Cert") is treated as colour-agnostic and
@@ -107,13 +109,20 @@ function GallerySkeleton() {
  *                                     StockStatusBadge over the top-right
  *                                     corner of the main image
  */
-export default function ProductImageGallery({
+// forwardRef (2026-08, Step C Priority 1) — the product detail page needs a
+// real DOM node here to play the card→detail Flip transition onto (GSAP
+// Flip.from() animates a snapshot rect onto whatever `targets` resolves to,
+// which has to be this component's own main-slide element, not something
+// the page can reach any other way). Opt-in: callers that don't pass a ref
+// see no change at all.
+const ProductImageGallery = forwardRef(function ProductImageGallery({
   product, shopifyImages = [], shopifyVideos = [], activeColorName = null, isLoading = false, stockStatus = null,
-}) {
+}, ref) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [imgErrors, setImgErrors]       = useState({});
   const [zoomOpen, setZoomOpen]         = useState(false);
   const touchStartX                     = useRef(null);
+  const reduceMotion                    = useReducedMotion();
 
   // ── Build image list ───────────────────────────────────────────────────────
     // Priority 1: Shopify images (sorted by position, already done in hook),
@@ -209,7 +218,7 @@ export default function ProductImageGallery({
           {slide.poster ? (
             <Image src={slide.poster} alt={slide.alt} fill sizes="56px" className="object-cover" />
           ) : (
-            <div className="h-full w-full bg-stone-800" />
+            <div className="h-full w-full bg-sidebar" />
           )}
           <span className="absolute inset-0 flex items-center justify-center bg-black/25">
             <Play size={16} className="fill-white text-white" aria-hidden="true" />
@@ -253,6 +262,7 @@ export default function ProductImageGallery({
 
         {/* Main slide */}
         <div
+          ref={ref}
           className="relative w-full flex-1 min-w-0 overflow-hidden rounded-2xl bg-muted"
           style={{ aspectRatio: '1 / 1' }}
           onTouchStart={handleTouchStart}
@@ -272,23 +282,34 @@ export default function ProductImageGallery({
               className="absolute inset-0 h-full w-full object-cover"
             />
           ) : showImage ? (
-            <button
-              type="button"
-              onClick={() => setZoomOpen(true)}
-              aria-label="Tap to zoom image"
-              className="absolute inset-0 h-full w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
-            >
-              <Image
+            // Crossfade between images on thumbnail/nav change (Step C
+            // Priority 4) — was an instant cut via a plain key-swap. The
+            // zoom button below still opens the same static image; only the
+            // slide-to-slide swap itself gained motion. Reduced-motion falls
+            // back to the old instant swap (duration 0), same code path.
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.button
                 key={current.src}
-                src={current.src}
-                alt={current.alt}
-                fill
-                sizes="(max-width: 768px) 100vw, 50vw"
-                className="object-cover"
-                priority
-                onError={() => handleImgError(safeIndex)}
-              />
-            </button>
+                type="button"
+                onClick={() => setZoomOpen(true)}
+                aria-label="Tap to zoom image"
+                className="absolute inset-0 h-full w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                initial={{ opacity: reduceMotion ? 1 : 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: reduceMotion ? 1 : 0 }}
+                transition={{ duration: reduceMotion ? 0 : DURATION.standard, ease: EASE_PREMIUM }}
+              >
+                <Image
+                  src={current.src}
+                  alt={current.alt}
+                  fill
+                  sizes="(max-width: 768px) 100vw, 50vw"
+                  className="object-cover"
+                  priority
+                  onError={() => handleImgError(safeIndex)}
+                />
+              </motion.button>
+            </AnimatePresence>
           ) : (
             <NoImagePlaceholder />
           )}
@@ -363,4 +384,6 @@ export default function ProductImageGallery({
       />
     </div>
   );
-}
+});
+
+export default ProductImageGallery;

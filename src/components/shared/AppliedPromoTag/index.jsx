@@ -31,7 +31,7 @@ export default function AppliedPromoTag({ promoCode, discountAmount, onRemove, c
             {promoCode} applied
           </p>
           {discountAmount > 0 && (
-            <p className="text-xs text-status-in-stock">
+            <p className="text-xs text-status-in-stock tabular-nums">
               You saved ₹{discountAmount.toLocaleString('en-IN')}
             </p>
           )}

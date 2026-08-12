@@ -11,6 +11,7 @@
 // Back button now lives in the global Header (see useSmartBack /
 // BACK_FALLBACKS: /cart → /catalog) — no local back button here anymore.
 
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import CartItemRow from '@/components/features/cart/CartItemRow';
 import CartEmptyState from '@/components/features/cart/CartEmptyState';
 import CartSummary from '@/components/features/cart/CartSummary';
@@ -19,6 +20,7 @@ import AppliedPromoTag from '@/components/shared/AppliedPromoTag';
 import ProceedToCheckoutButton from '@/components/features/cart/ProceedToCheckoutButton';
 import { useCart } from '@/hooks/cart/useCart';
 import { useRedirectOnCustomerChange } from '@/hooks/checkout/useRedirectOnCustomerChange';
+import { EASE_PREMIUM, DURATION } from '@/lib/motion';
 
 export default function CartPage() {
   useRedirectOnCustomerChange();
@@ -34,6 +36,7 @@ export default function CartPage() {
     detachCustomer,
     removePromo,
   } = useCart();
+  const reduceMotion = useReducedMotion();
 
   return (
     <div className="flex flex-col gap-6 max-w-5xl mx-auto w-full pb-28 p-4 md:p-6">
@@ -58,15 +61,28 @@ export default function CartPage() {
             ))}
           </div>
 
+          {/* Same enter/exit + reorder treatment as CartDrawer (Step C
+              Priority 3) — kept identical between the two so the item list
+              feels the same whether reached via the drawer or this page. */}
           <div className="rounded-xl border border-border bg-card px-4">
-            {items.map((item) => (
-              <CartItemRow
-                key={`${item.itemId}-${item.sizeId}-${item.styleId}`}
-                item={item}
-                onUpdateQuantity={updateQuantity}
-                onRemove={removeItem}
-              />
-            ))}
+            <AnimatePresence initial={false}>
+              {items.map((item) => (
+                <motion.div
+                  key={`${item.itemId}-${item.sizeId}-${item.styleId}`}
+                  layout={!reduceMotion}
+                  initial={reduceMotion ? false : { opacity: 0, scale: 0.96 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={reduceMotion ? undefined : { opacity: 0, height: 0 }}
+                  transition={{ duration: reduceMotion ? 0 : DURATION.standard, ease: EASE_PREMIUM }}
+                >
+                  <CartItemRow
+                    item={item}
+                    onUpdateQuantity={updateQuantity}
+                    onRemove={removeItem}
+                  />
+                </motion.div>
+              ))}
+            </AnimatePresence>
           </div>
 
           <div className="rounded-xl border border-border bg-card p-4">

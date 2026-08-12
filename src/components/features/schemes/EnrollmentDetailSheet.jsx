@@ -144,7 +144,7 @@ function ScheduleTab({ enrollmentId }) {
               </p>
             </div>
             <div className="flex flex-col items-end gap-1 shrink-0">
-              <span className="text-sm font-semibold text-foreground">{formatCurrency(month.amount)}</span>
+              <span className="text-sm font-semibold text-foreground tabular-nums">{formatCurrency(month.amount)}</span>
               <PaymentStatusBadge
                 status={mapScheduleStatus(rawStatus)}
                 labelOverride={month.isPaid ? 'Paid' : month.isOverdue ? 'Overdue' : 'Upcoming'}
@@ -180,7 +180,7 @@ function PaymentsTab({ enrollmentId }) {
               {receipt.modeName && ` · ${receipt.modeName}`}
             </p>
           </div>
-          <span className="text-sm font-semibold text-foreground shrink-0">
+          <span className="text-sm font-semibold text-foreground shrink-0 tabular-nums">
             {formatCurrency(receipt.amount)}
           </span>
         </div>

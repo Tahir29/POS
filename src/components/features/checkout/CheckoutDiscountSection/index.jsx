@@ -29,7 +29,7 @@ export default function CheckoutDiscountSection({ promotionDetails = [], isPrici
     promotionDetails.find((row) => row.promotion_code === promoCode)?.promotion_amount ?? null;
 
   return (
-    <section className="flex flex-col gap-3 rounded-xl border border-border bg-card p-5 shadow-sm">
+    <section className="flex flex-col gap-3 rounded-xl border border-border bg-card p-5">
       <h2 className="text-sm font-bold text-foreground">Discount</h2>
 
       {/* "You saved ₹X" is the server's own promotion_amount, so the badge

@@ -11,7 +11,19 @@
       "Bash(curl -sS -D - -o /tmp/dev_portal_body.html -u \"admin:admin@1985\" \"https://lucira.uat.ornaverse.in/developer/\" --max-time 20)",
       "Read(//tmp/**)",
       "Bash(curl -sS -D - -o /tmp/signin_page.html -c /tmp/cookies.txt \"https://lucira.uat.ornaverse.in/Account/Signin\" --max-time 20)",
-      "Bash(npx eslint *)"
+      "Bash(npx eslint *)",
+      "Bash(python \"C:/Users/Admin/.claude/plugins/marketplaces/local-desktop-app-uploads/ui-ux-pro-max/.claude/skills/ui-ux-pro-max/scripts/search.py\" \"luxury retail POS jewelry tablet premium calm precise\" --design-system -p \"Lucira POS\" -f markdown)",
+      "Bash(python \"C:/Users/Admin/.claude/plugins/marketplaces/local-desktop-app-uploads/ui-ux-pro-max/.claude/skills/ui-ux-pro-max/scripts/search.py\" \"touch target thumb reach tablet POS checkout\" --domain ux -n 15)",
+      "Bash(python \"C:/Users/Admin/.claude/plugins/marketplaces/local-desktop-app-uploads/ui-ux-pro-max/.claude/skills/ui-ux-pro-max/scripts/search.py\" \"card expand detail transition flip stagger success\" --domain gsap -n 16)",
+      "Bash(python \"C:/Users/Admin/.claude/plugins/marketplaces/local-desktop-app-uploads/ui-ux-pro-max/.claude/skills/ui-ux-pro-max/scripts/search.py\" \"quiet luxury editorial minimal restrained precise\" --domain style -n 8)",
+      "Bash(python \"C:/Users/Admin/.claude/plugins/marketplaces/local-desktop-app-uploads/ui-ux-pro-max/.claude/skills/ui-ux-pro-max/scripts/search.py\" \"jewelry luxury warm neutral gold\" --domain color -n 10)",
+      "Bash(python \"C:/Users/Admin/.claude/plugins/marketplaces/local-desktop-app-uploads/ui-ux-pro-max/.claude/skills/ui-ux-pro-max/scripts/search.py\" \"elegant serif refined luxury retail numeric tabular\" --domain typography -n 8)",
+      "Bash(timeout 40 bash -c 'until curl -sf http://localhost:3000 -o /dev/null; do sleep 1; done')",
+      "Bash(cygpath -w /tmp/dev-server.log)",
+      "Bash(tail -150 /tmp/dev-server.log)",
+      "Bash(lsof -ti:3000 -sTCP:LISTEN)",
+      "Bash(xargs -r kill)",
+      "Bash(netstat -ano)"
     ]
   }
 }

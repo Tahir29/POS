@@ -293,8 +293,8 @@ function OrdersTab({ customerId }) {
             {order.orderDate && <p className="text-xs text-muted-foreground mt-0.5">{fmtDate(order.orderDate)}</p>}
           </div>
           <div className="text-right shrink-0">
-            {order.totalAmount != null && <p className="text-sm font-semibold text-foreground">{fmt(order.totalAmount)}</p>}
-            {order.balanceAmount > 0 && <p className="text-xs text-status-error">Due {fmt(order.balanceAmount)}</p>}
+            {order.totalAmount != null && <p className="text-sm font-semibold text-foreground tabular-nums">{fmt(order.totalAmount)}</p>}
+            {order.balanceAmount > 0 && <p className="text-xs text-status-error tabular-nums">Due {fmt(order.balanceAmount)}</p>}
           </div>
         </div>
       ))}
@@ -321,7 +321,7 @@ function SchemesTab({ customerId }) {
               {e.enrolledDate ? ` · ${fmtDate(e.enrolledDate)}` : ''}
             </p>
             {e.investedAmount != null && (
-              <p className="text-xs text-muted-foreground mt-0.5">Paid: {fmt(e.investedAmount)}</p>
+              <p className="text-xs text-muted-foreground mt-0.5 tabular-nums">Paid: {fmt(e.investedAmount)}</p>
             )}
             {e.nominee && (
               <p className="text-xs text-muted-foreground mt-0.5">
@@ -355,7 +355,7 @@ function HistoryTab({ customerId }) {
     <div className="flex flex-col gap-3">
       <div className="rounded-lg border border-border p-3">
         <p className="text-xs text-muted-foreground/70">Total Purchases</p>
-        <p className="text-sm font-semibold text-foreground mt-0.5">{fmt(invoiceTotal)}</p>
+        <p className="text-sm font-semibold text-foreground mt-0.5 tabular-nums">{fmt(invoiceTotal)}</p>
       </div>
 
       {receiptModes.length > 0 && (
@@ -364,7 +364,7 @@ function HistoryTab({ customerId }) {
           {receiptModes.map((r, idx) => (
             <div key={idx} className="flex justify-between items-center text-sm rounded-lg border border-border px-3 py-2">
               <span className="text-foreground/80">{r.mode}</span>
-              <span className="font-semibold text-foreground">{fmt(r.amount)}</span>
+              <span className="font-semibold text-foreground tabular-nums">{fmt(r.amount)}</span>
             </div>
           ))}
         </div>
@@ -379,7 +379,7 @@ function HistoryTab({ customerId }) {
                 <p className="text-foreground/80 font-medium">{inv.document_no ?? `Invoice #${idx + 1}`}</p>
                 {inv.document_date && <p className="text-xs text-muted-foreground/70">{fmtDate(inv.document_date)}</p>}
               </div>
-              <span className="font-semibold text-foreground">{fmt(inv.net_amount)}</span>
+              <span className="font-semibold text-foreground tabular-nums">{fmt(inv.net_amount)}</span>
             </div>
           ))}
         </div>
@@ -399,7 +399,7 @@ function PointsTab({ customerId }) {
     <div className="flex flex-col gap-3">
       <div className="rounded-xl border border-border bg-muted p-4 text-center">
         <p className="text-xs text-muted-foreground/70 uppercase tracking-wide">Available Points</p>
-        <p className="text-3xl font-bold text-primary mt-1">{availablePoints.toLocaleString('en-IN')}</p>
+        <p className="text-3xl font-bold text-primary mt-1 tabular-nums">{availablePoints.toLocaleString('en-IN')}</p>
       </div>
       {loyaltyHistory.length > 0 && (
         <div className="flex flex-col gap-1.5">
@@ -473,7 +473,7 @@ export default function CustomerDetailPage() {
 
       {/* Content */}
       {customer && !isLoading && (
-        <div className="rounded-xl border border-border bg-card p-4 flex flex-col gap-4 shadow-sm">
+        <div className="rounded-xl border border-border bg-card p-4 flex flex-col gap-4">
 
           {/* Customer name + code header */}
           <div>

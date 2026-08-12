@@ -36,7 +36,7 @@ export default function TodaysActivityStrip({
 }) {
   if (isLoading) {
     return (
-      <div className="rounded-xl border border-border bg-card shadow-sm p-5">
+      <div className="rounded-xl border border-border bg-card p-5">
         <Skeleton className="h-3 w-28 mb-3" />
         <div className="flex gap-6">
           {Array.from({ length: 4 }).map((_, i) => (
@@ -48,7 +48,7 @@ export default function TodaysActivityStrip({
   }
 
   return (
-    <div className="relative overflow-hidden rounded-xl border border-border shadow-sm">
+    <div className="relative overflow-hidden rounded-xl border border-border">
       {/* Full-bleed photo background */}
       <Image
         src="/images/today-activity-banner.png"

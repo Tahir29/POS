@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { useAddMetalRate } from '@/hooks/settings/useAddMetalRate';
 import APP_CONFIG from '@/constants/appConfig';
 import PageLoader from '@/components/shared/PageLoader';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { todayDateString } from '@/lib/dateUtils';
 import {
@@ -167,13 +168,13 @@ function MetalRateForm() {
       </div>
 
       {/* Submit */}
-      <button
+      <Button
         type="submit"
         disabled={mutation.isPending}
-        className="w-full h-11 rounded-lg bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-60 disabled:cursor-not-allowed transition-opacity"
+        className="w-full h-11"
       >
         {mutation.isPending ? 'Saving…' : 'Save Metal Rate'}
-      </button>
+      </Button>
 
     </form>
   );

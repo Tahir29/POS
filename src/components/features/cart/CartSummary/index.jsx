@@ -41,7 +41,7 @@ export default function CartSummary({ totals = null, isPricing = false }) {
     <div className="flex flex-col gap-2 py-3" aria-busy={isPricing || undefined}>
       <div className="flex items-center justify-between text-sm text-muted-foreground">
         <span>Subtotal</span>
-        <span className="font-medium text-foreground">
+        <span className="font-medium text-foreground tabular-nums">
           ₹{subtotal.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
         </span>
       </div>
@@ -49,7 +49,7 @@ export default function CartSummary({ totals = null, isPricing = false }) {
       {discount > 0 && (
         <div className="flex items-center justify-between text-sm text-muted-foreground">
           <span>Discount</span>
-          <span className="font-medium text-status-in-stock">
+          <span className="font-medium text-status-in-stock tabular-nums">
             −₹{discount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
           </span>
         </div>
@@ -62,7 +62,7 @@ export default function CartSummary({ totals = null, isPricing = false }) {
       {totals && discount > 0 && (
         <div className="flex items-center justify-between text-sm text-muted-foreground">
           <span>Taxable Value</span>
-          <span className="font-medium text-foreground">
+          <span className="font-medium text-foreground tabular-nums">
             ₹{totals.taxableAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
           </span>
         </div>
@@ -72,7 +72,7 @@ export default function CartSummary({ totals = null, isPricing = false }) {
         {/* Only the cart's own figure is the flat-3% estimate; the priced
             one is the server's real per-item tax. */}
         <span>{totals ? 'GST' : 'GST (3%)'}</span>
-        <span className="font-medium text-foreground">
+        <span className="font-medium text-foreground tabular-nums">
           ₹{tax.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
         </span>
       </div>

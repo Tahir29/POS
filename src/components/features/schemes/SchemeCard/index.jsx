@@ -108,7 +108,7 @@ function Metric({ icon, label, value }) {
         {icon}
         <span className="text-xs">{label}</span>
       </div>
-      <span className="text-sm font-medium text-foreground">{value}</span>
+      <span className="text-sm font-medium text-foreground tabular-nums">{value}</span>
     </div>
   );
 }

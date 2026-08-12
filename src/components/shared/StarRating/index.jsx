@@ -32,7 +32,7 @@ export default function StarRating({ rating = 0, count, size = 'sm', showValue =
       {/* Compact — below sm: single star + numeric value + count, no room for 5 icons */}
       <div className="flex items-center gap-1 sm:hidden">
         <Star size={px} className="text-amber-400 fill-amber-400 shrink-0" aria-hidden="true" />
-        <span className="text-xs font-semibold text-stone-700">{clamped.toFixed(1)}</span>
+        <span className="text-xs font-semibold text-foreground">{clamped.toFixed(1)}</span>
         {typeof count === 'number' && count > 0 && (
           <span className="text-xs text-muted-foreground">({count.toLocaleString('en-IN')})</span>
         )}
@@ -45,7 +45,7 @@ export default function StarRating({ rating = 0, count, size = 'sm', showValue =
             const fillPct = Math.round(Math.min(1, Math.max(0, clamped - i)) * 100);
             return (
               <span key={i} className="relative inline-block" style={{ width: px, height: px }}>
-                <Star size={px} className="absolute inset-0 text-stone-300" aria-hidden="true" />
+                <Star size={px} className="absolute inset-0 text-muted-foreground/30" aria-hidden="true" />
                 <span
                   className="absolute inset-0 overflow-hidden"
                   style={{ width: `${fillPct}%` }}
@@ -57,7 +57,7 @@ export default function StarRating({ rating = 0, count, size = 'sm', showValue =
           })}
         </div>
         {showValue && clamped > 0 && (
-          <span className="text-xs font-semibold text-stone-700">{clamped.toFixed(1)}</span>
+          <span className="text-xs font-semibold text-foreground">{clamped.toFixed(1)}</span>
         )}
         {typeof count === 'number' && count > 0 && (
           <span className="text-xs text-muted-foreground">({count.toLocaleString('en-IN')})</span>

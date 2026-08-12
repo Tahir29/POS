@@ -27,11 +27,15 @@ import {
 // now routes through the same bg-muted/text-muted-foreground tokens the
 // 'chip' variant already used correctly. Both variants also pick up the
 // new premium timing tokens.
+// min-h-[44px] added to both variants (2026-08) — brings the tab strip to
+// this app's own touch-target standard (Sidebar rows, Quick Action tiles,
+// cart controls all already sit at 44px; these were the one place that
+// undercut it). Padding/radius/color untouched — purely a hit-area fix.
 const VARIANT_TRIGGER = {
-  pill: 'shrink-0 rounded-full px-4 py-1.5 text-xs font-medium transition-colors duration-standard ease-premium '
+  pill: 'shrink-0 rounded-full px-4 py-1.5 min-h-[44px] text-xs font-medium transition-colors duration-standard ease-premium '
     + 'data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-none '
     + 'data-[state=inactive]:bg-muted data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:bg-muted/70',
-  chip: 'flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium whitespace-nowrap transition-colors duration-standard ease-premium '
+  chip: 'flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 min-h-[44px] text-xs font-medium whitespace-nowrap transition-colors duration-standard ease-premium '
     + 'data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-none '
     + 'data-[state=inactive]:bg-muted/40 data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:bg-muted/70',
 };

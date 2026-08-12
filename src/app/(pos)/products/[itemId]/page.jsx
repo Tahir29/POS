@@ -22,6 +22,9 @@ import { Suspense, useState, useEffect, useCallback, useMemo, useRef } from 'rea
 import { useParams } from 'next/navigation';
 import { useSelector } from 'react-redux';
 import { toast }     from 'react-toastify';
+import { motion, useReducedMotion } from 'motion/react';
+import { consumeCardFlipState } from '@/lib/productFlip';
+import { EASE_PREMIUM, DURATION } from '@/lib/motion';
 
 import { useProductDetail }     from '@/hooks/products/useProductDetail';
 import { useStockByStores }     from '@/hooks/products/useStockByStores';
@@ -51,6 +54,15 @@ import { Settings2, CheckCircle2, Copy, Check } from 'lucide-react';
 const selectActiveStoreId   = (s) => s.store.activeStoreId;
 const selectActiveStoreName = (s) => s.store.activeStoreName;
 
+// Shared per-section variant for the info column's staged reveal (Step C
+// Priority 1) — every section fades/slides up the same small amount;
+// staggerChildren on the parent (see ProductDetailScreen) is what actually
+// spaces them out in time, not a different distance/duration per section.
+const infoRevealVariant = {
+  hidden: { opacity: 0, y: 10 },
+  show:   { opacity: 1, y: 0 },
+};
+
 // ── Not found ─────────────────────────────────────────────────────────────────
 
 function ProductNotFound() {
@@ -70,6 +82,7 @@ function ProductDetailScreen() {
   const { itemId } = useParams();
   const activeStoreId   = useSelector(selectActiveStoreId);
   const activeStoreName = useSelector(selectActiveStoreName);
+  const reduceMotion    = useReducedMotion();
 
   // ── Server state ──────────────────────────────────────────────────────────
   const {
@@ -77,6 +90,41 @@ function ProductDetailScreen() {
     isLoading: detailLoading,
     isError:   detailError,
   } = useProductDetail(itemId);
+
+  // ── Card→detail shared-element transition (Step C Priority 1) ────────────
+  // Best-effort, one-shot: consumeCardFlipState() returns null on a direct
+  // URL visit, a refresh, back/forward nav, a different item, or simply a
+  // lost race on the card's own dynamic gsap import — every one of those is
+  // the normal case, not an error, and renders exactly as before (no
+  // transition, no wait). Runs once the real image can be targeted, i.e.
+  // once loading is done and the gallery's ref is attached.
+  const heroRef = useRef(null);
+  useEffect(() => {
+    if (detailLoading || !product?.item_id || reduceMotion) return;
+    const flipState = consumeCardFlipState(product.item_id);
+    if (!flipState || !heroRef.current) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const [{ gsap }, { Flip }] = await Promise.all([
+          import('gsap'),
+          import('gsap/Flip'),
+        ]);
+        if (cancelled || !heroRef.current) return;
+        gsap.registerPlugin(Flip);
+        Flip.from(flipState, {
+          targets: heroRef.current,
+          duration: 0.5,
+          ease: 'power2.out',
+          absolute: true,
+        });
+      } catch {
+        // Best-effort — the hero image simply renders in place, unanimated.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [detailLoading, product?.item_id, reduceMotion]);
 
   const { data: attributes = [] } = useProductAttributes(null);
 
@@ -303,17 +351,38 @@ function ProductDetailScreen() {
 
         <div className="flex flex-col xl:flex-row gap-6 md:gap-8">
 
-          {/* Left — Image gallery */}
+          {/* Left — Image gallery — ref is the Priority-1 Flip target */}
           <div className="w-full xl:w-[45%] shrink-0">
-            <ProductImageGallery product={activeItem} shopifyImages={shopifyImages} shopifyVideos={shopifyVideos} activeColorName={activeItem?.metal_color_name ?? null} isLoading={imagesLoading} stockStatus={stockStatus} />
+            <ProductImageGallery ref={heroRef} product={activeItem} shopifyImages={shopifyImages} shopifyVideos={shopifyVideos} activeColorName={activeItem?.metal_color_name ?? null} isLoading={imagesLoading} stockStatus={stockStatus} />
           </div>
 
-          {/* Right — Info + actions */}
-          <div className="flex flex-col gap-4 flex-1 min-w-0">
-
+          {/* Right — Info + actions. Staged reveal (Step C Priority 1): each
+              direct section fades/slides in with a small stagger rather than
+              all appearing at once — reinforces that this page is the
+              destination of the card that was just tapped, not a cold
+              navigation. Reduced-motion renders every section at its final
+              state immediately (staggerChildren: 0 collapses the cascade). */}
+          <motion.div
+            className="flex flex-col gap-4 flex-1 min-w-0"
+            initial="hidden"
+            animate="show"
+            variants={{
+              hidden: {},
+              show: {
+                transition: {
+                  staggerChildren: reduceMotion ? 0 : 0.05,
+                  delayChildren: reduceMotion ? 0 : 0.05,
+                },
+              },
+            }}
+          >
             {/* SKU */}
             {product.item_code && (
-              <div className="flex items-center gap-1.5">
+              <motion.div
+                variants={infoRevealVariant}
+                transition={{ duration: DURATION.standard, ease: EASE_PREMIUM }}
+                className="flex items-center gap-1.5"
+              >
                 <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
                   {product.item_code}
                 </p>
@@ -328,24 +397,28 @@ function ProductDetailScreen() {
                     ? <Check size={12} className="text-status-in-stock" aria-hidden="true" />
                     : <Copy size={12} aria-hidden="true" />}
                 </button>
-              </div>
+              </motion.div>
             )}
 
             {/* Product name */}
-            <h1 className="font-heading text-xl text-foreground leading-snug md:text-3xl">
+            <motion.h1
+              variants={infoRevealVariant}
+              transition={{ duration: DURATION.standard, ease: EASE_PREMIUM }}
+              className="font-heading text-xl text-foreground leading-snug md:text-3xl"
+            >
               {product.item_name ?? 'Product'}
-            </h1>
+            </motion.h1>
 
             {/* Price. No strikethrough/"% OFF" pair: compare_price is another
                 stale master field, and showing a discount against a figure
                 that no longer matches what's charged is worse than showing
                 none. */}
-            <div>
+            <motion.div variants={infoRevealVariant} transition={{ duration: DURATION.standard, ease: EASE_PREMIUM }}>
               <div className="flex items-baseline gap-2">
                 {pricingLoading ? (
                   <p className="text-sm font-medium text-muted-foreground">Calculating live price…</p>
                 ) : price ? (
-                  <p className="font-heading text-3xl text-primary">{price}</p>
+                  <p className="font-heading text-3xl text-primary tabular-nums">{price}</p>
                 ) : pricingError ? (
                   <p className="flex items-center gap-2 text-sm font-medium text-status-made-order">
                     Could not calculate live price
@@ -367,11 +440,15 @@ function ProductDetailScreen() {
                   </p>
                 )}
               </div>
-            </div>
+            </motion.div>
 
             {/* In-stock-at-current-store banner */}
             {stockStatus === 'in_stock' && activeStoreName && (
-              <div className="flex items-center gap-2.5 rounded-xl bg-status-in-stock/10 border border-status-in-stock/20 px-4 py-3">
+              <motion.div
+                variants={infoRevealVariant}
+                transition={{ duration: DURATION.standard, ease: EASE_PREMIUM }}
+                className="flex items-center gap-2.5 rounded-xl bg-status-in-stock/10 border border-status-in-stock/20 px-4 py-3"
+              >
                 <CheckCircle2 size={18} className="shrink-0 text-status-in-stock" aria-hidden="true" />
                 <div>
                   <p className="text-sm font-medium text-status-in-stock">
@@ -381,7 +458,7 @@ function ProductDetailScreen() {
                     Ready to bill · take home today
                   </p>
                 </div>
-              </div>
+              </motion.div>
             )}
 
             {/* Product details — karat/color/size + SKU, with a live
@@ -391,7 +468,11 @@ function ProductDetailScreen() {
                 customizing, so availability is never hidden behind an
                 interaction. */}
             {(activeDetailsLine || activeCode) && (
-              <div className="rounded-xl bg-secondary/40 px-4 py-3 text-sm">
+              <motion.div
+                variants={infoRevealVariant}
+                transition={{ duration: DURATION.standard, ease: EASE_PREMIUM }}
+                className="rounded-xl bg-secondary/40 px-4 py-3 text-sm"
+              >
                 <div className="flex items-center justify-between gap-3">
                   {activeDetailsLine && (
                     <p className="font-medium text-foreground">{activeDetailsLine}</p>
@@ -415,12 +496,14 @@ function ProductDetailScreen() {
                 {activeCode && (
                   <p className="text-xs text-muted-foreground mt-0.5">{activeCode}</p>
                 )}
-              </div>
+              </motion.div>
             )}
 
             {/* Customize button — shown when design has variants */}
             {hasCustomization && (
-              <button
+              <motion.button
+                variants={infoRevealVariant}
+                transition={{ duration: DURATION.standard, ease: EASE_PREMIUM }}
                 type="button"
                 onClick={() => setCustomizeOpen(true)}
                 className="
@@ -441,27 +524,33 @@ function ProductDetailScreen() {
                     : 'Metal · Size'
                   }
                 </span>
-              </button>
+              </motion.button>
             )}
 
             {/* Made-to-order hint for out of stock items */}
             {stockStatus === 'out_stock' && (
-              <p className="text-sm text-primary">
+              <motion.p
+                variants={infoRevealVariant}
+                transition={{ duration: DURATION.standard, ease: EASE_PREMIUM }}
+                className="text-sm text-primary"
+              >
                 This item is currently out of stock — can be ordered as Made to Order.
-              </p>
+              </motion.p>
             )}
 
             {/* Availability at other stores — hidden once the confirmed
                 customization is Made to Order (no real stock anywhere to
                 report), shown for the base product or any in-stock variant */}
             {!isSelectedVariantMTO && (
-              <CrossStoreStockPanel
-                storeStocks={storeStocks}
-                isLoading={storeStocksLoading}
-              />
+              <motion.div variants={infoRevealVariant} transition={{ duration: DURATION.standard, ease: EASE_PREMIUM }}>
+                <CrossStoreStockPanel
+                  storeStocks={storeStocks}
+                  isLoading={storeStocksLoading}
+                />
+              </motion.div>
             )}
 
-          </div>
+          </motion.div>
         </div>
 
         <ProductTrustBadge />

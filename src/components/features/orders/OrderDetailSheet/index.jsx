@@ -18,7 +18,7 @@ function Row({ label, value, bold, border }) {
   return (
     <div className={`flex justify-between ${border ? 'border-t border-border pt-2' : ''}`}>
       <span className="text-muted-foreground">{label}</span>
-      <span className={bold ? 'font-bold text-foreground' : 'font-medium text-foreground'}>
+      <span className={`tabular-nums ${bold ? 'font-bold text-foreground' : 'font-medium text-foreground'}`}>
         {value}
       </span>
     </div>
@@ -68,7 +68,7 @@ function OrderContent({ raw, status }) {
                   <p className="text-xs text-muted-foreground truncate">{item.item_code}</p>
                 )}
               </div>
-              <span className="font-medium text-foreground shrink-0">
+              <span className="font-medium text-foreground shrink-0 tabular-nums">
                 {formatCurrency(item.gross_amount ?? item.net_amount)}
               </span>
             </div>
@@ -96,7 +96,7 @@ function OrderContent({ raw, status }) {
           {payments.map((p, i) => (
             <div key={p.receipt_id ?? i} className="flex justify-between gap-2">
               <span className="text-foreground/80">{p.mode_name}</span>
-              <span className="font-medium text-foreground">{formatCurrency(p.amount)}</span>
+              <span className="font-medium text-foreground tabular-nums">{formatCurrency(p.amount)}</span>
             </div>
           ))}
         </div>
@@ -206,10 +206,15 @@ export default function OrderDetailSheet({ order, isOpen, onClose }) {
 
       {/* Print portal — bg-white here is intentional: this renders on
           physical paper via the print stylesheet, not the app's screen
-          theme, so it always stays white regardless of .dark. */}
+          theme, so it always stays white regardless of .dark. The divider
+          below can't route through --border either, for the same reason:
+          --border resolves to a translucent white in dark mode (meant for
+          dark surfaces) and would be invisible on this always-white page.
+          Fixed brand blush (--secondary's light-mode value) instead of a
+          generic Tailwind stone-100 literal. */}
       {raw && typeof document !== 'undefined' && createPortal(
         <div id="invoice-print-area" className="hidden print:block p-6 bg-white">
-          <div className="flex justify-center items-center py-8 mb-8 border-b border-stone-100">
+          <div className="flex justify-center items-center py-8 mb-8 border-b border-[#EFE5DE]">
             <Logo variant="full" color="brown" width={140} height={44} />
           </div>
           <OrderContent raw={raw} status={order?.status} />

@@ -50,7 +50,7 @@ function HelperBalanceRow({ label, amount, modeCode, isApplied, onToggle, isLoad
     >
       <div>
         <p className="text-xs font-medium text-foreground/80">{label}</p>
-        <p className="text-sm font-semibold text-primary mt-0.5">
+        <p className="text-sm font-semibold text-primary mt-0.5 tabular-nums">
           {APP_CONFIG.CURRENCY.INR_SYMBOL}{Number(amount).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
         </p>
       </div>
@@ -221,7 +221,7 @@ export default function CheckoutPaymentSection({ onChange, amountDue, allowParti
   const hasVisibleHelpers = customerId && helperItems.some((h) => h.data?.amount > 0);
 
   return (
-    <section className="flex flex-col gap-3 rounded-xl border border-border bg-card p-5 shadow-sm">
+    <section className="flex flex-col gap-3 rounded-xl border border-border bg-card p-5">
       <h2 className="text-sm font-bold text-foreground">Payment</h2>
 
       {/* Invoice Helper Balances — only shown when customer attached + has balance */}
@@ -315,13 +315,13 @@ export default function CheckoutPaymentSection({ onChange, amountDue, allowParti
             {balancesApplied > 0 && (
               <div className="flex items-center justify-between text-muted-foreground">
                 <span>Balances applied</span>
-                <span>−{APP_CONFIG.CURRENCY.INR_SYMBOL}{balancesApplied.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>
+                <span className="tabular-nums">−{APP_CONFIG.CURRENCY.INR_SYMBOL}{balancesApplied.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>
               </div>
             )}
             {collectedByMode.map((p) => (
               <div key={p.modeId ?? p.modeCode} className="flex items-center justify-between text-muted-foreground">
                 <span>Collected ({p.modeName})</span>
-                <span>{APP_CONFIG.CURRENCY.INR_SYMBOL}{(Number(p.amount) || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>
+                <span className="tabular-nums">{APP_CONFIG.CURRENCY.INR_SYMBOL}{(Number(p.amount) || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>
               </div>
             ))}
             {isBalanced ? (
@@ -337,11 +337,11 @@ export default function CheckoutPaymentSection({ onChange, amountDue, allowParti
                     : allowPartial ? 'Balance on collection' : 'Remaining'}
                 </span>
                 <span
-                  className={
+                  className={`tabular-nums ${
                     remaining < 0
                       ? 'text-status-made-order'
                       : allowPartial ? 'text-foreground/80' : 'text-destructive'
-                  }
+                  }`}
                 >
                   {APP_CONFIG.CURRENCY.INR_SYMBOL}{Math.abs(remaining).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
                 </span>

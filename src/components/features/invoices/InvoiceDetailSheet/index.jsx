@@ -20,7 +20,7 @@ function Row({ label, value, bold, border }) {
   return (
     <div className={`flex justify-between ${border ? 'border-t border-border pt-2' : ''}`}>
       <span className="text-muted-foreground">{label}</span>
-      <span className={bold ? 'font-bold text-foreground' : 'font-medium text-foreground'}>
+      <span className={`tabular-nums ${bold ? 'font-bold text-foreground' : 'font-medium text-foreground'}`}>
         {value}
       </span>
     </div>
@@ -53,7 +53,7 @@ function InvoiceContent({ raw }) {
           {lineItems.map((item) => (
             <div key={item.transaction_item_id} className="flex justify-between gap-2">
               <span className="text-foreground/80 min-w-0">{item.item_name}</span>
-              <span className="font-medium text-foreground shrink-0">
+              <span className="font-medium text-foreground shrink-0 tabular-nums">
                 {formatCurrency(item.net_amount)}
               </span>
             </div>
@@ -76,7 +76,7 @@ function InvoiceContent({ raw }) {
           {payments.map((p) => (
             <div key={p.receipt_id} className="flex justify-between gap-2">
               <span className="text-foreground/80">{p.mode_name}</span>
-              <span className="font-medium text-foreground">{formatCurrency(p.amount)}</span>
+              <span className="font-medium text-foreground tabular-nums">{formatCurrency(p.amount)}</span>
             </div>
           ))}
         </div>
@@ -115,11 +115,16 @@ export default function InvoiceDetailSheet({ invoice, isOpen, onClose }) {
       {/* Print-only copy portaled to <body> — bg-white is intentional here
           (physical paper via print stylesheet, always white regardless of
           .dark), escapes BottomSheet's transform/overflow. Logo shown only
-          here (hidden on screen). */}
+          here (hidden on screen). The divider below can't route through
+          --border either, for the same reason: --border resolves to a
+          translucent white in dark mode (meant for dark surfaces) and
+          would be invisible on this always-white page. Fixed brand blush
+          (--secondary's light-mode value) instead of a generic Tailwind
+          stone-100 literal. */}
       {raw && typeof document !== 'undefined' &&
         createPortal(
           <div id="invoice-print-area" className="hidden print:block p-6 bg-white">
-            <div className="flex justify-center items-center py-8 mb-8 border-b border-stone-100">
+            <div className="flex justify-center items-center py-8 mb-8 border-b border-[#EFE5DE]">
               <Logo variant="full" color="brown" width={140} height={44} />
             </div>
             <InvoiceContent raw={raw} />

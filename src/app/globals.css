@@ -67,6 +67,7 @@
   --color-status-in-stock:  var(--status-in-stock);
   --color-status-made-order:var(--status-made-order);
   --color-status-error:     var(--status-error);
+  --color-status-info:      var(--status-info);
 
   /* Sidebar */
   --color-sidebar:                    var(--sidebar);
@@ -137,6 +138,7 @@
   --status-in-stock:  #189351;   /* Green  — in stock, availability badges       */
   --status-made-order:#AF7C3E;   /* Gold   — made-to-order, informational        */
   --status-error:     #F83E50;   /* Red    — out of stock, errors, destructive   */
+  --status-info:      #3B6E91;   /* Steel blue — completed/matured scheme states; muted rather than a stock blue so it still sits inside the warm palette */
 
   /* ── True-neutral gray scale — premium revamp (2026-07-22) ─────────────
      Introduced specifically to fix the "everything reads brown" feedback:
@@ -153,7 +155,20 @@
   --neutral-700: #3F3F46;
 
   /* ── shadcn/ui semantic tokens → Lucira values ───── */
-  --background:          #FCFCFC;          /* Near-white app background (was warm cream #FEF5F1) */
+  /* Visual Language Blueprint (2026-08-12) — neutrals restored partway.
+     The 2026-07-22 pass above went fully true-neutral to fix "everything
+     reads brown" (warm tint had been reused as literally every secondary
+     text/border color app-wide). That fix over-corrected: background,
+     border and muted text are the highest-surface-area tokens in the
+     app, and going fully cool-grey on all three made the whole product
+     read as generic dashboard software under the burgundy/terracotta
+     accents. This is a middle path, not a full reversion to the old warm
+     values — --background gets the real lift (it's page atmosphere, not
+     character-by-character text, so it can't retrigger "reads brown");
+     --border/--muted-foreground get only a whisper of warmth, well short
+     of the original saturated values, specifically to avoid repeating
+     that complaint. */
+  --background:          #FBF7F4;          /* Whisper-warm off-white (was #FCFCFC near-white, was #FEF5F1 cream before that) */
   --foreground:          #1C1210;          /* Near-black text                     */
 
   --card:                #FFFFFF;          /* Pure white cards                    */
@@ -169,15 +184,15 @@
   --secondary-foreground:#5A413F;          /* Primary text on secondary           */
 
   --muted:               #F5F5F5;          /* Surface muted (was #F9F9F9)         */
-  --muted-foreground:    #71717A;          /* True-neutral grey (was warm #8C7B78) */
+  --muted-foreground:    #7A6F6C;          /* Whisper-warm grey (was #71717A true-neutral, was #8C7B78 saturated-warm before that); ~4.9:1 on white, still WCAG AA */
 
   --accent:              #B77767;          /* Terracotta accent                   */
   --accent-foreground:   #FFFFFF;          /* White text on accent                */
 
   --destructive:         #F83E50;          /* Error / out of stock red            */
 
-  --border:              #E4E4E7;          /* True-neutral border (was warm #E8DDD9) */
-  --input:               #E4E4E7;          /* Input border (was warm #E8DDD9)     */
+  --border:              #E9E3DF;          /* Whisper-warm border (was #E4E4E7 true-neutral, was #E8DDD9 saturated-warm before that) */
+  --input:               #E9E3DF;          /* Input border, same reasoning as --border */
   --ring:                #B77767;          /* Focus ring — terracotta (deliberate accent, unchanged) */
 
   /* ── Shadow scale — premium revamp. None existed before; Button/Card
