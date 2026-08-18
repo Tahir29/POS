@@ -1,7 +1,7 @@
 'use client';
 
 // src/components/features/invoices/InvoiceDetailSheet/index.jsx
-// Read-only invoice detail view, opened from /invoices.
+// Invoice detail view, opened from /invoices.
 //
 // Uses the full record already returned by Invoice/List (passed in as
 // `invoice.raw`) — no second Invoice/Retrieve call needed.
@@ -9,11 +9,35 @@
 // PRINT LAYOUT: printable content portaled to document.body to escape
 // BottomSheet's CSS transform. Logo shown only in the print layout
 // (hidden on screen, shown via @media print / print:block).
+//
+// ADDED (2026-08-14) — Collect Payment and Cancel Invoice. Both
+// createInvoiceReceipt()/cancelInvoice() existed fully implemented in
+// orderService.js from the start with zero UI callers: every Partial/Due
+// invoice showed an actionable-looking status badge with no way to
+// actually collect the rest, and Orders had a working Cancel action this
+// screen never got. Cancel mirrors OrderDetailSheet's exactly (same
+// document family). Collect Payment is new — see useAddInvoiceReceipt's
+// header for its "unverified live" caveat (Invoice/Create's embedded
+// receipt_details[] is proven; this standalone post-creation call is not).
 
+import { useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useSelector } from 'react-redux';
+import { useForm } from 'react-hook-form';
+import { AlertTriangle, CreditCard } from 'lucide-react';
 import BottomSheet from '@/components/shared/BottomSheet';
+import { splitGst } from '@/lib/gst';
 import PrintInvoiceButton from '@/components/features/checkout/PrintInvoiceButton';
+import PaymentModeSelect from '@/components/shared/PaymentModeSelect';
 import Logo from '@/components/shared/Logo';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { useCancelInvoice } from '@/hooks/invoices/useCancelInvoice';
+import { useAddInvoiceReceipt } from '@/hooks/invoices/useAddInvoiceReceipt';
+import { usePaymentModes } from '@/hooks/checkout/usePaymentModes';
+import { useOrderHeaderConfig } from '@/hooks/checkout/useOrderHeaderConfig';
+import { selectActiveStoreId } from '@/store/slices/storeSlice';
+import APP_CONFIG from '@/constants/appConfig';
 
 function Row({ label, value, bold, border }) {
   if (value === null || value === undefined || value === '') return null;
@@ -34,6 +58,7 @@ function formatCurrency(amount) {
 function InvoiceContent({ raw }) {
   const lineItems = raw?.line_items ?? [];
   const payments  = raw?.receipt_details ?? [];
+  const gst       = splitGst(raw?.tax_amount);
 
   return (
     <div className="flex flex-col gap-2 text-sm">
@@ -67,8 +92,14 @@ function InvoiceContent({ raw }) {
           this row previously always rendered blank because of it. */}
       <Row label="Subtotal" value={formatCurrency(raw.sub_total)} border />
       <Row label="Discount" value={raw.discount ? `– ${formatCurrency(raw.discount)}` : null} />
-      <Row label="Tax"      value={formatCurrency(raw.tax_amount)} />
+      <Row label="CGST (1.5%)" value={gst && formatCurrency(gst.cgst)} />
+      <Row label="SGST (1.5%)" value={gst && formatCurrency(gst.sgst)} />
       <Row label="Total"    value={formatCurrency(raw.net_amount)} bold border />
+      <Row label="Received" value={formatCurrency(raw.receipt_amount)} />
+      <Row
+        label="Balance Due"
+        value={(raw.balance_amount ?? 0) > 0 ? formatCurrency(raw.balance_amount) : null}
+      />
 
       {payments.length > 0 && (
         <div className="border-t border-border pt-2 flex flex-col gap-1.5">
@@ -85,6 +116,98 @@ function InvoiceContent({ raw }) {
   );
 }
 
+// ── Collect Payment panel ──────────────────────────────────────
+function CollectPaymentPanel({ raw, onDone, onDismiss }) {
+  const storeId = useSelector(selectActiveStoreId);
+  const { paymentModes, isLoading: modesLoading } = usePaymentModes();
+  const headerConfig = useOrderHeaderConfig(APP_CONFIG.DOCUMENT_TYPES.POS_INVOICE);
+  const addReceipt = useAddInvoiceReceipt();
+
+  const { control, register, handleSubmit, watch, formState: { errors } } = useForm({
+    defaultValues: { mode_id: '', amount: String(raw.balance_amount ?? 0) },
+  });
+  const modeId = watch('mode_id');
+
+  const onSubmit = async (data) => {
+    const amount = Number(data.amount);
+    if (!amount || amount <= 0) return;
+    const mode = paymentModes.find((m) => m.modeId === Number(data.mode_id));
+    await addReceipt.mutateAsync({
+      transactionId:   raw.transaction_id,
+      partyId:         raw.party_id,
+      companyId:       storeId,
+      financialYearId: headerConfig.financialYearId,
+      mode,
+      amount,
+    });
+    onDone();
+  };
+
+  return (
+    <form onSubmit={handleSubmit(onSubmit)} className="rounded-xl border border-border bg-card p-4 flex flex-col gap-3">
+      <p className="text-sm font-semibold text-foreground">Collect Payment</p>
+
+      <div className="flex flex-col gap-1.5">
+        <label className="text-xs font-medium text-muted-foreground">Amount (₹) <span className="text-destructive">*</span></label>
+        <Input
+          type="number" step="0.01" min="0" max={raw.balance_amount ?? undefined}
+          {...register('amount', { required: true, min: 0.01 })}
+          className="h-10"
+        />
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <label className="text-xs font-medium text-muted-foreground">Payment Mode <span className="text-destructive">*</span></label>
+        <PaymentModeSelect control={control} name="mode_id" paymentModes={paymentModes} modesLoading={modesLoading} />
+      </div>
+
+      <div className="flex gap-2 mt-1">
+        <Button type="submit" size="sm" className="flex-1" disabled={addReceipt.isPending || !modeId}>
+          {addReceipt.isPending ? 'Recording…' : 'Record Payment'}
+        </Button>
+        <Button type="button" variant="outline" size="sm" className="flex-1" onClick={onDismiss} disabled={addReceipt.isPending}>
+          Cancel
+        </Button>
+      </div>
+      {errors.amount && <p className="text-xs text-destructive">Enter a valid amount.</p>}
+    </form>
+  );
+}
+
+// ── Cancel confirmation inline banner — identical to OrderDetailSheet's ─
+function CancelConfirmBanner({ onConfirm, onDismiss, isPending }) {
+  return (
+    <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 flex flex-col gap-3">
+      <div className="flex items-start gap-2.5">
+        <AlertTriangle size={16} className="shrink-0 text-destructive mt-0.5" />
+        <p className="text-sm text-destructive font-medium">
+          Cancel this invoice? This cannot be undone.
+        </p>
+      </div>
+      <div className="flex gap-2">
+        <Button
+          variant="destructive"
+          size="sm"
+          className="flex-1"
+          disabled={isPending}
+          onClick={onConfirm}
+        >
+          {isPending ? 'Cancelling…' : 'Yes, Cancel Invoice'}
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="flex-1"
+          disabled={isPending}
+          onClick={onDismiss}
+        >
+          Keep Invoice
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 /**
  * @param {{
  *   invoice: object | null,  // normalized invoice from useInvoiceList (with .raw)
@@ -94,16 +217,74 @@ function InvoiceContent({ raw }) {
  */
 export default function InvoiceDetailSheet({ invoice, isOpen, onClose }) {
   const raw = invoice?.raw;
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [showCollectPayment, setShowCollectPayment] = useState(false);
+
+  const cancelInvoiceMutation = useCancelInvoice();
+
+  const handleClose = () => {
+    setShowCancelConfirm(false);
+    setShowCollectPayment(false);
+    onClose();
+  };
+
+  const hasBalance = !!(raw && (raw.balance_amount ?? 0) > 0 && raw.transaction_id);
+  const isCancellable = !!(raw && raw.transaction_id);
+
+  const handleConfirmCancel = async () => {
+    if (!raw?.transaction_id) return;
+    await cancelInvoiceMutation.mutateAsync(raw.transaction_id);
+    setShowCancelConfirm(false);
+    handleClose();
+  };
 
   return (
     <>
-      <BottomSheet isOpen={isOpen} onClose={onClose} title="Invoice">
+      <BottomSheet isOpen={isOpen} onClose={handleClose} title="Invoice">
         {raw ? (
           <div className="flex flex-col gap-4">
             <div className="rounded-xl border border-border bg-card p-4">
               <InvoiceContent raw={raw} />
             </div>
+
             <PrintInvoiceButton />
+
+            {hasBalance && !showCollectPayment && !showCancelConfirm && (
+              <Button
+                variant="outline"
+                className="w-full gap-2"
+                onClick={() => setShowCollectPayment(true)}
+              >
+                <CreditCard size={16} />
+                Collect Payment
+              </Button>
+            )}
+
+            {showCollectPayment && (
+              <CollectPaymentPanel
+                raw={raw}
+                onDone={() => setShowCollectPayment(false)}
+                onDismiss={() => setShowCollectPayment(false)}
+              />
+            )}
+
+            {isCancellable && !showCancelConfirm && !showCollectPayment && (
+              <Button
+                variant="outline"
+                className="w-full border-destructive/40 text-destructive hover:bg-destructive/5 hover:text-destructive"
+                onClick={() => setShowCancelConfirm(true)}
+              >
+                Cancel Invoice
+              </Button>
+            )}
+
+            {isCancellable && showCancelConfirm && (
+              <CancelConfirmBanner
+                onConfirm={handleConfirmCancel}
+                onDismiss={() => setShowCancelConfirm(false)}
+                isPending={cancelInvoiceMutation.isPending}
+              />
+            )}
           </div>
         ) : (
           <p className="text-sm text-muted-foreground text-center py-4">

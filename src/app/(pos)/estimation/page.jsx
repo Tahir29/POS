@@ -28,7 +28,7 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver }        from '@hookform/resolvers/zod';
 import { z }                  from 'zod';
 import { toast }              from 'react-toastify';
-import { FileText, ChevronRight, RefreshCw, Plus, X, Check, Ban } from 'lucide-react';
+import { FileText, ChevronRight, RefreshCw, Plus, X, Check, Ban, AlertTriangle } from 'lucide-react';
 
 import { useEstimations } from '@/hooks/estimation/useEstimationList';
 import {
@@ -112,7 +112,16 @@ function EstimationNewForm({ onDone }) {
 
   const onSubmit = async (data) => {
     if (!customerId) return toast.error('Attach a customer to the session before submitting.');
-    if (!headerConfig.isReady) return toast.error('Store configuration is still loading — try again in a moment.');
+    if (!headerConfig.isReady) {
+      if (headerConfig.isError) headerConfig.refetch();
+      return toast.error(
+        headerConfig.isConfigMissing
+          ? "This document type isn't set up for your store yet — contact OrnaVerse support."
+          : headerConfig.isError
+            ? 'Store configuration failed to load — retrying now, try again in a moment.'
+            : 'Store configuration is still loading — try again in a moment.'
+      );
+    }
     try {
       const pieces = Number(data.pieces);
       const itemRate = Number(data.item_rate);
@@ -178,6 +187,17 @@ function EstimationNewForm({ onDone }) {
       <Button type="submit" disabled={create.isPending || !customerId} className="h-12 mt-1">
         {create.isPending ? 'Saving Quote…' : 'Save Quote'}
       </Button>
+
+      {/* Confirmed live 2026-08-14 (see estimationService.js header for the
+          full repro): Create works with no items, but fails the moment a
+          real item is added — with either the exact shape sent here or a
+          fully-priced one. Not something fixable from this form. */}
+      <p className="flex items-start gap-1.5 text-xs text-muted-foreground -mt-2">
+        <AlertTriangle size={13} className="shrink-0 mt-0.5 text-status-made-order" aria-hidden="true" />
+        Saving is currently expected to fail once an item is added — confirmed
+        a server-side issue on OrnaVerse&apos;s end, not something wrong with what
+        you entered.
+      </p>
     </form>
   );
 }

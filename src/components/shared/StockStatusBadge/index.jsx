@@ -8,10 +8,14 @@
 
 import { Badge } from '@/components/ui/badge';
 
-const LOW_STOCK_THRESHOLD = 3;
-
 /**
  * Derives status from raw stock API response (useProductStock hook).
+ *
+ * Binary only (in_stock / out_stock) — a "low_stock" tier was removed
+ * 2026-08-13. No field in any OrnaVerse response backs a real low-stock
+ * concept; it was a client-side quantity guess (n <= 3), and the UI never
+ * had a real third visual state for it — see products/[itemId]/page.jsx's
+ * own note from 2026-07-26 about the exact same thing happening there.
  */
 export function deriveStockStatus(stockData) {
   if (!stockData) return null;
@@ -25,10 +29,7 @@ export function deriveStockStatus(stockData) {
     null;
 
   if (qty !== null) {
-    const n = parseFloat(qty);
-    if (n <= 0)                   return 'out_stock';
-    if (n <= LOW_STOCK_THRESHOLD) return 'low_stock';
-    return 'in_stock';
+    return parseFloat(qty) <= 0 ? 'out_stock' : 'in_stock';
   }
 
   if (typeof stockData.in_stock === 'boolean') {
@@ -36,56 +37,6 @@ export function deriveStockStatus(stockData) {
   }
 
   return null;
-}
-
-/**
- * Derives status from a product object.
- *
- * Priority order:
- * 1. current_company_pieces  — from ProductCatalog/List (most accurate for active store)
- * 2. has_stock               — from ProductCatalog/List (boolean fallback)
- * 3. IsInStockJournal        — from Items/Retrieve (1 = in stock)
- * 4. stock_qty / quantity    — generic numeric fallback
- */
-export function deriveStockStatusFromProduct(product) {
-  if (!product) return null;
-
-  // ProductCatalog/List — pieces at current store
-  if (product.current_company_pieces !== undefined) {
-    const pieces = Number(product.current_company_pieces);
-    if (pieces <= 0)                   return 'out_stock';
-    if (pieces <= LOW_STOCK_THRESHOLD) return 'low_stock';
-    return 'in_stock';
-  }
-
-  // ProductCatalog/List — boolean fallback
-  if (typeof product.has_stock === 'boolean') {
-    return product.has_stock ? 'in_stock' : 'out_stock';
-  }
-
-  // Items/Retrieve — IsInStockJournal
-  if (product.IsInStockJournal !== undefined) {
-    return (product.IsInStockJournal === 1 || product.IsInStockJournal === true)
-      ? 'in_stock'
-      : 'out_stock';
-  }
-
-  // Generic numeric fallback
-  const qty =
-    product.stock_qty     ??
-    product.available_qty ??
-    product.quantity      ??
-    product.stock         ??
-    null;
-
-  if (qty !== null) {
-    const n = parseFloat(qty);
-    if (n <= 0)                   return 'out_stock';
-    if (n <= LOW_STOCK_THRESHOLD) return 'low_stock';
-    return 'in_stock';
-  }
-
-  return 'in_stock'; // optimistic default
 }
 
 // ── Badge config ──────────────────────────────────────────────────────────────
@@ -96,15 +47,21 @@ export function deriveStockStatusFromProduct(product) {
 // utilities — this component just wasn't using them).
 
 const CONFIG = {
-  in_stock:  { label: 'In Stock',     classes: 'bg-status-in-stock/10 text-status-in-stock ring-1 ring-status-in-stock/20' },
-  low_stock: { label: 'Low Stock',    classes: 'bg-status-made-order/10 text-status-made-order ring-1 ring-status-made-order/20' },
-  out_stock: { label: 'Out of Stock', classes: 'bg-status-error/10 text-status-error ring-1 ring-status-error/20' },
+  in_stock:  { label: 'In Stock',      classes: 'bg-status-in-stock/10 text-status-in-stock ring-1 ring-status-in-stock/20' },
+  out_stock: { label: 'Made to Order', classes: 'bg-status-error/10 text-status-error ring-1 ring-status-error/20' },
+  // A failed stock check, not a confirmed zero — see useStockByStores'
+  // isError. MUST render distinctly from in_stock/out_stock; the old
+  // `CONFIG[status] ?? CONFIG.in_stock` fallback below used to silently
+  // claim "In Stock" for any unrecognized status, which would have made
+  // this exact case actively misleading instead of just missing.
+  error:     { label: 'Stock Unknown', classes: 'bg-status-made-order/10 text-status-made-order ring-1 ring-status-made-order/20' },
 };
 
 export default function StockStatusBadge({ status, size = 'md' }) {
-  if (!status) return null;
+  const config = status ? CONFIG[status] : null;
+  if (!config) return null;
 
-  const { label, classes } = CONFIG[status] ?? CONFIG.in_stock;
+  const { label, classes } = config;
   const sizeClasses = size === 'sm'
     ? 'h-auto px-2 py-0.5 text-[11px]'
     : 'h-auto px-3 py-1 text-xs';

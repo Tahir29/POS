@@ -56,6 +56,12 @@ const API = {
   SETTINGS: {
     GET_PAYMENT_MODES:        'Services/Administration/PaymentReceiptMode/List',
     GET_PAYMENT_MODES_REFUND: 'Services/Administration/PaymentReceiptMode/PaymentModesForRefund',
+    // Bank/POS accounts a bank-settled payment (Credit Card, Debit Card,
+    // UPI) is deposited against — confirmed live against UAT 2026-08-13,
+    // { Take: 0 } → { Entities: [{id, code, name, ledger_id, company_id}] }.
+    // Does NOT take company_id in the request body (500s if you send one —
+    // scoped server-side from the token).
+    GET_BANK_POS_ACCOUNTS:    'Services/Administration/BankPOS/List',
     GET_TAXES:                'Services/Common/GetTaxes',
     CHECK_METAL_RATE_TODAY:   'Services/Common/Common/CheckMetalRateForToday',
     GET_REASON_CODES:         'Services/Administration/Reason/List',
@@ -223,6 +229,17 @@ const API = {
     LIST:   'Services/Master/PartyAddress/List',
     CREATE: 'Services/Master/PartyAddress/Create',
     UPDATE: 'Services/Master/PartyAddress/Update',
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // PARTY (Customer 360)
+  // Richer master-record read than CUSTOMERS.RETRIEVE — includes ledger ids,
+  // party_display_name, party_location, full party_address[]. Confirmed live
+  // 2026-08-12 against UAT with a real party_id, EntityId-in/Entity-out same
+  // as CUSTOMERS.RETRIEVE.
+  // ─────────────────────────────────────────────────────────────────────────
+  PARTY: {
+    RETRIEVE: 'Services/Master/Party/PartyRetrieve',
   },
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -480,6 +497,14 @@ const API = {
     ITEM_TRANSACTIONS: 'Services/Reports/CustomerHistory/ItemTransactions',
     TOTAL_RECEIPTS:    'Services/Reports/CustomerHistory/TotalReceipts',
     TOTAL_PROMOTIONS:  'Services/Reports/CustomerHistory/TotalPromotions',
+    // Customer 360 (2026-08-12) — confirmed live against UAT with a real
+    // party_id. PARTY_TRANSACTIONS is the single richest call: one document
+    // feed split by type (Invoices/Orders/Returns/Exchanges/URDs/BuyBacks/
+    // Receipts) PLUS invoice_total/buyback_total/exchange_total/
+    // credit_balance — the exact aggregate figures useCustomerHistory's own
+    // header comment (below) says it couldn't find a source for.
+    PARTY_TRANSACTIONS: 'Services/Reports/CustomerHistory/GetPartyTransactions',
+    SALES_INSIGHTS:     'Services/Reports/CustomerHistory/GetSalesInsights',
   },
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -500,6 +525,11 @@ const API = {
     ENROLLMENTS_LIST:    'Services/POS/SchemeEnrollment/List',
     ENROLL:              'Services/POS/SchemeEnrollment/Create',
     ENROLLMENT_RETRIEVE: 'Services/POS/SchemeEnrollment/Retrieve',
+    // Confirmed live 2026-08-14: no dedicated close/mature/foreclose/cancel
+    // endpoint exists anywhere in the API — this generic Update is the only
+    // mutation available on an enrollment. See schemeService.js
+    // closeSchemeEnrollment for what is and isn't safe to write through it.
+    ENROLLMENT_UPDATE:   'Services/POS/SchemeEnrollment/Update',
     RECEIPT_CREATE:      'Services/POS/SchemeReceipt/Create',
     RECEIPT_LIST:        'Services/POS/SchemeReceipt/List',
     MONTHLY_DETAILS:     'Services/POS/SchemeMonthlyDetails/List',

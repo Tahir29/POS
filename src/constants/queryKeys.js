@@ -28,6 +28,7 @@ export const QUERY_KEYS = {
   SETTINGS: {
     PAYMENT_MODES:        () => ['settings', 'payment-modes'],
     PAYMENT_MODES_REFUND: () => ['settings', 'payment-modes-refund'],
+    BANK_POS_ACCOUNTS:    () => ['settings', 'bank-pos-accounts'],
     TAXES:                (companyId) => ['settings', 'taxes', companyId],
     METAL_RATE_TODAY:     () => ['settings', 'metal-rate-today'],
     REASON_CODES:         () => ['settings', 'reason-codes'],
@@ -150,6 +151,14 @@ export const QUERY_KEYS = {
     PARTY_DAILY_CASH:(partyId, companyId) => ['invoice-helpers', 'daily-cash', partyId, companyId],
   },
 
+  // ── REPAIR INVOICE HELPERS (billing-time available balances) ──────────────
+  REPAIR_INVOICE_HELPERS: {
+    ADVANCES:    (partyId, companyId) => ['repair-invoice-helpers', 'advances',    partyId, companyId],
+    SCHEME:      (partyId, companyId) => ['repair-invoice-helpers', 'scheme',      partyId, companyId],
+    CREDIT_NOTE: (partyId, companyId) => ['repair-invoice-helpers', 'credit-note', partyId, companyId],
+    EXCHANGE:    (partyId, companyId) => ['repair-invoice-helpers', 'exchange',    partyId, companyId],
+  },
+
   // ── RETURNS ──────────────────────────────────────────────────────────────
   RETURNS: {
     LIST:       (params)        => ['returns', 'list', params],
@@ -213,6 +222,9 @@ export const QUERY_KEYS = {
   DAILY_CLOSING: {
     LIST:   (companyId)  => ['daily-closing', 'list', companyId],
     DETAIL: (closingId)  => ['daily-closing', 'detail', closingId],
+    // System-recorded receipt totals for a given store+date, used to
+    // reconcile the manually-typed EOD form — see useDailyClosingReconciliation.
+    RECONCILIATION: (companyId, dateString) => ['daily-closing', 'reconciliation', companyId, dateString],
   },
 
   // ── CRM ──────────────────────────────────────────────────────────────────
@@ -228,6 +240,11 @@ export const QUERY_KEYS = {
     ITEM_TRANSACTIONS: (customerId) => ['customer-history', 'item-transactions',  customerId],
     TOTAL_RECEIPTS:    (customerId) => ['customer-history', 'total-receipts',     customerId],
     TOTAL_PROMOTIONS:  (customerId) => ['customer-history', 'total-promotions',   customerId],
+  },
+
+  // ── CUSTOMER 360 ─────────────────────────────────────────────────────────
+  CUSTOMER_360: {
+    ALL: (customerId) => ['customer-360', 'all', customerId],
   },
 
   // ── REWARDS / LOYALTY ─────────────────────────────────────────────────────

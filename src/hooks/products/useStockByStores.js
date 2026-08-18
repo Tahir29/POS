@@ -18,7 +18,7 @@ import { getStockByStores } from '@/services/inventoryService';
  * }
  */
 export function useStockByStores(itemId) {
-  return useQuery({
+  const query = useQuery({
     queryKey:  QUERY_KEYS.CATALOG.STOCK_BY_STORES(itemId),
     queryFn:   () => getStockByStores(itemId),
     enabled:   !!itemId,
@@ -46,4 +46,17 @@ export function useStockByStores(itemId) {
       return Array.from(storeMap.values());
     },
   });
+
+  // isError/refetch surfaced explicitly — a failed fetch must NOT be
+  // indistinguishable from "this store genuinely has zero pieces" to any
+  // caller. See products/[itemId]/page.jsx's baseStockStatus for why this
+  // matters: before this, a network blip on this call read as real,
+  // confirmed out-of-stock to the salesperson.
+  return {
+    data:      query.data,
+    isLoading: query.isLoading,
+    isError:   query.isError,
+    error:     query.error,
+    refetch:   query.refetch,
+  };
 }

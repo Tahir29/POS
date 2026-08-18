@@ -1,6 +1,19 @@
 // src/lib/analytics/events.js
 // Centralised event name constants.
 //
+// SHARED BY GA4 AND WEBENGAGE — DELIBERATELY. This file contains nothing
+// GA-specific or WebEngage-specific: no gtag calls, no webengage calls,
+// just name strings. tracker.js fires every one of these to BOTH
+// destinations from the same call, with the same properties object (see
+// tracker.js's header comment and docs/analytics-integration.md). That's
+// what guarantees the two can never disagree about what an event is
+// called or what it carries — and what makes dropping WebEngage later (if
+// that's ever wanted) a change to tracker.js only: delete the
+// sendToWebEngage() line there, or just unset
+// NEXT_PUBLIC_WEBENGAGE_LICENSE_CODE so it self-disables. Nothing in THIS
+// file, or in any of the ~90 tracker.track(EVENTS.X, {...}) call sites
+// across the app, needs to change either way.
+//
 // Every custom event must be identifiable as coming from the POS app once
 // it lands in GA4 — but nobody defining a new event below should have to
 // remember to type "POS_" by hand (easy to forget, easy to typo). So this
@@ -63,6 +76,12 @@ const RAW_EVENTS = {
   // ── Orders ────────────────────────────────────────
   ORDER_CANCELLED:        'order_cancelled',
   ORDER_CANCEL_FAILED:    'order_cancel_failed',
+
+  // ── Invoices ──────────────────────────────────────
+  INVOICE_CANCELLED:      'invoice_cancelled',
+  INVOICE_CANCEL_FAILED:  'invoice_cancel_failed',
+  INVOICE_RECEIPT_ADDED:  'invoice_receipt_added',
+  INVOICE_RECEIPT_FAILED: 'invoice_receipt_failed',
 
   // ── Returns ───────────────────────────────────────
   RETURN_CREATED:         'return_created',

@@ -34,17 +34,39 @@ export async function getPaymentModesForRefund() {
   return response.data;
 }
 
+/**
+ * Bank/POS accounts a bank-settled payment (Credit Card, Debit Card, UPI)
+ * can be deposited against — e.g. "HDFC BANK MAIN", "ICICI BANK MAIN".
+ * Do NOT pass company_id — confirmed live 2026-08-13 that this endpoint
+ * 500s if you do; it's scoped server-side from the token.
+ * @returns {Promise<object>} Entities[] of {id, code, name, ledger_id, company_id}
+ */
+export async function getBankPosAccounts() {
+  const response = await axiosInstance.post(API.SETTINGS.GET_BANK_POS_ACCOUNTS, {
+    Take: 0,
+  });
+  return response.data;
+}
+
 // ─── TAXES ────────────────────────────────────────────────────────────────────
 
 /**
  * Fetches applicable taxes for the store (GST slabs, etc.).
- * Used to display tax breakdown on invoices.
+ *
+ * `exchange_rate` is REQUIRED — confirmed live 2026-08-14: omitting it
+ * (this function's only caller before this fix, the new Settings screen,
+ * is also the first real caller ever) returns
+ * {"Code":"exchange_rate","Message":"Exchange rate must be greater than
+ * zero."} before the request even reaches tax lookup. Even with it, a
+ * store with no tax template configured returns {"Message":"Tax Template
+ * Not Defined!"} — a real per-store config gap, not a bug here.
  * @param {{ company_id: number }} params
  * @returns {Promise<object>} OrnaVerse tax response
  */
 export async function getTaxes({ company_id } = {}) {
   const response = await axiosInstance.post(API.SETTINGS.GET_TAXES, {
     company_id,
+    exchange_rate: 1,
   });
   return response.data;
 }
@@ -99,6 +121,11 @@ export async function getExchangeRate({ currency_id, company_id } = {}) {
 /**
  * Fetches reason codes used for returns, cancellations, exchanges.
  * Static dataset — cache for session.
+ *
+ * CONFIRMED BROKEN live 2026-08-14 — Administration/Reason/List returns a
+ * generic 500 unconditionally: bare {Take:0}, {Take:10}, with company_id
+ * added directly or via EqualityFilter, all fail identically. Not a payload
+ * issue on our side; needs OrnaVerse's team.
  * @returns {Promise<object>} Entities[] of ReasonRow
  */
 export async function getReasonCodes() {

@@ -35,14 +35,34 @@ export function localDocumentDate(now = new Date()) {
  *
  * Fields their client sends, and where each comes from:
  *   mode_id, mode_code, mode_name, mode_type, mode_sub_type, allow_partial,
- *   ledger_id                      → the PaymentReceiptMode row
+ *   ledger_id                      → the PaymentReceiptMode row (OR the
+ *                                    selected bank account's ledger_id when
+ *                                    one is present — see bank_pos below)
  *   party_id, company_id,
  *   financial_year_id, exchange_rate → document context
  *   amount                         → what the operator entered
- *   ref_no, cheque_date, cheque_no → empty strings for cash/card/UPI
+ *   ref_no                         → empty string for Cash; a real,
+ *                                    operator-entered reference for
+ *                                    bank-settled modes (their own UI marks
+ *                                    it "Reference *" — required, not cosmetic)
+ *   cheque_date, cheque_no         → empty strings always (no UI collects these)
+ *
+ * bank_pos — added 2026-08-13, briefly broke Invoice/Create (sent the bank's
+ * string `code`), reverted, then confirmed correct 2026-08-14 via a real
+ * network capture of OrnaVerse's own client completing a Credit Card sale
+ * on their UAT panel:
+ *   - It's the bank account's NUMERIC id (BankPOS/List's `id`), not its
+ *     `code` string. That mismatch is exactly what caused the 500.
+ *   - When present, `ledger_id` on this same row becomes the bank
+ *     account's own ledger_id, not the payment mode's — confirmed from the
+ *     same capture (Credit Card's own ledger_id is NOT what was sent;
+ *     the selected bank's ledger_id was).
+ *   - Omitted entirely for Cash/helper balances — not sent as 0/null,
+ *     matching the original all-cash capture where the key was simply
+ *     absent from the row.
  *
  * @param {{
- *   paymentModes: {modeId, modeCode, modeName, amount, raw?: object}[],
+ *   paymentModes: {modeId, modeCode, modeName, amount, refNo?: string, bankPosId?: number|null, raw?: object}[],
  *   customerId:    number,
  *   activeStoreId: number,
  *   exchangeRate:  number,
@@ -69,6 +89,7 @@ export function buildReceiptDetails({
       allow_partial:     row.allow_partial ?? false,
       cheque_date:       '',
       cheque_no:         '',
+      ...(mode.bankPosId != null ? { bank_pos: mode.bankPosId } : {}),
       party_id:          customerId,
       ledger_id:         mode.ledgerId ?? row.ledger_id ?? null,
       company_id:        activeStoreId,

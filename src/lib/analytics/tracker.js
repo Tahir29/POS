@@ -9,12 +9,21 @@
 //   tracker.track(event, props)                    → during session
 //   tracker.endSession(reason)                     → customer detached / idle
 //
-// Every event goes to three places:
+// Every event goes to FOUR places (WebEngage added 2026-08-17 — see the
+// dedicated analytics doc, docs/analytics-integration.md, for the full
+// architecture writeup):
 //   1. sessionStorage (local buffer, useful for debugging/QA — see
-//      getEvents()/getAgentEvents(), unaffected by GA being configured or not)
+//      getEvents()/getAgentEvents(), unaffected by GA/WebEngage being
+//      configured or not)
 //   2. GA4, via sendToGA() — a no-op if NEXT_PUBLIC_GA_MEASUREMENT_ID isn't
 //      set, so analytics can never break the app.
-//   3. The browser console (always on) — filter devtools by "[POS Analytics]"
+//   3. WebEngage, via sendToWebEngage() — same no-op-if-unconfigured rule,
+//      gated on NEXT_PUBLIC_WEBENGAGE_LICENSE_CODE. Fired from the exact
+//      same call as GA4, with the exact same event name and properties
+//      object (EVENTS from events.js, defined once) — so the two can never
+//      drift apart, and removing WebEngage later is deleting the one line
+//      that calls sendToWebEngage() in this file, nothing in events.js.
+//   4. The browser console (always on) — filter devtools by "[POS Analytics]"
 //      to watch every event fire live as you click around: every button,
 //      every search, every transaction. This is how to manually confirm
 //      an event is actually wired up, and spot anything that's missing.
@@ -25,6 +34,15 @@
 // reports populate, AND its POS_-prefixed equivalent for your own
 // clickstream analysis. See events.js for the full rationale.
 //
+// SOURCE TAGGING — every event handed to GA4 or WebEngage carries
+// utm_source: 'pos' (see SOURCE_PROPS below), so if this GA4 property or
+// WebEngage account ever also receives traffic from the Shopify
+// storefront or anywhere else, POS events are always filterable/
+// attributable on their own. GA4 additionally gets this set once as a
+// user_property in layout.js's init script, so it also covers GA4's own
+// automatically-collected events (page_view, session_start, ...) that
+// never pass through this file at all.
+//
 // PII — Google's GA4 terms prohibit sending personally identifiable
 // information (name, email, full phone number) as event data; doing so
 // risks Google suspending the property. The full customerName/customerMobile
@@ -34,9 +52,46 @@
 // not identifying on its own) plus a masked mobile (last 4 digits only,
 // matching the masking style already used elsewhere in this app's UI).
 // Never add customerName/customerEmail to a sendToGA() payload.
+//
+// WebEngage is the deliberate OPPOSITE of that rule — it's a CRM/
+// engagement platform, not a web analytics tool, and identifying real
+// people is its entire purpose (see identifyWebEngageUser() in
+// startSession() below, which sends the full name/phone GA4 is never
+// given). sendToWebEngage() itself still only ever gets EVENT properties
+// (amounts, counts, ids) — the customer's actual identity is set once via
+// webengage.user.login()/setAttribute(), not repeated on every event.
 
 import { sendToGA } from './gtag';
+import {
+  sendToWebEngage, identifyWebEngageUser, logoutWebEngageUser,
+} from './webengage';
 import EVENTS from './events';
+
+// Applied to EVERY event sent to GA4/WebEngage — see "SOURCE TAGGING" above.
+// Not applied to the sessionStorage buffer or the console log: those are
+// for on-device debugging, where every event is already known to be from
+// this app, so the tag would be pure noise.
+const SOURCE_PROPS = { utm_source: 'pos' };
+
+// Session-derived fields (session_id/customer_id/customer_mobile) are
+// legitimately absent before a customer is attached — browsing the
+// catalog fires real events with no session yet. `session?.sessionId ??
+// undefined` resolves to `undefined`, but an object literal with a key
+// explicitly SET to undefined ({ session_id: undefined, ... }) still HAS
+// that key — it is not the same as omitting it. gtag() tolerates that
+// silently; WebEngage's SDK does strict per-attribute type-checking and
+// warns "unsupported type undefined" for every such key on every event
+// fired before a customer is attached — confirmed live 2026-08-17 from a
+// real browser console. Strip them before either destination sees the
+// object, rather than sending a placeholder that means "absent" to us but
+// "wrong type" to WebEngage.
+function omitUndefined(obj) {
+  const result = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (value !== undefined) result[key] = value;
+  }
+  return result;
+}
 
 const SESSION_KEY = 'lucira_session';
 const EVENTS_KEY  = 'lucira_events';
@@ -107,6 +162,12 @@ const tracker = {
     safeSet(SESSION_KEY, session);
     safeSet(EVENTS_KEY, []);
 
+    // Identify the customer to WebEngage BEFORE the SESSION_START event
+    // fires, so that event (and everything after it) is already attached
+    // to the right profile. GA4 never gets this call — see the PII note
+    // at the top of this file.
+    identifyWebEngageUser({ customerId, customerName, customerMobile });
+
     this.track(EVENTS.SESSION_START, {
       customerId,
       customerMobileMasked: maskMobile(customerMobile),
@@ -116,7 +177,7 @@ const tracker = {
   },
 
   /**
-   * Log an event — buffered locally AND sent to GA4.
+   * Log an event — buffered locally AND sent to GA4 + WebEngage.
    * Includes session context (customer/store) when one is active; still
    * logs with nulls when it isn't, since tracking now runs from login
    * onward, not just during an attached customer session.
@@ -146,13 +207,30 @@ const tracker = {
 
     logEvent(eventName, properties);
 
-    sendToGA(eventName, {
+    sendToGA(eventName, omitUndefined({
       timestamp,
-      session_id:            session?.sessionId ?? undefined,
-      customer_id:            session?.customerId ?? undefined,
-      customer_mobile_masked: maskMobile(session?.customerMobile) ?? undefined,
+      session_id:            session?.sessionId,
+      customer_id:            session?.customerId,
+      customer_mobile_masked: maskMobile(session?.customerMobile),
+      ...SOURCE_PROPS,
       ...properties,
-    });
+    }));
+
+    // Same event, same properties, second destination — see the "Every
+    // event goes to FOUR places" note at the top of this file. WebEngage
+    // already knows WHO this is via identifyWebEngageUser() in
+    // startSession(); customer_id/mobile here are for filtering this
+    // EVENT stream without a profile join, not a second identity signal.
+    // No PII restriction on this destination, so the full (unmasked)
+    // mobile is fine here even though GA above only gets a masked one.
+    sendToWebEngage(eventName, omitUndefined({
+      timestamp,
+      session_id:      session?.sessionId,
+      customer_id:     session?.customerId,
+      customer_mobile: session?.customerMobile,
+      ...SOURCE_PROPS,
+      ...properties,
+    }));
   },
 
   /**
@@ -175,7 +253,8 @@ const tracker = {
 
     logEvent(eventName, properties);
 
-    sendToGA(eventName, { timestamp, ...properties });
+    sendToGA(eventName, omitUndefined({ timestamp, ...SOURCE_PROPS, ...properties }));
+    sendToWebEngage(eventName, omitUndefined({ timestamp, ...SOURCE_PROPS, ...properties }));
   },
 
   /**
@@ -190,12 +269,17 @@ const tracker = {
    * @param {object} params — GA4 ecommerce params (items[], value, currency, ...)
    */
   trackEcommerce(gaEventName, posEventName, params = {}) {
-    this.track(posEventName, params); // already logs POS_-prefixed name
+    // Fires the POS_-prefixed name to sessionStorage + GA4 + WebEngage +
+    // console — see track() above. Only the bare GA4-reserved name below
+    // needs its own extra call, since GA4 (not WebEngage) is the only
+    // destination that treats that exact string specially.
+    this.track(posEventName, params);
     logEvent(gaEventName, params);     // also log the GA-reserved-name fire
-    sendToGA(gaEventName, {
+    sendToGA(gaEventName, omitUndefined({
       timestamp: new Date().toISOString(),
+      ...SOURCE_PROPS,
       ...params,
-    });
+    }));
   },
 
   /**
@@ -242,6 +326,13 @@ const tracker = {
         totalEvents: this.getEvents().length,
         customerId:  session.customerId,
       });
+      // Clears WebEngage's identity on THIS BROWSER now that the session
+      // is over — a POS counter is shared by many customers a day, and
+      // without this the next customer's events would be attributed to
+      // whoever was last logged in. Fired after the SESSION_END track()
+      // above, not before, so that event still lands on the outgoing
+      // customer's profile.
+      logoutWebEngageUser();
     }
   },
 

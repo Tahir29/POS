@@ -241,7 +241,14 @@ export function useCreateInvoice() {
       promotionDetails: promotionDetailsArg,
     }) => {
       if (!headerConfig.isReady) {
-        throw new Error('Store configuration is still loading — please try again in a moment');
+        if (headerConfig.isError) headerConfig.refetch();
+        throw new Error(
+          headerConfig.isConfigMissing
+            ? "This document type isn't set up for your store yet — contact OrnaVerse support"
+            : headerConfig.isError
+              ? 'Store configuration failed to load — retrying now, please try again in a moment'
+              : 'Store configuration is still loading — please try again in a moment'
+        );
       }
 
       const documentId = APP_CONFIG.DOCUMENT_TYPES.POS_INVOICE;

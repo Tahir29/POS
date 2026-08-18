@@ -11,7 +11,7 @@
 
 import { useState, useEffect } from 'react';
 import {
-  Phone, Mail, MapPin, CreditCard, UserCircle,
+  Phone, Mail, MapPin, CreditCard, UserCircle, History,
   Loader2,
 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
@@ -88,12 +88,30 @@ function ProfileTab({ customer, onAttach, isAttached, onClose }) {
         {isAttached ? 'Already attached to cart' : 'Attach to Cart'}
       </Button>
 
-      <Button asChild type="button" variant="outline" className="h-11 w-full gap-2">
-        <Link href={`/customers/${customer.customerId}`} onClick={onClose}>
-          <UserCircle size={16} />
-          View Full Profile
-        </Link>
-      </Button>
+      {/* Both links below only make sense once this customer is actually
+          on the sale (2026-08-12) — before that, jumping to their full
+          profile/360 has nothing to do with the cart in front of the
+          operator, so the paths simply aren't shown yet. */}
+      {isAttached && (
+        <>
+          <Button asChild type="button" variant="outline" className="h-11 w-full gap-2">
+            <Link href={`/customers/${customer.customerId}`} onClick={onClose}>
+              <UserCircle size={16} />
+              View Full Profile
+            </Link>
+          </Button>
+
+          {/* Jumps straight to the full profile page's '360' tab via
+              ?tab=360, read on mount by that page (see
+              customers/[customerId]/page.jsx). */}
+          <Button asChild type="button" variant="outline" className="h-11 w-full gap-2">
+            <Link href={`/customers/${customer.customerId}?tab=360`} onClick={onClose}>
+              <History size={16} />
+              Customer 360
+            </Link>
+          </Button>
+        </>
+      )}
     </div>
   );
 }

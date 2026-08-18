@@ -11,10 +11,11 @@
 // No longer relies on useAllCustomers directory lookup (fragile, stale).
 
 import { useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowLeft, Phone, Mail, MapPin, CreditCard,
   ClipboardList, BookOpen,
+  ShoppingCart, FileText, RotateCcw, ArrowLeftRight, Coins, Gem, Receipt, Star, Info,
 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -24,7 +25,6 @@ import { Input }    from '@/components/ui/input';
 import { Label }    from '@/components/ui/label';
 import LocationSelect from '@/components/shared/LocationSelect';
 import PillTabs from '@/components/shared/PillTabs';
-import PaymentStatusBadge, { mapOrderStatus } from '@/components/shared/PaymentStatusBadge';
 import EmptyState from '@/components/shared/EmptyState';
 import ErrorState from '@/components/shared/ErrorState';
 import InlineLoader from '@/components/shared/InlineLoader';
@@ -32,10 +32,9 @@ import InlineLoader from '@/components/shared/InlineLoader';
 import { updateCustomerSchema }   from '@/validators/customerSchema';
 import { useRetrieveCustomer }    from '@/hooks/customer/useRetrieveCustomer';
 import { useUpdateCustomer }      from '@/hooks/customer/useUpdateCustomer';
-import { useCustomerOrders }      from '@/hooks/customer/useCustomerOrders';
 import { useCustomerEnrollments } from '@/hooks/customer/useCustomerEnrollments';
-import { useCustomerHistory }     from '@/hooks/customer/useCustomerHistory';
 import { useCustomerLoyalty }     from '@/hooks/customer/useCustomerLoyalty';
+import { useCustomer360 }         from '@/hooks/customer/useCustomer360';
 import { useCountries, useStates, useCities } from '@/hooks/settings/useLocation';
 import APP_CONFIG from '@/constants/appConfig';
 
@@ -58,15 +57,48 @@ function maskPan(pan) {
 }
 
 // ── Tab config ────────────────────────────────────────────────────────────────
-const TABS    = ['profile', 'edit', 'orders', 'schemes', 'history', 'points'];
+// '360' added 2026-08-12 — see useCustomer360.js. 'orders' and 'history' were
+// REMOVED the same day: both were fully subsumed by 360's Order/Invoice
+// sub-tabs (360 covers the same documents plus real aggregate totals
+// useCustomerHistory's own header comment said it couldn't find a source
+// for) — kept as separate tabs, they were just the same data shown twice.
+// useCustomerOrders/useCustomerHistory hooks are left in place (still valid,
+// just no longer wired to this page) rather than deleted outright.
+const TABS    = ['profile', 'edit', 'schemes', 'points', '360'];
 const TAB_LABELS = {
   profile: 'Profile',
   edit:    'Edit',
-  orders:  'Orders',
   schemes: 'Schemes',
-  history: 'History',
   points:  'Points',
+  '360':   '360',
 };
+
+// Document-type sub-tabs inside the 360 tab's transaction table. Keys match
+// useCustomer360's `documents` shape exactly. "Scheme" isn't included here —
+// it's already the existing Schemes tab above, not duplicated.
+const DOC_TYPES = [
+  { key: 'order',    label: 'Order',        icon: ShoppingCart },
+  { key: 'invoice',  label: 'Invoice',      icon: FileText },
+  { key: 'return',   label: 'Return',       icon: RotateCcw },
+  { key: 'urd',      label: 'URD Purchase', icon: Coins },
+  { key: 'exchange', label: 'Exchange',     icon: ArrowLeftRight },
+  { key: 'buyback',  label: 'Buy Back',     icon: Gem },
+  { key: 'receipt',  label: 'Receipt',      icon: Receipt },
+];
+
+// Sales Insights are backend-computed and open-ended (kind/severity/title/
+// detail/priority) — render whatever comes back rather than hardcoding
+// per-insight copy. Icon map is best-effort by `kind`, with a generic
+// fallback for any kind not yet seen.
+const INSIGHT_ICON = {
+  preference:         Star,
+  open_order_balance: ShoppingCart,
+};
+
+function fmtWeight(grams) {
+  if (grams == null) return null;
+  return `${Number(grams).toFixed(3)} g`;
+}
 
 // ── Shared primitives ─────────────────────────────────────────────────────────
 function TabLoading({ label }) {
@@ -273,35 +305,6 @@ function EditTab({ customer, onSaved }) {
   );
 }
 
-// ── Orders Tab ────────────────────────────────────────────────────────────────
-function OrdersTab({ customerId }) {
-  const { orders, isLoading, isError, refetch } = useCustomerOrders({ customerId });
-
-  if (isLoading) return <TabLoading label="Loading orders…" />;
-  if (isError)   return <TabError label="Failed to load orders." onRetry={refetch} />;
-  if (!orders.length) return <TabEmpty icon={ClipboardList} label="No orders found." />;
-
-  return (
-    <div className="flex flex-col gap-2">
-      {orders.map((order, idx) => (
-        <div key={order.orderId ?? idx} className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2.5">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <p className="text-sm font-medium text-foreground truncate">{order.orderNo ?? `#${order.orderId}`}</p>
-              {order.status && <PaymentStatusBadge status={mapOrderStatus(order.status)} size="sm" />}
-            </div>
-            {order.orderDate && <p className="text-xs text-muted-foreground mt-0.5">{fmtDate(order.orderDate)}</p>}
-          </div>
-          <div className="text-right shrink-0">
-            {order.totalAmount != null && <p className="text-sm font-semibold text-foreground">{fmt(order.totalAmount)}</p>}
-            {order.balanceAmount > 0 && <p className="text-xs text-status-error">Due {fmt(order.balanceAmount)}</p>}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 // ── Schemes Tab ───────────────────────────────────────────────────────────────
 function SchemesTab({ customerId }) {
   const { enrollments, isLoading, isError, refetch } = useCustomerEnrollments({ customerId });
@@ -338,52 +341,123 @@ function SchemesTab({ customerId }) {
   );
 }
 
-// ── History Tab ───────────────────────────────────────────────────────────────
-// Rebuilt 2026-07-16 — see useCustomerHistory.js header: the real API only
-// gives an invoice list + a payment-mode breakdown, not a Credit Balance/
-// Exchange Value/Buy Back Value summary (no working data source for those).
-function HistoryTab({ customerId }) {
-  const { invoiceTotal, receiptModes, invoices, isLoading, isError, refetch } = useCustomerHistory(customerId);
-
-  if (isLoading) return <TabLoading label="Loading history…" />;
-  if (isError)   return <TabError label="Failed to load history." onRetry={refetch} />;
-  if (!invoices.length && !receiptModes.length) {
-    return <TabEmpty icon={ClipboardList} label="No purchase history found." />;
-  }
+// ── 360 Tab ───────────────────────────────────────────────────────────────────
+// Built 2026-08-12 — see useCustomer360.js for the three endpoints backing
+// this (PARTY.RETRIEVE, CUSTOMER_HISTORY.PARTY_TRANSACTIONS, .SALES_INSIGHTS),
+// all confirmed live against UAT with a real party_id before this was built.
+function InsightCard({ insight }) {
+  const Icon = INSIGHT_ICON[insight.kind] ?? Info;
+  const elevated = insight.severity === 'high' || insight.severity === 'critical';
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="rounded-lg border border-border p-3">
-        <p className="text-xs text-muted-foreground/70">Total Purchases</p>
-        <p className="text-sm font-semibold text-foreground mt-0.5">{fmt(invoiceTotal)}</p>
+    <div
+      className={`flex items-start gap-2.5 rounded-lg border p-3 ${
+        elevated ? 'border-status-error/30 bg-status-error/5' : 'border-accent/30 bg-accent/5'
+      }`}
+    >
+      <Icon
+        size={16}
+        className={`shrink-0 mt-0.5 ${elevated ? 'text-status-error' : 'text-accent'}`}
+        aria-hidden="true"
+      />
+      <div className="min-w-0">
+        <p className="text-sm font-semibold text-foreground">{insight.title}</p>
+        {insight.detail && <p className="text-xs text-muted-foreground mt-0.5">{insight.detail}</p>}
+      </div>
+    </div>
+  );
+}
+
+function DocumentRow({ doc }) {
+  const weight = fmtWeight(doc.net_weight ?? doc.weight);
+
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2.5">
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-foreground truncate">{doc.document_no ?? '—'}</p>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          {doc.document_date ? fmtDate(doc.document_date) : '—'}
+          {doc.pieces != null ? ` · ${doc.pieces} pc` : ''}
+          {weight ? ` · ${weight}` : ''}
+        </p>
+      </div>
+      <div className="text-right shrink-0">
+        {doc.net_amount != null && <p className="text-sm font-semibold text-foreground">{fmt(doc.net_amount)}</p>}
+        {doc.balance_amount > 0 && <p className="text-xs text-status-error">Due {fmt(doc.balance_amount)}</p>}
+      </div>
+    </div>
+  );
+}
+
+function Customer360Tab({ customerId }) {
+  const { insights, documents, totals, isLoading, isError, refetch } = useCustomer360(customerId);
+  const [docType, setDocType] = useState('order');
+
+  if (isLoading) return <TabLoading label="Loading customer 360…" />;
+  if (isError)   return <TabError label="Failed to load customer 360." onRetry={refetch} />;
+
+  const activeDocs = documents[docType] ?? [];
+  const activeLabel = DOC_TYPES.find((d) => d.key === docType)?.label ?? 'record';
+
+  return (
+    <div className="flex flex-col gap-4">
+
+      {/* Stat tiles */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+        <div className="rounded-lg border border-border p-3">
+          <p className="text-xs text-muted-foreground/70">Total Earnings</p>
+          <p className="text-sm font-semibold text-status-in-stock mt-0.5">{fmt(totals.invoiceTotal)}</p>
+        </div>
+        <div className="rounded-lg border border-border p-3">
+          <p className="text-xs text-muted-foreground/70">Credit Balance</p>
+          <p className={`text-sm font-semibold mt-0.5 ${totals.creditBalance < 0 ? 'text-status-error' : 'text-foreground'}`}>
+            {fmt(totals.creditBalance)}
+          </p>
+        </div>
+        <div className="rounded-lg border border-border p-3">
+          <p className="text-xs text-muted-foreground/70">Invoices</p>
+          <p className="text-sm font-semibold text-foreground mt-0.5">{documents.invoice.length}</p>
+        </div>
+        <div className="rounded-lg border border-border p-3">
+          <p className="text-xs text-muted-foreground/70">Orders</p>
+          <p className="text-sm font-semibold text-foreground mt-0.5">{documents.order.length}</p>
+        </div>
+        <div className="rounded-lg border border-border p-3">
+          <p className="text-xs text-muted-foreground/70">Returns</p>
+          <p className="text-sm font-semibold text-foreground mt-0.5">{documents.return.length}</p>
+        </div>
       </div>
 
-      {receiptModes.length > 0 && (
-        <div className="flex flex-col gap-1.5">
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">By Payment Mode</p>
-          {receiptModes.map((r, idx) => (
-            <div key={idx} className="flex justify-between items-center text-sm rounded-lg border border-border px-3 py-2">
-              <span className="text-foreground/80">{r.mode}</span>
-              <span className="font-semibold text-foreground">{fmt(r.amount)}</span>
-            </div>
+      {/* Sales Insights — backend-computed, render whatever comes back */}
+      {insights.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Sales Insights</p>
+          {insights.map((insight, idx) => (
+            <InsightCard key={insight.title ?? idx} insight={insight} />
           ))}
         </div>
       )}
 
-      {invoices.length > 0 && (
-        <div className="flex flex-col gap-1.5 mt-1">
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Recent Invoices</p>
-          {invoices.slice(0, 10).map((inv, idx) => (
-            <div key={idx} className="flex justify-between items-center text-sm rounded-lg border border-border px-3 py-2">
-              <div>
-                <p className="text-foreground/80 font-medium">{inv.document_no ?? `Invoice #${idx + 1}`}</p>
-                {inv.document_date && <p className="text-xs text-muted-foreground/70">{fmtDate(inv.document_date)}</p>}
-              </div>
-              <span className="font-semibold text-foreground">{fmt(inv.net_amount)}</span>
-            </div>
-          ))}
-        </div>
-      )}
+      {/* Transaction-type tabs */}
+      <div className="flex flex-col gap-2">
+        <PillTabs
+          tabs={DOC_TYPES}
+          value={docType}
+          onChange={setDocType}
+          variant="chip"
+          scrollable
+          className="-mx-1 px-1 pb-1"
+        />
+        {activeDocs.length === 0 ? (
+          <TabEmpty icon={ClipboardList} label={`No ${activeLabel.toLowerCase()} records.`} />
+        ) : (
+          <div className="flex flex-col gap-1.5">
+            {activeDocs.map((doc, idx) => (
+              <DocumentRow key={doc.transaction_id ?? doc.document_id ?? idx} doc={doc} />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -421,12 +495,20 @@ function PointsTab({ customerId }) {
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function CustomerDetailPage() {
-  const params     = useParams();
-  const router     = useRouter();
-  const partyId    = Number(params?.customerId);
+  const params       = useParams();
+  const router       = useRouter();
+  const searchParams = useSearchParams();
+  const partyId      = Number(params?.customerId);
 
-  // Default to Edit tab so staff can immediately update details
-  const [activeTab, setActiveTab] = useState('edit');
+  // Default to Edit tab so staff can immediately update details — unless
+  // arrived via a deep link (e.g. CustomerDetailSheet's "Customer 360"
+  // button, ?tab=360), in which case honor that instead. Read once at mount
+  // (useState initializer), not synced afterward — same one-shot pattern as
+  // any other query-param-seeded initial state in this app.
+  const [activeTab, setActiveTab] = useState(() => {
+    const requested = searchParams.get('tab');
+    return TABS.includes(requested) ? requested : 'edit';
+  });
 
   // Fetch full customer record directly by party_id
   const { customer, isLoading, isError, refetch } = useRetrieveCustomer(partyId, {
@@ -438,7 +520,7 @@ export default function CustomerDetailPage() {
   };
 
   return (
-    <div className="flex flex-col gap-4 max-w-2xl mx-auto w-full">
+    <div className="flex flex-col gap-4 max-w-3xl mx-auto w-full">
 
       {/* Header */}
       <div className="flex items-center gap-2">
@@ -498,10 +580,9 @@ export default function CustomerDetailPage() {
           <div>
             {activeTab === 'profile' && <ProfileTab customer={customer} />}
             {activeTab === 'edit'    && <EditTab customer={customer} onSaved={handleSaved} />}
-            {activeTab === 'orders'  && <OrdersTab customerId={customer.customerId} />}
             {activeTab === 'schemes' && <SchemesTab customerId={customer.customerId} />}
-            {activeTab === 'history' && <HistoryTab customerId={customer.customerId} />}
             {activeTab === 'points'  && <PointsTab customerId={customer.customerId} />}
+            {activeTab === '360'     && <Customer360Tab customerId={customer.customerId} />}
           </div>
 
         </div>

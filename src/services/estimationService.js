@@ -10,6 +10,27 @@
 // Use case: Customer asks "how much would this ring cost?" —
 // staff creates an estimation, customer gets a quote slip,
 // and if they agree, the estimation is posted to create the sale.
+//
+// ESTIMATION/CREATE 500S THE MOMENT A REAL LINE ITEM IS ADDED — confirmed
+// live 2026-08-14 end to end against UAT (party_id 2221, Tahir Kutty),
+// isolated with a real binary search, not a guess:
+//   1. Header alone, line_items: [] → 200, real EntityId (18, then
+//      cancelled to clean up the test).
+//   2. Header + a hand-built 7-field line item (item_id/item_code/
+//      item_name/pieces/item_rate/sub_total/taxable_amount/net_amount,
+//      exactly what estimation/page.jsx currently sends) → 500 Exception.
+//   3. Header + a FULL line item computed via Helpers/SetSalesItems with
+//      document_id:52 (Estimation's own constant, confirmed already used
+//      this way by pricingService.js) → STILL 500 Exception. Same result
+//      with a real vs. a guessed ledger_id on the header, so it isn't that
+//      either.
+// So this isn't the usual "line item needs the full computed shape"
+// problem that fixed Order/Return/Buyback/Exchange — something about
+// Estimation's line-item processing itself is broken server-side on this
+// tenant. The earlier "Estimation's full lifecycle is genuinely solid"
+// assessment was based on code review + a route sweep (render/console
+// errors only), not an actual submit — this live test is the correction.
+// Needs OrnaVerse's team; the UI now says so instead of implying success.
 
 import axiosInstance from '@/lib/axios/axiosInstance';
 import API from '@/constants/apiEndpoints';

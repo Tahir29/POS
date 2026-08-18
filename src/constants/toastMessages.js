@@ -74,6 +74,8 @@ const TOAST = {
     LOAD_FAILED:  'Failed to load invoice. Please try again.',
     PDF_SUCCESS:  'Invoice PDF generated successfully.',
     PDF_FAILED:   'Failed to generate PDF. Please try again.',
+    RECEIPT_ADDED: 'Payment recorded successfully.',
+    RECEIPT_FAILED:'Failed to record payment. Please try again.',
   },
 
   // ── RETURNS ───────────────────────────────────────────────────────────────
@@ -195,6 +197,8 @@ const TOAST = {
     RECEIPT_SUCCESS: 'Scheme payment recorded successfully.',
     RECEIPT_FAILED:  'Failed to record scheme payment. Please try again.',
     LOAD_FAILED:     'Failed to load schemes. Please try again.',
+    CLOSURE_RECORDED:'Benefit amount recorded on the enrollment.',
+    CLOSURE_FAILED:  'Failed to record the benefit amount. Please try again.',
   },
 
   // ── METAL RATES ───────────────────────────────────────────────────────────

@@ -10,6 +10,7 @@
 // drawer-specific logic (e.g. close handlers) here.
 
 import { useCartTotals } from '@/hooks/cart/useCartTotals';
+import { splitGst } from '@/lib/gst';
 
 /**
  * @param {{
@@ -36,6 +37,10 @@ export default function CartSummary({ totals = null, isPricing = false }) {
   const tax      = totals ? totals.taxAmount : cart.tax;
   const discount = totals ? (totals.discount ?? 0) : cart.discount;
   const total    = totals ? Math.round(totals.netAmount) : cart.total;
+  // Bifurcated for display — see lib/gst.js. The combined `tax` above is
+  // still what's actually summed into the header at submission time;
+  // this just shows it the way a GST tax invoice is required to.
+  const gst = splitGst(tax);
 
   return (
     <div className="flex flex-col gap-2 py-3" aria-busy={isPricing || undefined}>
@@ -68,14 +73,26 @@ export default function CartSummary({ totals = null, isPricing = false }) {
         </div>
       )}
 
-      <div className="flex items-center justify-between text-sm text-muted-foreground">
-        {/* Only the cart's own figure is the flat-3% estimate; the priced
-            one is the server's real per-item tax. */}
-        <span>{totals ? 'GST' : 'GST (3%)'}</span>
-        <span className="font-medium text-foreground">
-          ₹{tax.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
-        </span>
-      </div>
+      {/* Shown as CGST + SGST, not one "GST" line — see lib/gst.js for why
+          this split is exact for this business, not an estimate. Only the
+          cart's own combined figure (pre-split) is the flat-3% estimate;
+          the priced one is the server's real per-item tax total. */}
+      {gst && (
+        <>
+          <div className="flex items-center justify-between text-sm text-muted-foreground">
+            <span>CGST (1.5%)</span>
+            <span className="font-medium text-foreground">
+              ₹{gst.cgst.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+            </span>
+          </div>
+          <div className="flex items-center justify-between text-sm text-muted-foreground">
+            <span>SGST (1.5%)</span>
+            <span className="font-medium text-foreground">
+              ₹{gst.sgst.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+            </span>
+          </div>
+        </>
+      )}
 
       <div className="h-px w-full bg-grad-hairline mt-1" aria-hidden="true" />
 

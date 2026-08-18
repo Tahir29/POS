@@ -102,7 +102,7 @@ function GallerySkeleton() {
  * @param {boolean}  isLoading       — true while variant/Shopify data is still
  *                                     resolving — shows a skeleton instead of
  *                                     the "no image" empty state
- * @param {string|null} stockStatus  — 'in_stock' | 'low_stock' | 'out_stock' | null;
+ * @param {string|null} stockStatus  — 'in_stock' | 'out_stock' | null;
  *                                     when provided, renders a floating
  *                                     StockStatusBadge over the top-right
  *                                     corner of the main image
@@ -298,7 +298,7 @@ export default function ProductImageGallery({
               an arbitrary product photo, same technique as the nav/zoom
               buttons below. */}
           {stockStatus && (
-            <div className="absolute right-3 top-3 rounded-full bg-white/95 p-0.5 shadow-md ring-1 ring-black/5 backdrop-blur-sm">
+            <div className="absolute right-3 top-3 rounded-full bg-white/95 p-0.5">
               <StockStatusBadge status={stockStatus} size="sm" />
             </div>
           )}

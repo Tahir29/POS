@@ -7,6 +7,7 @@ import { createPortal } from 'react-dom';
 import { AlertTriangle } from 'lucide-react';
 
 import BottomSheet from '@/components/shared/BottomSheet';
+import { splitGst } from '@/lib/gst';
 import PrintInvoiceButton from '@/components/features/checkout/PrintInvoiceButton';
 import Logo from '@/components/shared/Logo';
 import { Button } from '@/components/ui/button';
@@ -41,6 +42,7 @@ function OrderContent({ raw, status }) {
 
   const lineItems = raw.line_items     ?? [];
   const payments  = raw.receipt_details ?? [];
+  const gst       = splitGst(raw.tax_amount);
 
   return (
     <div className="flex flex-col gap-2 text-sm">
@@ -82,7 +84,8 @@ function OrderContent({ raw, status }) {
           this row previously always rendered blank because of it. */}
       <Row label="Subtotal"   value={formatCurrency(raw.sub_total)} border />
       <Row label="Discount"   value={raw.discount ? `– ${formatCurrency(raw.discount)}` : null} />
-      <Row label="Tax"        value={formatCurrency(raw.tax_amount)} />
+      <Row label="CGST (1.5%)" value={gst && formatCurrency(gst.cgst)} />
+      <Row label="SGST (1.5%)" value={gst && formatCurrency(gst.sgst)} />
       <Row label="Total"      value={formatCurrency(raw.net_amount)} bold border />
       <Row label="Received"   value={formatCurrency(raw.receipt_amount)} />
       <Row

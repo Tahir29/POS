@@ -16,24 +16,31 @@
 // dailyClosingService.js header for the full story): the API field is
 // document_date, not closing_date (the form's internal field name stays
 // closing_date for clarity in this component — only the outgoing payload
-// key changed). Also confirmed: DailyClosing/Create and /List both crash
-// with a 500 the moment any field beyond the bare minimum is sent — likely
-// a missing DocumentNumbering config on OrnaVerse's side, not a payload
-// issue. Submitting this form will currently fail; that's expected until
-// OrnaVerse resolves it.
+// key changed). Also confirmed, RE-VERIFIED live 2026-08-14 against the
+// full 689-row DocumentNumbering/List: DailyClosing/Create and /List both
+// still crash with a 500 the moment any field beyond the bare minimum is
+// sent — a missing DocumentNumbering config on OrnaVerse's side, not a
+// payload issue, and not something fixable here. Submitting this form
+// will currently fail; that's expected until OrnaVerse resolves it.
+//
+// What IS real now (added 2026-08-14): a "System Recorded" panel backed by
+// useDailyClosingReconciliation, so the manual entry below is checked
+// against actual receipts instead of typed from memory alone. See that
+// hook's header for the endpoint and its per-store reliability.
 
 import { Suspense, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { ClipboardCheck, ChevronDown } from 'lucide-react';
+import { ClipboardCheck, ChevronDown, ScanLine, RefreshCw } from 'lucide-react';
 import EmptyState from '@/components/shared/EmptyState';
 import ErrorState from '@/components/shared/ErrorState';
 import InlineLoader from '@/components/shared/InlineLoader';
 
-import { useDailyClosing }       from '@/hooks/dailyClosing/useDailyClosing';
-import { useCreateDailyClosing } from '@/hooks/dailyClosing/useCreateDailyClosing';
+import { useDailyClosing }               from '@/hooks/dailyClosing/useDailyClosing';
+import { useCreateDailyClosing }         from '@/hooks/dailyClosing/useCreateDailyClosing';
+import { useDailyClosingReconciliation } from '@/hooks/dailyClosing/useDailyClosingReconciliation';
 import { selectActiveStoreId }   from '@/store/slices/storeSlice';
 import { todayDateString } from '@/lib/dateUtils';
 
@@ -150,7 +157,7 @@ function NewClosingTab() {
   const today = todayDateString();
 
   const {
-    register, handleSubmit, watch, reset,
+    register, handleSubmit, watch, reset, setValue,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(closingSchema),
@@ -170,6 +177,22 @@ function NewClosingTab() {
   const [cashSales, cardSales, upiSales, otherSales, openingBalance] = watched.map(Number);
   const totalSales     = (cashSales || 0) + (cardSales || 0) + (upiSales || 0) + (otherSales || 0);
   const closingBalance = (openingBalance || 0) + (cashSales || 0); // cash in hand at EOD
+
+  // System-recorded totals for whichever date the form has selected — lets
+  // staff check their physical count against real receipts instead of
+  // typing purely from memory. See useDailyClosingReconciliation header.
+  const closingDate = watch('closing_date');
+  const {
+    buckets: systemBuckets, total: systemTotal, hasData: systemHasData,
+    isLoading: systemLoading, isError: systemError, refetch: refetchSystem,
+  } = useDailyClosingReconciliation(closingDate);
+
+  const applySystemTotals = () => {
+    setValue('cash_sales',  String(systemBuckets.cash));
+    setValue('card_sales',  String(systemBuckets.card));
+    setValue('upi_sales',   String(systemBuckets.upi));
+    setValue('other_sales', String(systemBuckets.other));
+  };
 
   const onSubmit = async (data) => {
     const totalSalesCalc = Number(data.cash_sales) + Number(data.card_sales) +
@@ -234,6 +257,61 @@ function NewClosingTab() {
       {/* Opening balance */}
       <Field id="dc_opening"  label="Opening Cash Balance" name="opening_balance" required />
 
+      {/* System-recorded totals — a check, not a source of truth. Real
+          receipt data for this store+date; not shown as "sales" since
+          Return/Exchange rows are money out, grouped in "Other" here. */}
+      <div className="rounded-xl border border-accent/30 bg-accent/5 px-4 py-3 flex flex-col gap-2">
+        <div className="flex items-center justify-between">
+          <span className="flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wide">
+            <ScanLine size={13} aria-hidden="true" />
+            System Recorded
+          </span>
+          {systemLoading && <span className="text-xs text-muted-foreground">Checking…</span>}
+        </div>
+
+        {systemError && (
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs text-muted-foreground">
+              Couldn&apos;t fetch system totals for this store right now.
+            </p>
+            <button
+              type="button"
+              onClick={() => refetchSystem()}
+              className="flex items-center gap-1 text-xs font-semibold text-accent hover:text-accent/80"
+            >
+              <RefreshCw size={12} aria-hidden="true" />
+              Retry
+            </button>
+          </div>
+        )}
+
+        {!systemLoading && !systemError && !systemHasData && (
+          <p className="text-xs text-muted-foreground">No receipts recorded for this date yet.</p>
+        )}
+
+        {!systemLoading && !systemError && systemHasData && (
+          <>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+              <span className="text-muted-foreground">Cash</span>
+              <span className="text-right font-medium text-foreground/80">{formatCurrency(systemBuckets.cash)}</span>
+              <span className="text-muted-foreground">Card</span>
+              <span className="text-right font-medium text-foreground/80">{formatCurrency(systemBuckets.card)}</span>
+              <span className="text-muted-foreground">UPI</span>
+              <span className="text-right font-medium text-foreground/80">{formatCurrency(systemBuckets.upi)}</span>
+              <span className="text-muted-foreground">Other (incl. returns/exchange/advances)</span>
+              <span className="text-right font-medium text-foreground/80">{formatCurrency(systemBuckets.other)}</span>
+              <span className="text-muted-foreground border-t border-accent/20 pt-1 mt-1">Total</span>
+              <span className="text-right font-bold text-foreground border-t border-accent/20 pt-1 mt-1">
+                {formatCurrency(systemTotal)}
+              </span>
+            </div>
+            <Button type="button" variant="outline" size="sm" className="h-9 self-start" onClick={applySystemTotals}>
+              Use these totals
+            </Button>
+          </>
+        )}
+      </div>
+
       {/* Sales by mode */}
       <div className="rounded-xl border border-border bg-muted shadow-sm p-4 flex flex-col gap-4">
         <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Sales by Payment Mode</p>
@@ -269,6 +347,16 @@ function NewClosingTab() {
       >
         {createClosing.isPending ? 'Saving Closing…' : 'Submit Day Close'}
       </Button>
+
+      {/* Confirmed live 2026-08-14 (see file header + dailyClosingService.js):
+          this call fails server-side on OrnaVerse's tenant regardless of
+          what's sent — say so up front rather than let staff think a
+          failure toast means they did something wrong. */}
+      <p className="text-xs text-muted-foreground text-center -mt-2">
+        Submitting is currently expected to fail — OrnaVerse hasn&apos;t configured
+        this document type on this tenant yet. Keep a manual record until
+        that&apos;s resolved.
+      </p>
 
     </form>
   );

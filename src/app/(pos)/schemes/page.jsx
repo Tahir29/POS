@@ -11,6 +11,7 @@ import { useSelector } from 'react-redux';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { toast } from 'react-toastify';
 import { RefreshCw, LayoutGrid, Plus, X } from 'lucide-react';
 
 import EmptyState from '@/components/shared/EmptyState';
@@ -123,7 +124,21 @@ function ReceiptSheet({ enrollment, isOpen, onClose }) {
     // ledger_id below (the document type's own control ledger).
     const selectedMode = paymentModes.find((m) => m.modeId === Number(data.mode_id));
 
-    if (!headerConfig.isReady) return;
+    // Was a silent no-op before this — a genuinely failed config lookup
+    // (see useOrderHeaderConfig's isError) left the Pay button doing
+    // nothing at all, with no toast and no way to tell "still loading"
+    // from "stuck" apart from staring at network tab.
+    if (!headerConfig.isReady) {
+      if (headerConfig.isError) headerConfig.refetch();
+      toast.error(
+        headerConfig.isConfigMissing
+          ? "This document type isn't set up for your store yet — contact OrnaVerse support."
+          : headerConfig.isError
+            ? 'Store configuration failed to load — retrying now, try again in a moment.'
+            : 'Store configuration is still loading — try again in a moment.'
+      );
+      return;
+    }
 
     // NOT buildTransactionHeaderFields — that builds a SALES document header
     // (sub_total / taxable_amount / net_amount / receipt_amount / balance_amount

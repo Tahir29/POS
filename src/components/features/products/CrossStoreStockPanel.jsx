@@ -23,18 +23,18 @@ const selectActiveStoreId = (state) => state.store.activeStoreId;
 
 // ── Stock quantity pill ───────────────────────────────────────────────────────
 // Reuses StockStatusBadge's shared derivation instead of re-implementing the
-// same in-stock/low-stock/out-of-stock threshold logic locally.
+// same in-stock/out-of-stock logic locally. Binary only — no "low stock"
+// tier (removed 2026-08-13, see StockStatusBadge/index.jsx).
 
 const STATUS_TEXT_CLASSES = {
   out_stock: 'text-status-error',
-  low_stock: 'text-status-made-order',
   in_stock:  'text-status-in-stock',
 };
 
 function StockQty({ qty }) {
   const n = parseFloat(qty ?? 0);
   const status = deriveStockStatus({ stock_qty: qty }) ?? 'out_stock';
-  const label = status === 'out_stock' ? 'Out of Stock' : status === 'low_stock' ? `${n} left` : `${n} in stock`;
+  const label = status === 'out_stock' ? 'Out of Stock' : `${n} in stock`;
 
   return (
     <span className={`text-xs font-semibold text-nowrap ${STATUS_TEXT_CLASSES[status]}`}>
@@ -49,9 +49,11 @@ function StockQty({ qty }) {
  * @param {{
  *   storeStocks: { company_id: number, companyname: string, pieces: number }[],
  *   isLoading:   boolean,
+ *   isError:     boolean,
+ *   onRetry:     () => void,
  * }} props
  */
-export default function CrossStoreStockPanel({ storeStocks = [], isLoading }) {
+export default function CrossStoreStockPanel({ storeStocks = [], isLoading, isError = false, onRetry }) {
   const activeStoreId = useSelector(selectActiveStoreId);
 
   const storesInStock = storeStocks.filter((s) => parseFloat(s.pieces) > 0).length;
@@ -91,15 +93,35 @@ export default function CrossStoreStockPanel({ storeStocks = [], isLoading }) {
               </div>
             )}
 
+            {/* Failed fetch — distinct from "genuinely no stock data" below.
+                storeStocks is [] either way, so isError has to be checked
+                explicitly or a network blip reads as a real empty result. */}
+            {!isLoading && isError && (
+              <div className="flex flex-col items-center gap-2 px-4 py-4 text-center">
+                <p className="text-sm text-status-made-order">
+                  Couldn&apos;t check stock across stores.
+                </p>
+                {onRetry && (
+                  <button
+                    type="button"
+                    onClick={onRetry}
+                    className="text-xs font-semibold text-status-made-order underline underline-offset-2 hover:text-status-made-order/80"
+                  >
+                    Retry
+                  </button>
+                )}
+              </div>
+            )}
+
             {/* Empty */}
-            {!isLoading && storeStocks.length === 0 && (
+            {!isLoading && !isError && storeStocks.length === 0 && (
               <p className="px-4 py-4 text-sm text-muted-foreground text-center">
                 No stock information available.
               </p>
             )}
 
             {/* Store rows */}
-            {!isLoading && storeStocks.length > 0 && (
+            {!isLoading && !isError && storeStocks.length > 0 && (
               <div className="flex flex-col divide-y divide-border">
                 {storeStocks.map((store) => {
                   const isActive = store.company_id === activeStoreId;

@@ -22,6 +22,7 @@ import { Button } from '@/components/ui/button';
 import InvoiceReportButton from '@/components/features/checkout/InvoiceReportButton';
 import { useInvoiceDetail } from '@/hooks/checkout/useInvoiceDetail';
 import { useOrderDetail } from '@/hooks/checkout/useOrderDetail';
+import { splitGst } from '@/lib/gst';
 import APP_CONFIG from '@/constants/appConfig';
 
 function fmt(amount) {
@@ -67,7 +68,9 @@ export default function OrderConfirmationScreen({
   const balanceAmt  = invoice?.balance_amount ?? null;
   // Server-computed GST — see useCreateInvoice.js header (not calculated
   // client-side; read back whatever the server computed per line item).
+  // Bifurcated into CGST+SGST for display — see lib/gst.js.
   const taxAmount   = invoice?.tax_amount ?? null;
+  const gst         = splitGst(taxAmount);
 
   const handleNewSale = () => {
     router.push('/catalog');
@@ -113,11 +116,17 @@ export default function OrderConfirmationScreen({
                 <span className="font-medium text-foreground">{customerName}</span>
               </div>
             )}
-            {taxAmount != null && taxAmount > 0 && (
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">GST</span>
-                <span className="text-foreground/80">{fmt(taxAmount)}</span>
-              </div>
+            {gst && (
+              <>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">CGST (1.5%)</span>
+                  <span className="text-foreground/80">{fmt(gst.cgst)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">SGST (1.5%)</span>
+                  <span className="text-foreground/80">{fmt(gst.sgst)}</span>
+                </div>
+              </>
             )}
             {totalAmount != null && (
               <div className="flex justify-between border-t border-border pt-2 mt-1">

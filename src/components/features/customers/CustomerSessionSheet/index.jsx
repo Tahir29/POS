@@ -13,7 +13,8 @@
 
 import { useEffect, useState } from 'react';
 import { toast } from 'react-toastify';
-import { ChevronLeft, Loader2 } from 'lucide-react';
+import Link from 'next/link';
+import { ChevronLeft, Loader2, UserCircle } from 'lucide-react';
 import BottomSheet from '@/components/shared/BottomSheet';
 import ConfirmDialog from '@/components/shared/ConfirmDialog';
 import CustomerLookupInput from '../CustomerLookupInput';
@@ -205,6 +206,17 @@ export default function CustomerSessionSheet({ isOpen, onClose }) {
                 onDetach={handleDetach}
                 detachLabel="Remove"
               />
+
+              {/* Redirect to full profile — only shown once a customer is
+                  actually attached (2026-08-13); there's nothing to view a
+                  profile for before that. */}
+              <Button asChild type="button" variant="outline" className="h-11 w-full gap-2">
+                <Link href={`/customers/${session.customerId}`} onClick={handleClose}>
+                  <UserCircle size={16} />
+                  View Full Profile
+                </Link>
+              </Button>
+
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <div className="h-px flex-1 bg-border" />
                 <span>or switch customer</span>
@@ -245,7 +257,7 @@ export default function CustomerSessionSheet({ isOpen, onClose }) {
           {isMobileSearch && notFound && !walkIn.isLoading && walkInKnown && (
             <div className="flex flex-col gap-3">
               <p className="text-sm text-muted-foreground">
-                {walkInKnown.name ? `Welcome back, ${walkInKnown.name}.` : 'Welcome back.'} They've visited before but aren't a registered customer yet.
+                {walkInKnown.name ? `Welcome back, ${walkInKnown.name}.` : 'Welcome back.'} They&apos;ve visited before but aren&apos;t a registered customer yet.
               </p>
               <p className="text-sm font-semibold text-foreground/80">Complete Customer Signup</p>
               <NewCustomerForm
