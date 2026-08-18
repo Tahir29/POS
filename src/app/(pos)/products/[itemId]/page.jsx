@@ -103,9 +103,12 @@ function ProductDetailScreen() {
   // per-store data (same call, already correct) showed it had no row for
   // that store at all. Deriving both from the same source keeps them
   // consistent by construction.
-  const { data: storeStocks = [], isLoading: storeStocksLoading } = useStockByStores(
-    selectedVariant?.item_id ?? product?.item_id
-  );
+  const {
+    data: storeStocks = [],
+    isLoading: storeStocksLoading,
+    isError: storeStocksError,
+    refetch: refetchStoreStocks,
+  } = useStockByStores(selectedVariant?.item_id ?? product?.item_id);
 
   // Current store's stock qty. Not a hard cap on quantity — customers can
   // order more than what's physically in stock; anything beyond this is
@@ -164,9 +167,14 @@ function ProductDetailScreen() {
   // fixed on 2026-07-26 — the UI doesn't have a third visual state for it,
   // so it was showing as an unexplained "Low Stock" tag for a genuinely
   // in-stock product.
+  // 'error' is a distinct third state, never folded into 'out_stock' — a
+  // failed stock check must not read as a confirmed zero (see
+  // useStockByStores' header comment for the real-world bug this caused).
   const baseStockStatus = storeStocksLoading
     ? null
-    : availableStock > 0 ? 'in_stock' : 'out_stock';
+    : storeStocksError
+      ? 'error'
+      : availableStock > 0 ? 'in_stock' : 'out_stock';
 
   // Active item = selected variant (if customized) else original product
   const activeItem = selectedVariant ?? product;
@@ -399,16 +407,20 @@ function ProductDetailScreen() {
                   {stockStatus && (
                     <span
                       className={`flex shrink-0 items-center gap-1.5 text-xs font-semibold ${
-                        stockStatus === 'out_stock' ? 'text-status-error' : 'text-status-in-stock'
+                        stockStatus === 'error' ? 'text-status-made-order'
+                        : stockStatus === 'out_stock' ? 'text-status-error'
+                        : 'text-status-in-stock'
                       }`}
                     >
                       <span
                         className={`h-1.5 w-1.5 rounded-full ${
-                          stockStatus === 'out_stock' ? 'bg-status-error' : 'bg-status-in-stock'
+                          stockStatus === 'error' ? 'bg-status-made-order'
+                          : stockStatus === 'out_stock' ? 'bg-status-error'
+                          : 'bg-status-in-stock'
                         }`}
                         aria-hidden="true"
                       />
-                      {stockStatus === 'out_stock' ? 'Out of Stock' : 'In Stock'}
+                      {stockStatus === 'error' ? 'Stock Unknown' : stockStatus === 'out_stock' ? 'Made to Order' : 'In Stock'}
                     </span>
                   )}
                 </div>
@@ -451,6 +463,23 @@ function ProductDetailScreen() {
               </p>
             )}
 
+            {/* Stock check failed — say so plainly rather than let it read
+                as a confirmed zero. Only reachable for the base-product
+                path (selectedVariant's own MTO/in-stock branch above never
+                produces 'error'). */}
+            {stockStatus === 'error' && (
+              <p className="flex items-center gap-2 text-sm font-medium text-status-made-order">
+                Couldn&apos;t check stock for this item
+                <button
+                  type="button"
+                  onClick={() => refetchStoreStocks()}
+                  className="font-semibold underline underline-offset-2 hover:text-status-made-order/80"
+                >
+                  Retry
+                </button>
+              </p>
+            )}
+
             {/* Availability at other stores — hidden once the confirmed
                 customization is Made to Order (no real stock anywhere to
                 report), shown for the base product or any in-stock variant */}
@@ -458,6 +487,8 @@ function ProductDetailScreen() {
               <CrossStoreStockPanel
                 storeStocks={storeStocks}
                 isLoading={storeStocksLoading}
+                isError={storeStocksError}
+                onRetry={refetchStoreStocks}
               />
             )}
 

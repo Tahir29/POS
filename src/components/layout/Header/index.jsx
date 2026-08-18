@@ -75,7 +75,7 @@ function CartBadge({ onOpen }) {
           <motion.span
             key={itemCount > 99 ? '99+' : itemCount}
             className={cn(
-              'absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center',
+              'absolute -top-0.5 -right-1 flex h-5 w-5 items-center justify-center',
               'rounded-full bg-primary text-primary-foreground text-xs font-bold',
               'pointer-events-none'
             )}

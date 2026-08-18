@@ -18,14 +18,17 @@
 import { useEffect, useState } from 'react';
 import { Loader2, CheckCircle2 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
+import { Input } from '@/components/ui/input';
 import { useCartTotals } from '@/hooks/cart/useCartTotals';
 import { usePaymentModes } from '@/hooks/checkout/usePaymentModes';
+import { useBankPosAccounts } from '@/hooks/checkout/useBankPosAccounts';
 import { useInvoiceHelpers } from '@/hooks/checkout/useInvoiceHelpers';
 import { useCustomerSession } from '@/hooks/customer/useCustomerSession';
 import { useSelector } from 'react-redux';
 import { selectActiveStoreId } from '@/store/slices/storeSlice';
 import PaymentModeSelector from '../PaymentModeSelector';
 import PaymentAmountInput from '../PaymentAmountInput';
+import BankPosSelect from '../BankPosSelect';
 import APP_CONFIG from '@/constants/appConfig';
 import tracker from '@/lib/analytics/tracker';
 import EVENTS from '@/lib/analytics/events';
@@ -75,6 +78,7 @@ export default function CheckoutPaymentSection({ onChange, amountDue, allowParti
   const { total: cartTotal } = useCartTotals();
   const total = amountDue ?? cartTotal;
   const { paymentModes, isLoading: modesLoading, isError: modesError } = usePaymentModes();
+  const { bankPosAccounts } = useBankPosAccounts();
   const { customerId } = useCustomerSession();
   const activeStoreId  = useSelector(selectActiveStoreId);
 
@@ -108,6 +112,11 @@ export default function CheckoutPaymentSection({ onChange, amountDue, allowParti
   const selectedModeIds    = payments.filter((p) => p.modeId).map((p) => p.modeId);
   const appliedHelperCodes = payments.filter((p) => p.isHelper).map((p) => p.modeCode);
 
+  // Bank-settled tenders need to say which bank account the money lands in;
+  // Cash (and helper balances — Scheme/Exchange/Credit Note/Old Gold/
+  // Advances, none of which touch a bank) don't.
+  const requiresBank = (p) => !p.isHelper && p.modeCode !== 'Cash';
+
   // ── Standard mode toggle ──────────────────────────────────────────────────
   const handleModeToggle = (modeId) => {
     setPayments((prev) => {
@@ -136,6 +145,8 @@ export default function CheckoutPaymentSection({ onChange, amountDue, allowParti
           modeName: mode?.modeName ?? 'Unknown',
           amount:   isFirst ? String(remaining) : '',
           isHelper: false,
+          bankPosId: null,
+          refNo:    '',
         },
       ];
     });
@@ -169,6 +180,26 @@ export default function CheckoutPaymentSection({ onChange, amountDue, allowParti
     );
   };
 
+  const handleBankChange = (identifier, bankPosId) => {
+    setPayments((prev) =>
+      prev.map((p) =>
+        (p.modeId === identifier || p.modeCode === identifier)
+          ? { ...p, bankPosId }
+          : p
+      )
+    );
+  };
+
+  const handleRefNoChange = (identifier, refNo) => {
+    setPayments((prev) =>
+      prev.map((p) =>
+        (p.modeId === identifier || p.modeCode === identifier)
+          ? { ...p, refNo }
+          : p
+      )
+    );
+  };
+
   // Recompute single-mode pre-fill when total changes
   useEffect(() => {
     setPayments((prev) => {
@@ -187,21 +218,37 @@ export default function CheckoutPaymentSection({ onChange, amountDue, allowParti
   // against), mode_type, mode_sub_type and allow_partial, all of which live on
   // the PaymentReceiptMode row. Flattening to four fields here is what used to
   // strip them. See lib/checkout/documentFields.buildReceiptDetails.
+  //
+  // bankPosId/bankLedgerId/refNo (confirmed 2026-08-14 via a real network
+  // capture of OrnaVerse's own client completing a Credit Card + bank sale
+  // on their UAT panel — see documentFields.js's header comment for the
+  // full contract this is built against):
+  //   - bank_pos is the bank account's NUMERIC id (not its code string —
+  //     that's what caused the earlier 500).
+  //   - ledger_id on the receipt row becomes the BANK ACCOUNT's ledger_id
+  //     once one is selected, not the payment mode's own ledger_id.
+  //   - ref_no is a real, required field for bank-settled modes in their
+  //     own UI ("Reference *") — not an always-empty placeholder.
   useEffect(() => {
     onChange?.(
       payments.map((p) => {
         const mode = paymentModes.find((m) => m.modeId === p.modeId);
+        const bankAccount = p.bankPosId != null
+          ? bankPosAccounts.find((a) => a.id === p.bankPosId)
+          : null;
         return {
-          modeId:   p.modeId   ?? undefined,
-          modeCode: p.modeCode ?? '',
-          modeName: p.modeName,
-          amount:   Number(p.amount) || 0,
-          ledgerId: mode?.ledgerId ?? null,
-          raw:      mode?.raw ?? null,
+          modeId:       p.modeId   ?? undefined,
+          modeCode:     p.modeCode ?? '',
+          modeName:     p.modeName,
+          amount:       Number(p.amount) || 0,
+          ledgerId:     bankAccount?.ledgerId ?? mode?.ledgerId ?? null,
+          raw:          mode?.raw ?? null,
+          bankPosId:    bankAccount?.id ?? null,
+          refNo:        p.refNo ?? '',
         };
       })
     );
-  }, [payments, paymentModes]);
+  }, [payments, paymentModes, bankPosAccounts]);
 
   const balancesApplied = payments.filter((p) => p.isHelper)
     .reduce((s, p) => s + (Number(p.amount) || 0), 0);
@@ -302,12 +349,32 @@ export default function CheckoutPaymentSection({ onChange, amountDue, allowParti
       {payments.length > 0 && (
         <div className="flex flex-col gap-2 pt-2 border-t border-border">
           {payments.map((p) => (
-            <PaymentAmountInput
-              key={p.modeId ?? p.modeCode}
-              modeName={p.modeName}
-              amount={p.amount}
-              onChange={(value) => handleAmountChange(p.modeId ?? p.modeCode, value)}
-            />
+            <div key={p.modeId ?? p.modeCode} className="flex flex-col gap-1.5">
+              <PaymentAmountInput
+                modeName={p.modeName}
+                amount={p.amount}
+                onChange={(value) => handleAmountChange(p.modeId ?? p.modeCode, value)}
+              />
+              {requiresBank(p) && (
+                <>
+                  <BankPosSelect
+                    value={p.bankPosId}
+                    onChange={(bankPosId) => handleBankChange(p.modeId ?? p.modeCode, bankPosId)}
+                  />
+                  {/* Reference — required in OrnaVerse's own UI for
+                      bank-settled modes ("Reference *"), confirmed
+                      2026-08-14. Plain text, no format validated server-side
+                      beyond "present". */}
+                  <Input
+                    value={p.refNo ?? ''}
+                    onChange={(e) => handleRefNoChange(p.modeId ?? p.modeCode, e.target.value)}
+                    placeholder="Reference number"
+                    className="h-10"
+                    aria-label={`Reference for ${p.modeName}`}
+                  />
+                </>
+              )}
+            </div>
           ))}
 
           {/* Balances applied / Collected / Paid in full summary */}

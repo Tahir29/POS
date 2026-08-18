@@ -65,6 +65,7 @@ function isPendingReturn(item) {
  * @returns {{
  *   isLoading: boolean,
  *   isError: boolean,
+ *   refetch: () => void,
  *   todayRevenue: number,
  *   revenueTrendPct: number|null,
  *   todayOrderCount: number,
@@ -76,16 +77,27 @@ function isPendingReturn(item) {
  * }}
  */
 export function useDashboardSummary() {
-  const { allOrders, isLoading: ordersLoading, isError: ordersError } = useAllOrders();
-  const { items: returns,   isLoading: returnsLoading,   isError: returnsError }   = useReturns({ skip: 0 });
-  const { items: exchanges, isLoading: exchangesLoading, isError: exchangesError } = useExchanges({ skip: 0 });
-  const { items: buybacks,  isLoading: buybacksLoading,  isError: buybacksError }  = useBuybacks({ skip: 0 });
-  const { items: urdPurchases, isLoading: urdLoading, isError: urdError } = useURDPurchases({ skip: 0 });
+  const { allOrders, isLoading: ordersLoading, isError: ordersError, refetch: refetchOrders } = useAllOrders();
+  const { items: returns,   isLoading: returnsLoading,   isError: returnsError,   refetch: refetchReturns }   = useReturns({ skip: 0 });
+  const { items: exchanges, isLoading: exchangesLoading, isError: exchangesError, refetch: refetchExchanges } = useExchanges({ skip: 0 });
+  const { items: buybacks,  isLoading: buybacksLoading,  isError: buybacksError,  refetch: refetchBuybacks }  = useBuybacks({ skip: 0 });
+  const { items: urdPurchases, isLoading: urdLoading, isError: urdError, refetch: refetchUrd } = useURDPurchases({ skip: 0 });
 
   const isLoading = ordersLoading || returnsLoading || exchangesLoading || buybacksLoading || urdLoading;
   const isError   = ordersError || returnsError || exchangesError || buybacksError || urdError;
 
-  return useMemo(() => {
+  // One retry button for the whole dashboard — re-fires every underlying
+  // query that's actually wired to a network call, not just the first one
+  // that happened to fail.
+  const refetch = () => {
+    refetchOrders?.();
+    refetchReturns?.();
+    refetchExchanges?.();
+    refetchBuybacks?.();
+    refetchUrd?.();
+  };
+
+  const summary = useMemo(() => {
     const todayPrefix     = toLocalPrefix(new Date());
     const yesterdayPrefix = daysAgoPrefix(1);
 
@@ -162,4 +174,8 @@ export function useDashboardSummary() {
       activityToday,
     };
   }, [allOrders, returns, exchanges, buybacks, urdPurchases, isLoading, isError]);
+
+  // refetch deliberately kept out of the memo above — it's a plain
+  // function recreated every render (see above), not memo-worthy data.
+  return { ...summary, refetch };
 }

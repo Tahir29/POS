@@ -103,6 +103,7 @@ function pickAddress(partyAddress) {
  *   customerMobile:  string,
  *   customerEmail:   string|null,
  *   customerPan:     string|null,
+ *   customerPanDocument: string|null,
  *   birthDate:       string|null,
  *   anniversary:     string|null,
  *   gender:          number|null,
@@ -138,6 +139,13 @@ export function normalizeCustomer(entity) {
     // Nullable fields — treat "NA" and empty strings as null
     customerEmail:  entity.email  && entity.email  !== 'NA' ? entity.email  : null,
     customerPan:    entity.pan_no && entity.pan_no !== 'NA' ? entity.pan_no : null, // pan_no not pan
+    // Confirmed field on POS.CustomerRow via v1.json (2026-08-14) — a
+    // string, holds either a stored path (once saved) or the base64 payload
+    // just sent on this same Update call. See CheckoutPanCapture: OrnaVerse
+    // rejects Create above the PAN threshold with "Please upload PAN & its
+    // number", not just the number, so this has to be resolved alongside
+    // customerPan, not instead of it.
+    customerPanDocument: entity.pan_document && entity.pan_document !== 'NA' ? entity.pan_document : null,
 
     // Personal details — needed by CustomerDetailSheet and Edit form
     birthDate:    entity.birth_date   ?? null,

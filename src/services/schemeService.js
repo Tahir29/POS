@@ -336,3 +336,49 @@ export function canMatureEnrollment(enrollment) {
   const remaining = rows.filter((m) => !m.payment_made).length;
   return { allowed: rows.length > 0 && remaining === 0, remaining };
 }
+
+/**
+ * Records a closure benefit against the enrollment — the first real write
+ * this screen has ever done beyond calculating a figure. See
+ * EnrollmentDetailSheet's ClosureTab: this used to be pure calculators,
+ * "nothing is closed or paid out here" by design/admission.
+ *
+ * THERE IS NO DEDICATED CLOSE/MATURE/FORECLOSE/CANCEL ENDPOINT anywhere in
+ * the 4,091-endpoint API (confirmed 2026-08-14 by searching the full spec
+ * for every scheme-related path) — SchemeEnrollment/Update is the only
+ * mutation available on this entity, same generic Serenity CRUD pattern as
+ * everywhere else in this codebase. Confirmed live the same day that a
+ * genuine no-op Update round-trip (retrieve → send back unchanged)
+ * succeeds cleanly against a real enrollment (scheme_enrollment_id 137),
+ * so the write mechanism itself is proven.
+ *
+ * WHAT'S DELIBERATELY NOT DONE HERE: `scheme_status` (a 4-value enum,
+ * 0/1/2/3, no labels in the API schema) is NOT set. Every real enrollment
+ * checked so far reports status 1, which is consistent with "Active" but
+ * not confirmed to mean that, and guessing which of the other 3 values
+ * means Matured vs. Foreclosed vs. Cancelled — then writing it to a real
+ * customer's financial record — is exactly the kind of guess this
+ * codebase's own conventions say not to make (see e.g. the Return/Order
+ * header-field saga). Only `benifit_amount` (the API's own field name —
+ * see SCHEMES.ENROLL's header comment on the typo) is written, since
+ * that's an unambiguous number the calculator already produced. Confirm
+ * the status enum with OrnaVerse (or capture it from their own UI
+ * completing a real closure) before extending this to also transition
+ * scheme_status.
+ *
+ * @param {{ enrollmentId: number, benefitAmount: number }} params
+ * @returns {Promise<object>} SaveResponse { EntityId }
+ */
+export async function closeSchemeEnrollment({ enrollmentId, benefitAmount }) {
+  const enrollment = await getSchemeEnrollmentDetail(enrollmentId);
+  if (!enrollment) throw new Error('Could not load this enrollment.');
+
+  const response = await axiosInstance.post(API.SCHEMES.ENROLLMENT_UPDATE, {
+    EntityId: enrollmentId,
+    Entity: {
+      ...enrollment,
+      benifit_amount: benefitAmount,
+    },
+  });
+  return response.data;
+}

@@ -8,12 +8,15 @@ import RecentOrdersList     from '@/components/features/dashboard/RecentOrdersLi
 import QuickActionGrid      from '@/components/features/dashboard/QuickActions';
 import TodaysActivityStrip  from '@/components/features/dashboard/TodaysActivityStrip';
 import InlineLoader         from '@/components/shared/InlineLoader';
+import ErrorState           from '@/components/shared/ErrorState';
 
 import { useDashboardSummary } from '@/hooks/dashboard/useDashboardSummary';
 
 function DashboardScreen() {
   const {
     isLoading,
+    isError,
+    refetch,
     todayRevenue,
     revenueTrendPct,
     todayOrderCount,
@@ -23,6 +26,26 @@ function DashboardScreen() {
     pendingReturnsCount,
     activityToday,
   } = useDashboardSummary();
+
+  // A failed summary must not render as "nothing happened today" — every
+  // KPI/list below is real-zero-shaped, so a backend outage and an idle
+  // store would otherwise be indistinguishable to staff. Loading takes
+  // priority (isError can be stale-true from a prior failed fetch while a
+  // fresh one is already in flight).
+  if (isError && !isLoading) {
+    return (
+      <div className="max-w-6xl mx-auto w-full px-4 py-4 md:px-6">
+        <ErrorState
+          title="Couldn't load today's activity."
+          description="Today's revenue, orders, and activity counts couldn't be fetched. Quick actions below still work normally."
+          onRetry={refetch}
+        />
+        <div className="mt-6">
+          <QuickActionGrid />
+        </div>
+      </div>
+    );
+  }
 
   const revenueTrend = revenueTrendPct == null
     ? undefined

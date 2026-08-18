@@ -78,7 +78,7 @@ async function retrieveRefund(transactionId) {
 }
 
 /**
- * Second pass that makes the credit actually settle.
+ * Second pass intended to make the credit actually settle.
  *
  * WHY THIS EXISTS: settlement is keyed on `receipts[].ref_document_no`
  * matching the refund's OWN document_no. OrnaVerse's ERP dialog fills that
@@ -90,6 +90,31 @@ async function retrieveRefund(transactionId) {
  *
  * So we don't predict. We create, read back the number that was actually
  * assigned, and stamp it into the receipts. Drift-proof by construction.
+ *
+ * STILL DOESN'T ACTUALLY SETTLE THE CREDIT — confirmed live 2026-08-14 end
+ * to end against a real customer (Tahir Kutty, party_id 2221): created a
+ * Return (transaction_id 147, ₹1,07,840 credit), then a Refund for ₹10,000
+ * against it, ran this exact stamp step, and the Return's own
+ * balance_amount/receipt_amount were UNCHANGED afterward (still 107840/
+ * 107840 via both Return/Retrieve directly and POSReceiptsSelect/List) —
+ * the money-out side works, the knock-off does not, at least via this
+ * mechanism. Two things worth knowing for whoever picks this up:
+ *   1. Retrieve's own echo of what was just sent already corrupts the
+ *      linkage: `receipts[].transaction_id` comes back as the REFUND's own
+ *      transaction_id (50), not the original credit's (147) that Create was
+ *      sent — so `entity.receipts` here is not safe to round-trip verbatim
+ *      even before considering whether ref_document_no stamping does
+ *      anything. Preserving the original transaction_id through the patch
+ *      didn't change the outcome either.
+ *   2. Manually setting the ORIGINAL Return's own balance_amount/
+ *      receipt_amount via Return/Update DID succeed mechanically (200,
+ *      tested then reverted) — suggesting settlement may need to touch the
+ *      credit DOCUMENT directly rather than only the refund's receipts.
+ *      NOT implemented here: this was a one-off hypothesis test, not
+ *      confirmed against a real capture of OrnaVerse's own client actually
+ *      settling a refund, and guessing wrong here risks corrupting real
+ *      balance data. Needs a live capture (network tab, their own UI,
+ *      completing a real Refund end-to-end) before coding a fix.
  */
 async function stampRefDocumentNo(transactionId) {
   const entity = await retrieveRefund(transactionId);

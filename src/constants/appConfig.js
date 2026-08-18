@@ -112,6 +112,14 @@ const APP_CONFIG = {
   // single flat rate here is correct for this business, not a simplification.
   // Applied to the taxable value (subtotal after discount) in cartSlice's
   // recalculateTotals, the single source of truth for cart/checkout totals.
+  //
+  // This combined rate is still all that's computed/stored here — the real
+  // CGST+SGST split (confirmed live 2026-08-17 in OrnaVerse's own
+  // per-line item_taxes[], via SetSalesItems + summarizeLineItems) already
+  // happens server-side regardless of this constant. lib/gst.js's
+  // splitGst() reconstructs that same 50/50 split for display wherever
+  // only the combined tax_amount is at hand (cart estimate, order/invoice
+  // summaries) — a display-time bifurcation, not a second calculation.
   TAX: {
     GST_RATE: 0.03,
   },
@@ -188,11 +196,6 @@ const APP_CONFIG = {
   SEARCH: {
     DEBOUNCE_MS:      300, // ms to wait before triggering search
     MIN_QUERY_LENGTH:   2, // minimum chars before triggering search
-  },
-
-  // ── STOCK ─────────────────────────────────────────────────────────────────
-  STOCK: {
-    LOW_STOCK_THRESHOLD: 3, // items at or below this count show "Low Stock"
   },
 
   // ── PAYMENT MODES ─────────────────────────────────────────────────────────

@@ -107,7 +107,7 @@ function StockBadge({ inStock }) {
         inStock ? 'bg-status-in-stock/95' : 'bg-status-error/95',
       ].join(' ')}
     >
-      {inStock ? 'In Stock' : 'Out of Stock'}
+      {inStock ? 'In Stock' : 'Made to Order'}
     </Badge>
   );
 }

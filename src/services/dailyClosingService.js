@@ -28,11 +28,22 @@
 // moments earlier. This isn't something a payload change on our side can
 // fix — every plausible field-name variant hits the identical crash. Most
 // likely explanation: the "Daily Closing" document type has no
-// DocumentNumbering record configured in this environment (none of the
-// ~60 document types seen via DocumentNumbering/List look like a closing
-// doc), so the server's auto-numbering step NullReferences. Needs
+// DocumentNumbering record configured in this environment (RE-CONFIRMED
+// 2026-08-14 against the FULL 689-row DocumentNumbering/List — not the ~60
+// seen in the original check — still zero rows with a closing-related
+// prefix), so the server's auto-numbering step NullReferences. Needs
 // OrnaVerse's team to investigate — flag this as a distinct issue from the
 // OAuth-scope AccessDenied problem affecting Order/Invoice/Return/etc.
+//
+// getReceiptModeTotals() below is UNRELATED to that bug — it's a different
+// endpoint (Reports/CustomerHistory/TotalReceipts) confirmed live
+// 2026-08-14 to accept company_id + from_date/to_date (it was previously
+// only ever called party_id-scoped, see useCustomerHistory.js) and return a
+// real payment-mode breakdown. Used here to give the EOD form something
+// real to reconcile against, independent of whether Create itself works.
+// NOTE: confirmed unreliable for 2 of this tenant's 6 stores (company_id 1
+// and 4 both 500; 2, 5, 6, 7 all return real data) — treat a failure here
+// as store-specific, not a sign the whole approach is broken.
 
 import axiosInstance from '@/lib/axios/axiosInstance';
 import API from '@/constants/apiEndpoints';
@@ -77,6 +88,23 @@ export async function getDailyClosingList({ take = 30, skip = 0 } = {}) {
   const response = await axiosInstance.post(API.DAILY_CLOSING.LIST, {
     Take: take,
     Skip: skip,
+  });
+  return response.data;
+}
+
+/**
+ * Real payment-mode receipt totals for a store on a given date — see file
+ * header for why this endpoint (built for customer-scoped history) works
+ * here instead. Used to give the manual EOD entry something to check
+ * against, not to auto-file anything.
+ * @param {{ companyId: number, fromDate: string, toDate: string }} params — ISO date-times
+ * @returns {Promise<object>} { Entities: {mode, frequency, amount}[] }
+ */
+export async function getReceiptModeTotals({ companyId, fromDate, toDate }) {
+  const response = await axiosInstance.post(API.CUSTOMER_HISTORY.TOTAL_RECEIPTS, {
+    company_id: companyId,
+    from_date:  fromDate,
+    to_date:    toDate,
   });
   return response.data;
 }

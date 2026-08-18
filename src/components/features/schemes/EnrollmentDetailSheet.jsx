@@ -16,6 +16,7 @@ import PaymentStatusBadge, { mapScheduleStatus } from '@/components/shared/Payme
 import { useSchemeMonthlyDetails } from '@/hooks/schemes/useSchemeMonthlyDetails';
 import { useSchemeReceiptHistory } from '@/hooks/schemes/useSchemeReceiptHistory';
 import { useSchemeBenefits } from '@/hooks/schemes/useSchemeBenefits';
+import { useCloseSchemeEnrollment } from '@/hooks/schemes/useCloseSchemeEnrollment';
 import { formatCurrency, formatDate } from '@/lib/schemeFormat';
 
 const TABS = [
@@ -190,10 +191,14 @@ function PaymentsTab({ enrollmentId }) {
 }
 
 // ── Closure calculators ───────────────────────────────────────
-// Read-only: these work out what a customer WOULD get. Nothing is closed,
-// cancelled or paid out here.
+// Calculate a figure, then optionally record it on the enrollment — see
+// useCloseSchemeEnrollment / closeSchemeEnrollment's header for exactly
+// what "record" means (benifit_amount only; no dedicated close/mature/
+// foreclose/cancel endpoint exists anywhere in the API, and scheme_status
+// is deliberately left untouched pending confirmation of its enum values).
 function ClosureTab({ enrollmentId }) {
   const { calculate, kind, result, error, isLoading } = useSchemeBenefits(enrollmentId);
+  const closeMutation = useCloseSchemeEnrollment();
 
   const payload = result?.Entity ?? result;
   const rows = payload && typeof payload === 'object'
@@ -203,11 +208,18 @@ function ClosureTab({ enrollmentId }) {
     : [];
   const installments = Array.isArray(payload?.Installments) ? payload.Installments : [];
   const delayedCount = installments.filter((i) => i.is_delayed).length;
+  const payoutAmount = payload?.total_payout ?? payload?.total_benefit ?? null;
+
+  const handleRecord = () => {
+    if (payoutAmount == null) return;
+    closeMutation.mutate({ enrollmentId, benefitAmount: payoutAmount });
+  };
 
   return (
     <div className="flex flex-col gap-3">
       <p className="text-xs text-muted-foreground">
-        These only calculate a figure — nothing is closed or paid out.
+        Calculate a figure, then record it on the enrollment. This does not
+        yet change the enrollment&apos;s status — see below.
       </p>
 
       <div className="flex flex-col gap-2">
@@ -281,6 +293,26 @@ function ClosureTab({ enrollmentId }) {
                 ? ` · ${delayedCount} paid late, charged at the delayed rate`
                 : ' · all paid on time'}
             </p>
+          )}
+
+          {payoutAmount != null && (
+            <div className="border-t border-border pt-2 flex flex-col gap-1.5">
+              <button
+                type="button"
+                onClick={handleRecord}
+                disabled={closeMutation.isPending}
+                className="flex min-h-10 items-center justify-center rounded-lg bg-primary px-3 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+              >
+                {closeMutation.isPending ? 'Recording…' : `Record ${formatCurrency(payoutAmount)} on this enrollment`}
+              </button>
+              <p className="text-xs text-muted-foreground">
+                Records the benefit amount only — does not change the
+                enrollment&apos;s status. No dedicated close/mature/foreclose/
+                cancel endpoint exists in the API; the status field&apos;s exact
+                meaning needs confirming with OrnaVerse before this can also
+                mark the enrollment closed.
+              </p>
+            </div>
           )}
         </div>
       )}

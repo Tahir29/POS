@@ -26,6 +26,27 @@
 // transactionHeaderService.buildTransactionHeaderFields, useOrderHeaderConfig),
 // UNVERIFIED LIVE per the user's explicit direction to code this without a
 // live round-trip per flow.
+//
+// RECORD-TYPE FIX (2026-08-14) — "Repair In" used to stop at creating the
+// workshop Repair Order (document 75) and call that done. It never created
+// an actual POS RepairIn record, despite useCreateRepairIn/usePostRepairIn
+// already existing fully implemented and imported into this very file —
+// just never called. That's why anything raised here never showed up in
+// this tab's own list (which reads real RepairIn/List), and Repair Out had
+// nothing genuine to pick from. Now wired as the two real stages it always
+// should have been. Also fixed in the same pass: the order's own
+// financial_year_id/ledger_id were being resolved off REPAIR_IN's
+// DocumentNumbering config instead of the order's own (document 75) — two
+// different document types, two different control ledgers.
+//
+// STILL BLOCKED SERVER-SIDE either way — confirmed live the same day:
+// Inventory/Repair/Create (the order, stage one) 500s even on a bare
+// 4-field payload, and POS/RepairIn/Create (stage two) 500s on a real line
+// item even once a correct existing order is referenced. See
+// repairService.js's buildRepairOrderPayload/createRepairIn headers for
+// the full repro. This wiring is the correct shape either way, so it'll
+// start working the moment OrnaVerse's side is fixed rather than needing
+// another round of changes here.
 
 import { Suspense, useState } from 'react';
 import { useSelector }        from 'react-redux';
@@ -35,7 +56,7 @@ import { z }                  from 'zod';
 import { toast }              from 'react-toastify';
 import {
   Wrench, Hammer, Receipt, ChevronRight,
-  RefreshCw, Plus, X,
+  RefreshCw, Plus, X, AlertTriangle,
 } from 'lucide-react';
 
 import {
@@ -47,6 +68,7 @@ import {
   useCreateRepairOut,     usePostRepairOut,
   useCreateRepairInvoice, usePostRepairInvoice, useCreateRepairInvoiceReceipt,
 } from '@/hooks/repair/useRepairMutations';
+import { useRepairInvoiceHelpers } from '@/hooks/repair/useRepairInvoiceHelpers';
 import { usePaymentModes }     from '@/hooks/checkout/usePaymentModes';
 import { useOrderHeaderConfig } from '@/hooks/checkout/useOrderHeaderConfig';
 import {
@@ -55,7 +77,8 @@ import {
 } from '@/hooks/repair/useRepairOrders';
 import {
   priceRepairItems, buildRepairOrderPayload,
-  REPAIR_TYPE, REPAIR_LOCATION_TYPE,
+  getRepairOrderAsIntakeLines, buildRepairInPayload,
+  REPAIR_TYPE, REPAIR_LOCATION_TYPE, REPAIR_ORDER_DOCUMENT_ID,
 } from '@/services/repairService';
 import { buildTransactionHeaderFields } from '@/services/transactionHeaderService';
 import InlineLoader            from '@/components/shared/InlineLoader';
@@ -173,10 +196,17 @@ function RepairInNewForm({ onDone }) {
   const storeId       = useSelector(selectActiveStoreId);
   const customerId    = useSelector(selectCartCustomerId);
   const customerName  = useSelector(selectCartCustomerName);
-  const headerConfig  = useOrderHeaderConfig(APP_CONFIG.DOCUMENT_TYPES.REPAIR_IN);
+  // Two DIFFERENT document types, two DIFFERENT configs — this used to
+  // resolve everything (including the Repair ORDER's own ledger_id) off
+  // REPAIR_IN's config, which has no ledger_id row at all on this tenant.
+  // The order itself (document 75) needs its own.
+  const headerConfig       = useOrderHeaderConfig(REPAIR_ORDER_DOCUMENT_ID);
+  const repairInHeaderConfig = useOrderHeaderConfig(APP_CONFIG.DOCUMENT_TYPES.REPAIR_IN);
 
   const create = useCreateRepairOrder({ onSuccess: () => {} });
-  const post   = usePostRepairOrder({ onSuccess: () => onDone() });
+  const post   = usePostRepairOrder({ onSuccess: () => {} });
+  const createIn = useCreateRepairIn({ onSuccess: () => {} });
+  const postIn   = usePostRepairIn({ onSuccess: () => onDone() });
 
   const { register, handleSubmit, setValue, reset, watch, formState: { errors } } = useForm({
     resolver: zodResolver(repairOrderSchema),
@@ -207,7 +237,16 @@ function RepairInNewForm({ onDone }) {
 
   const onSubmit = async (data) => {
     if (!customerId) return toast.error('Attach a customer to the session before submitting.');
-    if (!headerConfig.isReady) return toast.error('Store configuration is still loading — try again in a moment.');
+    if (!headerConfig.isReady) {
+      if (headerConfig.isError) headerConfig.refetch();
+      return toast.error(
+        headerConfig.isConfigMissing
+          ? "This document type isn't set up for your store yet — contact OrnaVerse support."
+          : headerConfig.isError
+            ? 'Store configuration failed to load — retrying now, try again in a moment.'
+            : 'Store configuration is still loading — try again in a moment.'
+      );
+    }
     if (!selectedRows.length) return toast.error('Pick at least one item to send for repair.');
     try {
       // Line items are server-computed — priced by the same helper Return uses.
@@ -245,7 +284,29 @@ function RepairInNewForm({ onDone }) {
       if (!transactionId) throw new Error('Repair order failed — no EntityId returned.');
       // Document 75 is auto_posting TRUE, so Create already posted it.
       if (!headerConfig.autoPosting) await post.mutateAsync(transactionId);
-      else onDone();
+
+      // Second stage — the actual POS Repair In intake, previously never
+      // created at all (this page used to stop at the workshop order and
+      // call that "done"). A Repair In line is COPIED from the order's own
+      // line, never hand-built — see mapOrderLineToRepairInLine's header
+      // comment for why. See createRepairIn's header for this step's own
+      // live-test status: confirmed still not fully working on this tenant
+      // as of 2026-08-14, kept here because it's the correct shape to send
+      // regardless, and because Repair Order creation itself is currently
+      // the blocker stopping this from ever being reached in practice.
+      if (!repairInHeaderConfig.isConfigMissing) {
+        const { order, lines } = await getRepairOrderAsIntakeLines(transactionId);
+        if (order && lines.length) {
+          const inRes = await createIn.mutateAsync(
+            buildRepairInPayload({ order, lines, documentDate: data.document_date })
+          );
+          const repairInId = inRes?.EntityId;
+          if (repairInId && !repairInHeaderConfig.autoPosting) {
+            await postIn.mutateAsync(repairInId);
+          }
+        }
+      }
+      onDone();
       reset();
     } catch (err) {
       setIsPricing(false);
@@ -253,7 +314,7 @@ function RepairInNewForm({ onDone }) {
     }
   };
 
-  const isSubmitting = isPricing || create.isPending || post.isPending;
+  const isSubmitting = isPricing || create.isPending || post.isPending || createIn.isPending || postIn.isPending;
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5">
@@ -347,6 +408,16 @@ function RepairInNewForm({ onDone }) {
       >
         {isPricing ? 'Pricing items…' : isSubmitting ? 'Saving…' : 'Save Repair Order'}
       </Button>
+
+      {/* Confirmed live 2026-08-14 (see repairService.js's
+          buildRepairOrderPayload/createRepairIn headers for the full repro):
+          both stages this creates currently fail server-side regardless of
+          what's sent. */}
+      <p className="flex items-start gap-1.5 text-xs text-muted-foreground -mt-2">
+        <AlertTriangle size={13} className="shrink-0 mt-0.5 text-status-made-order" aria-hidden="true" />
+        Saving is currently expected to fail — confirmed a server-side issue on
+        OrnaVerse&apos;s end, not something wrong with what you entered.
+      </p>
     </form>
   );
 }
@@ -380,7 +451,16 @@ function RepairOutNewForm({ onDone }) {
     if (!selectedIn) return toast.error('Select the repair intake this item belongs to.');
     const item = selectedIn.lineItems?.[0];
     if (!item) return toast.error('Selected intake has no item on record.');
-    if (!headerConfig.isReady) return toast.error('Store configuration is still loading — try again in a moment.');
+    if (!headerConfig.isReady) {
+      if (headerConfig.isError) headerConfig.refetch();
+      return toast.error(
+        headerConfig.isConfigMissing
+          ? "This document type isn't set up for your store yet — contact OrnaVerse support."
+          : headerConfig.isError
+            ? 'Store configuration failed to load — retrying now, try again in a moment.'
+            : 'Store configuration is still loading — try again in a moment.'
+      );
+    }
     try {
       const pieces = item.pieces ?? 1;
       const weight = item.weight ?? 0;
@@ -461,7 +541,10 @@ function RepairOutNewForm({ onDone }) {
 const repairInvoiceSchema = z.object({
   document_date: z.string().min(1, 'Required'),
   item_rate: z.coerce.number().min(0, 'Required'),
-  mode_id: z.coerce.number().min(1, 'Select payment mode'),
+  // Optional at the schema level — required only when applied balances
+  // don't already cover the full amount, enforced in onSubmit where the
+  // applied total is known.
+  mode_id: z.coerce.number().optional().or(z.literal('')),
 });
 
 function RepairInvoiceNewForm({ onDone }) {
@@ -469,16 +552,43 @@ function RepairInvoiceNewForm({ onDone }) {
   const { items: repairOuts, isLoading: repairOutsLoading } = useRepairOuts({});
   const { paymentModes, isLoading: modesLoading } = usePaymentModes();
   const [selectedOut, setSelectedOut] = useState(null);
+  const [appliedBalances, setAppliedBalances] = useState([]); // { code, label, amount }[]
   const headerConfig = useOrderHeaderConfig(APP_CONFIG.DOCUMENT_TYPES.REPAIR_INVOICE);
+
+  // Advance/Scheme/Credit Note/Exchange balances this customer already has
+  // on file — previously never surfaced here at all, so repair billing
+  // could only take a brand-new flat payment even when the customer was
+  // already carrying credit. See useRepairInvoiceHelpers header for the
+  // "unverified live" caveat shared with the rest of this pass.
+  const { balances, isLoading: balancesLoading } = useRepairInvoiceHelpers({
+    partyId: selectedOut?.customerId ?? null,
+    companyId: storeId,
+  });
 
   const create      = useCreateRepairInvoice({ onSuccess: () => {} });
   const post        = usePostRepairInvoice({ onSuccess: () => {} });
-  const addReceipt  = useCreateRepairInvoiceReceipt({ onSuccess: () => onDone() });
+  const addReceipt  = useCreateRepairInvoiceReceipt({ onSuccess: () => {} });
 
-  const { register, handleSubmit, control, reset, formState: { errors } } = useForm({
+  const { register, handleSubmit, control, reset, watch, formState: { errors } } = useForm({
     resolver: zodResolver(repairInvoiceSchema),
     defaultValues: { document_date: todayDateString(), item_rate: '', mode_id: '' },
   });
+
+  const itemRateEntered = Number(watch('item_rate')) || 0;
+  const appliedTotal = appliedBalances.reduce((s, b) => s + b.amount, 0);
+  const remainingDue = Math.max(0, +(itemRateEntered - appliedTotal).toFixed(2));
+
+  const toggleBalance = (balance) => {
+    setAppliedBalances((prev) => {
+      const exists = prev.find((b) => b.code === balance.code);
+      if (exists) return prev.filter((b) => b.code !== balance.code);
+      return [...prev, {
+        code: balance.code,
+        label: balance.label,
+        amount: Math.min(balance.amount, itemRateEntered || balance.amount),
+      }];
+    });
+  };
 
   const onSubmit = async (data) => {
     if (!selectedOut) return toast.error('Select the repair job this invoice is for.');
@@ -486,8 +596,22 @@ function RepairInvoiceNewForm({ onDone }) {
     if (!item) return toast.error('Selected job has no item on record.');
 
     const itemRate = Number(data.item_rate);
-    const selectedMode = paymentModes.find((m) => m.modeId === Number(data.mode_id));
-    if (!headerConfig.isReady) return toast.error('Store configuration is still loading — try again in a moment.');
+    // A mode is only required for whatever isn't covered by applied
+    // balances — a fully-covered invoice needs no new payment at all.
+    if (remainingDue > 0 && !data.mode_id) {
+      return toast.error('Select how the remaining balance is paid.');
+    }
+    const selectedMode = data.mode_id ? paymentModes.find((m) => m.modeId === Number(data.mode_id)) : null;
+    if (!headerConfig.isReady) {
+      if (headerConfig.isError) headerConfig.refetch();
+      return toast.error(
+        headerConfig.isConfigMissing
+          ? "This document type isn't set up for your store yet — contact OrnaVerse support."
+          : headerConfig.isError
+            ? 'Store configuration failed to load — retrying now, try again in a moment.'
+            : 'Store configuration is still loading — try again in a moment.'
+      );
+    }
 
     try {
       const pieces = item.pieces ?? 1;
@@ -521,19 +645,39 @@ function RepairInvoiceNewForm({ onDone }) {
       // RepairInvoice (119) is auto_posting FALSE, so this normally runs.
       if (!headerConfig.autoPosting) await post.mutateAsync(transactionId);
 
+      // One receipt row per applied balance, same idea as the main
+      // checkout's helper payments (CheckoutPaymentSection) — mode_id/
+      // ledger_id omitted for these, mode_code alone identifies which
+      // balance is being drawn down. UNVERIFIED LIVE — see
+      // useRepairInvoiceHelpers header.
+      for (const balance of appliedBalances) {
+        await addReceipt.mutateAsync({
+          transaction_id: transactionId,
+          party_id:       selectedOut.customerId,
+          company_id:     storeId,
+          amount:         balance.amount,
+          mode_code:      balance.code,
+        });
+      }
+
+      // Whatever's left after applied balances, paid via the selected mode.
       // ledger_id sourced from the selected mode — same pattern as Refund
       // and Scheme Receipt (see usePaymentModes.js normalizeMode).
-      await addReceipt.mutateAsync({
-        transaction_id: transactionId,
-        party_id:       selectedOut.customerId,
-        company_id:     storeId,
-        amount:         itemRate,
-        mode_id:        Number(data.mode_id),
-        ledger_id:      selectedMode?.ledgerId ?? undefined,
-      });
+      if (remainingDue > 0) {
+        await addReceipt.mutateAsync({
+          transaction_id: transactionId,
+          party_id:       selectedOut.customerId,
+          company_id:     storeId,
+          amount:         remainingDue,
+          mode_id:        Number(data.mode_id),
+          ledger_id:      selectedMode?.ledgerId ?? undefined,
+        });
+      }
 
+      onDone();
       reset();
       setSelectedOut(null);
+      setAppliedBalances([]);
     } catch (err) {
       toast.error(getErrorMessage(err));
     }
@@ -561,9 +705,38 @@ function RepairInvoiceNewForm({ onDone }) {
         <Input type="number" inputMode="decimal" {...register('item_rate')} className="h-11" />
       </FormField>
 
-      <FormField label="Payment Method" required error={errors.mode_id}>
-        <PaymentModeSelect control={control} name="mode_id" paymentModes={paymentModes} modesLoading={modesLoading} />
-      </FormField>
+      {/* Existing balances — Advance/Scheme/Credit Note/Exchange. Previously
+          not shown anywhere on this form at all (see useRepairInvoiceHelpers
+          header). Only shown once a job (and so a customer) is selected. */}
+      {selectedOut && !balancesLoading && balances.some((b) => b.amount > 0) && (
+        <FormField label="Apply Existing Balance">
+          <div className="flex flex-col gap-2">
+            {balances.filter((b) => b.amount > 0).map((b) => {
+              const isApplied = appliedBalances.some((a) => a.code === b.code);
+              return (
+                <button
+                  key={b.code}
+                  type="button"
+                  aria-pressed={isApplied}
+                  onClick={() => toggleBalance(b)}
+                  className={`flex min-h-11 items-center justify-between gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors ${
+                    isApplied ? 'border-primary bg-primary/10' : 'border-border bg-card hover:bg-muted'
+                  }`}
+                >
+                  <span className="text-sm font-medium text-foreground">{b.label}</span>
+                  <span className="text-sm tabular-nums text-muted-foreground">{formatINR(b.amount)} available</span>
+                </button>
+              );
+            })}
+          </div>
+        </FormField>
+      )}
+
+      {remainingDue > 0 && (
+        <FormField label={appliedBalances.length > 0 ? `Remaining (${formatINR(remainingDue)}) — Payment Method` : 'Payment Method'} required error={errors.mode_id}>
+          <PaymentModeSelect control={control} name="mode_id" paymentModes={paymentModes} modesLoading={modesLoading} />
+        </FormField>
+      )}
 
       <Button type="submit" disabled={isSubmitting || !selectedOut} className="h-12 mt-1">
         {isSubmitting ? 'Billing…' : 'Create Repair Invoice'}

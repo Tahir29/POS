@@ -286,7 +286,23 @@ function SoldItemFlowForm({ flow, onDone }) {
 
   const onSubmit = async (data) => {
     if (!customerId) return toast.error('Attach a customer to the session first.');
-    if (!headerConfig.isReady) return toast.error('Store configuration is still loading — try again in a moment.');
+    if (!headerConfig.isReady) {
+      // isError means the underlying queries already exhausted their
+      // retries and are stuck — "try again in a moment" alone would never
+      // resolve on its own from there, so kick off a fresh attempt now
+      // rather than leave the operator with no path but a hard refresh.
+      // isConfigMissing is a THIRD, distinct case (confirmed live 2026-08-14
+      // for Credit Note specifically — zero DocumentNumbering rows exist
+      // for it on any store) — no amount of retrying will ever fix that.
+      if (headerConfig.isError) headerConfig.refetch();
+      return toast.error(
+        headerConfig.isConfigMissing
+          ? "This document type isn't set up for your store yet — contact OrnaVerse support."
+          : headerConfig.isError
+            ? 'Store configuration failed to load — retrying now, try again in a moment.'
+            : 'Store configuration is still loading — try again in a moment.'
+      );
+    }
     try {
       setIsPricing(true);
       // Pass the sold-item rows through UNMODIFIED — the pricing helper needs
@@ -598,7 +614,23 @@ function MetalLineItemForm({ type, onDone }) {
     if (config.pickerMode === 'fixed' && !urdItem) {
       return toast.error('URD Gold master item is still loading — try again in a moment.');
     }
-    if (!headerConfig.isReady) return toast.error('Store configuration is still loading — try again in a moment.');
+    if (!headerConfig.isReady) {
+      // isError means the underlying queries already exhausted their
+      // retries and are stuck — "try again in a moment" alone would never
+      // resolve on its own from there, so kick off a fresh attempt now
+      // rather than leave the operator with no path but a hard refresh.
+      // isConfigMissing is a THIRD, distinct case (confirmed live 2026-08-14
+      // for Credit Note specifically — zero DocumentNumbering rows exist
+      // for it on any store) — no amount of retrying will ever fix that.
+      if (headerConfig.isError) headerConfig.refetch();
+      return toast.error(
+        headerConfig.isConfigMissing
+          ? "This document type isn't set up for your store yet — contact OrnaVerse support."
+          : headerConfig.isError
+            ? 'Store configuration failed to load — retrying now, try again in a moment.'
+            : 'Store configuration is still loading — try again in a moment.'
+      );
+    }
     try {
       const line_items = data.line_items.map((i) => {
         const resolvedItem = config.pickerMode === 'fixed' ? urdItem : i.item;
@@ -637,7 +669,17 @@ function MetalLineItemForm({ type, onDone }) {
       const createRes = await create.mutateAsync(payload);
       const transactionId = createRes?.EntityId;
       if (!transactionId) throw new Error('Creation failed — no EntityId returned.');
-      await post.mutateAsync(transactionId);
+      // Only Post when the document type isn't already auto-posting — same
+      // guard as Return/Exchange/Buyback/Credit Note above. This was the
+      // one flow that skipped it and called Post unconditionally.
+      // CONFIRMED live 2026-08-14 via DocumentNumbering/List (document_id
+      // 104): auto_posting:true on every company row for this tenant — so
+      // every successful URD Purchase was hitting AlreadyPosted and
+      // showing the cashier a failure toast for a transaction that had, in
+      // fact, already gone through.
+      if (!headerConfig.autoPosting) {
+        await post.mutateAsync(transactionId);
+      }
       reset();
     } catch (err) {
       toast.error(getErrorMessage(err));
@@ -772,7 +814,23 @@ function CreditNoteNewForm({ onDone }) {
 
   const onSubmit = async (data) => {
     if (!customerId) return toast.error('Attach a customer to the session before submitting.');
-    if (!headerConfig.isReady) return toast.error('Store configuration is still loading — try again in a moment.');
+    if (!headerConfig.isReady) {
+      // isError means the underlying queries already exhausted their
+      // retries and are stuck — "try again in a moment" alone would never
+      // resolve on its own from there, so kick off a fresh attempt now
+      // rather than leave the operator with no path but a hard refresh.
+      // isConfigMissing is a THIRD, distinct case (confirmed live 2026-08-14
+      // for Credit Note specifically — zero DocumentNumbering rows exist
+      // for it on any store) — no amount of retrying will ever fix that.
+      if (headerConfig.isError) headerConfig.refetch();
+      return toast.error(
+        headerConfig.isConfigMissing
+          ? "This document type isn't set up for your store yet — contact OrnaVerse support."
+          : headerConfig.isError
+            ? 'Store configuration failed to load — retrying now, try again in a moment.'
+            : 'Store configuration is still loading — try again in a moment.'
+      );
+    }
     try {
       const amount = Number(data.net_amount);
       const createRes = await create.mutateAsync({
@@ -880,7 +938,23 @@ function RefundNewForm({ onDone }) {
 
   const onSubmit = async (data) => {
     if (!customerId) return toast.error('Attach a customer to the session before submitting.');
-    if (!headerConfig.isReady) return toast.error('Store configuration is still loading — try again in a moment.');
+    if (!headerConfig.isReady) {
+      // isError means the underlying queries already exhausted their
+      // retries and are stuck — "try again in a moment" alone would never
+      // resolve on its own from there, so kick off a fresh attempt now
+      // rather than leave the operator with no path but a hard refresh.
+      // isConfigMissing is a THIRD, distinct case (confirmed live 2026-08-14
+      // for Credit Note specifically — zero DocumentNumbering rows exist
+      // for it on any store) — no amount of retrying will ever fix that.
+      if (headerConfig.isError) headerConfig.refetch();
+      return toast.error(
+        headerConfig.isConfigMissing
+          ? "This document type isn't set up for your store yet — contact OrnaVerse support."
+          : headerConfig.isError
+            ? 'Store configuration failed to load — retrying now, try again in a moment.'
+            : 'Store configuration is still loading — try again in a moment.'
+      );
+    }
     try {
       const mode = paymentModes.find((m) => m.modeId === Number(data.mode_id));
       await create.mutateAsync({
@@ -989,6 +1063,18 @@ function RefundNewForm({ onDone }) {
       >
         {isSubmitting ? 'Processing Refund…' : 'Submit Refund'}
       </Button>
+
+      {/* Confirmed live 2026-08-14 (see refundService.js's stampRefDocumentNo
+          header for the full repro): the payout is real and this does file
+          a refund record, but the underlying credit is NOT actually marked
+          settled afterward — its balance stays exactly where it was. Say so
+          plainly; this is a real-money gap, not a cosmetic one. */}
+      <p className="flex items-start gap-1.5 text-xs text-muted-foreground -mt-2">
+        <AlertCircle size={13} className="shrink-0 mt-0.5 text-status-made-order" aria-hidden="true" />
+        The selected credit(s) may still show as outstanding after this — OrnaVerse
+        doesn&apos;t reliably mark them settled yet. Track paid-out refunds manually
+        until that&apos;s confirmed fixed.
+      </p>
     </form>
   );
 }
