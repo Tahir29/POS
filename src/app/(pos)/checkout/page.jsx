@@ -24,7 +24,12 @@
 //
 // Exactly one document per sale — raising both would book the same goods
 // twice. (Their ERP can later fulfil an order into an invoice via "Fulfill
-// from order"; that contract is uncaptured, so it isn't wired here.)
+// from order" — wired 2026-08-19: OrderDetailSheet's FulfillOrderAction
+// hydrates the cart from a ready order line and lands here like any other
+// sale; useCreateInvoice threads fulfillmentOrderId/OrderNo through onto
+// the Invoice/Create payload. See the header comment on
+// API.ORDER_FULFILLMENT for what's confirmed vs. still unverified about
+// that reference actually closing the source order out server-side.)
 //
 // FLOW:
 //   1. Customer must be attached (checkoutSchema enforces this)

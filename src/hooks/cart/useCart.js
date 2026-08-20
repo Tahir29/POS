@@ -10,6 +10,8 @@ import {
   selectCartCustomerMobile,
   selectAppliedPromos,
   selectIsCartEmpty,
+  selectFulfillmentOrderId,
+  selectFulfillmentOrderNo,
   removeItem,
   updateQuantity,
   attachCustomer,
@@ -17,7 +19,9 @@ import {
   applyPromo,
   removePromo,
   clearCart,
+  hydrateFromOrder,
 } from '@/store/slices/cartSlice';
+import { mapFulfillmentLineToCartItem } from '@/services/orderFulfillmentService';
 import TOAST from '@/constants/toastMessages';
 
 export function useCart() {
@@ -29,6 +33,8 @@ export function useCart() {
   const customerMobile      = useSelector(selectCartCustomerMobile);
   const appliedPromos       = useSelector(selectAppliedPromos);
   const isEmpty             = useSelector(selectIsCartEmpty);
+  const fulfillmentOrderId  = useSelector(selectFulfillmentOrderId);
+  const fulfillmentOrderNo  = useSelector(selectFulfillmentOrderNo);
 
   const handleRemoveItem = (item) => {
     dispatch(removeItem({
@@ -77,6 +83,28 @@ export function useCart() {
     toast.success(TOAST.CART.CART_CLEARED);
   };
 
+  // "Fulfill from order" — replaces the whole cart with an order's own
+  // customer + selected ready-to-invoice line(s). See cartSlice's
+  // hydrateFromOrder and orderFulfillmentService.js for the full contract
+  // and what's confirmed vs. still unverified about this actually closing
+  // the source order out server-side.
+  //
+  // @param {{ order: { partyId, partyName, mobile, transactionId, documentNo },
+  //   lines: object[] }} params — lines are raw rows from
+  //   getReadyToInvoiceLines/getAllOpenOrderLines
+  const handleLoadFromOrder = ({ order, lines }) => {
+    const items = lines.map(mapFulfillmentLineToCartItem);
+    dispatch(hydrateFromOrder({
+      items,
+      customerId:         order.partyId,
+      customerName:       order.partyName,
+      customerMobile:     order.mobile,
+      fulfillmentOrderId: order.transactionId,
+      fulfillmentOrderNo: order.documentNo,
+    }));
+    toast.success(TOAST.CART.LOADED_FROM_ORDER(order.documentNo));
+  };
+
   return {
     items,
     customerId,
@@ -84,6 +112,8 @@ export function useCart() {
     customerMobile,
     appliedPromos,
     isEmpty,
+    fulfillmentOrderId,
+    fulfillmentOrderNo,
     removeItem: handleRemoveItem,
     updateQuantity: handleUpdateQuantity,
     attachCustomer: handleAttachCustomer,
@@ -91,5 +121,6 @@ export function useCart() {
     applyPromo: handleApplyPromo,
     removePromo: handleRemovePromo,
     clearCart: handleClearCart,
+    loadFromOrder: handleLoadFromOrder,
   };
 }

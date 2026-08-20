@@ -264,11 +264,16 @@ const extractServerMessage = (data) => {
  *             retryable: boolean, serverMessage: string|null, response?: object }}
  */
 const normalizeError = (error) => {
-  // TEMP DEBUG — remove once the live 500 (Invoice/Create) and 400
-  // (POSInvoice/Get* helpers) errors are diagnosed. Logs the ACTUAL raw
-  // response body from OrnaVerse, which normalizeError below normally
-  // discards in favor of a generic user-facing message.
-  if (error.response) {
+  // DEV-ONLY DEBUG — logs the ACTUAL raw response body from OrnaVerse,
+  // which normalizeError below normally discards in favor of a generic
+  // user-facing message. Was previously unconditional and shipped to
+  // production, where it printed full upstream response bodies (which can
+  // carry customer/invoice PII on business-data endpoints) to the browser
+  // console on every failed request — a real leak path if anyone screen-
+  // shares or screen-records a support session. Gated to development only
+  // (2026-08-18 security pass); keep this guard if the logging is ever
+  // needed again for a live issue.
+  if (error.response && process.env.NODE_ENV !== 'production') {
     console.error(
       '[normalizeError] RAW error response:',
       error.config?.url,

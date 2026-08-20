@@ -61,8 +61,52 @@ export function localDocumentDate(now = new Date()) {
  *     matching the original all-cash capture where the key was simply
  *     absent from the row.
  *
+ * CREDIT ROWS (`mode.creditRef` present) — applying a customer's Return/
+ * Exchange/Scheme/Old Gold/Advance balance toward this document — build a
+ * DIFFERENT shape, confirmed 2026-08-19 by reading OrnaVerse's own compiled
+ * POS client (`buildReceiptFromCredit` in their `chunk-ROKEGHO3.js`) while
+ * their UAT was down for a live capture — same technique this project
+ * already used for the Repair flow (see BLOCKERS.md's "How the contract was
+ * obtained without a capture"), so this is sourced evidence, not a guess:
+ *
+ *   mode_code/mode_id/mode_type   → copied from the SOURCE credit receipt
+ *                                   (a POSReceiptsSelect/List row), not a
+ *                                   PaymentReceiptMode row — credits aren't
+ *                                   tenders, they don't have one.
+ *   mode_sub_type: 2 (hardcoded)  → THE discriminator their own code uses
+ *                                   to recognize a credit-application row
+ *                                   (`isCreditReceipt()`: mode_sub_type===2
+ *                                   || mode_type in a fixed credit-type
+ *                                   set) — not mode_code/mode_id, which are
+ *                                   just carried through for display/audit.
+ *                                   A normal tender row is mode_sub_type 1
+ *                                   (their own default when absent).
+ *   ledger_id, document_ledger_id → copied from the credit receipt row.
+ *   ref_no, ref_document_id,
+ *   ref_transaction_id            → the credit receipt's OWN document_no /
+ *                                   document_id / transaction_id — this is
+ *                                   the actual settlement linkage, meant to
+ *                                   knock the balance off that receipt.
+ *   party_id, allow_partial       → copied from the credit receipt row.
+ *   mode_name                     → deliberately NOT sent — their own
+ *                                   function omits it, and POSReceiptsSelect
+ *                                   rows never carry one either.
+ *
+ * CONFIRMED SETTLING 2026-08-19 — completed a real Invoice on Tahir Kutty
+ * (party_id 2221, HO-LJ-0826-018, ₹49,825.06 net) applying ₹18,451.00 of his
+ * HO-EXC-07-26-00001 Exchange credit + Cash for the remainder. Re-checked
+ * POSReceiptsSelect/List immediately after: total available credit dropped
+ * from ₹4,71,510.00 to ₹4,53,059.00 (exactly ₹18,451.00 less), and
+ * HO-EXC-07-26-00001 itself disappeared from the list entirely (balance hit
+ * 0, so it no longer passes the `balance_amount > 0` filter) — every other
+ * receipt's balance was untouched. This IS a different mechanism from
+ * refundService.js's toRefundReceipt(), which is confirmed NOT to settle on
+ * this tenant — the two don't share a code path, so one's brokenness was
+ * never evidence against the other, and now this one is positively confirmed
+ * working rather than just plausible.
+ *
  * @param {{
- *   paymentModes: {modeId, modeCode, modeName, amount, refNo?: string, bankPosId?: number|null, raw?: object}[],
+ *   paymentModes: {modeId, modeCode, modeName, amount, refNo?: string, bankPosId?: number|null, raw?: object, creditRef?: object}[],
  *   customerId:    number,
  *   activeStoreId: number,
  *   exchangeRate:  number,
@@ -74,9 +118,30 @@ export function buildReceiptDetails({
   paymentModes, customerId, activeStoreId, exchangeRate, headerConfig,
 }) {
   return paymentModes.map((mode) => {
+    if (mode.creditRef) {
+      const credit = mode.creditRef;
+      return {
+        amount:             mode.amount,
+        mode_id:            credit.mode_id,
+        mode_code:          credit.mode_code,
+        mode_type:          credit.mode_type,
+        mode_sub_type:      2,
+        ledger_id:          credit.ledger_id,
+        document_ledger_id: credit.document_ledger_id,
+        ref_no:             credit.document_no,
+        ref_document_id:    credit.document_id ?? credit.ref_document_id,
+        ref_transaction_id: credit.transaction_id ?? credit.ref_transaction_id,
+        allow_partial:      credit.allow_partial ?? false,
+        cheque_date:        '',
+        cheque_no:          '',
+        party_id:           credit.party_id ?? customerId,
+        company_id:         activeStoreId,
+        financial_year_id:  headerConfig.financialYearId,
+        exchange_rate:      exchangeRate,
+      };
+    }
+
     // `raw` is the untouched PaymentReceiptModeRow (see usePaymentModes).
-    // Helper balances (scheme/credit note/old gold) have no mode row at all,
-    // hence the fallbacks rather than assuming it is there.
     const row = mode.raw ?? {};
     return {
       amount:            mode.amount,
@@ -85,7 +150,7 @@ export function buildReceiptDetails({
       mode_code:         mode.modeCode ?? row.mode_code ?? '',
       mode_name:         mode.modeName ?? row.mode_name ?? '',
       mode_type:         row.mode_type ?? null,
-      mode_sub_type:     row.mode_sub_type ?? null,
+      mode_sub_type:     row.mode_sub_type ?? 1, // 1 = normal tender — their own default
       allow_partial:     row.allow_partial ?? false,
       cheque_date:       '',
       cheque_no:         '',

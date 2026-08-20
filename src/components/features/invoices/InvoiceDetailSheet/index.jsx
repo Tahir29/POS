@@ -6,9 +6,13 @@
 // Uses the full record already returned by Invoice/List (passed in as
 // `invoice.raw`) — no second Invoice/Retrieve call needed.
 //
-// PRINT LAYOUT: printable content portaled to document.body to escape
-// BottomSheet's CSS transform. Logo shown only in the print layout
-// (hidden on screen, shown via @media print / print:block).
+// PRINT: via InvoiceReportButton — OrnaVerse's own report-render pipeline,
+// not window.print(). Confirmed live 2026-08-19: their own ERP toolbar
+// Print button on this exact document type fires the same
+// Administration/DocumentReports/List call and offers the same three
+// formats. The old window.print()-based PrintInvoiceButton (and the
+// #invoice-print-area portal + @media print CSS it depended on) is gone —
+// see globals.css.
 //
 // ADDED (2026-08-14) — Collect Payment and Cancel Invoice. Both
 // createInvoiceReceipt()/cancelInvoice() existed fully implemented in
@@ -21,15 +25,13 @@
 // receipt_details[] is proven; this standalone post-creation call is not).
 
 import { useState } from 'react';
-import { createPortal } from 'react-dom';
 import { useSelector } from 'react-redux';
 import { useForm } from 'react-hook-form';
 import { AlertTriangle, CreditCard } from 'lucide-react';
 import BottomSheet from '@/components/shared/BottomSheet';
 import { splitGst } from '@/lib/gst';
-import PrintInvoiceButton from '@/components/features/checkout/PrintInvoiceButton';
+import InvoiceReportButton from '@/components/features/checkout/InvoiceReportButton';
 import PaymentModeSelect from '@/components/shared/PaymentModeSelect';
-import Logo from '@/components/shared/Logo';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useCancelInvoice } from '@/hooks/invoices/useCancelInvoice';
@@ -239,15 +241,14 @@ export default function InvoiceDetailSheet({ invoice, isOpen, onClose }) {
   };
 
   return (
-    <>
-      <BottomSheet isOpen={isOpen} onClose={handleClose} title="Invoice">
-        {raw ? (
+    <BottomSheet isOpen={isOpen} onClose={handleClose} title="Invoice">
+      {raw ? (
           <div className="flex flex-col gap-4">
             <div className="rounded-xl border border-border bg-card p-4">
               <InvoiceContent raw={raw} />
             </div>
 
-            <PrintInvoiceButton />
+            <InvoiceReportButton transactionId={raw.transaction_id} />
 
             {hasBalance && !showCollectPayment && !showCancelConfirm && (
               <Button
@@ -291,22 +292,6 @@ export default function InvoiceDetailSheet({ invoice, isOpen, onClose }) {
             Invoice details unavailable.
           </p>
         )}
-      </BottomSheet>
-
-      {/* Print-only copy portaled to <body> — bg-white is intentional here
-          (physical paper via print stylesheet, always white regardless of
-          .dark), escapes BottomSheet's transform/overflow. Logo shown only
-          here (hidden on screen). */}
-      {raw && typeof document !== 'undefined' &&
-        createPortal(
-          <div id="invoice-print-area" className="hidden print:block p-6 bg-white">
-            <div className="flex justify-center items-center py-8 mb-8 border-b border-stone-100">
-              <Logo variant="full" color="brown" width={140} height={44} />
-            </div>
-            <InvoiceContent raw={raw} />
-          </div>,
-          document.body
-        )}
-    </>
+    </BottomSheet>
   );
 }

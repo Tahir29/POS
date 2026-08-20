@@ -251,63 +251,31 @@ export async function generateInvoicePDF(transactionId) {
 // has available to apply toward this invoice.
 
 /**
- * Get customer's available advance payments.
- * @param {{ party_id: number, company_id: number }} params
+ * Every outstanding credit-bearing receipt for this party, in one flat list
+ * — Return, Exchange, Scheme Receipt, URD Purchase, Order/Invoice advance,
+ * whatever the party currently has. This REPLACES getInvoiceAdvances/
+ * getInvoiceCreditNote/getInvoiceExchange/getInvoiceOldGold/getInvoiceScheme
+ * (removed 2026-08-18) — those five endpoints 500 on this tenant and are
+ * never called by OrnaVerse's own POS; this is the one call their payment
+ * screen actually makes. See the comment on API.INVOICE_HELPERS for the
+ * live capture that confirmed it, and useInvoiceHelpers.js for how the
+ * returned rows are bucketed back into the 5 category totals the UI shows.
+ *
+ * Deliberately no `company_id` in the request — the real call omits it.
+ *
+ * @param {{ party_id: number }} params
+ * @returns {Promise<object[]>} rows: { transaction_id, document_id,
+ *   document_no, balance_amount, ledger_id, document_ledger_id, mode_id,
+ *   mode_code, mode_type, allow_partial, ... } — same shape
+ *   refundService.js's getCustomerCredits() already reads from this
+ *   endpoint successfully.
  */
-export async function getInvoiceAdvances({ party_id, company_id }) {
-  const response = await axiosInstance.post(API.INVOICE_HELPERS.GET_ADVANCES, {
+export async function getPartyReceipts({ party_id }) {
+  if (!party_id) return [];
+  const response = await axiosInstance.post(API.INVOICE_HELPERS.RECEIPTS_SELECT, {
     party_id,
-    company_id,
   });
-  return response.data;
-}
-
-/**
- * Get customer's available credit note balance.
- * @param {{ party_id: number, company_id: number }} params
- */
-export async function getInvoiceCreditNote({ party_id, company_id }) {
-  const response = await axiosInstance.post(API.INVOICE_HELPERS.GET_CREDIT_NOTE, {
-    party_id,
-    company_id,
-  });
-  return response.data;
-}
-
-/**
- * Get customer's available exchange value.
- * @param {{ party_id: number, company_id: number }} params
- */
-export async function getInvoiceExchange({ party_id, company_id }) {
-  const response = await axiosInstance.post(API.INVOICE_HELPERS.GET_EXCHANGE, {
-    party_id,
-    company_id,
-  });
-  return response.data;
-}
-
-/**
- * Get customer's available old gold value.
- * @param {{ party_id: number, company_id: number }} params
- */
-export async function getInvoiceOldGold({ party_id, company_id }) {
-  const response = await axiosInstance.post(API.INVOICE_HELPERS.GET_OLD_GOLD, {
-    party_id,
-    company_id,
-  });
-  return response.data;
-}
-
-/**
- * Get customer's available scheme balance (matured or available for redemption).
- * @param {{ party_id: number, company_id: number }} params
- */
-export async function getInvoiceScheme({ party_id, company_id }) {
-  const response = await axiosInstance.post(API.INVOICE_HELPERS.GET_SCHEME, {
-    party_id,
-    company_id,
-  });
-  return response.data;
+  return response.data?.Entities ?? [];
 }
 
 /**

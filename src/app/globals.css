@@ -343,26 +343,10 @@
   }
 }
 
-/* ── Print ──────────────────────────────────────────────────────────────
-   Used by PrintInvoiceButton (OrderConfirmationScreen, Phase 9b).
-   Hides everything except the printable invoice area. */
-@media print {
-  body * {
-    visibility: hidden;
-  }
-
-  #invoice-print-area,
-  #invoice-print-area * {
-    visibility: visible;
-  }
-
-  #invoice-print-area {
-    position: fixed;
-    inset: 0;
-    width: 100%;
-    height: auto;
-    max-height: none;
-    overflow: visible;
-    padding: 1rem;
-  }
-}
+/* Print CSS (#invoice-print-area / @media print, used by the old
+   window.print()-based PrintInvoiceButton) removed 2026-08-20 — every
+   caller now prints through InvoiceReportButton, which renders OrnaVerse's
+   own report HTML in an iframe and prints THAT (frame.contentWindow.print())
+   instead of hiding/showing parts of our own page. Confirmed live that this
+   is the same mechanism their own ERP toolbar's Print button uses, not a
+   POS-only shortcut. */

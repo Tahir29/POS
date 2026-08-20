@@ -25,6 +25,13 @@ const initialState = {
   subtotal:            0,
   taxAmount:           0,     // 3% GST on the taxable value (subtotal - discount)
   total:               0,
+  // Set only when this cart was loaded via "Fulfill from order" (see
+  // useOrderFulfillment.js / hydrateFromOrder below) — carried through to
+  // Invoice/Create as a best-effort reference back to the source order.
+  // UNVERIFIED whether OrnaVerse's backend actually uses these to close the
+  // order out; see the header comment on API.ORDER_FULFILLMENT.
+  fulfillmentOrderId:  null,
+  fulfillmentOrderNo:  null,
 };
 
 // ── HELPERS ──────────────────────────────────────────────────
@@ -174,6 +181,31 @@ const cartSlice = createSlice({
       return initialState;
     },
 
+    // "Fulfill from order" — replaces the ENTIRE cart wholesale (not a merge;
+    // any in-progress cart for a different customer would make no sense
+    // mixed with a fulfillment) with the order's own customer + selected
+    // ready-to-invoice line(s), tagged with fulfillmentOrderId/OrderNo so
+    // useCreateInvoice can reference the source order at submission time.
+    // See useOrderFulfillment.js and the header comment on
+    // API.ORDER_FULFILLMENT for what's confirmed vs. still unverified about
+    // that reference actually closing the order out server-side.
+    //
+    // unitPrice on these items is a DISPLAY ESTIMATE ONLY (net_amount / pieces
+    // from the order line) — buildPricedLineItems re-prices and re-claims a
+    // physical stock piece against TODAY's rates at submission, exactly as
+    // it does for any other cart item; nothing about this bypasses that.
+    hydrateFromOrder: (state, action) => {
+      const { items, customerId, customerName, customerMobile, fulfillmentOrderId, fulfillmentOrderNo } = action.payload;
+      const next = {
+        ...initialState,
+        items,
+        customerId, customerName, customerMobile,
+        fulfillmentOrderId, fulfillmentOrderNo,
+      };
+      recalculateTotals(next);
+      return next;
+    },
+
   },
 
   // Redux Persist rehydration migration: a cart persisted before multi-promo
@@ -231,6 +263,7 @@ export const {
   applyGiftCard,
   applyGiftVoucher,
   clearCart,
+  hydrateFromOrder,
 } = cartSlice.actions;
 
 // ── SELECTORS ────────────────────────────────────────────────
@@ -246,5 +279,7 @@ export const selectCartCustomerMobile = (state) => state.cart.customerMobile;
 export const selectCartCustomerAddress = (state) => state.cart.customerAddress;
 export const selectAppliedPromos      = (state) => state.cart.appliedPromos;
 export const selectIsCartEmpty        = (state) => state.cart.items.length === 0;
+export const selectFulfillmentOrderId = (state) => state.cart.fulfillmentOrderId;
+export const selectFulfillmentOrderNo = (state) => state.cart.fulfillmentOrderNo;
 
 export default cartSlice.reducer;

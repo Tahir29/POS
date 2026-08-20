@@ -23,7 +23,19 @@ import APP_CONFIG from '@/constants/appConfig';
  */
 
 const paymentModeSchema = z.object({
-  modeId: z.number({ message: 'Payment mode is required' }),
+  // Nullable: a toggled credit/helper balance (Scheme/Exchange/Credit Note/
+  // Old Gold/Advance) has no PaymentReceiptMode selection, so it legitimately
+  // carries modeId: null — its real mode_id/mode_code come from the source
+  // credit receipt instead (CheckoutPaymentSection's creditRef, plumbed into
+  // receipt_details by documentFields.buildReceiptDetails). Requiring a
+  // number here unconditionally silently failed checkoutSchema.safeParse for
+  // EVERY submission with a credit applied — found 2026-08-19 while
+  // verifying the credit-application wiring: the toggle worked, the amounts
+  // were correct, but Place Order/Complete Sale stayed disabled with no
+  // visible reason (isValid swallows the Zod error rather than surfacing
+  // it). Confirmed via checkoutSchema.safeParse in isolation with a
+  // representative payments array.
+  modeId: z.number({ message: 'Payment mode is required' }).nullable(),
   modeName: z.string().min(1),
   amount: z
     .number({ message: 'Enter an amount' })

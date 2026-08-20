@@ -3,15 +3,15 @@
 // src/components/features/orders/OrderDetailSheet/index.jsx
 
 import { useState } from 'react';
-import { createPortal } from 'react-dom';
 import { AlertTriangle } from 'lucide-react';
 
 import BottomSheet from '@/components/shared/BottomSheet';
 import { splitGst } from '@/lib/gst';
-import PrintInvoiceButton from '@/components/features/checkout/PrintInvoiceButton';
-import Logo from '@/components/shared/Logo';
+import InvoiceReportButton from '@/components/features/checkout/InvoiceReportButton';
+import FulfillOrderAction from '@/components/features/orders/FulfillOrderAction';
 import { Button } from '@/components/ui/button';
 import { useCancelOrder } from '@/hooks/orders/useCancelOrder';
+import APP_CONFIG from '@/constants/appConfig';
 
 // ── Helpers ───────────────────────────────────────────────────
 function Row({ label, value, bold, border }) {
@@ -164,6 +164,12 @@ export default function OrderDetailSheet({ order, isOpen, onClose }) {
     (raw.balance_amount ?? 0) > 0 && raw.transaction_id
   );
 
+  // Fulfillment doesn't require an outstanding balance the way Cancel does —
+  // an order can be fully paid up front and still be waiting on a
+  // made-to-order piece. Same document-type guard as Cancel: only ever
+  // meaningful for an Order (53), never an Invoice (54) row.
+  const isFulfillable = !!(raw && order?.documentType !== 'invoice' && raw.transaction_id);
+
   const handleConfirmCancel = async () => {
     if (!raw?.transaction_id) return;
     await cancelOrderMutation.mutateAsync(raw.transaction_id);
@@ -171,54 +177,57 @@ export default function OrderDetailSheet({ order, isOpen, onClose }) {
     handleClose();
   };
 
+  // Same document, either document type — 'invoice' rows print through 54,
+  // 'order' rows through 53. Confirmed live 2026-08-19: OrnaVerse's own ERP
+  // toolbar Print button on an invoice fires Administration/DocumentReports/
+  // List with exactly this document_id, offering the same three formats
+  // ("E Certificate", "New Invoice Format", "New Invoice Format WO Header")
+  // InvoiceReportButton already shows — same mechanism everywhere, not
+  // something specific to the post-checkout confirmation screen.
+  const printDocumentId = order?.documentType === 'invoice'
+    ? APP_CONFIG.DOCUMENT_TYPES.POS_INVOICE
+    : APP_CONFIG.DOCUMENT_TYPES.POS_ORDER;
+  const printDocumentLabel = order?.documentType === 'invoice' ? 'Invoice' : 'Order';
+
   return (
-    <>
-      <BottomSheet isOpen={isOpen} onClose={handleClose} title="Order">
-        {raw ? (
-          <div className="flex flex-col gap-4">
-            <div className="rounded-xl border border-border bg-card p-4">
-              <OrderContent raw={raw} status={order?.status} />
-            </div>
-
-            <PrintInvoiceButton />
-
-            {isCancellable && !showCancelConfirm && (
-              <Button
-                variant="outline"
-                className="w-full border-destructive/40 text-destructive hover:bg-destructive/5 hover:text-destructive"
-                onClick={() => setShowCancelConfirm(true)}
-              >
-                Cancel Order
-              </Button>
-            )}
-
-            {isCancellable && showCancelConfirm && (
-              <CancelConfirmBanner
-                onConfirm={handleConfirmCancel}
-                onDismiss={() => setShowCancelConfirm(false)}
-                isPending={cancelOrderMutation.isPending}
-              />
-            )}
+    <BottomSheet isOpen={isOpen} onClose={handleClose} title="Order">
+      {raw ? (
+        <div className="flex flex-col gap-4">
+          <div className="rounded-xl border border-border bg-card p-4">
+            <OrderContent raw={raw} status={order?.status} />
           </div>
-        ) : (
-          <p className="text-sm text-muted-foreground text-center py-4">
-            Order details unavailable.
-          </p>
-        )}
-      </BottomSheet>
 
-      {/* Print portal — bg-white here is intentional: this renders on
-          physical paper via the print stylesheet, not the app's screen
-          theme, so it always stays white regardless of .dark. */}
-      {raw && typeof document !== 'undefined' && createPortal(
-        <div id="invoice-print-area" className="hidden print:block p-6 bg-white">
-          <div className="flex justify-center items-center py-8 mb-8 border-b border-stone-100">
-            <Logo variant="full" color="brown" width={140} height={44} />
-          </div>
-          <OrderContent raw={raw} status={order?.status} />
-        </div>,
-        document.body
+          <InvoiceReportButton
+            transactionId={raw.transaction_id}
+            documentId={printDocumentId}
+            documentLabel={printDocumentLabel}
+          />
+
+          {isFulfillable && <FulfillOrderAction raw={raw} />}
+
+          {isCancellable && !showCancelConfirm && (
+            <Button
+              variant="outline"
+              className="w-full border-destructive/40 text-destructive hover:bg-destructive/5 hover:text-destructive"
+              onClick={() => setShowCancelConfirm(true)}
+            >
+              Cancel Order
+            </Button>
+          )}
+
+          {isCancellable && showCancelConfirm && (
+            <CancelConfirmBanner
+              onConfirm={handleConfirmCancel}
+              onDismiss={() => setShowCancelConfirm(false)}
+              isPending={cancelOrderMutation.isPending}
+            />
+          )}
+        </div>
+      ) : (
+        <p className="text-sm text-muted-foreground text-center py-4">
+          Order details unavailable.
+        </p>
       )}
-    </>
+    </BottomSheet>
   );
 }
