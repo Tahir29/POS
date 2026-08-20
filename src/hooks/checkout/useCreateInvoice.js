@@ -138,6 +138,7 @@ function buildInvoiceEntity({
   paymentModes, narration,
   salesPersonId, exchangeRate,
   headerConfig,
+  fulfillmentOrderId, fulfillmentOrderNo,
 }) {
   const today = localDocumentDate();
   const {
@@ -212,12 +213,25 @@ function buildInvoiceEntity({
     // to go out empty because the row's shape could not be guessed; it no
     // longer has to be, because the server hands it to us fully formed.
     promotion_details: promotionDetails ?? [],
+    // "Fulfill from order" — best-effort reference back to the source Order,
+    // mirroring the shape OrnaVerse's own client builds client-side
+    // (hydrateInvoiceCartFromOrder: fulfillment_order_id/fulfillment_order_no)
+    // — see the header comment on API.ORDER_FULFILLMENT. UNVERIFIED whether
+    // the server actually uses these to close the source order out; sending
+    // them is cheap insurance (harmless if unrecognized), not confirmed to
+    // be load-bearing. Omitted entirely for a normal (non-fulfillment) sale,
+    // matching how bank_pos is omitted for Cash elsewhere in this file.
+    ...(fulfillmentOrderId != null ? {
+      is_fulfillment:       true,
+      fulfillment_order_id: fulfillmentOrderId,
+      fulfillment_order_no: fulfillmentOrderNo,
+    } : {}),
   };
 }
 
 export function useCreateInvoice() {
   const queryClient = useQueryClient();
-  const { items, appliedPromos } = useCart();
+  const { items, appliedPromos, fulfillmentOrderId, fulfillmentOrderNo } = useCart();
   // Cart total is a FALLBACK for analytics only. Every money figure on the
   // document now comes from the priced, promotion-applied line items.
   const { total: cartTotal } = useCartTotals();
@@ -284,6 +298,7 @@ export function useCreateInvoice() {
         paymentModes, narration,
         salesPersonId, exchangeRate,
         headerConfig,
+        fulfillmentOrderId, fulfillmentOrderNo,
       });
 
       // Step 1: Create draft invoice.

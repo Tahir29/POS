@@ -77,6 +77,7 @@ function buildOrderEntity({
   customerId, customerName, customerMobile,
   activeStoreId, paymentModes, narration,
   salesPersonId, exchangeRate, headerConfig,
+  fulfillmentOrderId, fulfillmentOrderNo,
 }) {
   const today = localDocumentDate();
   const {
@@ -135,12 +136,23 @@ function buildOrderEntity({
     // The invoice_promotions[] rows from Helper/ApplyPromotions, passed
     // through untouched — see useCreateInvoice.js.
     promotion_details: promotionDetails ?? [],
+    // Edge case, not the normal path: a fulfillment cart (see
+    // FulfillOrderAction / useCreateInvoice.js) should always claim stock
+    // and route to Invoice — this only fires if that claim fails at the
+    // last moment (another counter took the piece first, in the gap
+    // between the ready-check and submit). Same best-effort, unverified
+    // reference as useCreateInvoice.js — see its comment.
+    ...(fulfillmentOrderId != null ? {
+      is_fulfillment:       true,
+      fulfillment_order_id: fulfillmentOrderId,
+      fulfillment_order_no: fulfillmentOrderNo,
+    } : {}),
   };
 }
 
 export function useCreateOrder() {
   const queryClient = useQueryClient();
-  const { items, appliedPromos } = useCart();
+  const { items, appliedPromos, fulfillmentOrderId, fulfillmentOrderNo } = useCart();
   const { customerId, customerName, customerMobile } = useCustomerSession();
   const activeStoreId = useSelector(selectActiveStoreId);
   const { exchangeRate } = useExchangeRate();
@@ -199,6 +211,7 @@ export function useCreateOrder() {
         customerId, customerName, customerMobile,
         activeStoreId, paymentModes, narration,
         salesPersonId, exchangeRate, headerConfig,
+        fulfillmentOrderId, fulfillmentOrderNo,
       });
 
       // Step 1: Create draft order. `stage` is stamped on the error so the

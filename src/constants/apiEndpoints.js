@@ -262,6 +262,53 @@ const API = {
   },
 
   // ─────────────────────────────────────────────────────────────────────────
+  // ORDER FULFILLMENT — "Fulfill from order": an Order (53) raised earlier,
+  // now converted into an Invoice (54) once the piece is ready.
+  //
+  // CONFIRMED 2026-08-19 by driving OrnaVerse's own "Fulfill from order"
+  // dialog live on UAT and capturing the network calls. Two distinct
+  // endpoints, not one:
+  //
+  //   READY_TO_INVOICE (POS/OrderItems/List) — { party_id,
+  //     validate_against_stock: true, document_id: 54, document_status: 1 }
+  //     → only order lines that pass a live stock-allocation check. This is
+  //     what "Fulfill from order"'s default tab shows.
+  //
+  //   ALL_OPEN (Inventory/OrderItemFulfilment/List) — { document_id: 53,
+  //     party_ids: [id], Take: 500 } → EVERY open order line regardless of
+  //     readiness, each carrying status_id/reason_status_description
+  //     ("New", "Ready To Invoice", ...). This is the "All open" tab.
+  //
+  // WHAT MOVES A LINE FROM "New" TO "Ready To Invoice": NOT a live stock
+  // check, and NOT anything reachable from the counter POS. Confirmed by
+  // placing two fresh test orders for an item with genuine physical stock —
+  // both stayed "New" immediately after creation. The real pipeline lives
+  // entirely in OrnaVerse's ERP admin ("Back to ERP" → Inventory →
+  // "Order Fulfilment"): New → Processing → In Stock → Ready To Invoice →
+  // Ready to Ship → QC Completed → Shipped, driven by dedicated warehouse/
+  // manufacturing tools (Work Order, Purchase Order, Allocate Stock,
+  // Shipment) — a back-office workflow, structurally separate from the
+  // sales counter, the same way a WMS sits apart from a POS terminal. The
+  // counter's job is only to check readiness and load a ready line, never to
+  // move it there itself.
+  //
+  // STILL UNVERIFIED: the actual Invoice/Create payload for a genuine
+  // fulfillment case. Every real "Ready To Invoice" candidate found on UAT
+  // (via the ERP's own status counts) either turned out to be a different
+  // order channel (EORD, not RPO/POS) or showed the SAME inconsistency their
+  // own live system has — "All open" reports the line as Ready To Invoice
+  // while READY_TO_INVOICE's own query still returns it empty. That
+  // inconsistency is on OrnaVerse's side, not this integration — but it
+  // means the fulfillment cart→Invoice/Create round trip has never been
+  // observed succeeding live. See useOrderFulfillment.js and
+  // useCreateInvoice.js for what's built on evidence vs. best-effort.
+  // ─────────────────────────────────────────────────────────────────────────
+  ORDER_FULFILLMENT: {
+    READY_TO_INVOICE: 'Services/POS/OrderItems/List',
+    ALL_OPEN:          'Services/Inventory/OrderItemFulfilment/List',
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
   // INVOICES (POS native)
   // Flow: Create → (optional Update) → Post
   // Same field structure as OrderRow + is_insured boolean
@@ -292,13 +339,29 @@ const API = {
   // Fetch available balances for a customer at checkout time
   // Call before rendering payment section to show what customer can apply
   // ─────────────────────────────────────────────────────────────────────────
+  // GetAdvances/GetCreditNote/GetExchange/GetOldGold/GetScheme REMOVED
+  // 2026-08-18 — all five 500 on this tenant, and CONFIRMED by driving
+  // OrnaVerse's own POS end to end (Invoice tab, real customer Tahir Kutty,
+  // party_id 2221) while capturing every /Services/ call: their own payment
+  // screen never calls any of them. useCustomerHistory.js's header comment
+  // reached the same conclusion independently on 2026-07-16.
+  //
+  // What their UI actually calls — ONE request, { party_id } only (no
+  // company_id) — is RECEIPTS_SELECT below. It returns every outstanding
+  // credit-bearing receipt for that party in one flat list; their screen
+  // sums every row's balance_amount into the single "Credit" figure shown
+  // on the customer card (verified: rows summed to exactly ₹4,71,510.00,
+  // matching the displayed figure). Bucket rows by `document_id`
+  // (APP_CONFIG.DOCUMENT_TYPES) to rebuild the 5 category totals this app's
+  // UI shows — see useInvoiceHelpers.js.
+  //
+  // Same endpoint, already proven correct here for a different purpose —
+  // see REFUNDS.CUSTOMER_CREDITS / getCustomerCredits() in
+  // refundService.js, which reads the identical rows to know what a refund
+  // can pay out.
   INVOICE_HELPERS: {
-    GET_ADVANCES:        'Services/POS/POSInvoice/GetAdvances',
-    GET_CREDIT_NOTE:     'Services/POS/POSInvoice/GetCreditNote',
-    GET_EXCHANGE:        'Services/POS/POSInvoice/GetExchange',
-    GET_OLD_GOLD:        'Services/POS/POSInvoice/GetOldGold',
-    GET_SCHEME:          'Services/POS/POSInvoice/GetScheme',
-    GET_PARTY_DAILY_CASH:'Services/POS/POSInvoice/GetPartyDailyCash',
+    RECEIPTS_SELECT:      'Services/POS/POSReceiptsSelect/List',
+    GET_PARTY_DAILY_CASH: 'Services/POS/POSInvoice/GetPartyDailyCash', // unaffected — confirmed working on its own
   },
 
   // ─────────────────────────────────────────────────────────────────────────

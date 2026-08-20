@@ -134,6 +134,12 @@ export const QUERY_KEYS = {
     DETAIL:          (orderId)    => ['orders', 'detail', orderId],
   },
 
+  // ── ORDER FULFILLMENT ("Fulfill from order") ──────────────────────────────
+  ORDER_FULFILLMENT: {
+    READY_TO_INVOICE: (partyId) => ['order-fulfillment', 'ready', partyId],
+    ALL_OPEN:          (partyId) => ['order-fulfillment', 'all-open', partyId],
+  },
+
   // ── INVOICES ─────────────────────────────────────────────────────────────
   INVOICES: {
     LIST:   (params)    => ['invoices', 'list', params],
@@ -142,12 +148,11 @@ export const QUERY_KEYS = {
   },
 
   // ── INVOICE HELPERS (checkout available balances) ─────────────────────────
+  // ADVANCES/CREDIT_NOTE/EXCHANGE/OLD_GOLD/SCHEME collapsed into one RECEIPTS
+  // key 2026-08-18 — one call (POSReceiptsSelect/List) now backs all 5
+  // category totals; see useInvoiceHelpers.js.
   INVOICE_HELPERS: {
-    ADVANCES:        (partyId, companyId) => ['invoice-helpers', 'advances',   partyId, companyId],
-    CREDIT_NOTE:     (partyId, companyId) => ['invoice-helpers', 'credit-note',partyId, companyId],
-    EXCHANGE:        (partyId, companyId) => ['invoice-helpers', 'exchange',   partyId, companyId],
-    OLD_GOLD:        (partyId, companyId) => ['invoice-helpers', 'old-gold',   partyId, companyId],
-    SCHEME:          (partyId, companyId) => ['invoice-helpers', 'scheme',     partyId, companyId],
+    RECEIPTS:        (partyId)            => ['invoice-helpers', 'receipts',   partyId],
     PARTY_DAILY_CASH:(partyId, companyId) => ['invoice-helpers', 'daily-cash', partyId, companyId],
   },
 

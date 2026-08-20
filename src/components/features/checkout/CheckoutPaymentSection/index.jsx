@@ -35,14 +35,14 @@ import EVENTS from '@/lib/analytics/events';
 
 // ── Invoice Helper Balance Row — toggle switch style ─────────────────────────
 
-function HelperBalanceRow({ label, amount, modeCode, isApplied, onToggle, isLoading }) {
+function HelperBalanceRow({ label, amount, modeCode, rows, isApplied, onToggle, isLoading }) {
   if (isLoading) return null;
   if (!amount || amount <= 0) return null;
 
   return (
     <button
       type="button"
-      onClick={() => onToggle({ modeCode, label, amount })}
+      onClick={() => onToggle({ modeCode, label, amount, rows })}
       role="switch"
       aria-checked={isApplied}
       className={`
@@ -87,7 +87,13 @@ export default function CheckoutPaymentSection({ onChange, amountDue, allowParti
     companyId: activeStoreId,
   });
 
-  // payments: { modeId?, modeCode, modeName, amount (string), isHelper? }[]
+  // payments: { key, modeId?, modeCode, modeName, amount (string), isHelper?,
+  //   helperCategory?, creditRef? }[]
+  // `key` is the stable per-row identity used everywhere below instead of
+  // modeId/modeCode — needed because one helper category (e.g. "Credit
+  // Note") can now be backed by several distinct source receipts, each its
+  // own payments[] entry, and they'd otherwise collide on a shared modeCode
+  // (e.g. two Return receipts both carry mode_code "Return").
   const [payments, setPayments] = useState([]);
 
   // ── Statutory cash ceiling ────────────────────────────────────────────────
@@ -109,8 +115,10 @@ export default function CheckoutPaymentSection({ onChange, amountDue, allowParti
   const cashHeadroom   = Math.max(0, APP_CONFIG.COMPLIANCE.CASH_DAILY_LIMIT - dailyCashTaken);
   const isCashBlocked  = !helpers.dailyCash?.isLoading && cashHeadroom <= 0;
 
-  const selectedModeIds    = payments.filter((p) => p.modeId).map((p) => p.modeId);
-  const appliedHelperCodes = payments.filter((p) => p.isHelper).map((p) => p.modeCode);
+  const selectedModeIds = payments.filter((p) => p.modeId).map((p) => p.modeId);
+  const appliedHelperCategories = [...new Set(
+    payments.filter((p) => p.isHelper).map((p) => p.helperCategory)
+  )];
 
   // Bank-settled tenders need to say which bank account the money lands in;
   // Cash (and helper balances — Scheme/Exchange/Credit Note/Old Gold/
@@ -140,6 +148,7 @@ export default function CheckoutPaymentSection({ onChange, amountDue, allowParti
       return [
         ...prev,
         {
+          key:      modeId,
           modeId,
           modeCode: mode?.modeCode ?? '',
           modeName: mode?.modeName ?? 'Unknown',
@@ -153,51 +162,68 @@ export default function CheckoutPaymentSection({ onChange, amountDue, allowParti
   };
 
   // ── Helper balance toggle ─────────────────────────────────────────────────
-  const handleHelperToggle = ({ modeCode, label, amount }) => {
+  // The amounts these toggles show are real (useInvoiceHelpers.js reads them
+  // from POSReceiptsSelect/List, confirmed 2026-08-18 — see its header
+  // comment). Applying one now references the actual source receipt(s) it
+  // draws from — CONFIRMED 2026-08-19 by reading OrnaVerse's own compiled
+  // POS client's `buildReceiptFromCredit` (see documentFields.js's header
+  // comment for the full field-by-field contract) while their UAT was down
+  // for a live capture. A category can be backed by several distinct
+  // receipts (e.g. four separate Return documents making up one "Credit
+  // Note" total), so toggling one on allocates the applied amount across
+  // its underlying `rows` — oldest/first row first, up to each row's own
+  // balance — producing one payments[] entry PER receipt actually drawn
+  // from, not one flat entry for the whole category. CONFIRMED SETTLING
+  // 2026-08-19 — see documentFields.js's header comment for the live
+  // transaction (HO-LJ-0826-018) that proved the applied receipt's balance
+  // actually decrements server-side, not just cosmetically shows as applied.
+  function allocateCreditRows(rows, amountToApply) {
+    const entries = [];
+    let remaining = amountToApply;
+    for (const row of rows ?? []) {
+      if (remaining <= 0) break;
+      const balance = Number(row.balance_amount) || 0;
+      if (balance <= 0) continue;
+      const take = Math.min(balance, remaining);
+      entries.push({ row, amount: take });
+      remaining -= take;
+    }
+    return entries;
+  }
+
+  const handleHelperToggle = ({ modeCode, label, amount, rows }) => {
     setPayments((prev) => {
-      const exists = prev.find((p) => p.isHelper && p.modeCode === modeCode);
-      if (exists) return prev.filter((p) => !(p.isHelper && p.modeCode === modeCode));
-      return [
-        ...prev,
-        {
-          modeId:   null,
-          modeCode,
-          modeName: label,
-          amount:   String(Math.min(amount, total)),
-          isHelper: true,
-        },
-      ];
+      const exists = prev.some((p) => p.isHelper && p.helperCategory === modeCode);
+      if (exists) return prev.filter((p) => !(p.isHelper && p.helperCategory === modeCode));
+
+      const applyAmount = Math.min(amount, total);
+      const allocations = allocateCreditRows(rows, applyAmount);
+      const entries = allocations.map(({ row, amount: rowAmount }) => ({
+        key:            row.receipt_id ?? `${modeCode}-${row.transaction_id}`,
+        modeId:         null,
+        modeCode:       row.mode_code,
+        // Mirrors OrnaVerse's own payment screen, which labels an applied
+        // credit as "<Type> (<document_no>)" — e.g. "Exchange (HO-EXC-07-26-00001)".
+        modeName:       `${label} (${row.document_no})`,
+        amount:         String(rowAmount),
+        isHelper:       true,
+        helperCategory: modeCode,
+        creditRef:      row,
+      }));
+      return [...prev, ...entries];
     });
   };
 
-  const handleAmountChange = (identifier, value) => {
-    setPayments((prev) =>
-      prev.map((p) =>
-        (p.modeId === identifier || p.modeCode === identifier)
-          ? { ...p, amount: value }
-          : p
-      )
-    );
+  const handleAmountChange = (key, value) => {
+    setPayments((prev) => prev.map((p) => (p.key === key ? { ...p, amount: value } : p)));
   };
 
-  const handleBankChange = (identifier, bankPosId) => {
-    setPayments((prev) =>
-      prev.map((p) =>
-        (p.modeId === identifier || p.modeCode === identifier)
-          ? { ...p, bankPosId }
-          : p
-      )
-    );
+  const handleBankChange = (key, bankPosId) => {
+    setPayments((prev) => prev.map((p) => (p.key === key ? { ...p, bankPosId } : p)));
   };
 
-  const handleRefNoChange = (identifier, refNo) => {
-    setPayments((prev) =>
-      prev.map((p) =>
-        (p.modeId === identifier || p.modeCode === identifier)
-          ? { ...p, refNo }
-          : p
-      )
-    );
+  const handleRefNoChange = (key, refNo) => {
+    setPayments((prev) => prev.map((p) => (p.key === key ? { ...p, refNo } : p)));
   };
 
   // Recompute single-mode pre-fill when total changes
@@ -237,7 +263,10 @@ export default function CheckoutPaymentSection({ onChange, amountDue, allowParti
           ? bankPosAccounts.find((a) => a.id === p.bankPosId)
           : null;
         return {
-          modeId:       p.modeId   ?? undefined,
+          // null, not undefined — checkoutSchema's modeId is nullable() (a
+          // real value for a payment mode, null for an applied credit), and
+          // Zod's nullable() does not also accept undefined.
+          modeId:       p.modeId   ?? null,
           modeCode:     p.modeCode ?? '',
           modeName:     p.modeName,
           amount:       Number(p.amount) || 0,
@@ -245,6 +274,10 @@ export default function CheckoutPaymentSection({ onChange, amountDue, allowParti
           raw:          mode?.raw ?? null,
           bankPosId:    bankAccount?.id ?? null,
           refNo:        p.refNo ?? '',
+          // Carried through so buildReceiptDetails can build the credit
+          // linkage (ref_no/ref_document_id/ref_transaction_id/mode_sub_type)
+          // instead of a normal tender row — see its header comment.
+          creditRef:    p.creditRef ?? null,
         };
       })
     );
@@ -263,7 +296,7 @@ export default function CheckoutPaymentSection({ onChange, amountDue, allowParti
     { label: 'Credit Note',     code: 'CreditNote',  data: helpers.creditNote, loading: helpers.creditNote?.isLoading },
     { label: 'Old Gold Value',  code: 'OldGold',     data: helpers.oldGold,    loading: helpers.oldGold?.isLoading },
     { label: 'Advance Paid',    code: 'Advances',    data: helpers.advances,   loading: helpers.advances?.isLoading },
-  ];
+  ]; // each `data.rows` is the underlying POSReceiptsSelect rows for that bucket — see useInvoiceHelpers.js
 
   const hasVisibleHelpers = customerId && helperItems.some((h) => h.data?.amount > 0);
 
@@ -289,7 +322,8 @@ export default function CheckoutPaymentSection({ onChange, amountDue, allowParti
               label={h.label}
               amount={h.data?.amount}
               modeCode={h.code}
-              isApplied={appliedHelperCodes.includes(h.code)}
+              rows={h.data?.rows}
+              isApplied={appliedHelperCategories.includes(h.code)}
               onToggle={handleHelperToggle}
               isLoading={h.loading}
             />
@@ -349,17 +383,17 @@ export default function CheckoutPaymentSection({ onChange, amountDue, allowParti
       {payments.length > 0 && (
         <div className="flex flex-col gap-2 pt-2 border-t border-border">
           {payments.map((p) => (
-            <div key={p.modeId ?? p.modeCode} className="flex flex-col gap-1.5">
+            <div key={p.key} className="flex flex-col gap-1.5">
               <PaymentAmountInput
                 modeName={p.modeName}
                 amount={p.amount}
-                onChange={(value) => handleAmountChange(p.modeId ?? p.modeCode, value)}
+                onChange={(value) => handleAmountChange(p.key, value)}
               />
               {requiresBank(p) && (
                 <>
                   <BankPosSelect
                     value={p.bankPosId}
-                    onChange={(bankPosId) => handleBankChange(p.modeId ?? p.modeCode, bankPosId)}
+                    onChange={(bankPosId) => handleBankChange(p.key, bankPosId)}
                   />
                   {/* Reference — required in OrnaVerse's own UI for
                       bank-settled modes ("Reference *"), confirmed
@@ -367,7 +401,7 @@ export default function CheckoutPaymentSection({ onChange, amountDue, allowParti
                       beyond "present". */}
                   <Input
                     value={p.refNo ?? ''}
-                    onChange={(e) => handleRefNoChange(p.modeId ?? p.modeCode, e.target.value)}
+                    onChange={(e) => handleRefNoChange(p.key, e.target.value)}
                     placeholder="Reference number"
                     className="h-10"
                     aria-label={`Reference for ${p.modeName}`}
@@ -386,7 +420,7 @@ export default function CheckoutPaymentSection({ onChange, amountDue, allowParti
               </div>
             )}
             {collectedByMode.map((p) => (
-              <div key={p.modeId ?? p.modeCode} className="flex items-center justify-between text-muted-foreground">
+              <div key={p.key} className="flex items-center justify-between text-muted-foreground">
                 <span>Collected ({p.modeName})</span>
                 <span>{APP_CONFIG.CURRENCY.INR_SYMBOL}{(Number(p.amount) || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>
               </div>

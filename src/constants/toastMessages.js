@@ -39,6 +39,7 @@ const TOAST = {
     PROMO_INVALID: (code) => `Promo code ${code} is not valid.`,
     PROMO_FAILED:  'Failed to validate promo code. Please try again.',
     PROMO_SIMILAR_APPLIED: 'A similar promotion is already applied.',
+    LOADED_FROM_ORDER: (orderNo) => `Loaded ${orderNo} into a new invoice.`,
   },
 
   // ── CUSTOMER ──────────────────────────────────────────────────────────────
