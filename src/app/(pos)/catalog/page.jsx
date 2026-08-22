@@ -89,9 +89,9 @@ function getMatchingTypeIds(q, categories) {
 }
 
 /**
- * Client-side filter + sort for search mode. Runs against this store's
- * complete catalog (see useAllCatalog / catalogService.getAllProducts) —
- * text matching has to happen here rather than server-side: the live
+ * Client-side filter for search mode — FILTERING ONLY, no sort. Runs against
+ * this store's complete catalog (see useAllCatalog / catalogService.getAllProducts)
+ * — text matching has to happen here rather than server-side: the live
  * inventory endpoint has no working search parameter at all, and the one
  * real full-text search that does exist (Items/List's ContainsText) can't
  * be scoped to a single store's stock (its result ordering has no
@@ -106,13 +106,21 @@ function getMatchingTypeIds(q, categories) {
  *
  * Category filter chip (activeCategoryId) is applied on top as AND.
  * OOS toggle applied as AND.
- * Sort applied last.
+ *
+ * SORT DELIBERATELY NOT DONE HERE ANYMORE (2026-08-21). This used to sort
+ * right here, on rows straight off the catalog/inventory endpoints — which
+ * NEVER carry a real price (confirmed in catalogService.js: "Catalog rows
+ * leave here with `price: null`"). Live prices only exist once
+ * useLiveCatalogPrices has merged them in downstream, so sorting by
+ * price_asc/price_desc here was comparing null against null for every pair —
+ * a no-op that silently preserved server order and read as "sort doesn't
+ * apply." Sorting now happens once, in the page component, AFTER live
+ * prices are merged — see sortProducts below and its call site.
  */
-function applySearchFilters(allProducts, {
+function applySearchFilterOnly(allProducts, {
   searchQuery,
   activeCategoryId,
   showOutOfStock,
-  sortBy,
   categories,
 }) {
   let result = allProducts;
@@ -144,27 +152,33 @@ function applySearchFilters(allProducts, {
     });
   }
 
-  // 4. Sort
-  result = [...result].sort((a, b) => compareProducts(a, b, sortBy));
-
   return result;
 }
 
-function applyBrowseSort(products, sortBy) {
-  if (!sortBy || sortBy === 'name_asc') return products;
-  return [...products].sort((a, b) => compareProducts(a, b, sortBy));
-}
-
 /**
- * OOS + category chip + sort — no text matching, for the fast SKU-search
- * interim results (see useSkuSearch), which are already query-filtered by
- * the server.
+ * OOS + category chip — filter only, no sort, no text matching. For the fast
+ * SKU-search interim results (see useSkuSearch), which are already
+ * query-filtered by the server.
  */
-function applyBasicFilters(products, { activeCategoryId, showOutOfStock, sortBy }) {
+function applyBasicFilterOnly(products, { activeCategoryId, showOutOfStock }) {
   let result = products;
   if (!showOutOfStock) result = result.filter(isInStock);
   if (activeCategoryId) result = result.filter((p) => p.type_id === activeCategoryId);
-  return [...result].sort((a, b) => compareProducts(a, b, sortBy));
+  return result;
+}
+
+/**
+ * THE ONLY sort step, for both browse and search mode, applied ONCE — after
+ * live prices are merged in (see pricedDisplayProducts in the page
+ * component). Previously each mode sorted its own raw, unpriced rows
+ * (applyBrowseSort / the tail of applySearchFilters / applyBasicFilters),
+ * which is exactly what made price_asc/price_desc a no-op: those rows never
+ * carry a real price. Always genuinely sorts, including name_asc — the old
+ * "skip when name_asc" shortcut assumed the server's default order was
+ * already alphabetical, which was never actually confirmed.
+ */
+function sortProducts(products, sortBy) {
+  return [...products].sort((a, b) => compareProducts(a, b, sortBy));
 }
 
 // ── CatalogScreen ─────────────────────────────────────────────────────────────
@@ -216,11 +230,9 @@ function CatalogScreen() {
     ...(activeCategoryId && { type_ids: [activeCategoryId] }),
   });
 
+  // UNSORTED — sorting now happens once, after live prices are merged in
+  // (see pricedDisplayProducts/sortedDisplayProducts below).
   const rawBrowseProducts = data?.products ?? [];
-  const browseProducts    = useMemo(
-    () => applyBrowseSort(rawBrowseProducts, sortBy),
-    [rawBrowseProducts, sortBy],
-  );
 
   // ── Search mode ───────────────────────────────────────────────────────────
   // Two sources, combined:
@@ -276,14 +288,14 @@ function CatalogScreen() {
     isLoading: categoryNameLoading,
   } = useCategoryNameSearch(interimMatchingTypeIds, effectiveStoreId, isSearchMode && !allReady);
 
+  // UNSORTED — same reason as rawBrowseProducts above.
   const searchResults = useMemo(() => {
     if (!isSearchMode) return [];
     if (allReady) {
-      return applySearchFilters(allProducts, {
+      return applySearchFilterOnly(allProducts, {
         searchQuery,
         activeCategoryId,
         showOutOfStock,
-        sortBy,
         categories,           // ← passed so category name matching works
       });
     }
@@ -295,10 +307,10 @@ function CatalogScreen() {
       seen.add(p.item_id);
       return true;
     });
-    return applyBasicFilters(merged, { activeCategoryId, showOutOfStock, sortBy });
+    return applyBasicFilterOnly(merged, { activeCategoryId, showOutOfStock });
   }, [
     isSearchMode, allReady, allProducts, skuResults, categoryNameResults,
-    searchQuery, activeCategoryId, showOutOfStock, sortBy, categories,
+    searchQuery, activeCategoryId, showOutOfStock, categories,
   ]);
 
   const isIndexingFullCatalog = isSearchMode && !allReady;
@@ -311,7 +323,9 @@ function CatalogScreen() {
   }, [browseError, allError, catsError]);
 
   // ── Derived ───────────────────────────────────────────────────────────────
-  const displayProducts = isSearchMode ? searchResults : browseProducts;
+  // Still unsorted at this point — see sortedDisplayProducts below, which is
+  // what actually renders.
+  const displayProducts = isSearchMode ? searchResults : rawBrowseProducts;
   // Only block on the fast SKU/category-name paths — the full background
   // fetch can take a while on a large store and shouldn't hold the whole
   // search UI hostage.
@@ -333,6 +347,19 @@ function CatalogScreen() {
       return { ...p, price, is_pricing: price == null && !settledIds.has(p.item_id) };
     }),
     [displayProducts, livePriceById, settledIds],
+  );
+
+  // THE sort step — deliberately after pricing is merged in, not before.
+  // compareProducts' price branch always sorts a still-pricing item (price
+  // null) after every priced one regardless of direction, so a card doesn't
+  // jump to the top while it still reads "Pricing…" — it settles into place
+  // once its real price lands. Re-runs as prices arrive progressively (each
+  // settled item changes pricedDisplayProducts), so the list keeps
+  // correcting itself instead of freezing at whatever order the first
+  // batch of live prices happened to produce.
+  const sortedDisplayProducts = useMemo(
+    () => sortProducts(pricedDisplayProducts, sortBy),
+    [pricedDisplayProducts, sortBy],
   );
 
   // ── Barcode handler ───────────────────────────────────────────────────────
@@ -503,7 +530,7 @@ function CatalogScreen() {
 
         <div className="flex-1 overflow-y-auto py-2">
           <ProductGrid
-            products={pricedDisplayProducts}
+            products={sortedDisplayProducts}
             isLoading={isLoading}
             isFetchingMore={isFetchingMore}
             hasMore={hasMore}

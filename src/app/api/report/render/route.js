@@ -30,6 +30,18 @@ function isLoginPage(html) {
   return /<title>\s*Login to your account\s*<\/title>/i.test(html);
 }
 
+// CONFIRMED 2026-08-21: some report templates ("New Invoice Format" and
+// "New Invoice Format WO Header", specifically — "E Certificate" is fine)
+// fail server-side on OrnaVerse's end with a 200 OK and this literal
+// sentence as the entire body — a genuine broken FastReport template on
+// their side, reproduced even on an old, previously-proven invoice, so
+// not something tied to a specific sale's data. A 200 with this body would
+// otherwise sail through as if it were real report HTML and show the
+// operator a near-blank iframe with no explanation.
+function isReportGenerationError(html) {
+  return html.trim() === 'An error occurred while generating the report';
+}
+
 async function render(session, form) {
   const headers = {
     'Content-Type': 'application/x-www-form-urlencoded',
@@ -96,6 +108,16 @@ export async function POST(request) {
       );
     }
 
+    // See isReportGenerationError() above — this is OrnaVerse's own report
+    // template failing, not a session problem, so don't destroy the
+    // session over it (the operator's next report may render fine).
+    if (isReportGenerationError(result.html)) {
+      return Response.json(
+        { error: 'This report format is currently broken on OrnaVerse’s side — try a different format, or ask OrnaVerse to fix this template.' },
+        { status: 502 },
+      );
+    }
+
     if (result.status >= 400) {
       return Response.json(
         { error: `OrnaVerse could not render this report (HTTP ${result.status}).` },
@@ -103,7 +125,52 @@ export async function POST(request) {
       );
     }
 
-    return new Response(result.html, {
+    // OrnaVerse's response is a bare fragment — no <html>/<head> at all,
+    // confirmed live (starts straight at `<div class="fr...-container">`).
+    // It carries inline <script> tags (the FastReport viewer's own JS —
+    // without them the report never finishes initialising, which is why it
+    // was rendering as a permanently-loading blank preview — see the
+    // matching sandbox="allow-scripts" change in InvoiceReportButton) and
+    // CSS/JS with ROOT-RELATIVE URLs like `/_fr/resources.getResource?...`
+    // and `/_fr/preview.getReport?...`.
+    //
+    // CHANGED 2026-08-21: this used to add <base href="UPSTREAM/"> so those
+    // resolved to OrnaVerse directly — fixed the resource 404, but then the
+    // viewer's own follow-up XHR call ALSO resolved there and hit a real
+    // cross-origin CORS block (their server has no reason to allow our
+    // origin). Deliberately NOT setting a base now: with no <base>, these
+    // root-relative URLs resolve against OUR OWN origin instead — which is
+    // exactly what we want, now that app/_fr/[...path]/route.js exists at
+    // that exact path to proxy them through, same-origin, no CORS at all.
+    //
+    // SECURITY REVIEW 2026-08-21 — the iframe embedding this needs
+    // sandbox="allow-scripts allow-same-origin" for the reasons above
+    // (see InvoiceReportButton), which is a known combination that would
+    // otherwise let a compromised report script read this origin's
+    // localStorage (operator session tokens) and send it anywhere. Can't
+    // drop allow-same-origin without breaking the feature (tested live —
+    // see that file's comment) or move the tokens out of localStorage in
+    // this pass, so mitigated here instead: a CSP that still allows the
+    // one thing this document legitimately needs (XHR back to OUR OWN
+    // /_fr/* proxy, same origin) but blocks it from ever reaching any
+    // THIRD-PARTY domain — the actual exfiltration step. connect-src 'self'
+    // is the directive doing the real work; the rest just matches what the
+    // fragment already legitimately uses (inline <script>/<style>, icons
+    // via the same proxy) so nothing legitimate breaks.
+    const csp = [
+      "default-src 'self'",
+      "script-src 'self' 'unsafe-inline'",
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data:",
+      "connect-src 'self'",
+      "object-src 'none'",
+      "frame-src 'none'",
+      "base-uri 'none'",
+      "form-action 'none'",
+    ].join('; ');
+    const wrapped = `<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="${csp}"></head><body>${result.html}</body></html>`;
+
+    return new Response(wrapped, {
       status:  200,
       headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' },
     });
