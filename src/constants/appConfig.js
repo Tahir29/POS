@@ -148,9 +148,27 @@ const APP_CONFIG = {
   // file). LIVE also used client_credentials; if reverting, both CLIENT_ID
   // and GRANT_TYPE_PASSWORD here need to go back alongside route.js's
   // ACTIVE_ENV.
+  // SCOPE — FIXED 2026-08-21: 'profile email' alone never got a refresh_token
+  // back from OrnaVerse's /connect/token AT ALL, confirmed live by diffing the
+  // raw response with and without offline_access — { access_token, token_type,
+  // expires_in } only vs. + refresh_token once offline_access is requested.
+  // This is standard OpenIddict/OAuth behaviour (offline_access is what a
+  // client asks for to be ISSUED a refresh token in the first place), not an
+  // OrnaVerse quirk. Every real login before this fix ran with refreshToken
+  // permanently null — interceptors.js's proactive-refresh branch requires a
+  // truthy refreshToken and so silently never fired, and worse, its reactive
+  // 401 handler treats a missing refreshToken as "log out immediately, no
+  // refresh attempt." So the ONLY thing standing between a signed-in operator
+  // and a forced logout was the access token's own 60-minute clock — any
+  // request that landed after that (checkout's own post-Create/Post burst of
+  // invalidateQueries calls being a very likely moment to land on) hit a real
+  // 401 with nothing to recover it, and appeared as "the customer got signed
+  // out right after placing the order." Not a race condition, not a checkout
+  // bug — checkout just happens to be a reliable place for A request to land
+  // after however long the session had actually been open.
   AUTH: {
     CLIENT_ID:                 '65948cb671ae46e1a04653f505e29332',
-    SCOPE:                     'profile email',
+    SCOPE:                     'profile email offline_access',
     GRANT_TYPE_PASSWORD:       'password',
     GRANT_TYPE_REFRESH:        'refresh_token',
     TOKEN_REFRESH_THRESHOLD_MS: 5 * 60 * 1000, // refresh proactively 5 min before expiry

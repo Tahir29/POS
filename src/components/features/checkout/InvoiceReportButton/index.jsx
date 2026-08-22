@@ -174,7 +174,36 @@ export default function InvoiceReportButton({
               // The document is OrnaVerse's own markup, but it is still
               // third-party HTML being injected into our origin — sandbox it
               // so it can lay itself out and print, and nothing more.
-              sandbox="allow-same-origin allow-modals"
+              //
+              // allow-scripts ADDED 2026-08-21: the report itself carries
+              // inline <script> tags that are the FastReport viewer's own
+              // rendering logic — without allow-scripts the browser blocks
+              // them outright, and the report never finishes initialising.
+              //
+              // SECURITY REVIEW 2026-08-21 — allow-scripts + allow-same-
+              // origin together is a known sandbox-defeating combination:
+              // a script running in that frame gets this origin's full
+              // localStorage, including the operator's live access/refresh
+              // tokens. TESTED removing allow-same-origin to close that —
+              // confirmed live it breaks the report outright: without it
+              // the frame's origin becomes `null`, the viewer's own XHR
+              // back to our /_fr/* proxy (needed to fetch the report body)
+              // gets CORS-blocked ("Access-Control-Allow-Origin" for a null
+              // origin is not something we can grant without exposing the
+              // proxy to every site on the internet), and the preview goes
+              // straight back to a bare "Error 0". allow-same-origin has to
+              // stay for the feature to work at all.
+              //
+              // Mitigated instead with a Content-Security-Policy baked into
+              // the response itself (see api/report/render/route.js) that
+              // still lets the report reach OUR OWN /_fr/* proxy (needed)
+              // but blocks it from reaching any THIRD-PARTY domain — the
+              // actual exfiltration step a compromised report would need,
+              // even though it could still, in principle, read localStorage
+              // in-frame. Doesn't fully close the gap (a real fix means
+              // moving tokens out of localStorage entirely) but removes the
+              // step that turns "can read" into "can send anywhere."
+              sandbox="allow-same-origin allow-modals allow-scripts"
             />
           </div>
         </div>

@@ -66,16 +66,20 @@ function sweep() {
 }
 
 /**
- * Pulls the cookie pairs we need out of a Set-Cookie header list.
+ * Pulls the cookie pairs we need out of a Set-Cookie header list, keyed by
+ * cookie name (so a later response's cookie of the same name can cleanly
+ * override an earlier one — see createReportSession below).
  * Node's fetch exposes them via getSetCookie(); fall back to the raw header
  * for runtimes that don't.
+ *
+ * @returns {{ pairs: Map<string, string>, csrf: string|null }}
  */
 function parseCookies(response) {
   const raw = typeof response.headers.getSetCookie === 'function'
     ? response.headers.getSetCookie()
     : [response.headers.get('set-cookie')].filter(Boolean);
 
-  const pairs = [];
+  const pairs = new Map();
   let csrf = null;
   for (const entry of raw) {
     // A Set-Cookie value is "name=value; Path=/; HttpOnly; ..." — only the
@@ -84,17 +88,35 @@ function parseCookies(response) {
     for (const chunk of String(entry).split(/,(?=[^;=]+?=)/)) {
       const pair = chunk.split(';')[0].trim();
       if (!pair || !pair.includes('=')) continue;
-      pairs.push(pair);
       const [name, ...rest] = pair.split('=');
+      pairs.set(name.trim(), pair);
       if (name.trim() === 'CSRF-TOKEN') csrf = rest.join('=');
     }
   }
-  return { cookie: pairs.join('; '), csrf };
+  return { pairs, csrf };
 }
 
 /**
  * Exchanges the operator's credentials for an OrnaVerse cookie session and
  * returns an opaque id for it. The credentials are used here and discarded.
+ *
+ * CHANGED 2026-08-21: OrnaVerse's UAT ~/Account/Login now enforces ASP.NET
+ * Core's antiforgery token — confirmed live by hand: a bare POST with no
+ * prior GET is rejected with an EMPTY 400 (no body, no cookie at all),
+ * which is exactly what was surfacing to every operator as "Your OrnaVerse
+ * print session has expired" on every sign-in, not just a stale one. This
+ * wasn't there when this file's contract was first captured (2026-08-05) —
+ * something changed on their side since. The login page's own GET response
+ * sets an antiforgery cookie + a CSRF-TOKEN cookie; the POST must carry
+ * both the cookie and the token (as X-CSRF-TOKEN) back — the exact same
+ * pairing /Print/Render already required below, just now needed one step
+ * earlier too. Verified: a correct login now returns real
+ * .AspNetAuth/.AspNetCore.Session cookies; a wrong password still returns
+ * zero new cookies plus a proper {"Error":{"Message":...}} body, so the
+ * existing "no cookie = failure" signal still works — it just has to be
+ * checked against the POST's own cookies, not the merged jar (the GET's
+ * antiforgery cookie is present either way and would otherwise mask a
+ * genuine login failure).
  *
  * @param {{ username: string, password: string }} params
  * @returns {Promise<string>} session id, to be stored in an httpOnly cookie
@@ -106,19 +128,31 @@ export async function createReportSession({ username, password }) {
     throw err;
   }
 
+  const loginPage = await fetch(`${UPSTREAM}/Account/Login`, {
+    method:   'GET',
+    cache:    'no-store',
+    redirect: 'manual',
+  });
+  const { pairs: pagePairs, csrf: pageCsrf } = parseCookies(loginPage);
+
   const response = await fetch(`${UPSTREAM}/Account/Login`, {
     method:   'POST',
-    headers:  { 'Content-Type': 'application/json' },
+    headers:  {
+      'Content-Type': 'application/json',
+      Cookie: [...pagePairs.values()].join('; '),
+      ...(pageCsrf ? { 'X-CSRF-TOKEN': pageCsrf } : {}),
+    },
     body:     JSON.stringify({ username, password }),
     cache:    'no-store',
     redirect: 'manual',
   });
 
-  const { cookie, csrf } = parseCookies(response);
+  const { pairs: authPairs, csrf: authCsrf } = parseCookies(response);
 
-  // Serenity answers 200 with an Error object on a bad login, so status
-  // alone isn't enough — the absence of a cookie is the real tell.
-  if (!cookie) {
+  // The real tell is the POST's OWN cookies, not the merged jar — the GET's
+  // antiforgery cookie is present even on a failed login and would
+  // otherwise make every failure look like a success.
+  if (authPairs.size === 0) {
     let detail = '';
     try {
       const body = await response.json();
@@ -135,9 +169,41 @@ export async function createReportSession({ username, password }) {
     throw err;
   }
 
+  // Carry the full jar forward like a real browser would — the POST's own
+  // cookies win by name, but anything the GET set that the POST didn't
+  // reissue (the antiforgery cookie itself, typically) stays in.
+  const merged = new Map(pagePairs);
+  for (const [name, pair] of authPairs) merged.set(name, pair);
+
+  // CHANGED 2026-08-21 (second half of the same fix): the PRE-login
+  // antiforgery/CSRF pair does not survive authentication. Confirmed by
+  // hand — /Print/Render rejected it with the exact same empty-400
+  // signature /Account/Login had before the fix above, even though the
+  // login itself had genuinely succeeded. ASP.NET Core's antiforgery cookie
+  // is bound to the identity active when it was issued; ours was issued
+  // before sign-in, so it stops validating the moment the auth cookie
+  // lands. One more GET, now WITH the auth cookies attached, gets a fresh
+  // pair that's actually valid for the authenticated session — verified
+  // live: without this step every /Print/Render call 400s with no body
+  // (identical to the pre-fix login failure); with it, real report HTML
+  // comes back.
+  const authedPage = await fetch(`${UPSTREAM}/`, {
+    method:   'GET',
+    headers:  { Cookie: [...merged.values()].join('; ') },
+    cache:    'no-store',
+    redirect: 'manual',
+  });
+  const { pairs: authedPairs, csrf: authedCsrf } = parseCookies(authedPage);
+  for (const [name, pair] of authedPairs) merged.set(name, pair);
+
   sweep();
   const id = randomUUID();
-  sessions.set(id, { cookie, csrf, at: Date.now(), username });
+  sessions.set(id, {
+    cookie: [...merged.values()].join('; '),
+    csrf: authedCsrf ?? authCsrf ?? pageCsrf,
+    at: Date.now(),
+    username,
+  });
   return id;
 }
 
