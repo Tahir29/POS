@@ -6,9 +6,12 @@
 // or "not found" -> NewCustomerForm.
 //
 // Trust/session-hygiene: if the cart already has items when attaching a
-// different customer (or a guest cart when attaching anyone), or when
-// detaching while items remain, the associate is prompted to clear the
-// cart so items never silently carry over between customers.
+// different customer (or a guest cart when attaching anyone), the associate
+// is prompted to clear the cart so items never silently carry over between
+// customers. Detaching no longer prompts (2026-08-24) — cartSlice's
+// detachCustomer reducer now always saves-then-clears unconditionally (see
+// its own comment), so there's nothing left here for the associate to
+// decide.
 
 import { useEffect, useState } from 'react';
 import { toast } from 'react-toastify';
@@ -144,42 +147,36 @@ export default function CustomerSessionSheet({ isOpen, onClose }) {
     performAttach(newCustomer, { silent: true });
   };
 
+  // No confirmation needed (2026-08-24) — cartSlice's detachCustomer reducer
+  // now always saves the outgoing customer's cart to Mongo and clears it
+  // locally, unconditionally. See that reducer's own comment.
   const handleDetach = () => {
-    if (!isEmpty) {
-      setPendingAction({ type: 'detach' });
-      return;
-    }
     session.detach();
     handleClose();
   };
 
+  // Optional chaining here isn't defensive style — it's required. Next's
+  // React Compiler auto-memoizes this closure and evaluates
+  // pendingAction.payload/.options EAGERLY on every render as memoization
+  // dependencies (not lazily when the closure actually runs) — confirmed
+  // live 2026-08-24 by reading the compiled output. pendingAction is null
+  // on every ordinary render (only set right before this dialog opens), so
+  // a bare `pendingAction.options` crashed the whole component on mount,
+  // every time, everywhere it's rendered — not just when this dialog is open.
   const handleConfirmClear = () => {
     clearCart();
-    if (pendingAction?.type === 'attach') {
-      performAttach(pendingAction.payload, pendingAction.options);
-    } else {
-      session.detach();
-      handleClose();
-    }
+    performAttach(pendingAction?.payload, pendingAction?.options);
     setPendingAction(null);
   };
 
   const handleKeepCart = () => {
-    if (pendingAction?.type === 'attach') {
-      performAttach(pendingAction.payload, pendingAction.options);
-    } else {
-      session.detach();
-      handleClose();
-    }
+    performAttach(pendingAction?.payload, pendingAction?.options);
     setPendingAction(null);
   };
 
-  const confirmTitle =
-    pendingAction?.type === 'attach' ? 'Switch customer?' : 'Clear cart?';
+  const confirmTitle = 'Switch customer?';
   const confirmDescription =
-    pendingAction?.type === 'attach'
-      ? `The cart has ${items.length} item${items.length === 1 ? '' : 's'} from the current session. Clear the cart before switching to this customer?`
-      : `The cart still has ${items.length} item${items.length === 1 ? '' : 's'}. Clear the cart as well?`;
+    `The cart has ${items.length} item${items.length === 1 ? '' : 's'} from the current session. Clear the cart before switching to this customer?`;
 
   return (
     <>

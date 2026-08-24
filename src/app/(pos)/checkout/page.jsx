@@ -75,7 +75,7 @@ import EVENTS, { GA_ECOMMERCE_EVENTS } from '@/lib/analytics/events';
 
 function CheckoutScreen() {
   const router  = useRouter();
-  const { items, isEmpty, clearCart } = useCart();
+  const { items, isEmpty, clearCart, removeItem } = useCart();
   const { total }          = useCartTotals();
   const { customerId }     = useCustomerSession();
   const activeStoreId      = useSelector(selectActiveStoreId);
@@ -293,7 +293,12 @@ function CheckoutScreen() {
           />
         </div>
         <div className="flex flex-col gap-5 w-full">
-          {/* Order items — same CartItemRow used on the Cart page, read-only here */}
+          {/* Order items — same CartItemRow used on the Cart page, read-only
+              here except for removal: quantity still can't be edited from
+              checkout, but a wrongly-picked line can be dropped without
+              abandoning checkout and going back to the cart. Removing
+              re-keys useCheckoutPricing's query (see cartKey there), so the
+              remaining lines re-price automatically. */}
           <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
             <h2 className="text-sm font-bold text-foreground mb-1">
               Order Items <span className="text-muted-foreground font-normal text-xs">({items.length} item{items.length !== 1 ? 's' : ''})</span>
@@ -304,6 +309,7 @@ function CheckoutScreen() {
                   key={`${item.itemId}-${item.sizeId}-${item.styleId}`}
                   item={item}
                   readOnly
+                  onRemove={removeItem}
                   // What this line is really being sold at. The cart's own
                   // figure is the item master's nominal spec; an invoice
                   // bills a physical piece whose actual weight sets the
