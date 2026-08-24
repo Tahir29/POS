@@ -46,9 +46,11 @@
 import { useState }        from 'react';
 import Image               from 'next/image';
 import { useRouter }       from 'next/navigation';
+import { useSelector }     from 'react-redux';
 import { motion, useReducedMotion } from 'motion/react';
 import { resolveImageSrc } from '@/lib/resolveImageSrc';
 import { resolveMetalColorName } from '@/lib/metalColor';
+import { selectActiveStoreCode } from '@/store/slices/storeSlice';
 import APP_CONFIG          from '@/constants/appConfig';
 import Logo                from '@/components/shared/Logo';
 import StarRating          from '@/components/shared/StarRating';
@@ -112,7 +114,15 @@ function NoImagePlaceholder() {
 // Flag/tag shape flush to the card's left edge (square on the left, rounded
 // on the right) rather than a floating pill — reads as a tag stuck to the
 // corner of the card instead of a badge hovering over the photo.
-function StockBadge({ inStock }) {
+//
+// storeCode (2026-08-24): the catalog grid is always scoped to one active
+// store (see catalog/page.jsx's activeStoreId), so "In Stock" alone never
+// said WHICH store actually has the piece — only meaningful once an
+// associate is comparing this card against another store's, or recalling
+// it later from Recently Viewed/Wishlist. Shown only alongside "In Stock":
+// "Made to Order" already means not on this store's shelf, so tagging it
+// with a store code would read as a contradiction.
+function StockBadge({ inStock, storeCode }) {
   return (
     <Badge
       className={[
@@ -121,14 +131,24 @@ function StockBadge({ inStock }) {
       ].join(' ')}
     >
       {inStock ? 'In Stock' : 'Made to Order'}
+      {inStock && storeCode && (
+        <span className="ml-1 font-bold opacity-90">· {storeCode}</span>
+      )}
     </Badge>
   );
 }
 
-export default function ProductCard({ product, showStockBadge = false }) {
+export default function ProductCard({ product, showStockBadge = false, storeCode: storeCodeOverride }) {
   const router = useRouter();
   const [imgError, setImgError] = useState(false);
   const reduceMotion = useReducedMotion();
+  const activeStoreCode = useSelector(selectActiveStoreCode);
+  // storeCodeOverride (2026-08-24) — for a card rendered in the "Available
+  // at other stores" lane (see OtherStoreSection), whose "In Stock" badge
+  // must show THAT store's code, never the page's own active/browsing
+  // store. Omitted everywhere else, so the badge falls back to the active
+  // store as before.
+  const storeCode = storeCodeOverride ?? activeStoreCode;
 
   const {
     item_id,
@@ -250,7 +270,7 @@ export default function ProductCard({ product, showStockBadge = false }) {
 
         {showStockBadge && (
           <div className="absolute left-0 top-3">
-            <StockBadge inStock={inStock} />
+            <StockBadge inStock={inStock} storeCode={storeCode} />
           </div>
         )}
 

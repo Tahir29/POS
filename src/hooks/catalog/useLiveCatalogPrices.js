@@ -173,6 +173,20 @@ async function flush(storeId) {
 /**
  * @param {object[]} products — current display list (ProductCatalogRow[]),
  *   `price` may be null for items still needing the live-pricing tier.
+ * @param {number|null} [storeIdOverride] — price against THIS store instead
+ *   of the Redux global active store. The catalog page's own store filter
+ *   (catalogStoreId) lets an operator browse a store other than the one
+ *   they're signed into, and pricing MUST follow that same store, not the
+ *   signed-in one — a price is which physical piece a store actually holds
+ *   (see getLivePricesForItems), so pricing against the wrong store silently
+ *   quotes a DIFFERENT piece than the one on screen. Confirmed live
+ *   2026-08-24: switching the catalog's store filter correctly re-fetched
+ *   the product list from the new store, but every SetSalesItems call still
+ *   carried the old (signed-in) store's company_id and priced its stock
+ *   journal entries — e.g. "HO-TGI-11-25-77" — while browsing a completely
+ *   different store's catalog. Callers without a filter of their own
+ *   (RecentlyViewedCarousel, the customer profile's Wishlist tab) omit this
+ *   and keep pricing against the signed-in store, same as before.
  * @returns {{
  *   priceById:  Map<number, number>,  // item_id -> live price
  *   settledIds: Set<number>,          // server has given a verdict (priced or not)
@@ -180,10 +194,11 @@ async function flush(storeId) {
  *   Callers need both: a card with no price is "Pricing…" until its id is
  *   settled, and "Price unavailable" after.
  */
-export function useLiveCatalogPrices(products) {
+export function useLiveCatalogPrices(products, storeIdOverride) {
   // The store decides WHICH physical piece a card is priced against, so a
   // price is only meaningful alongside it. See getLivePricesForItems.
   const activeStoreId = useSelector(selectActiveStoreId);
+  const storeId = storeIdOverride ?? activeStoreId;
 
   const idsNeeding = useMemo(() => {
     const seen = new Set();
@@ -198,12 +213,12 @@ export function useLiveCatalogPrices(products) {
   // Gates the queries below: until the first canary result lands there is no
   // epoch to key against, and fetching now would cache every price under a
   // key that is about to change — paying the 6-7s sweep twice on first load.
-  const { epoch, isBlind } = usePricingEpoch(products);
+  const { epoch, isBlind } = usePricingEpoch(products, storeId);
 
   const results = useQueries({
     queries: idsNeeding.map((itemId) => ({
-      queryKey: QUERY_KEYS.CATALOG.PRICE(itemId, activeStoreId, epoch),
-      queryFn:  () => enqueuePrice(itemId, activeStoreId),
+      queryKey: QUERY_KEYS.CATALOG.PRICE(itemId, storeId, epoch),
+      queryFn:  () => enqueuePrice(itemId, storeId),
       enabled:  epoch != null,
       // Cached until the epoch says otherwise, never on a timer — the whole
       // point of the epoch. The exception is a BLIND epoch (every canary
