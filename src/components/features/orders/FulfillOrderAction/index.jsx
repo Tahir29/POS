@@ -1,6 +1,5 @@
 'use client';
 
-// src/components/features/orders/FulfillOrderAction/index.jsx
 // "Fulfill from order" entry point, added to OrderDetailSheet — checks
 // whether any of THIS order's lines have cleared OrnaVerse's own
 // stock-allocation check, and if so, loads them into a fresh Invoice cart.

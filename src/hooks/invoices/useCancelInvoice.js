@@ -1,4 +1,3 @@
-// src/hooks/invoices/useCancelInvoice.js
 // Cancels a posted POS invoice via POS/Invoice/Cancel.
 // Mirrors useCancelOrder.js exactly — same document family, same contract,
 // just never had a UI caller (cancelInvoice() sat unused in orderService.js).

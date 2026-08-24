@@ -1,6 +1,5 @@
 'use client';
 
-// src/components/layout/Header/HeaderCustomerControl/index.jsx
 // Header-level "Customer" control — shows attached customer or
 // "Add Customer" prompt, opens CustomerSessionSheet.
 // Available on every POS screen, independent of cart/checkout.
@@ -36,7 +35,14 @@ export default function HeaderCustomerControl() {
           type="button"
           variant="outline"
           onClick={() => setSheetOpen(true)}
-          className="flex items-center gap-2 min-h-[44px] rounded-full px-4"
+          // rounded-full removed 2026-08-23 — was overriding the base
+          // Button's own corner radius with a pill shape; every other
+          // rectangular control in the app was flattened to the small
+          // brand-consistent radius (see globals.css's --radius scale
+          // comment), and this button isn't a circle/pill by function the
+          // way an avatar or icon-only button is, so it shouldn't look like
+          // one either. Falls back to the Button component's default.
+          className="flex items-center gap-2 min-h-[44px] px-4"
           aria-label="Add customer"
         >
           <UserPlus size={16} aria-hidden="true" />
@@ -55,14 +61,19 @@ export default function HeaderCustomerControl() {
     <>
       <div
         className={cn(
-          'flex items-center gap-2 rounded-full pl-1.5 pr-2 py-1.5 min-h-[40px]',
+          // Pill shape removed 2026-08-23 — this chip and the inner name
+          // button below both keep only the avatar (a genuine circle) and
+          // the detach "X" (a genuine icon-only circular button) rounded;
+          // the chip itself is a rectangular container, same treatment as
+          // every other card/panel in the app now.
+          'flex items-center gap-2 rounded-sm pl-1.5 pr-2 py-1.5 min-h-[40px]',
           'border border-status-in-stock/20 bg-status-in-stock/10'
         )}
       >
         <button
           type="button"
           onClick={() => setSheetOpen(true)}
-          className="flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-full"
+          className="flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
           aria-label={`Customer: ${customerName}. Tap to view details.`}
         >
           <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-status-in-stock text-[10px] font-bold text-white">

@@ -1,4 +1,3 @@
-// src/components/features/schemes/SchemeCard.jsx
 import { Calendar, IndianRupee, Clock, Gift, Ban } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
@@ -24,7 +23,6 @@ export default function SchemeCard({ scheme }) {
 
   return (
     <div className="bg-card border border-border rounded-xl p-5 flex flex-col gap-4">
-      {/* Header */}
       <div className="flex items-start justify-between gap-3">
         <div>
           <h3 className="text-base font-semibold text-foreground leading-tight">
@@ -39,7 +37,6 @@ export default function SchemeCard({ scheme }) {
         )}
       </div>
 
-      {/* Key metrics */}
       <div className="grid grid-cols-2 gap-3">
         <Metric
           icon={<IndianRupee className="w-3.5 h-3.5" />}
@@ -81,7 +78,6 @@ export default function SchemeCard({ scheme }) {
         )}
       </div>
 
-      {/* Scheme rules */}
       {Array.isArray(schemes_rules) && schemes_rules.length > 0 && (
         <div className="border-t border-border pt-3">
           <p className="text-xs font-medium text-muted-foreground mb-2">Scheme Rules</p>

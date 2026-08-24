@@ -1,4 +1,3 @@
-// src/hooks/store/useStoreSwitcher.js
 // SEC-003: clearCart() is now dispatched on every store switch.
 // Customer PII (customerId, customerName, customerMobile) was previously
 // left in persisted cart state after a store switch. Clearing the cart
@@ -32,27 +31,22 @@ export function useStoreSwitcher() {
   const router = useRouter();
 
   const handleSwitchStore = useCallback(async (store) => {
-    // Prevent switching to the already active store
     if (store.company_id === activeStoreId) {
       return;
     }
 
-    // 1. SEC-003: Clear cart to remove customer PII before switching context.
-    //    Any in-progress sale is lost — this is intentional and matches the
-    //    shared-device POS model where store switches are deliberate actions.
+    // SEC-003: Clear cart to remove customer PII before switching context.
+    // Any in-progress sale is lost — this is intentional and matches the
+    // shared-device POS model where store switches are deliberate actions.
     dispatch(clearCart());
 
-    // 2. Update Redux store context
     switchStore(store);
 
-    // 3. Invalidate entire TanStack Query cache
     await queryClient.invalidateQueries();
 
-    // 4. Toast with store name
     const storeName = store.mailing_name ?? 'store';
     toast.success(TOAST.STORE.SWITCHED(storeName));
 
-    // 5. Redirect to dashboard in new store context
     router.replace('/dashboard');
   }, [activeStoreId, dispatch, switchStore, queryClient, router]);
 

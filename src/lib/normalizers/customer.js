@@ -20,8 +20,6 @@
 //   pin_code  (string — different type from CustomerRow)
 //   is_default
 
-// ─── ADDRESS NORMALIZER ───────────────────────────────────────────────────────
-
 /**
  * Normalises an address record into the flat shape used by:
  *   cart.customerAddress
@@ -53,7 +51,6 @@ export function normalizeAddress(addr) {
   };
 
   return {
-    // Text lines
     address:  str('address') || str('address_1'),
     address1: addr.address && addr.address_1 ? str('address_1') : '',
 
@@ -72,8 +69,6 @@ export function normalizeAddress(addr) {
   };
 }
 
-// ─── ADDRESS PICKER ───────────────────────────────────────────────────────────
-
 /**
  * Picks the best address from a customer's party_address[]:
  *   1. The entry flagged is_default: true
@@ -87,8 +82,6 @@ function pickAddress(partyAddress) {
   if (!Array.isArray(partyAddress) || partyAddress.length === 0) return null;
   return partyAddress.find((a) => a.is_default) ?? partyAddress[0];
 }
-
-// ─── CUSTOMER NORMALIZER ──────────────────────────────────────────────────────
 
 /**
  * Normalises a POS.CustomerRow into the shape used throughout the app:
@@ -115,7 +108,6 @@ function pickAddress(partyAddress) {
 export function normalizeCustomer(entity) {
   if (!entity) return null;
 
-  // Address — prefer a partyAddress entry; fall back to root CustomerRow fields
   const pickedAddress = pickAddress(entity.party_address);
   const customerAddress = pickedAddress
     ? normalizeAddress(pickedAddress)
@@ -147,7 +139,6 @@ export function normalizeCustomer(entity) {
     // customerPan, not instead of it.
     customerPanDocument: entity.pan_document && entity.pan_document !== 'NA' ? entity.pan_document : null,
 
-    // Personal details — needed by CustomerDetailSheet and Edit form
     birthDate:    entity.birth_date   ?? null,
     anniversary:  entity.anniversary  ?? null,
     gender:       entity.gender       ?? null,
@@ -159,8 +150,6 @@ export function normalizeCustomer(entity) {
     raw: entity,
   };
 }
-
-// ─── CREATE PAYLOAD BUILDER ───────────────────────────────────────────────────
 
 /**
  * Builds the Entity payload for POS/Customer/Create.
@@ -205,8 +194,6 @@ export function buildCustomerCreatePayload(formValues) {
   };
 }
 
-// ─── UPDATE PAYLOAD BUILDER ───────────────────────────────────────────────────
-
 /**
  * Builds the Entity payload for POS/Customer/Update.
  * Merges the original raw CustomerRow with form changes.
@@ -223,14 +210,11 @@ export function buildCustomerUpdatePayload(originalRaw, formChanges) {
   return {
     // Spread the full original record first (preserves all fields OrnaVerse requires)
     ...originalRaw,
-    // Then overlay only what changed
     ...formChanges,
     // party_id must always be present (read-only in OrnaVerse but required in payload)
     party_id: originalRaw.party_id,
   };
 }
-
-// ─── WALK-IN NORMALIZER ────────────────────────────────────────────────────────
 
 /**
  * Normalises the `Customer` object from Services/POS/WalkIn/Lookup.

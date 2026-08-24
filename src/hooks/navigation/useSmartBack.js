@@ -1,5 +1,3 @@
-// src/hooks/navigation/useSmartBack.js
-//
 // Smart "back" navigation for routes that are a FIXED step in a flow
 // (Checkout → Cart, Product Detail → Catalog) regardless of how the user
 // actually arrived there. Plain router.back() / real browsing history

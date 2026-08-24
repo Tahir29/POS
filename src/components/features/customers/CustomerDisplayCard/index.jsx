@@ -1,9 +1,5 @@
 'use client';
 
-// src/components/features/customers/CustomerDisplayCard/index.jsx
-// Shows a found/attached customer's details with a detach action.
-// Reads `raw` (full OrnaVerse record) for address/PAN info if available.
-//
 // ADDED: masked PAN row (raw.pan_no — confirmed POS.CustomerRow field,
 // see project memory) and an initials avatar, matching the same visual
 // pattern already used in the Header customer pill for consistency.
@@ -56,7 +52,6 @@ export default function CustomerDisplayCard({ customer, onDetach, detachLabel = 
           <div className="min-w-0">
             <p className="font-semibold text-foreground truncate">{customerName}</p>
 
-            {/* Compact meta line: mobile · email · masked PAN */}
             <p className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-sm text-muted-foreground mt-0.5">
               {customerMobile && (
                 <span className="flex items-center gap-1">

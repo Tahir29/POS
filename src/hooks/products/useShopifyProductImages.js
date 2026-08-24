@@ -1,5 +1,3 @@
-// src/hooks/products/useShopifyProductImages.js
-//
 // Fetches Shopify product media (images + video) for a given external_product_id.
 //
 // ENABLED ONLY when externalProductId is non-null and non-zero.
@@ -19,9 +17,15 @@
 import { useQuery }                 from '@tanstack/react-query';
 import { getShopifyProductMedia }   from '@/services/shopifyService';
 import { QUERY_KEYS }               from '@/constants/queryKeys';
+import APP_CONFIG                   from '@/constants/appConfig';
 
-// 30 minutes — product media rarely changes during a trading day
-const STALE_TIME = 30 * 60 * 1000;
+// 24h (2026-08-23, was 30 min) — product photos only change when someone
+// re-shoots/re-uploads on Shopify, not during a trading day. Paired with
+// lib/queryPersister.js, which persists this exact query to IndexedDB so a
+// page reload doesn't re-fetch every visible card's image on every visit.
+// gcTime must be at least this long too, or the persister has nothing left
+// in memory to write out once a card scrolls out of view / unmounts.
+const STALE_TIME = APP_CONFIG.STALE_TIME.MASTER_DATA;
 
 /**
  * @param {string|number|null|undefined} externalProductId
@@ -45,6 +49,7 @@ export function useShopifyProductImages(externalProductId) {
     queryFn:  () => getShopifyProductMedia(id),
     enabled:  !!id,
     staleTime: STALE_TIME,
+    gcTime:    STALE_TIME,
     // getShopifyProductMedia never throws — returns { images: [], videos: [] }
     // on any error. So isError will effectively never be true, but we expose
     // it anyway for completeness in case the service layer changes in future.

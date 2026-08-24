@@ -1,7 +1,5 @@
 'use client';
 
-// src/components/features/auth/StoreSelectionGrid/index.jsx
-//
 // Store selection screen — searchable dropdown replaces the card list.
 // Scales cleanly from 1 store to 100+ stores.
 // Uses shadcn/ui Command (combobox pattern) for search + select.
@@ -42,10 +40,9 @@ export default function StoreSelectionGrid() {
   const { logout } = useAuth();
 
   const [open, setOpen]           = useState(false);
-  const [selected, setSelected]   = useState(null);   // store object
+  const [selected, setSelected]   = useState(null);
   const [isSelecting, setIsSelecting] = useState(false);
 
-  // ── Confirm selection ─────────────────────────────────────────────────────
   const handleConfirm = async () => {
     if (!selected || isSelecting) return;
     setIsSelecting(true);
@@ -59,7 +56,6 @@ export default function StoreSelectionGrid() {
     }
   };
 
-  // ── Pick from dropdown ────────────────────────────────────────────────────
   const handleSelect = (store) => {
     setSelected(store);
     setOpen(false);
@@ -69,7 +65,7 @@ export default function StoreSelectionGrid() {
     <div className="flex min-h-screen bg-background">
       <div className="flex w-full overflow-hidden sm:shadow-lg">
 
-        {/* ── Left — brand photo panel — same banner + treatment as Login ── */}
+        {/* Same banner + treatment as LoginForm's left panel */}
         <div className="relative hidden w-[42%] shrink-0 flex-col overflow-hidden bg-primary sm:flex">
           <Image
             src="/images/login-banner.png"
@@ -103,11 +99,9 @@ export default function StoreSelectionGrid() {
           </div>
         </div>
 
-        {/* ── Right — store selection panel ───────────────────────────── */}
         <div className="flex flex-1 items-center justify-center bg-card px-6 py-10 sm:px-14 sm:py-12">
           <div className="w-full max-w-md">
 
-            {/* Logo shown only when the photo panel is hidden (small screens) */}
             <div className="mb-8 flex justify-center sm:hidden">
               <Logo variant="full" width={130} height={42} priority />
             </div>
@@ -128,7 +122,6 @@ export default function StoreSelectionGrid() {
           ) : (
             <div className="flex flex-col gap-4">
 
-              {/* Searchable store dropdown */}
               <div className="space-y-1.5">
                 <Label className="text-xs font-semibold tracking-[0.1em] text-muted-foreground uppercase">
                   Select Store
@@ -218,7 +211,6 @@ export default function StoreSelectionGrid() {
                 </Popover>
               </div>
 
-              {/* Selected store confirmation card */}
               {selected && (
                 <div className="flex items-center justify-between gap-3 rounded-xl border-l-4 border-accent bg-card px-5 py-4 shadow-sm">
                   <div>
@@ -235,7 +227,6 @@ export default function StoreSelectionGrid() {
                 </div>
               )}
 
-              {/* Confirm button */}
               <Button
                 onClick={handleConfirm}
                 disabled={!selected || isSelecting}

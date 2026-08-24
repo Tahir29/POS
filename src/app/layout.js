@@ -1,4 +1,3 @@
-// src/app/layout.jsx
 // Root layout — wraps the entire app in Providers.
 // SEC-002: Checks token expiry immediately after Redux Persist rehydrates.
 //          If the stored token is expired, auth state is cleared before

@@ -55,9 +55,16 @@ export function useAllCatalog(storeId, { enabled = true } = {}) {
     // expensive query in the app. STALE_TIME.STOCK (1 min) was wrong here:
     // combined with the global refetchOnWindowFocus, it meant switching
     // browser tabs/apps and back after a minute re-triggered a full
-    // catalog re-fetch. A store's catalog doesn't meaningfully change
-    // minute-to-minute, so this uses STALE_TIME.CATALOG (5 min) instead.
-    staleTime: APP_CONFIG.STALE_TIME.CATALOG,
+    // catalog re-fetch. Was bumped to STALE_TIME.CATALOG (5 min), then to
+    // MASTER_DATA (24h, 2026-08-23) — this is product master data (name,
+    // SKU, weight, karat, image refs), not price or stock, and only
+    // changes when someone edits a product in OrnaVerse. Paired with
+    // lib/queryPersister.js, which persists this exact query to IndexedDB
+    // so a page reload restores it instantly instead of re-paging the
+    // whole store. gcTime must be at least maxAge (also 24h) or the
+    // persister has nothing left in memory to write out.
+    staleTime: APP_CONFIG.STALE_TIME.MASTER_DATA,
+    gcTime:    APP_CONFIG.STALE_TIME.MASTER_DATA,
   });
 
   return { ...query, loadedCount };

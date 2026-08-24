@@ -1,6 +1,5 @@
 'use client';
 
-// src/components/features/checkout/PromoCodeInput/index.jsx
 // Code entry with "Apply" button — validates via usePromoValidation.
 
 import { useState } from 'react';

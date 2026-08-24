@@ -1,5 +1,3 @@
-// src/services/shopifyService.js
-//
 // Client-side service for Shopify data used in Lucira POS.
 //
 // ─── FUTURE-PROOF SWAP POINT ───────────────────────────────────────────────

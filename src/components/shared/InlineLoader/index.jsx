@@ -1,5 +1,3 @@
-// src/components/shared/InlineLoader/index.jsx
-//
 // Shared inline loading indicator (spinner + label) for lists/tabs/sections
 // that are loading data. Unifies three previously-fragmented patterns
 // (inline Loader2+text, a raw spinning div, a bare-text Suspense fallback)

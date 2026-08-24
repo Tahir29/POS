@@ -1,6 +1,5 @@
 'use client';
 
-// src/app/(pos)/invoices/page.jsx
 // Invoice directory — paginated browse + full-dataset search/filter.
 //
 // Search/filter behavior (mirrors /orders pattern):
@@ -129,15 +128,19 @@ export default function InvoicesPage() {
 
   return (
     <div className="flex flex-col gap-3 max-w-3xl mx-auto w-full p-4 md:p-6">
-      {isAllFetching && !isAllLoading && (
-        <div className="flex justify-end -mb-1">
-          <Loader2 size={14} className="animate-spin text-muted-foreground" aria-hidden="true" />
-        </div>
-      )}
+      {/* ── Filters — sticky (2026-08-24) — see the identical block in
+          orders/page.jsx for the full reasoning (native position:sticky,
+          no JS pin/unpin logic needed; the negative-margin/padding swap
+          cancels this page's own p-4/md:p-6 for just this block so the
+          sticky bar's background spans the full column and its "stuck"
+          position doesn't leave a gap where the page's top padding was). */}
+      <div className="sticky top-0 z-10 -mx-4 -mt-4 flex flex-col gap-2 border-b border-border bg-background px-4 pt-4 pb-3 md:-mx-6 md:-mt-6 md:px-6 md:pt-6">
+        {isAllFetching && !isAllLoading && (
+          <div className="flex justify-end -mb-1">
+            <Loader2 size={14} className="animate-spin text-muted-foreground" aria-hidden="true" />
+          </div>
+        )}
 
-      {/* ── Filters ─────────────────────────────────────── */}
-      <div className="flex flex-col gap-2">
-        {/* Search input */}
         <div className="relative">
           <Search
             size={16}
@@ -168,7 +171,6 @@ export default function InvoicesPage() {
           )}
         </div>
 
-        {/* Date range + Clear — stacked on mobile, inline on md+ */}
         <div className="flex flex-col gap-2 md:flex-row md:items-center">
           <div className="flex items-center gap-2 flex-1">
             <Input
@@ -190,7 +192,6 @@ export default function InvoicesPage() {
             />
           </div>
 
-          {/* Clear all */}
           {hasFilters && (
             <Button
               type="button"
@@ -206,7 +207,6 @@ export default function InvoicesPage() {
           )}
         </div>
 
-        {/* Active filter summary */}
         {isSearchActive && !isFilterBusy && (
           <p className="text-xs text-muted-foreground">
             {filteredInvoices.length} invoice{filteredInvoices.length !== 1 ? 's' : ''} found

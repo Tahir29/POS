@@ -41,10 +41,8 @@ const storeSlice = createSlice({
   },
 });
 
-// ── ACTIONS ──────────────────────────────────────────────────
 export const { setAvailableStores, setActiveStore, clearStore } = storeSlice.actions;
 
-// ── SELECTORS ────────────────────────────────────────────────
 export const selectActiveStoreId   = (state) => state.store.activeStoreId;
 export const selectActiveStoreName = (state) => state.store.activeStoreName;
 export const selectActiveStoreCode = (state) => state.store.activeStoreCode;

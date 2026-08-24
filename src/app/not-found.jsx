@@ -1,7 +1,5 @@
 'use client';
 
-// src/app/not-found.jsx
-//
 // Root 404 — no AppShell (Sidebar/Header) wraps this route, so it's fully
 // self-contained. Built around the brand's gemstone motif: a spotlighted
 // gem that tilts toward the cursor and catches a gold-sheen shimmer, on
@@ -26,8 +24,6 @@ const SPARKLES = [
   { top: '80%', left: '8%',  size: 11, delay: 1.8 },
   { top: '2%',  left: '52%', size: 9,  delay: 2.4 },
 ];
-
-// ── Gem spotlight — pointer-tilt gem + gold-sheen shimmer sweep + sparkles ──
 
 function GemSpotlight({ reduceMotion }) {
   const ref = useRef(null);
@@ -56,7 +52,6 @@ function GemSpotlight({ reduceMotion }) {
       className="relative flex h-44 w-44 items-center justify-center rounded-full bg-gradient-to-br from-brand-blush via-brand-cream to-transparent shadow-lg sm:h-52 sm:w-52"
       style={{ perspective: 700 }}
     >
-      {/* Sparkle particles */}
       {SPARKLES.map((s, i) => (
         <motion.span
           key={i}
@@ -72,7 +67,6 @@ function GemSpotlight({ reduceMotion }) {
         </motion.span>
       ))}
 
-      {/* Gold-sheen shimmer sweep */}
       {!reduceMotion && (
         <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-full" aria-hidden="true">
           <motion.div
@@ -83,7 +77,6 @@ function GemSpotlight({ reduceMotion }) {
         </div>
       )}
 
-      {/* Gem — tilts toward the cursor */}
       <motion.div
         style={reduceMotion ? undefined : { rotateX, rotateY }}
         transition={{ duration: DURATION.standard, ease: EASE_PREMIUM }}
@@ -93,8 +86,6 @@ function GemSpotlight({ reduceMotion }) {
     </div>
   );
 }
-
-// ── Page ─────────────────────────────────────────────────────────────────────
 
 export default function NotFound() {
   const reduceMotion = useReducedMotion();

@@ -1,4 +1,3 @@
-// src/services/customerService.js
 // Customer lookup, creation, and update — all via native POS endpoints.
 //
 // RESPONSE CONVENTION:
@@ -11,8 +10,6 @@
 
 import axiosInstance from '@/lib/axios/axiosInstance';
 import API from '@/constants/apiEndpoints';
-
-// ─── LOOKUP ───────────────────────────────────────────────────────────────────
 
 export function getCustomer(mobile) {
   return axiosInstance.post(API.CUSTOMERS.GET_CUSTOMER, { mobile });
@@ -30,7 +27,6 @@ export function retrieveParty(partyId) {
   return axiosInstance.post(API.PARTY.RETRIEVE, { EntityId: partyId });
 }
 
-// ─── WALK-IN ──────────────────────────────────────────────────────────────────
 // NOT a pure read — every call also records a customer_visits row against the
 // active store (resolved server-side from the token). Only call this once per
 // staff-initiated mobile search, never speculatively. See apiEndpoints.js
@@ -51,13 +47,9 @@ export async function getCustomerList({ take = 50, skip = 0, companyId }) {
   return response.data;  // ← unwrapped so hooks do data?.Entities not data?.data?.Entities
 }
 
-// ─── CREATE ───────────────────────────────────────────────────────────────────
-
 export function createCustomer(payload) {
   return axiosInstance.post(API.CUSTOMERS.CREATE, { Entity: payload });
 }
-
-// ─── UPDATE ───────────────────────────────────────────────────────────────────
 
 export function updateCustomer(partyId, payload) {
   return axiosInstance.post(API.CUSTOMERS.UPDATE, {

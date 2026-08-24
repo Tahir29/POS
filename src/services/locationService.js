@@ -1,4 +1,3 @@
-// src/services/locationService.js
 // Cascading location master: Countries → States → Cities.
 //
 // CRITICAL: These endpoints use Serenity's ListRequest convention.

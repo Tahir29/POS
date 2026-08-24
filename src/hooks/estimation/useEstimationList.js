@@ -1,6 +1,3 @@
-// src/hooks/estimation/useEstimationList.js
-// Paginated list of estimations/quotations.
-//
 // Confirmed 2026-07-16 via real API data: same header shape as every other
 // POS transaction (transaction_id, document_no, document_date, party_name,
 // net_amount, line_items[] with real catalog item_id) — mirrors

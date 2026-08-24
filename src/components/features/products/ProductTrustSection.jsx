@@ -1,7 +1,5 @@
 'use client';
 
-// src/components/features/products/ProductTrustSection/index.jsx
-//
 // Static store-level marketing content — NOT per-product data.
 // Covers: trust badge strip, "Why Lucira" three promises, certification
 // badges, and a Warranty/Care/Package accordion.
@@ -19,39 +17,6 @@ import Image from 'next/image';
 import {
   Accordion, AccordionItem, AccordionTrigger, AccordionContent,
 } from '@/components/ui/accordion';
-
-// ── Trust badge strip ─────────────────────────────────────────────────────────
-
-// const TRUST_BADGES = [
-//   { icon: ShieldCheck, title: 'IGI Certified',       subtitle: 'Every diamond graded' },
-//   { icon: RefreshCw,   title: 'Lifetime Exchange',   subtitle: '100% value back' },
-//   { icon: Truck,       title: 'Free Insured Shipping', subtitle: 'Fully protected' },
-//   { icon: Gem,         title: 'Lifetime Buyback',    subtitle: 'Transparent rates' },
-// ];
-
-// function TrustBadgeStrip() {
-//   return (
-//     <div className="rounded-2xl bg-primary px-4 py-5 md:px-6">
-//       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-//         {TRUST_BADGES.map(({ icon: Icon, title, subtitle }) => (
-//           <div key={title} className="flex items-center gap-2.5">
-//             <Icon size={20} className="shrink-0 text-accent" aria-hidden="true" />
-//             <div className="min-w-0">
-//               <p className="text-sm font-semibold text-primary-foreground leading-tight truncate">
-//                 {title}
-//               </p>
-//               <p className="text-xs text-primary-foreground/60 leading-tight truncate">
-//                 {subtitle}
-//               </p>
-//             </div>
-//           </div>
-//         ))}
-//       </div>
-//     </div>
-//   );
-// }
-
-// ── Why Lucira ────────────────────────────────────────────────────────────────
 
 const WHY_LUCIRA = [
   {
@@ -71,28 +36,51 @@ const WHY_LUCIRA = [
   },
 ];
 
+// Redesigned 2026-08-24 — two real problems, not just polish:
+//   1. The header (title + subtitle) sat in one unwrapped flex row, which
+//      crowded/could overlap on a narrow phone width — now stacks below
+//      sm: and only sits inline side-by-side from sm: up.
+//   2. The column divider was an absolutely-positioned `after` pseudo-
+//      element pinned to each item's right edge — meant for the 3-column
+//      desktop layout, but nothing hid it on mobile's single-column stack,
+//      where it just left a stray vertical line hanging off the right edge
+//      of each full-width block with no second column to separate from.
+//      Replaced with divide-y (horizontal rules BETWEEN stacked items) on
+//      mobile, swapped for md:border-l (vertical rules between columns)
+//      once the grid actually goes 3-wide — each divider only exists in the
+//      layout it makes sense in.
+// The numeral also moved from plain colored text into a small circular
+// badge, matching the icon-badge treatment the trust-badge strip and Stock
+// Across Stores panel already picked up in this same redesign pass — one
+// consistent visual language across the page instead of three different
+// "how do we mark this row/column" treatments.
 function WhyLuciraSection() {
   return (
     <div className="rounded-2xl border border-border bg-card p-5 shadow-sm md:p-6">
-      <div className='flex items-center justify-start gap-2'>
+      <div className="flex flex-col gap-0.5 sm:flex-row sm:items-baseline sm:gap-2">
         <h2 className="font-heading text-lg text-foreground">Why Lucira</h2>
-        <p className="text-sm text-muted-foreground mt-0.5">Three promises behind every piece</p>
+        <p className="text-sm text-muted-foreground">Three promises behind every piece</p>
       </div>
 
-      <div className="grid grid-cols-1 gap-5 mt-4 md:grid-cols-3">
-        {WHY_LUCIRA.map(({ num, title, body }) => (
-          <div key={num} className="relative after:absolute after:w-0.5 after:bg-primary/10 after:top-0 after:bottom-0 after:-right-2.5">
-            <p className="font-heading text-2xl text-accent">{num}</p>
+      <div className="mt-4 grid grid-cols-1 divide-y divide-border md:grid-cols-3 md:divide-y-0 md:gap-6">
+        {WHY_LUCIRA.map(({ num, title, body }, i) => (
+          <div
+            key={num}
+            className={`flex flex-col gap-1.5 py-4 first:pt-0 last:pb-0 md:py-0 ${
+              i > 0 ? 'md:border-l md:border-border md:pl-6' : ''
+            }`}
+          >
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-accent/10 font-heading text-sm font-bold text-accent">
+              {num}
+            </span>
             <p className="text-sm font-semibold text-foreground mt-1">{title}</p>
-            <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{body}</p>
+            <p className="text-xs text-muted-foreground leading-relaxed">{body}</p>
           </div>
         ))}
       </div>
     </div>
   );
 }
-
-// ── Certified quality + accordion ─────────────────────────────────────────────
 
 const CERT_BADGES = ['https://cdn.shopify.com/s/files/1/0739/8516/3482/files/IGI.png', 'https://cdn.shopify.com/s/files/1/0739/8516/3482/files/SGL_528e2e93-e563-40b6-a8a6-c098475a6de9.png', 'https://cdn.shopify.com/s/files/1/0739/8516/3482/files/BIS.png'];
 
@@ -126,7 +114,6 @@ function CertifiedQualityBlock() {
   return (
     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
 
-      {/* Certified badges */}
       <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
         <div className="flex items-center justify-between">
           <h3 className="font-heading text-base text-foreground">Certified Quality Guaranteed</h3>
@@ -148,7 +135,6 @@ function CertifiedQualityBlock() {
         </p>
       </div>
 
-      {/* Accordion */}
       <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
         <Accordion
           type="multiple"
@@ -177,12 +163,9 @@ function CertifiedQualityBlock() {
   );
 }
 
-// ── Exported composite ────────────────────────────────────────────────────────
-
 export default function ProductTrustSection() {
   return (
     <div className="flex flex-col gap-4">
-      {/* <TrustBadgeStrip /> */}
       <WhyLuciraSection />
       <CertifiedQualityBlock />
     </div>

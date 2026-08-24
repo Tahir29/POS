@@ -49,7 +49,6 @@ export default function SessionProvider({ children }) {
   const clickDebounceRef  = useRef(null);
   const lastPathRef       = useRef(null);
 
-  // ── Customer idle timer — only when a customer is attached ────────────────
   const clearIdleTimers = useCallback(() => {
     clearTimeout(idleTimerRef.current);
     clearTimeout(warningTimerRef.current);
@@ -61,7 +60,6 @@ export default function SessionProvider({ children }) {
     if (!isCustomerActive) return;
     clearIdleTimers();
 
-    // Warning 30s before the customer idle timeout
     warningTimerRef.current = setTimeout(() => {
       toast.warn('Customer session expiring in 30 seconds due to inactivity.', {
         autoClose: 10000,
@@ -69,7 +67,6 @@ export default function SessionProvider({ children }) {
       });
     }, APP_CONFIG.SESSION.IDLE_TIMEOUT_MS - APP_CONFIG.SESSION.WARNING_BEFORE);
 
-    // Customer detached after IDLE_TIMEOUT_MS — agent stays logged in
     idleTimerRef.current = setTimeout(() => {
       toast.dismiss('idle-warning');
       tracker.endSession('idle_timeout');
@@ -104,8 +101,6 @@ export default function SessionProvider({ children }) {
     };
   }, [isCustomerActive, resetIdleTimer, clearIdleTimers]);
 
-  // ── Staff idle timer — runs whenever the agent is logged in, regardless
-  // of customer state. Full logout (not just a customer detach). ────────────
   const clearStaffIdleTimers = useCallback(() => {
     clearTimeout(staffIdleTimerRef.current);
     clearTimeout(staffWarningTimerRef.current);
@@ -117,7 +112,6 @@ export default function SessionProvider({ children }) {
     if (!isAuthenticated) return;
     clearStaffIdleTimers();
 
-    // Warning 30s before the staff idle timeout
     staffWarningTimerRef.current = setTimeout(() => {
       toast.warn('You will be logged out in 30 seconds due to inactivity.', {
         autoClose: 10000,
@@ -125,7 +119,6 @@ export default function SessionProvider({ children }) {
       });
     }, APP_CONFIG.SESSION.STAFF_IDLE_TIMEOUT_MS - APP_CONFIG.SESSION.WARNING_BEFORE);
 
-    // Full agent logout after STAFF_IDLE_TIMEOUT_MS
     staffIdleTimerRef.current = setTimeout(() => {
       toast.dismiss('staff-idle-warning');
       toast.info('Logged out due to inactivity.', { toastId: 'staff-idle-expired' });
@@ -182,7 +175,6 @@ export default function SessionProvider({ children }) {
     }
   }, [isAuthenticated]);
 
-  // ── Click tracking — runs from login onward (see note above) ──────────────
   useEffect(() => {
     if (!isAuthenticated) return;
 

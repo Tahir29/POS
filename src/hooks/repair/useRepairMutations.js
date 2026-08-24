@@ -1,5 +1,3 @@
-// src/hooks/repair/useRepairMutations.js
-//
 // Mutation hooks for the 3-stage repair workflow.
 // Mirrors useTransactionMutations.js — same Create → Post pattern, except
 // RepairInvoice also gets a receipt step (like Invoice/InvoiceReceipt).
@@ -67,8 +65,6 @@ export function usePostRepairOrder({ onSuccess } = {}) {
   });
 }
 
-// ─── REPAIR IN ────────────────────────────────────────────────────────────────
-
 export function useCreateRepairIn({ onSuccess } = {}) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -119,8 +115,6 @@ export function useCancelRepairIn({ onSuccess } = {}) {
   });
 }
 
-// ─── REPAIR OUT ───────────────────────────────────────────────────────────────
-
 export function useCreateRepairOut({ onSuccess } = {}) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -154,8 +148,6 @@ export function usePostRepairOut({ onSuccess } = {}) {
     },
   });
 }
-
-// ─── REPAIR INVOICE ───────────────────────────────────────────────────────────
 
 export function useCreateRepairInvoice({ onSuccess } = {}) {
   const queryClient = useQueryClient();

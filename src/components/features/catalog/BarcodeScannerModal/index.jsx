@@ -1,7 +1,5 @@
 'use client';
 
-// src/components/features/catalog/BarcodeScannerModal/index.jsx
-//
 // Camera-based barcode scanner using @zxing/browser.
 // Works with:
 //   - Tablet/phone back camera (default)
@@ -28,11 +26,11 @@ import { X, RefreshCw, Camera } from 'lucide-react';
 export default function BarcodeScannerModal({ isOpen, onDetected, onClose }) {
   const videoRef      = useRef(null);
   const readerRef     = useRef(null);
-  const controlsRef   = useRef(null);   // ZXing stream controls (for stopping)
+  const controlsRef   = useRef(null);
 
-  const [cameras,       setCameras]       = useState([]);   // available camera devices
-  const [cameraIndex,   setCameraIndex]   = useState(0);    // which camera is active
-  const [error,         setError]         = useState(null); // permission or device error
+  const [cameras,       setCameras]       = useState([]);
+  const [cameraIndex,   setCameraIndex]   = useState(0);
+  const [error,         setError]         = useState(null);
   const [scanning,      setScanning]      = useState(false);
   // Debounce bookkeeping only — never rendered, so a ref, not state. It used
   // to be useState, with onDetected(code) called from INSIDE the setter's
@@ -48,7 +46,6 @@ export default function BarcodeScannerModal({ isOpen, onDetected, onClose }) {
   // inside an ordinary callback, not a computation React is mid-render on.
   const lastScannedRef = useRef(null);
 
-  // ── Stop any active stream ─────────────────────────────────────────────────
   const stopStream = useCallback(() => {
     try {
       controlsRef.current?.stop();
@@ -57,7 +54,6 @@ export default function BarcodeScannerModal({ isOpen, onDetected, onClose }) {
     setScanning(false);
   }, []);
 
-  // ── Start scanning on a specific camera ───────────────────────────────────
   const startScanning = useCallback(async (deviceId) => {
     if (!videoRef.current) return;
     stopStream();
@@ -75,7 +71,6 @@ export default function BarcodeScannerModal({ isOpen, onDetected, onClose }) {
             // Debounce — ignore same code within 2s to prevent double-fire
             const prev = lastScannedRef.current;
             if (prev?.code === code && Date.now() - prev.ts < 2000) {
-              // duplicate within the debounce window — ignore
             } else {
               lastScannedRef.current = { code, ts: Date.now() };
               onDetected(code);
@@ -100,7 +95,6 @@ export default function BarcodeScannerModal({ isOpen, onDetected, onClose }) {
     }
   }, [stopStream, onDetected]);
 
-  // ── Initialise reader + enumerate cameras on open ──────────────────────────
   useEffect(() => {
     if (!isOpen) return;
 
@@ -121,7 +115,6 @@ export default function BarcodeScannerModal({ isOpen, onDetected, onClose }) {
 
         setCameras(devices);
 
-        // Prefer back camera — look for "back", "rear", "environment" in label
         const backIndex = devices.findIndex((d) =>
           /back|rear|environment/i.test(d.label)
         );
@@ -144,7 +137,6 @@ export default function BarcodeScannerModal({ isOpen, onDetected, onClose }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
-  // ── Switch camera ──────────────────────────────────────────────────────────
   const handleFlipCamera = useCallback(async () => {
     if (cameras.length <= 1) return;
     const nextIndex = (cameraIndex + 1) % cameras.length;
@@ -152,7 +144,6 @@ export default function BarcodeScannerModal({ isOpen, onDetected, onClose }) {
     await startScanning(cameras[nextIndex].deviceId);
   }, [cameras, cameraIndex, startScanning]);
 
-  // ── Close ──────────────────────────────────────────────────────────────────
   const handleClose = useCallback(() => {
     stopStream();
     setError(null);
@@ -164,14 +155,12 @@ export default function BarcodeScannerModal({ isOpen, onDetected, onClose }) {
 
   return (
     <>
-      {/* Backdrop */}
       <div
         className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm"
         aria-hidden="true"
         onClick={handleClose}
       />
 
-      {/* Modal */}
       <div
         role="dialog"
         aria-modal="true"
@@ -180,7 +169,6 @@ export default function BarcodeScannerModal({ isOpen, onDetected, onClose }) {
       >
         <div className="rounded-2xl overflow-hidden bg-black shadow-2xl">
 
-          {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 bg-black/80">
             <div className="flex items-center gap-2 text-white">
               <Camera size={16} aria-hidden="true" />
@@ -196,7 +184,6 @@ export default function BarcodeScannerModal({ isOpen, onDetected, onClose }) {
             </button>
           </div>
 
-          {/* Camera viewport */}
           <div className="relative w-full aspect-square bg-black">
             <video
               ref={videoRef}
@@ -206,22 +193,18 @@ export default function BarcodeScannerModal({ isOpen, onDetected, onClose }) {
               playsInline  // required on iOS
             />
 
-            {/* Scan frame overlay */}
             {scanning && !error && (
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                 <div className="relative w-52 h-52">
-                  {/* Corner brackets */}
                   <div className="absolute top-0 left-0 w-8 h-8 border-t-2 border-l-2 border-white rounded-tl-sm" />
                   <div className="absolute top-0 right-0 w-8 h-8 border-t-2 border-r-2 border-white rounded-tr-sm" />
                   <div className="absolute bottom-0 left-0 w-8 h-8 border-b-2 border-l-2 border-white rounded-bl-sm" />
                   <div className="absolute bottom-0 right-0 w-8 h-8 border-b-2 border-r-2 border-white rounded-br-sm" />
-                  {/* Scan line animation */}
                   <div className="absolute inset-x-0 top-0 h-0.5 bg-primary/80 animate-scan-line" />
                 </div>
               </div>
             )}
 
-            {/* Error state */}
             {error && (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/80 px-6 text-center">
                 <Camera size={32} className="text-white/40" />
@@ -236,7 +219,6 @@ export default function BarcodeScannerModal({ isOpen, onDetected, onClose }) {
               </div>
             )}
 
-            {/* Loading state */}
             {!scanning && !error && (
               <div className="absolute inset-0 flex items-center justify-center bg-black">
                 <div className="flex flex-col items-center gap-2 text-white/60">
@@ -247,7 +229,6 @@ export default function BarcodeScannerModal({ isOpen, onDetected, onClose }) {
             )}
           </div>
 
-          {/* Footer */}
           <div className="flex items-center justify-between px-4 py-3 bg-black/80">
             <p className="text-xs text-white/50">
               {cameras.length > 1

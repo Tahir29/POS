@@ -1,4 +1,3 @@
-// src/services/transactionHeaderService.js
 // Shared Order/Invoice Create header-field block, generalized for the other
 // POS transaction types (Return/Refund/CreditNote/Exchange/Buyback/URD
 // Purchase/Repair/SchemeReceipt) — all confirmed to share the same

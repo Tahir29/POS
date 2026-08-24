@@ -1,6 +1,5 @@
 'use client';
 
-// src/components/features/catalog/ProductSearchBar/index.jsx
 // Unified search + barcode scan input.
 //
 // Text search: debounced, fires onSearch(q) after DEBOUNCE_MS.
@@ -102,15 +101,12 @@ export default function ProductSearchBar({
         clearTimeout(debounceRef.current);
         onBarcodeDetected(val);
       }
-      // else: normal Enter — let debounce handle it
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inputVal, onBarcodeDetected]);
 
-  // Camera scan icon — opens modal
   const handleScanIconClick = () => setCameraOpen(true);
 
-    // Camera modal detected a code
   const handleCameraDetected = useCallback((code) => {
     setCameraOpen(false);
     setInputVal(code);
@@ -129,7 +125,6 @@ export default function ProductSearchBar({
       <div className="flex flex-col gap-2 w-full">
         <div className="relative flex-1">
 
-          {/* Search icon — left */}
           <span
             aria-hidden="true"
             className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
@@ -159,7 +154,6 @@ export default function ProductSearchBar({
             className="min-h-[44px] pl-9 pr-16"
           />
 
-          {/* Right side: clear OR barcode icon */}
           <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
             {showClear ? (
               <button
@@ -184,7 +178,6 @@ export default function ProductSearchBar({
           </div>
         </div>
 
-        {/* Recent searches */}
         {showRecents && (
           <div
             role="list"
@@ -207,7 +200,6 @@ export default function ProductSearchBar({
           </div>
         )}
       </div>
-      {/* Camera barcode scanner modal */}
       <BarcodeScannerModal
         isOpen={cameraOpen}
         onDetected={handleCameraDetected}

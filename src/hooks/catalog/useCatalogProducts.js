@@ -58,7 +58,16 @@ export function useCatalogProducts(filters = {}) {
       products: data.pages.flatMap((page) => page?.Entities ?? []),
     }),
 
-    staleTime: APP_CONFIG.STALE_TIME.CATALOG,
+    // 24h (2026-08-23, was 5 min) — this powers the default catalog grid
+    // AND every category filter combo (type_ids is part of the query key),
+    // so switching categories used to mean a fresh fetch for any combo not
+    // already warm in this session, and any reload lost all of it. Product
+    // rows here are master data (name, SKU, weight, karat, embedded image
+    // fields) — see lib/queryPersister.js, which persists this exact query
+    // to IndexedDB so a reload restores it instantly instead of re-fetching.
+    // Never used for price — see usePricingEpoch.js.
+    staleTime: APP_CONFIG.STALE_TIME.MASTER_DATA,
+    gcTime:    APP_CONFIG.STALE_TIME.MASTER_DATA,
     enabled:   !!storeId,
   });
 }

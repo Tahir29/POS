@@ -1,7 +1,5 @@
 'use client';
 
-// src/app/(pos)/estimation/page.jsx
-//
 // Estimation / Quotation — give a customer a price quote before they
 // commit to a purchase. Confirmed 2026-07-16 via real API data: line items
 // reference a genuine catalog item_id (same shape as Invoice line items),

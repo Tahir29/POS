@@ -1,4 +1,3 @@
-// src/services/catalogService.js
 // OrnaVerse Catalog + Items module.
 // All functions are pure HTTP wrappers — no business logic.
 //
@@ -26,8 +25,6 @@ import {
   priceItemAsSold,
 } from '@/services/pricingService';
 import { getStockPieces } from '@/services/inventoryService';
-
-// ─── ITEMS (Master catalogue) ─────────────────────────────────────────────────
 
 /**
  * Fetches featured items from the master items list.
@@ -86,8 +83,6 @@ export async function searchItems(params) {
   });
   return response.data;
 }
-
-// ─── CATALOG (Live store inventory) ───────────────────────────────────────────
 
 /**
  * Batch-fetches full item detail (including item_rate and item_components[]

@@ -1,4 +1,3 @@
-// src/hooks/schemes/useEnrollCustomer.js
 // Enroll the attached customer into a jewellery savings scheme.
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';

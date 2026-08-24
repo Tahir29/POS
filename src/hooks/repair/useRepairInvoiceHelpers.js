@@ -1,5 +1,3 @@
-// src/hooks/repair/useRepairInvoiceHelpers.js
-//
 // Available customer balances at REPAIR billing time — the repair-specific
 // counterpart of useInvoiceHelpers.js. Same 4 sources exist for repairs
 // (Advances/Scheme/CreditNote/Exchange — no OldGold or DailyCash equivalent

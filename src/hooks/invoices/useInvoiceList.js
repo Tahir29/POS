@@ -1,4 +1,3 @@
-// src/hooks/invoices/useInvoiceList.js
 // Paginated invoice list — /invoices page.
 // Maps to: POST Services/POS/Invoice/List
 //
@@ -65,7 +64,6 @@ export function useInvoiceList({ skip = 0 } = {}) {
     // Fixed: was QUERY_KEYS.ORDERS.INVOICE_LIST — moved to INVOICES.LIST
     queryKey: QUERY_KEYS.INVOICES.LIST({ skip, take, companyId: activeStoreId }),
     queryFn: async () => {
-      // getInvoiceList returns response.data (service unwraps)
       const data     = await getInvoiceList({ take, skip, company_id: activeStoreId });
       const entities = data?.Entities ?? [];
       return {

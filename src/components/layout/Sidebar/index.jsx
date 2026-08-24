@@ -11,8 +11,6 @@ import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
 import { NAV_ITEMS, BOTTOM_ITEMS } from '@/constants/navItems';
 
-// ── SidebarNavItem ────────────────────────────────────────────────────────────
-
 function SidebarNavItem({ item, collapsed, onNavigate }) {
   const pathname = usePathname();
   const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
@@ -33,7 +31,6 @@ function SidebarNavItem({ item, collapsed, onNavigate }) {
       aria-current={isActive ? 'page' : undefined}
     >
       <Icon size={20} aria-hidden="true" className="shrink-0" />
-      {/* {!collapsed && <span className="truncate">{item.label}</span>} */}
       {!collapsed && (
         <span className='flex items-center gap-2 truncate'>
           <span className='truncate'>{item.label}</span>
@@ -50,7 +47,6 @@ function SidebarNavItem({ item, collapsed, onNavigate }) {
       <Tooltip>
         <TooltipTrigger asChild>{linkContent}</TooltipTrigger>
         <TooltipContent side="right">
-          {/* <p>{item.label}</p> */}
           <p>{item.label}{item.comingSoon ? ' (Coming Soon)' : ''}</p>
         </TooltipContent>
       </Tooltip>
@@ -59,8 +55,6 @@ function SidebarNavItem({ item, collapsed, onNavigate }) {
 
   return linkContent;
 }
-
-// ── Sidebar ───────────────────────────────────────────────────────────────────
 
 export default function Sidebar() {
   const { sidebarOpen, toggle, close } = useSidebar();
@@ -73,7 +67,6 @@ export default function Sidebar() {
 
   return (
     <>
-      {/* Mobile-only backdrop — closes the drawer, invisible/inert at md+ */}
       {sidebarOpen && (
         <div
           className="fixed inset-0 z-40 bg-black/40 md:hidden"
@@ -92,7 +85,6 @@ export default function Sidebar() {
         )}
         aria-label="Main navigation"
       >
-        {/* ── Logo ─────────────────────────────────────────── */}
         <div
           className={cn(
             'flex items-center border-b border-sidebar-border min-h-[64px] px-4 gap-3',
@@ -107,7 +99,6 @@ export default function Sidebar() {
           </span>
         </div>
 
-        {/* ── Main Nav ─────────────────────────────────────── */}
         <nav
           className="flex flex-col gap-1 flex-1 overflow-y-auto p-2"
           aria-label="Primary"
@@ -119,7 +110,6 @@ export default function Sidebar() {
 
         <Separator className="bg-sidebar-border" />
 
-        {/* ── Bottom Nav ───────────────────────────────────── */}
         <nav className="hidden flex-col gap-1 p-2" aria-label="Secondary">
           {BOTTOM_ITEMS.map((item) => (
             <SidebarNavItem key={item.href} item={item} collapsed={collapsed} onNavigate={close} />

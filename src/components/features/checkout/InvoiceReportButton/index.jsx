@@ -1,7 +1,5 @@
 'use client';
 
-// src/components/features/checkout/InvoiceReportButton/index.jsx
-//
 // Print/preview an invoice using OrnaVerse's OWN report pipeline, mirroring
 // what their POS does after a sale (captured from their UAT counter
 // 2026-08-05):

@@ -1,4 +1,3 @@
-// src/hooks/products/useProductReviews.js
 // Infinite-scroll review list for the product detail page — same
 // useInfiniteQuery + page-number pattern as useCatalogProducts.
 

@@ -1,6 +1,5 @@
 'use client';
 
-// src/components/features/dashboard/RecentOrdersList/index.jsx
 // Compact recent-orders panel for the dashboard. Status badge is the
 // shared PaymentStatusBadge (src/components/shared/PaymentStatusBadge)
 // so status colors stay consistent with the /orders page.

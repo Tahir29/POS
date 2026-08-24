@@ -1,7 +1,5 @@
 'use client';
 
-// src/components/features/catalog/ProductCard/index.jsx
-//
 // SCHEMA: ProductCatalogRow doesn't return a usable price on this
 // environment. `price` here is filled in out-of-band by useLiveCatalogPrices
 // from Helpers/SetSalesItems — the same calculator checkout bills from, so
@@ -11,7 +9,11 @@
 // catalogService.js for why the stored item_rate is never used.
 //
 // Fields used: item_id, item_code, item_name, has_stock, weight, net_weight,
-// metal_id, karat_id, image/image_1, price.
+// metal_id, karat_code, metal_color_code/metal_color_name, image/image_1,
+// price. metal_color_code vs. metal_color_name: two different upstream
+// endpoints spell this differently (short code on catalog rows, full name
+// on Items/Retrieve and Style/Retrieve) — see lib/metalColor.js for why
+// this card accepts either.
 //
 // NOT rendered — confirmed 2026-07-15 there's no backing data for any of
 // these anywhere in the API (checked directly, not assumed):
@@ -20,8 +22,17 @@
 //   - Tags (e.g. "Fast Shipping") — no tags field exists at all
 //   - Similar products — the field exists (similar_items) but is empty on
 //     every product in this catalog
-//   - Wishlist, video icon, variant colour swatches — by product decision,
-//     not a data gap
+//   - Video icon, variant colour swatches — by product decision, not a
+//     data gap
+//
+// WISHLIST (added 2026-08-23) — top-right heart, filled/outline from
+// wishlistSlice (see hooks/products/useWishlist.js). Requires a customer
+// to be attached, same rule recentlyViewed's recording follows: there's no
+// party_id to key a wishlist entry to otherwise. See
+// lib/mongo/wishlist.js for the Mongo side. The button itself now lives in
+// components/features/products/WishlistButton.jsx (extracted same day) so
+// the product detail page can render the identical heart inline instead of
+// floating over an image.
 //
 // Star ratings (added 2026-07-19, Nector integration) — ONLY shown for
 // products with a style_id. Nector indexes reviews by Shopify product ID,
@@ -35,17 +46,18 @@
 import { useState }        from 'react';
 import Image               from 'next/image';
 import { useRouter }       from 'next/navigation';
-import { Gem } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 import { resolveImageSrc } from '@/lib/resolveImageSrc';
+import { resolveMetalColorName } from '@/lib/metalColor';
 import APP_CONFIG          from '@/constants/appConfig';
+import Logo                from '@/components/shared/Logo';
 import StarRating          from '@/components/shared/StarRating';
 import { useStyleExternalProductId } from '@/hooks/products/useStyleExternalProductId';
 import { useProductReviewSummary }   from '@/hooks/products/useProductReviewSummary';
+import WishlistButton       from '@/components/features/products/WishlistButton';
 import { Badge } from '@/components/ui/badge';
 import { EASE_PREMIUM, DURATION } from '@/lib/motion';
 
-// ── Metal type label + swatch color ───────────────────────────────────────────
 // Swatch colors are a presentation mapping (not fabricated data) — the
 // metal_id itself is real; this just gives each metal a recognizable dot.
 const METAL_ID_TO_NAME = Object.fromEntries(
@@ -59,7 +71,6 @@ function getMetalLabel(metal_id) {
   return metal_id ? METAL_ID_TO_NAME[metal_id] ?? null : null;
 }
 
-// ── Weight formatter ──────────────────────────────────────────────────────────
 function formatWeight(grams) {
   if (!grams && grams !== 0) return null;
   const n = Number(grams);
@@ -67,7 +78,6 @@ function formatWeight(grams) {
   return `${n.toFixed(3)} g`;
 }
 
-// ── Price formatter ────────────────────────────────────────────────────────────
 // Whole rupees, matching lib/priceUtils.formatPrice on the product page.
 // Live prices carry fractional paise (sub_total 226444.105), and
 // toLocaleString's default shows up to 3 decimals — "₹2,26,444.105" on a
@@ -77,25 +87,28 @@ function formatINR(value) {
   return `₹${Number(value).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
 }
 
-// ── No-image placeholder ──────────────────────────────────────────────────────
 // On-brand instead of a generic "broken image" glyph — a jewellery app's
 // missing-photo state shouldn't look like an error, since it isn't one
 // (most catalog rows genuinely have no photo asset yet, see header note).
+// Uses the same Logo component/asset as the sidebar mark (2026-08-23,
+// swapped from a generic lucide Gem icon) — a missing-photo state is exactly
+// the kind of empty space that's otherwise unbranded, so it doubles as a
+// small brand touch instead of a throwaway icon with no relation to Lucira.
 function NoImagePlaceholder() {
   return (
     <div className="flex h-full w-full flex-col items-center justify-center gap-1.5 bg-muted">
-      <Gem
-        size={30}
-        strokeWidth={1.25}
-        className="text-accent/50"
-        aria-hidden="true"
+      <Logo
+        variant="icon"
+        color="brown"
+        width={32}
+        height={32}
+        className="opacity-40"
       />
       <span className="text-[10px] text-muted-foreground/60 tracking-wide">No image</span>
     </div>
   );
 }
 
-// ── Stock Badge ───────────────────────────────────────────────────────────────
 // Flag/tag shape flush to the card's left edge (square on the left, rounded
 // on the right) rather than a floating pill — reads as a tag stuck to the
 // corner of the card instead of a badge hovering over the photo.
@@ -112,8 +125,6 @@ function StockBadge({ inStock }) {
   );
 }
 
-// ── ProductCard ───────────────────────────────────────────────────────────────
-
 export default function ProductCard({ product, showStockBadge = false }) {
   const router = useRouter();
   const [imgError, setImgError] = useState(false);
@@ -128,6 +139,8 @@ export default function ProductCard({ product, showStockBadge = false }) {
     net_weight,
     metal_id,
     karat_code,
+    metal_color_code,
+    metal_color_name,
     image,
     image_url,
     image_1,
@@ -136,6 +149,10 @@ export default function ProductCard({ product, showStockBadge = false }) {
     // opposed to having come back with no sellable price.
     is_pricing: isPricing = false,
     style_id,
+    // Only ever populated for a wishlisted item that was a CONFIRMED
+    // Customize selection (2026-08-24) — a plain catalog/recently-viewed
+    // row has no size concept, so this is undefined there, same as always.
+    item_size_name,
   } = product;
 
   const { externalProductId } = useStyleExternalProductId(style_id ?? null);
@@ -147,11 +164,24 @@ export default function ProductCard({ product, showStockBadge = false }) {
   // Purity/karat when the API gives us a real one — "NA" (mostly synthetic
   // stone rows) is dropped rather than shown as a literal "NA".
   const karatLabel   = karat_code && karat_code !== 'NA' ? karat_code : null;
-  // Metal name + karat together (e.g. "Silver 925"), falling back to
-  // whichever of the two is actually present.
-  const metalKaratLabel = [metalLabel, karatLabel].filter(Boolean).join(' ') || null;
+  const metalColorName = resolveMetalColorName({ metal_color_code, metal_color_name });
 
-  const infoLine = [metalKaratLabel, weightLabel].filter(Boolean).join(' · ') || null;
+  // Descriptive metal + karat label (fixed 2026-08-23 — was a terse
+  // "Gold 14", which reads like two unrelated numbers next to a metal name
+  // unless you already know "14" means karat; the weight next to it already
+  // spells out its unit ("3.080 g"), this should too). Gold specifically
+  // gets "{karat} Karat {Color} Gold" (e.g. "14 Karat Yellow Gold") when the
+  // color resolves, or "{karat} Karat Gold" when it doesn't (color code/name
+  // missing or unrecognized) — never a bare number. Other metals (Silver,
+  // Platinum, …) keep the plain "{Metal} {code}" form, e.g. "Silver 925":
+  // "Karat" isn't the right unit for a silver purity figure.
+  const metalKaratLabel = metalLabel === 'Gold' && karatLabel
+    ? `${karatLabel} Karat ${metalColorName ?? 'Gold'}`
+    : [metalLabel, karatLabel].filter(Boolean).join(' ') || null;
+
+  const sizeLabel = item_size_name && item_size_name !== 'NA' ? `Size ${item_size_name}` : null;
+
+  const infoLine = [metalKaratLabel, weightLabel, sizeLabel].filter(Boolean).join(' · ') || null;
 
   const rawSrc  = image ?? image_url ?? image_1 ?? null;
   const imageSrc = !imgError ? resolveImageSrc(rawSrc) : null;
@@ -161,12 +191,39 @@ export default function ProductCard({ product, showStockBadge = false }) {
     router.push(`/products/${item_id}`);
   }
 
+  // role="button" on a <div>, not a real <button> (2026-08-23) — the
+  // wishlist heart added below is its OWN real <button>, and a <button>
+  // cannot validly contain another <button>. It used to be one; the
+  // browser's HTML parser auto-closes the outer button the instant it
+  // meets the nested one, which silently detaches everything after that
+  // point from the card's actual click target — confirmed live, the heart
+  // toggle didn't register at all (aria-pressed never became true) and
+  // React logged the exact "cannot contain a nested button" hydration
+  // error. tabIndex + onKeyDown reproduce a real button's keyboard
+  // behavior (Enter/Space) since a plain div gets neither for free.
   return (
-    <motion.button
-      type="button"
+    <motion.div
+      role="button"
+      tabIndex={0}
       onClick={handleTap}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          handleTap();
+        }
+      }}
       className={[
-        'group relative flex flex-col overflow-hidden rounded-2xl border bg-card text-left',
+        // h-full/w-full (2026-08-22): harmless on the catalog grid — a grid
+        // item already stretches to its row's height by default, so this
+        // just makes explicit what was already true there — but load-
+        // bearing inside RecentlyViewedCarousel's Swiper: a slide (flex
+        // item) stretches to match its row's tallest slide by default, but
+        // an ORDINARY block child of that slide (this button, with no
+        // height of its own) does not inherit that stretch — it only ever
+        // sizes to its own content. Without this, cards whose name wraps to
+        // one line vs. two ended up visibly different heights in the
+        // carousel despite sitting in equal-height slides.
+        'group relative flex h-full w-full flex-col overflow-hidden rounded-2xl border bg-card text-left',
         'shadow-sm transition-all duration-standard ease-premium',
         'hover:shadow-md hover:border-accent/40',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
@@ -177,7 +234,6 @@ export default function ProductCard({ product, showStockBadge = false }) {
       whileTap={reduceMotion ? undefined : { scale: 0.98 }}
       transition={{ duration: DURATION.micro, ease: EASE_PREMIUM }}
     >
-      {/* ── Image ─────────────────────────────────────────── */}
       <div className="relative aspect-square w-full overflow-hidden bg-muted">
         {imageSrc ? (
           <Image
@@ -197,9 +253,10 @@ export default function ProductCard({ product, showStockBadge = false }) {
             <StockBadge inStock={inStock} />
           </div>
         )}
+
+        <WishlistButton product={product} reduceMotion={reduceMotion} />
       </div>
 
-      {/* ── Info ──────────────────────────────────────────── */}
       {/* Divider between the photo and details — a deliberate seam rather
           than the two areas just running together. */}
       <div className="flex flex-1 flex-col gap-1.5 border-t border-border p-3.5">
@@ -236,7 +293,6 @@ export default function ProductCard({ product, showStockBadge = false }) {
           </p>
         )}
 
-        {/* Name */}
         {item_name && item_name !== item_code && (
           <p className="line-clamp-2 text-sm font-semibold leading-snug text-foreground">
             {item_name}
@@ -244,6 +300,6 @@ export default function ProductCard({ product, showStockBadge = false }) {
         )}
 
       </div>
-    </motion.button>
+    </motion.div>
   );
 }

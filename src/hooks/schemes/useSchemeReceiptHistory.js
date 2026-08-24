@@ -1,4 +1,3 @@
-// src/hooks/schemes/useSchemeReceiptHistory.js
 // Payment (receipt) history for a single scheme enrollment.
 //
 // Confirmed live 2026-07-22 — Services/POS/SchemeReceipt/List returns
@@ -35,7 +34,6 @@ export function useSchemeReceiptHistory(enrollmentId) {
     queryFn: async () => {
       const data = await getSchemeReceipts({ scheme_enrollment_id: enrollmentId });
       const rows = data?.Entities ?? [];
-      // Most recent first.
       return rows
         .map(normalizeReceipt)
         .sort((a, b) => new Date(b.documentDate ?? 0) - new Date(a.documentDate ?? 0));

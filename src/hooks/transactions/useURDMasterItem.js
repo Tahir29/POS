@@ -1,4 +1,3 @@
-// src/hooks/transactions/useURDMasterItem.js
 // Fetches the generic "URD GOLD" master item's live data (current
 // item_rate) via Items/Retrieve — see appConfig.js URD_MASTER_ITEMS for why
 // this can't be found through search/list.

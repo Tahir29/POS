@@ -1,9 +1,5 @@
 'use client';
 
-// src/components/features/products/ProductStickyActionBar/index.jsx
-//
-// Fixed bottom bar: Total (unit price × quantity) + QuantitySelector + AddToCartButton.
-//
 // Quantity is intentionally NOT capped by physical stock — customers can
 // order more than what's on the shelf; anything beyond availableStock is
 // fulfilled as Made to Order. We surface that as a clear, non-blocking
@@ -55,7 +51,6 @@ export default function ProductStickyActionBar({
     <div className="sticky bottom-0 left-0 right-0 z-20 border-t border-border bg-card px-4 py-3 md:px-6">
       <div className="max-w-full mx-auto">
 
-        {/* Made-to-Order notice — non-blocking, quantity is never capped */}
         {madeToOrderQty > 0 && (
           <div className="flex items-center gap-1.5 mb-2 text-xs text-status-made-order">
             <PackagePlus size={13} className="shrink-0" aria-hidden="true" />
@@ -69,7 +64,6 @@ export default function ProductStickyActionBar({
 
         <div className="flex items-center justify-between gap-3">
 
-          {/* Total */}
           <div className="shrink-0">
             <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
               Total
@@ -81,7 +75,6 @@ export default function ProductStickyActionBar({
             </p>
           </div>
           <div className="flex items-center gap-3">
-            {/* Quantity — not capped by stock */}
             <QuantitySelector
               quantity={quantity}
               onChange={onQuantityChange}

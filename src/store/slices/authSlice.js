@@ -48,10 +48,8 @@ const authSlice = createSlice({
   },
 });
 
-// ── ACTIONS ──────────────────────────────────────────────────
 export const { setTokens, updateTokens, clearAuth } = authSlice.actions;
 
-// ── SELECTORS ────────────────────────────────────────────────
 export const selectAccessToken     = (state) => state.auth.accessToken;
 export const selectRefreshToken    = (state) => state.auth.refreshToken;
 export const selectTokenExpiry     = (state) => state.auth.tokenExpiry;

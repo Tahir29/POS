@@ -1,7 +1,5 @@
 'use client';
 
-// src/components/features/dashboard/TodaysActivityStrip/index.jsx
-//
 // Photo banner (dashboard redesign) — uses the dedicated Today's Activity
 // banner asset (separate from the auth screens' login-banner.png).
 //
@@ -49,7 +47,6 @@ export default function TodaysActivityStrip({
 
   return (
     <div className="relative overflow-hidden rounded-xl border border-border shadow-sm">
-      {/* Full-bleed photo background */}
       <Image
         src="/images/today-activity-banner.png"
         alt=""

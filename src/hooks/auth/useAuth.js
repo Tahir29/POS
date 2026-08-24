@@ -29,6 +29,9 @@ import {
 } from '@/store/slices/storeSlice';
 
 import { clearCart } from '@/store/slices/cartSlice';
+import { clearRecentlyViewed } from '@/store/slices/recentlyViewedSlice';
+import { clearWishlist } from '@/store/slices/wishlistSlice';
+import { persistor } from '@/store';
 import { clearAllCookies } from '@/lib/cookies';
 import queryClient from '@/lib/queryClient';
 
@@ -135,21 +138,67 @@ export function useAuth() {
       timestamp: new Date().toISOString(),
     });
 
-    tracker.clear();
-
     dispatch(clearAuth());
     dispatch(clearStore());
-    dispatch(clearCart());
+    // reason: 'session_reset' — see abandonedCartMiddleware's cart/clearCart
+    // case. This is the OPERATOR's session ending, not the customer's cart
+    // being resolved — a customer who still has an unpaid cart at logout
+    // should have it PRESERVED as abandoned, not deleted, which is what the
+    // default (no reason) clearCart() means everywhere else it's called.
+    dispatch(clearCart({ reason: 'session_reset' }));
+    // FIXED 2026-08-22: recentlyViewed isn't in persistConfig's whitelist
+    // (see that slice's own header comment), so it was never written to
+    // localStorage — but it's still a live, in-memory Redux slice, and
+    // nothing was clearing IT on logout. clearCart() resets cart via the
+    // 'cart/clearCart' action type, which recentlyViewedMiddleware doesn't
+    // listen for (only 'cart/attachCustomer'/'cart/detachCustomer' do) — so
+    // on a shared terminal, a new agent signing in right after — without a
+    // full page reload — could see the PREVIOUS customer's recently-viewed
+    // carousel until a fresh attach/detach cycle overwrote it. Dispatched
+    // directly here rather than teaching the middleware about 'clearCart',
+    // since logout is a one-off case, not something every clearCart caller
+    // should imply.
+    dispatch(clearRecentlyViewed());
+    // Same reasoning as clearRecentlyViewed — wishlist isn't in
+    // persistConfig's whitelist either (see wishlistSlice's header
+    // comment), and wishlistMiddleware only listens for
+    // cart/attachCustomer/detachCustomer, not cart/clearCart, so nothing
+    // else resets this slice on logout.
+    dispatch(clearWishlist());
+    // No separate dispatch(clearAbandonedCartState()) needed here, unlike
+    // recentlyViewed above — abandonedCartMiddleware's own cart/clearCart
+    // case (triggered by the 'session_reset' dispatch above) already resets
+    // this slice unconditionally, regardless of the reason. It only decided
+    // whether to SAVE or DELETE the Mongo record based on that reason; the
+    // local Redux reset happens either way.
     // Any cookie the backend may have set (e.g. a load-balancer/session
     // cookie) must not outlive the session it belongs to — previously only
     // the dev-only "clear site data" button did this, so a stale cookie
     // could persist across normal logins indefinitely.
     clearAllCookies();
-    // The three dispatches above wipe Redux (and its persisted localStorage
-    // mirror), but TanStack Query's cache is a separate, module-level
-    // singleton (see lib/queryClient.js) that nothing was ever clearing on
-    // logout. On a shared terminal, a different agent logging in right after
-    // — without a full page reload — would inherit every previously-cached
+    // The dispatches above wipe Redux (and, for the persisted slices, their
+    // localStorage mirror) by resetting each slice back to its initial
+    // state — but that still WRITES an (empty) object to localStorage
+    // rather than removing the entry outright. persistor.purge() (2026-08-22)
+    // is redux-persist's own API for actually deleting the persisted entry,
+    // which is what "cleared entirely" should mean on a full sign-out —
+    // belt-and-braces alongside the resets above, not a replacement for them
+    // (the resets still matter for the in-memory state other components are
+    // already subscribed to).
+    persistor.purge();
+    // FIXED 2026-08-22: this used to run BEFORE the dispatches above —
+    // dispatch(clearCart()) is caught by analyticsMiddleware's own
+    // 'cart/clearCart' case, which calls tracker.track(EVENTS.CART_CLEARED),
+    // and track() unconditionally re-writes sessionStorage's events key. So
+    // clearing the tracker first just meant a fresh "cart cleared" event got
+    // written right back into it a moment later — sessionStorage was never
+    // actually empty after logout, confirmed live. Now the last thing to
+    // touch it, after every dispatch that could trigger a tracked event.
+    tracker.clear();
+    // TanStack Query's cache is a separate, module-level singleton (see
+    // lib/queryClient.js) that nothing above was ever clearing on logout.
+    // On a shared terminal, a different agent logging in right after —
+    // without a full page reload — would inherit every previously-cached
     // query still sitting in memory: schemes list, payment modes, sales
     // persons, financial year/document config, catalog prices, etc. Several
     // of those aren't even keyed by store id, so they wouldn't self-correct

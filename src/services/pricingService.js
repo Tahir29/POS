@@ -1,4 +1,3 @@
-// src/services/pricingService.js
 // Live per-item price calculation via Services/Helpers/SetSalesItems.
 //
 // This is the endpoint OrnaVerse's own UI calls to price a variant — NOT

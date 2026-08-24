@@ -1,6 +1,3 @@
-// src/hooks/customer/useCustomerLoyalty.js
-// Customer loyalty points and history.
-//
 // CustomerRewardsRow fields: reward_id, points, amount, document_date,
 //   document_no, transaction_id, points_type, reason, party_id
 //
@@ -13,7 +10,6 @@ import { QUERY_KEYS } from '@/constants/queryKeys';
 import APP_CONFIG from '@/constants/appConfig';
 
 export function useCustomerLoyalty(customerId, { enabled = true } = {}) {
-  // Current points balance
   const pointsQuery = useQuery({
     queryKey: QUERY_KEYS.REWARDS.POINTS(customerId),
     queryFn:  async () => {
@@ -26,7 +22,6 @@ export function useCustomerLoyalty(customerId, { enabled = true } = {}) {
     staleTime: APP_CONFIG.STALE_TIME.CUSTOMER,
   });
 
-  // Points transaction history
   const historyQuery = useQuery({
     queryKey: QUERY_KEYS.REWARDS.LOYALTY_HISTORY(customerId),
     queryFn:  async () => {
@@ -41,7 +36,6 @@ export function useCustomerLoyalty(customerId, { enabled = true } = {}) {
     staleTime: APP_CONFIG.STALE_TIME.CUSTOMER,
   });
 
-  // Extract available points from the points response
   const pointsData     = pointsQuery.data;
   const availablePoints = pointsData?.points ?? pointsData?.Entities?.[0]?.points ?? 0;
 

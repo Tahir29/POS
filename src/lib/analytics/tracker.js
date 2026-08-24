@@ -97,8 +97,6 @@ const SESSION_KEY = 'lucira_session';
 const EVENTS_KEY  = 'lucira_events';
 const MAX_EVENTS  = 500;
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
 function safeGet(key) {
   try {
     const raw = sessionStorage.getItem(key);
@@ -109,6 +107,11 @@ function safeGet(key) {
 function safeSet(key, value) {
   try { sessionStorage.setItem(key, JSON.stringify(value)); }
   catch {} // sessionStorage full — silently drop
+}
+
+function safeRemove(key) {
+  try { sessionStorage.removeItem(key); }
+  catch {} // matches safeGet/safeSet's own silent-fail convention
 }
 
 // Last 4 digits only — e.g. "8149639991" → "******9991". Never send the
@@ -133,8 +136,6 @@ function logEvent(eventName, properties) {
     properties,
   );
 }
-
-// ── Tracker ───────────────────────────────────────────────────────────────────
 
 const tracker = {
 
@@ -282,31 +283,19 @@ const tracker = {
     }));
   },
 
-  /**
-   * Check if a customer session is currently active.
-   */
   isSessionActive() {
     const session = this.getSession();
     return !!session?.customerId;
   },
 
-  /**
-   * Get current session metadata.
-   */
   getSession() {
     return safeGet(SESSION_KEY);
   },
 
-  /**
-   * Get all customer events for the current session.
-   */
   getEvents() {
     return safeGet(EVENTS_KEY) ?? [];
   },
 
-  /**
-   * Get agent-level events.
-   */
   getAgentEvents() {
     return safeGet('lucira_agent_events') ?? [];
   },
@@ -333,6 +322,15 @@ const tracker = {
       // above, not before, so that event still lands on the outgoing
       // customer's profile.
       logoutWebEngageUser();
+      // FIXED 2026-08-22: this used to leave SESSION_KEY sitting in
+      // sessionStorage indefinitely — startSession() writes customerId/
+      // customerName/customerMobile into it, and nothing removed that on
+      // detach, only on a full agent logout (tracker.clear()). On a shared
+      // counter, a departing customer's name/mobile stayed readable in
+      // sessionStorage until the NEXT customer's startSession() overwrote
+      // it. Removed here so a detach actually ends the session's data, not
+      // just the tracked event.
+      safeRemove(SESSION_KEY);
     }
   },
 
@@ -346,9 +344,6 @@ const tracker = {
     return events;
   },
 
-  /**
-   * Clear everything — hard reset.
-   */
   clear() {
     try {
       sessionStorage.removeItem(SESSION_KEY);

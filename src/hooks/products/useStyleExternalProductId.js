@@ -1,5 +1,3 @@
-// src/hooks/products/useStyleExternalProductId.js
-//
 // Lightweight lookup of just external_product_id (Shopify) for a style,
 // used by the catalog grid to resolve which cards can show a Nector rating
 // — most products have no style_id at all (only variant/configurable

@@ -24,7 +24,7 @@ import { usePathname } from 'next/navigation';
 import { ArrowUp } from 'lucide-react';
 import { isScrollToTopEnabled } from '@/constants/scrollToTopConfig';
 
-const SHOW_AFTER_PX = 200; // minimum scroll distance before the button can appear
+const SHOW_AFTER_PX = 200;
 
 function isScrollable(el) {
   return !!el && el.scrollHeight > el.clientHeight + 1;

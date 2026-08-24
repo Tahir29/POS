@@ -1,6 +1,5 @@
 'use client';
 
-// src/components/features/products/ProductBreadcrumb/index.jsx
 // Breadcrumb navigation: Item Group → Category → Sub-Category → Product Name
 // Tapping Category or Sub-Category navigates back to /catalog with that filter active.
 // Back arrow navigates to previous page (preserves catalog URL filters).
@@ -39,7 +38,6 @@ export default function ProductBreadcrumb({ product }) {
 
   return (
     <div className="flex items-center gap-2">
-      {/* Back button */}
       <button
         onClick={() => router.back()}
         aria-label="Go back"
@@ -54,7 +52,6 @@ export default function ProductBreadcrumb({ product }) {
         <ArrowLeft size={18} />
       </button>
 
-      {/* Breadcrumb trail */}
       <nav aria-label="Breadcrumb" className="flex items-center gap-1 overflow-hidden">
         {crumbs.map((crumb, i) => (
           <span key={crumb.href} className="flex items-center gap-1 min-w-0">

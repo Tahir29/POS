@@ -8,14 +8,12 @@
 // the rest of the session. See store/storage.js.
 import storage from './storage';
 
-// ── ROOT PERSIST CONFIG ──────────────────────────────────────
 // Whitelist controls exactly which slices survive a page refresh.
 // ui slice is intentionally excluded — always resets on load.
 const persistConfig = {
   key:       'lucira-pos-root',
   storage,
   whitelist: ['auth', 'cart', 'store'],
-  // 'ui' is NOT in the whitelist — resets on every load
 };
 
 export default persistConfig;

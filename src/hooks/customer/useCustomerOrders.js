@@ -1,4 +1,3 @@
-// src/hooks/customer/useCustomerOrders.js
 // Customer order history — filtered by party_id from the full orders +
 // invoices list. Checkout now raises ONE of two documents per sale (see
 // checkout/page.jsx): an Invoice (54, in stock + paid in full) or an Order
@@ -82,7 +81,6 @@ export function useCustomerOrders({ customerId, enabled = true } = {}) {
     staleTime: APP_CONFIG.STALE_TIME.ORDERS,
   });
 
-  // Client-side filter by customerId
   const allOrders = query.data ?? [];
   const orders = customerId
     ? allOrders.filter((o) => o.customerId != null && String(o.customerId) === String(customerId))

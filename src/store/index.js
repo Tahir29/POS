@@ -10,20 +10,26 @@ import authReducer    from './slices/authSlice';
 import cartReducer    from './slices/cartSlice';
 import storeReducer   from './slices/storeSlice';
 import uiReducer      from './slices/uiSlice';
+import recentlyViewedReducer from './slices/recentlyViewedSlice';
+import abandonedCartReducer from './slices/abandonedCartSlice';
+import wishlistReducer from './slices/wishlistSlice';
 import { analyticsMiddleware } from './analyticsMiddleware';
+import { recentlyViewedMiddleware } from './recentlyViewedMiddleware';
+import { abandonedCartMiddleware } from './abandonedCartMiddleware';
+import { wishlistMiddleware } from './wishlistMiddleware';
 
-// ── COMBINE ALL REDUCERS ──────────────────────────────────────
 const rootReducer = combineReducers({
   auth:  authReducer,
   cart:  cartReducer,
   store: storeReducer,
   ui:    uiReducer,
+  recentlyViewed: recentlyViewedReducer,
+  abandonedCart: abandonedCartReducer,
+  wishlist: wishlistReducer,
 });
 
-// ── WRAP WITH PERSIST ─────────────────────────────────────────
 const persistedReducer = persistReducer(persistConfig, rootReducer);
 
-// ── CONFIGURE STORE ───────────────────────────────────────────
 export const store = configureStore({
   reducer: persistedReducer,
   middleware: (getDefaultMiddleware) =>
@@ -32,9 +38,8 @@ export const store = configureStore({
         // Required by Redux Persist — ignore its internal action types
         ignoredActions: [FLUSH, REHYDRATE, PAUSE, PERSIST, PURGE, REGISTER],
       },
-    }).concat(analyticsMiddleware),
+    }).concat(analyticsMiddleware, recentlyViewedMiddleware, abandonedCartMiddleware, wishlistMiddleware),
   devTools: process.env.NODE_ENV !== 'production',
 });
 
-// ── PERSISTOR ─────────────────────────────────────────────────
 export const persistor = persistStore(store);

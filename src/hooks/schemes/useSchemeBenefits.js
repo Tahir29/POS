@@ -1,4 +1,3 @@
-// src/hooks/schemes/useSchemeBenefits.js
 // On-demand maturity / foreclose / cancellation calculations for one
 // enrollment.
 //

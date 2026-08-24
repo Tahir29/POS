@@ -13,7 +13,6 @@
 
 const TOAST = {
 
-  // ── AUTHENTICATION ────────────────────────────────────────────────────────
   AUTH: {
     LOGIN_SUCCESS:   'Logged in successfully.',
     LOGIN_FAILED:    'Invalid username or password. Please try again.',
@@ -22,13 +21,11 @@ const TOAST = {
     REFRESH_FAILED:  'Session could not be renewed. Please log in again.',
   },
 
-  // ── STORE ─────────────────────────────────────────────────────────────────
   STORE: {
     SWITCHED:    (storeName) => `Switched to ${storeName}.`,
     LOAD_FAILED: 'Failed to load store list. Please try again.',
   },
 
-  // ── CART ──────────────────────────────────────────────────────────────────
   CART: {
     ITEM_ADDED:   (itemName) => `${itemName} added to cart.`,
     ITEM_REMOVED: (itemName) => `${itemName} removed from cart.`,
@@ -42,7 +39,6 @@ const TOAST = {
     LOADED_FROM_ORDER: (orderNo) => `Loaded ${orderNo} into a new invoice.`,
   },
 
-  // ── CUSTOMER ──────────────────────────────────────────────────────────────
   CUSTOMER: {
     FOUND:                    (name) => `Customer ${name} logged in.`,
     NOT_FOUND:                'No customer found with this mobile number.',
@@ -55,7 +51,6 @@ const TOAST = {
     SESSION_CHANGED_REDIRECT: 'Customer changed — returning to catalog to start a fresh order.',
   },
 
-  // ── ORDERS ────────────────────────────────────────────────────────────────
   ORDERS: {
     CREATED:      (orderNo) => `Order #${orderNo} placed successfully.`,
     CREATE_FAILED:'Failed to place order. Please try again.',
@@ -65,7 +60,6 @@ const TOAST = {
     LOAD_FAILED:  'Failed to load orders. Please try again.',
   },
 
-  // ── INVOICES ──────────────────────────────────────────────────────────────
   INVOICES: {
     CREATED:      (invoiceNo) => `Invoice #${invoiceNo} created successfully.`,
     CREATE_FAILED:'Failed to create invoice. Please try again.',
@@ -79,7 +73,6 @@ const TOAST = {
     RECEIPT_FAILED:'Failed to record payment. Please try again.',
   },
 
-  // ── RETURNS ───────────────────────────────────────────────────────────────
   RETURNS: {
     CREATED:      'Return created successfully.',
     CREATE_FAILED:'Failed to create return. Please try again.',
@@ -90,7 +83,6 @@ const TOAST = {
     LOAD_FAILED:  'Failed to load returns. Please try again.',
   },
 
-  // ── REFUNDS ───────────────────────────────────────────────────────────────
   REFUNDS: {
     CREATED:      'Refund recorded successfully.',
     CREATE_FAILED:'Failed to record refund. Please try again.',
@@ -99,7 +91,6 @@ const TOAST = {
     LOAD_FAILED:  'Failed to load refunds. Please try again.',
   },
 
-  // ── CREDIT NOTES ──────────────────────────────────────────────────────────
   CREDIT_NOTES: {
     CREATED:      'Credit note created successfully.',
     CREATE_FAILED:'Failed to create credit note. Please try again.',
@@ -110,7 +101,6 @@ const TOAST = {
     LOAD_FAILED:  'Failed to load credit notes. Please try again.',
   },
 
-  // ── EXCHANGE ──────────────────────────────────────────────────────────────
   EXCHANGE: {
     CREATED:      'Exchange created successfully.',
     CREATE_FAILED:'Failed to create exchange. Please try again.',
@@ -121,7 +111,6 @@ const TOAST = {
     LOAD_FAILED:  'Failed to load exchanges. Please try again.',
   },
 
-  // ── BUY BACK ──────────────────────────────────────────────────────────────
   BUYBACK: {
     CREATED:      'Buy back created successfully.',
     CREATE_FAILED:'Failed to create buy back. Please try again.',
@@ -143,7 +132,6 @@ const TOAST = {
     LOAD_FAILED:  'Failed to load old gold purchases. Please try again.',
   },
 
-  // ── REPAIR ────────────────────────────────────────────────────────────────
   REPAIR: {
     INTAKE_CREATED:      'Repair intake recorded successfully.',
     INTAKE_FAILED:       'Failed to record repair intake. Please try again.',
@@ -162,7 +150,6 @@ const TOAST = {
     LOAD_FAILED:         'Failed to load repair records. Please try again.',
   },
 
-  // ── ESTIMATION / QUOTATION ────────────────────────────────────────────────
   ESTIMATION: {
     CREATED:        'Quotation created successfully.',
     CREATE_FAILED:  'Failed to create quotation. Please try again.',
@@ -175,14 +162,12 @@ const TOAST = {
     LOAD_FAILED:    'Failed to load quotations. Please try again.',
   },
 
-  // ── DAILY CLOSING ─────────────────────────────────────────────────────────
   DAILY_CLOSING: {
     CREATED:      'Daily closing recorded successfully.',
     CREATE_FAILED:'Failed to record daily closing. Please try again.',
     LOAD_FAILED:  'Failed to load closing records. Please try again.',
   },
 
-  // ── GIFT VOUCHERS ─────────────────────────────────────────────────────────
   GIFT_VOUCHER: {
     APPLIED:      (code) => `Gift voucher ${code} applied successfully.`,
     APPLY_FAILED: 'Failed to apply gift voucher. Please try again.',
@@ -191,7 +176,6 @@ const TOAST = {
     REDEEM_FAILED:'Failed to redeem gift voucher. Please try again.',
   },
 
-  // ── SCHEMES ───────────────────────────────────────────────────────────────
   SCHEMES: {
     ENROLLED:        'Customer enrolled in scheme successfully.',
     ENROLL_FAILED:   'Failed to enroll customer. Please try again.',
@@ -202,24 +186,20 @@ const TOAST = {
     CLOSURE_FAILED:  'Failed to record the benefit amount. Please try again.',
   },
 
-  // ── METAL RATES ───────────────────────────────────────────────────────────
   METAL_RATES: {
     ADDED:       'Metal rates updated successfully.',
     ADD_FAILED:  'Failed to update metal rates. Please try again.',
     NOT_SET:     'Metal rates have not been set for today. Please update before billing.',
   },
 
-  // ── CUSTOMER HISTORY ──────────────────────────────────────────────────────
   CUSTOMER_HISTORY: {
     LOAD_FAILED: 'Failed to load customer history. Please try again.',
   },
 
-  // ── REWARDS / LOYALTY ─────────────────────────────────────────────────────
   REWARDS: {
     LOAD_FAILED: 'Failed to load loyalty points. Please try again.',
   },
 
-  // ── CATALOG ───────────────────────────────────────────────────────────────
   CATALOG: {
     LOAD_FAILED:  'Failed to load products. Please try again.',
     SEARCH_ERROR: 'Search failed. Please try again.',
@@ -228,7 +208,6 @@ const TOAST = {
     COPY_FAILED:  'Could not copy SKU. Please try again.',
   },
 
-  // ── GENERIC ───────────────────────────────────────────────────────────────
   GENERIC: {
     SOMETHING_WRONG: 'Something went wrong. Please try again.',
     NETWORK_ERROR:   'Network error. Please check your connection.',

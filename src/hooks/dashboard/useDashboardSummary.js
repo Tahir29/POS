@@ -1,5 +1,3 @@
-// src/hooks/dashboard/useDashboardSummary.js
-//
 // Aggregates real, already-fetched data for the redesigned dashboard:
 //   - Today's Revenue / Orders Today KPI cards (+ vs-yesterday trend)
 //   - A 7-day revenue sparkline (derived from the same order list — no
@@ -101,7 +99,6 @@ export function useDashboardSummary() {
     const todayPrefix     = toLocalPrefix(new Date());
     const yesterdayPrefix = daysAgoPrefix(1);
 
-    // ── Today vs yesterday — orders & revenue ────────────────────
     let todayRevenue = 0;
     let todayOrderCount = 0;
     let yesterdayRevenue = 0;
@@ -141,16 +138,13 @@ export function useDashboardSummary() {
     }
     const revenueSparkline = Array.from(dayBuckets.values());
 
-    // ── Recent Orders (top 4, most recent first) ────────────────
     const recentOrders = [...allOrders]
       .filter((o) => !!o.orderDate)
       .sort((a, b) => new Date(b.orderDate) - new Date(a.orderDate))
       .slice(0, 4);
 
-    // ── Pending Returns ──────────────────────────────────────────
     const pendingReturnsCount = returns.filter(isPendingReturn).length;
 
-    // ── Today's Activity ─────────────────────────────────────────
     const countToday = (list) =>
       list.filter((item) => item.documentDate && getLocalDatePrefix(item.documentDate) === todayPrefix).length;
 

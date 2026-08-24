@@ -1,6 +1,5 @@
 'use client';
 
-// src/components/features/checkout/CheckoutCustomerSummary/index.jsx
 // Read-only customer summary for the checkout screen. Reads
 // useCustomerSession (single source of truth, shared with
 // HeaderCustomerControl / CartCustomerTag). "Change" reopens

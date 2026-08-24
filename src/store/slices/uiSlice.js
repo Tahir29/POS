@@ -32,7 +32,6 @@ const uiSlice = createSlice({
   },
 });
 
-// ── ACTIONS ──────────────────────────────────────────────────
 export const {
   openSidebar,
   closeSidebar,
@@ -45,7 +44,6 @@ export const {
   setGlobalLoading,
 } = uiSlice.actions;
 
-// ── SELECTORS ────────────────────────────────────────────────
 export const selectSidebarOpen   = (state) => state.ui.sidebarOpen;
 export const selectActiveModal   = (state) => state.ui.activeModal;
 export const selectGlobalLoading = (state) => state.ui.globalLoading;

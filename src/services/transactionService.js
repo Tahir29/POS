@@ -1,5 +1,3 @@
-// src/services/transactionService.js
-//
 // Pure HTTP wrappers for all POS transaction types:
 //   Returns, Refunds, Credit Notes, Exchange, Buyback, URD Purchase
 //
@@ -26,8 +24,6 @@
 
 import axiosInstance from '@/lib/axios/axiosInstance';
 import API           from '@/constants/apiEndpoints';
-
-// ─── RETURNS ──────────────────────────────────────────────────────────────────
 
 /**
  * Paginated list of return transactions.
@@ -86,8 +82,6 @@ export async function cancelReturn(transactionId) {
   return response.data;
 }
 
-// ─── REFUNDS ──────────────────────────────────────────────────────────────────
-
 /**
  * Paginated list of refund transactions.
  * @param {{ company_id: number, take?: number, skip?: number }} params
@@ -128,8 +122,6 @@ export async function deleteRefund(transactionId) {
   });
   return response.data;
 }
-
-// ─── CREDIT NOTES ─────────────────────────────────────────────────────────────
 
 /**
  * Paginated list of credit note transactions.
@@ -188,8 +180,6 @@ export async function cancelCreditNote(transactionId) {
   return response.data;
 }
 
-// ─── EXCHANGE ─────────────────────────────────────────────────────────────────
-
 /**
  * Paginated list of exchange transactions.
  * @param {{ company_id: number, take?: number, skip?: number }} params
@@ -247,8 +237,6 @@ export async function cancelExchange(transactionId) {
   return response.data;
 }
 
-// ─── BUYBACK ──────────────────────────────────────────────────────────────────
-
 /**
  * Paginated list of buyback transactions.
  * @param {{ company_id: number, take?: number, skip?: number }} params
@@ -305,8 +293,6 @@ export async function cancelBuyback(transactionId) {
   });
   return response.data;
 }
-
-// ─── URD PURCHASE ─────────────────────────────────────────────────────────────
 
 /**
  * Paginated list of URD purchase transactions.

@@ -1,4 +1,3 @@
-// src/hooks/schemes/useSchemeReceipt.js
 // Record a monthly scheme instalment payment from a customer.
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';

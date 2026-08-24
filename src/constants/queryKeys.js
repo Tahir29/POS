@@ -13,18 +13,15 @@
 
 export const QUERY_KEYS = {
 
-  // ── STORES ───────────────────────────────────────────────────────────────
   STORES: {
     USER_STORES: () => ['stores', 'user-stores'],
   },
 
-  // ── HR ───────────────────────────────────────────────────────────────────
   HR: {
     EMPLOYEE_BY_USER: (userId) => ['hr', 'employee-by-user', userId],
     EMPLOYEES_BY_COMPANY: (companyId) => ['hr', 'employees-by-company', companyId],
   },
 
-  // ── SETTINGS ─────────────────────────────────────────────────────────────
   SETTINGS: {
     PAYMENT_MODES:        () => ['settings', 'payment-modes'],
     PAYMENT_MODES_REFUND: () => ['settings', 'payment-modes-refund'],
@@ -34,7 +31,6 @@ export const QUERY_KEYS = {
     REASON_CODES:         () => ['settings', 'reason-codes'],
   },
 
-  // ── EXCHANGE RATE ──────────────────────────────────────────────────────────
   EXCHANGE_RATE: {
     GET: (currencyId, companyId) => ['exchange-rate', currencyId, companyId],
   },
@@ -45,14 +41,12 @@ export const QUERY_KEYS = {
     DOCUMENT_NUMBERING: ()          => ['document-config', 'document-numbering'],
   },
 
-  // ── LOCATION ─────────────────────────────────────────────────────────────
   LOCATION: {
     COUNTRIES: ()            => ['location', 'countries'],
     STATES:    (countryId)   => ['location', 'states', countryId],
     CITIES:    (stateId)     => ['location', 'cities', stateId],
   },
 
-  // ── CATEGORIES ───────────────────────────────────────────────────────────
   CATEGORIES: {
     TYPES:       () => ['categories', 'types'],
     SUBTYPES:    () => ['categories', 'subtypes'],
@@ -109,25 +103,27 @@ export const QUERY_KEYS = {
     PRICE_EPOCH:           (storeId, canaryIds) => ['catalog', 'price-epoch', storeId, canaryIds],
   },
 
-  // ── INVENTORY ─────────────────────────────────────────────────────────────
   INVENTORY: {
     STOCK: (itemCode) => ['inventory', 'stock', itemCode],
   },
 
-  // ── CUSTOMERS ────────────────────────────────────────────────────────────
   CUSTOMERS: {
     LOOKUP:   (mobile)    => ['customers', 'lookup', mobile],
     RETRIEVE: (partyId)   => ['customers', 'detail', partyId],
     LIST:     (params)    => ['customers', 'list', params],
     ALL:      (companyId) => ['customers', 'all', companyId],
+    // Read-only fetch for the customer profile page's Wishlist tab —
+    // independent of wishlistSlice, which only ever describes whichever
+    // customer is currently ATTACHED to the POS session, not whichever
+    // customer's profile an operator happens to be viewing (those are
+    // often different people).
+    WISHLIST: (partyId) => ['customers', 'wishlist', partyId],
   },
 
-  // ── PARTY ADDRESS ─────────────────────────────────────────────────────────
   PARTY_ADDRESS: {
     LIST: (partyId) => ['party-address', 'list', partyId],
   },
 
-  // ── ORDERS ───────────────────────────────────────────────────────────────
   ORDERS: {
     LIST:            (params)     => ['orders', 'list', params],
     CUSTOMER_ORDERS: (customerId) => ['orders', 'customer', customerId],
@@ -140,7 +136,6 @@ export const QUERY_KEYS = {
     ALL_OPEN:          (partyId) => ['order-fulfillment', 'all-open', partyId],
   },
 
-  // ── INVOICES ─────────────────────────────────────────────────────────────
   INVOICES: {
     LIST:   (params)    => ['invoices', 'list', params],
     ALL:    (companyId) => ['invoices', 'all', companyId],
@@ -164,45 +159,38 @@ export const QUERY_KEYS = {
     EXCHANGE:    (partyId, companyId) => ['repair-invoice-helpers', 'exchange',    partyId, companyId],
   },
 
-  // ── RETURNS ──────────────────────────────────────────────────────────────
   RETURNS: {
     LIST:       (params)        => ['returns', 'list', params],
     DETAIL:     (transactionId) => ['returns', 'detail', transactionId],
     SOLD_ITEMS: (partyId)       => ['returns', 'sold-items', partyId],
   },
 
-  // ── REFUNDS ──────────────────────────────────────────────────────────────
   REFUNDS: {
     LIST:             (params)   => ['refunds', 'list', params],
     DETAIL:           (refundId) => ['refunds', 'detail', refundId],
     CUSTOMER_CREDITS: (partyId)  => ['refunds', 'customer-credits', partyId],
   },
 
-  // ── CREDIT NOTES ─────────────────────────────────────────────────────────
   CREDIT_NOTES: {
     LIST:   (params)          => ['credit-notes', 'list', params],
     DETAIL: (transactionId)   => ['credit-notes', 'detail', transactionId],
   },
 
-  // ── EXCHANGE ─────────────────────────────────────────────────────────────
   EXCHANGE: {
     LIST:   (params)          => ['exchange', 'list', params],
     DETAIL: (transactionId)   => ['exchange', 'detail', transactionId],
   },
 
-  // ── BUY BACK ─────────────────────────────────────────────────────────────
   BUYBACK: {
     LIST:   (params)          => ['buyback', 'list', params],
     DETAIL: (transactionId)   => ['buyback', 'detail', transactionId],
   },
 
-  // ── URD PURCHASE ─────────────────────────────────────────────────────────
   URD_PURCHASE: {
     LIST:   (params)          => ['urd-purchase', 'list', params],
     DETAIL: (transactionId)   => ['urd-purchase', 'detail', transactionId],
   },
 
-  // ── REPAIR ───────────────────────────────────────────────────────────────
   REPAIR: {
     // Workshop repair orders (document 75) — the source an intake is raised
     // against. Distinct from the three POS repair documents below.
@@ -217,13 +205,11 @@ export const QUERY_KEYS = {
     REPAIR_INVOICE_DETAIL:(transactionId)  => ['repair', 'repair-invoice-detail', transactionId],
   },
 
-  // ── ESTIMATION / QUOTATION ────────────────────────────────────────────────
   ESTIMATION: {
     LIST:   (params)          => ['estimation', 'list', params],
     DETAIL: (transactionId)   => ['estimation', 'detail', transactionId],
   },
 
-  // ── DAILY CLOSING ─────────────────────────────────────────────────────────
   DAILY_CLOSING: {
     LIST:   (companyId)  => ['daily-closing', 'list', companyId],
     DETAIL: (closingId)  => ['daily-closing', 'detail', closingId],
@@ -232,14 +218,12 @@ export const QUERY_KEYS = {
     RECONCILIATION: (companyId, dateString) => ['daily-closing', 'reconciliation', companyId, dateString],
   },
 
-  // ── CRM ──────────────────────────────────────────────────────────────────
   CRM: {
     PROMOTION:              (promoCode)   => ['crm', 'promotion', promoCode],
     PROMOTION_LIST:         ()            => ['crm', 'promotion-list'],
     GIFT_VOUCHER_CHECK:     (voucherCode) => ['crm', 'gift-voucher-check', voucherCode],
   },
 
-  // ── CUSTOMER HISTORY ──────────────────────────────────────────────────────
   CUSTOMER_HISTORY: {
     TRANSACTIONS:      (customerId) => ['customer-history', 'transactions',      customerId],
     ITEM_TRANSACTIONS: (customerId) => ['customer-history', 'item-transactions',  customerId],
@@ -247,18 +231,15 @@ export const QUERY_KEYS = {
     TOTAL_PROMOTIONS:  (customerId) => ['customer-history', 'total-promotions',   customerId],
   },
 
-  // ── CUSTOMER 360 ─────────────────────────────────────────────────────────
   CUSTOMER_360: {
     ALL: (customerId) => ['customer-360', 'all', customerId],
   },
 
-  // ── REWARDS / LOYALTY ─────────────────────────────────────────────────────
   REWARDS: {
     POINTS:          (customerId) => ['rewards', 'points',  customerId],
     LOYALTY_HISTORY: (customerId) => ['rewards', 'history', customerId],
   },
 
-  // ── SCHEMES ──────────────────────────────────────────────────────────────
   SCHEMES: {
     LIST:                ()               => ['schemes', 'list'],
     ENROLLMENTS:         (params)         => ['schemes', 'enrollments', params],
@@ -271,7 +252,6 @@ export const QUERY_KEYS = {
     CANCELLATION:        (enrollmentId)   => ['schemes', 'cancellation', enrollmentId],
   },
 
-  // ── SHOPIFY ──────────────────────────────────────────────────────────────
   // external_product_id lives on StyleRow (Style/Retrieve), NOT ProductCatalogRow
   SHOPIFY: {
     PRODUCT_IMAGES: (externalProductId) => ['shopify', 'product-images', externalProductId],

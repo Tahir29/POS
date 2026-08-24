@@ -1,4 +1,3 @@
-// src/hooks/transactions/useSoldItems.js
 // What a given customer has actually purchased — i.e. what they can return.
 // Feeds the Returns form's item picker; the selected rows go straight into
 // calculateReturnItems() (see returnItemsService.js for why the raw row

@@ -1,6 +1,5 @@
 'use client';
 
-// src/components/features/checkout/SalesPersonSelect/index.jsx
 // "Sales Person" picker for checkout — mirrors the same field on the
 // vendor's own POS Sale screen (confirmed 2026-07-16: they select an
 // employee name before placing the order). Reuses useSalesPersonOptions,

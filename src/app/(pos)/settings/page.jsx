@@ -1,4 +1,3 @@
-// src/app/(pos)/settings/page.jsx
 'use client';
 
 // Settings — was a single Metal Rate entry form pretending to be a whole
@@ -37,8 +36,6 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 
-// ─── Zod schema ───────────────────────────────────────────────────────────────
-
 const metalRateSchema = z.object({
   metal_type_id: z.coerce
     .number({ required_error: 'Select a metal type.' })
@@ -55,8 +52,7 @@ const metalRateSchema = z.object({
     .min(1, 'Effective date is required.'),
 });
 
-// ─── Metal type options (from APP_CONFIG — never hardcode IDs) ────────────────
-
+// Metal type options — sourced from APP_CONFIG, never hardcode IDs
 const METAL_OPTIONS = [
   { label: 'Gold',      value: APP_CONFIG.METAL_TYPES.GOLD },
   { label: 'Silver',    value: APP_CONFIG.METAL_TYPES.SILVER },
@@ -64,8 +60,6 @@ const METAL_OPTIONS = [
   { label: 'Palladium', value: APP_CONFIG.METAL_TYPES.PALLADIUM },
   { label: 'Alloy',     value: APP_CONFIG.METAL_TYPES.ALLOY },
 ];
-
-// ─── Shared row primitive ─────────────────────────────────────────────────────
 
 function SettingsRow({ title, subtitle, trailing }) {
   return (
@@ -82,8 +76,6 @@ function SettingsRow({ title, subtitle, trailing }) {
 function SettingsCard({ children }) {
   return <div className="rounded-xl border border-border bg-card overflow-hidden">{children}</div>;
 }
-
-// ─── Metal Rate Form ──────────────────────────────────────────────────────────
 
 function MetalRateForm() {
   const {
@@ -124,7 +116,6 @@ function MetalRateForm() {
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5">
 
-      {/* Metal Type */}
       <div className="flex flex-col gap-1.5">
         <label className="text-sm font-medium text-foreground">
           Metal Type <span className="text-destructive">*</span>
@@ -155,7 +146,6 @@ function MetalRateForm() {
         )}
       </div>
 
-      {/* Purchase Rate */}
       <div className="flex flex-col gap-1.5">
         <label className="text-sm font-medium text-foreground">
           Purchase Rate (₹) <span className="text-destructive">*</span>
@@ -173,7 +163,6 @@ function MetalRateForm() {
         )}
       </div>
 
-      {/* Sales Rate */}
       <div className="flex flex-col gap-1.5">
         <label className="text-sm font-medium text-foreground">
           Sales Rate (₹) <span className="text-destructive">*</span>
@@ -191,7 +180,6 @@ function MetalRateForm() {
         )}
       </div>
 
-      {/* Effective Date */}
       <div className="flex flex-col gap-1.5">
         <label className="text-sm font-medium text-foreground">
           Effective Date <span className="text-destructive">*</span>
@@ -207,7 +195,6 @@ function MetalRateForm() {
         )}
       </div>
 
-      {/* Submit */}
       <button
         type="submit"
         disabled={mutation.isPending}
@@ -219,8 +206,6 @@ function MetalRateForm() {
     </form>
   );
 }
-
-// ─── Payment Modes tab (read-only) ────────────────────────────────────────────
 
 function PaymentModesTab() {
   const { paymentModes, isLoading, isError, refetch } = usePaymentModes();
@@ -243,8 +228,6 @@ function PaymentModesTab() {
   );
 }
 
-// ─── Bank / POS Accounts tab (read-only) ──────────────────────────────────────
-
 function BankAccountsTab() {
   const { bankPosAccounts, isLoading, isError, refetch } = useBankPosAccounts();
 
@@ -260,8 +243,6 @@ function BankAccountsTab() {
     </SettingsCard>
   );
 }
-
-// ─── Taxes tab (read-only) ─────────────────────────────────────────────────────
 
 function TaxesTab() {
   const storeId = useSelector(selectActiveStoreId);
@@ -294,8 +275,6 @@ function TaxesTab() {
   );
 }
 
-// ─── Reason Codes tab (read-only) ──────────────────────────────────────────────
-
 function ReasonCodesTab() {
   const { reasonCodes, isLoading, isError, refetch } = useReasonCodes();
 
@@ -322,8 +301,6 @@ function ReasonCodesTab() {
     </SettingsCard>
   );
 }
-
-// ─── Page ─────────────────────────────────────────────────────────────────────
 
 const TABS = [
   { key: 'metal-rates', label: 'Metal Rates', icon: Coins },

@@ -1,6 +1,5 @@
 'use client';
 
-// src/components/features/checkout/CheckoutTrustStrip/index.jsx
 // Reassurance strip at the bottom of checkout — same purpose as
 // ProductTrustBadge on the product detail page (build confidence right
 // before the money moment), scaled down to a single compact bar since

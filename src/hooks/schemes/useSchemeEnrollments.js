@@ -1,4 +1,3 @@
-// src/hooks/schemes/useSchemeEnrollments.js
 // Fetch scheme enrollments — optionally filtered by customer.
 //
 // NOTE: SchemeEnrollment/List returns a BARE ARRAY on UAT (no Entities wrapper).

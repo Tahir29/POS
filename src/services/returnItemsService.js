@@ -1,4 +1,3 @@
-// src/services/returnItemsService.js
 // The two lookups a POS Return needs before it can be created.
 //
 // WHY THIS EXISTS — root cause of the long-running Return/Create 500s

@@ -1,4 +1,3 @@
-// src/hooks/schemes/useSalesPersonOptions.js
 // Employees at the active store, for the "Sales Person" picker on scheme
 // enrollment. sales_person_id on SchemeEnrollmentRow is confirmed required
 // (v1.json) — this mirrors the vendor's own Scheme Enrollment screen, which

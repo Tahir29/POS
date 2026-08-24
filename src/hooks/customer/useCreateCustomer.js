@@ -23,19 +23,16 @@ export function useCreateCustomer() {
 
   const mutation = useMutation({
     mutationFn: async (formValues) => {
-      // ── Step 1: Check if customer already exists by mobile ──────────────
       try {
         const lookupResponse = await getCustomer(formValues.mobile);
         const existing = lookupResponse?.data?.Entities?.[0] ?? null;
         if (existing) {
-          // Return existing customer — skip creation
           return { _existing: true, customer: normalizeCustomer(existing) };
         }
       } catch {
         // Lookup failed — proceed to create (fail-open, not fail-closed)
       }
 
-      // ── Step 2: Create new customer ──────────────────────────────────────
       const entity = buildCustomerCreatePayload({
         ...formValues,
         company_id: activeStoreId,
@@ -49,10 +46,8 @@ export function useCreateCustomer() {
       const customerMobile = formValues.mobile;
 
       if (result._existing) {
-        // Customer already exists — inform the user
         toast.info(`Customer ${customerName} already exists. Using existing record.`);
       } else {
-        // New customer created
         const customerId = result.response?.data?.EntityId;
         toast.success(TOAST.CUSTOMER.CREATED(customerName));
 

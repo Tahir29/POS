@@ -1,6 +1,5 @@
 'use client';
 
-// src/components/features/cart/CartCustomerTag/index.jsx
 // Displays the customer attached to the cart (if any) with a remove option.
 // Customer attach happens in Phase 9 (Checkout) / Phase 10 (Customers) flows —
 // this component only renders state and exposes the detach action.

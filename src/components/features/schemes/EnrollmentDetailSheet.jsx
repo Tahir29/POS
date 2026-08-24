@@ -1,7 +1,5 @@
 'use client';
 
-// src/components/features/schemes/EnrollmentDetailSheet.jsx
-//
 // Per-enrollment detail: month-by-month payment schedule + payment
 // (receipt) history. Both sourced from confirmed-working read endpoints
 // (SchemeMonthlyDetails/List, SchemeReceipt/List) that existed in
@@ -119,7 +117,6 @@ function EmptyRow({ icon: Icon, label }) {
   );
 }
 
-// ── Monthly schedule ──────────────────────────────────────────
 function ScheduleTab({ enrollmentId }) {
   const { data: months = [], isLoading, isError } = useSchemeMonthlyDetails(enrollmentId);
 
@@ -159,7 +156,6 @@ function ScheduleTab({ enrollmentId }) {
   );
 }
 
-// ── Payment history ───────────────────────────────────────────
 function PaymentsTab({ enrollmentId }) {
   const { data: receipts = [], isLoading, isError } = useSchemeReceiptHistory(enrollmentId);
 
@@ -190,7 +186,6 @@ function PaymentsTab({ enrollmentId }) {
   );
 }
 
-// ── Closure calculators ───────────────────────────────────────
 // Calculate a figure, then optionally record it on the enrollment — see
 // useCloseSchemeEnrollment / closeSchemeEnrollment's header for exactly
 // what "record" means (benifit_amount only; no dedicated close/mature/
@@ -320,7 +315,6 @@ function ClosureTab({ enrollmentId }) {
   );
 }
 
-// ── Sheet ──────────────────────────────────────────────────────
 export default function EnrollmentDetailSheet({ enrollment, isOpen, onClose }) {
   const [activeTab, setActiveTab] = useState('schedule');
 
@@ -330,7 +324,6 @@ export default function EnrollmentDetailSheet({ enrollment, isOpen, onClose }) {
     <BottomSheet isOpen={isOpen} onClose={onClose} title="Enrollment Details">
       <div className="flex flex-col gap-4">
 
-        {/* Summary */}
         <div className="rounded-xl border border-border bg-muted p-3 text-sm flex flex-col gap-1">
           <p className="font-medium text-foreground">{enrollment.schemeName}</p>
           <p className="text-muted-foreground">{enrollment.partyName} · {enrollment.mobile}</p>

@@ -31,8 +31,6 @@ export const NAV_ITEMS = [
   { label: 'Estimation',   href: '/estimation',   icon: FileSpreadsheet },
   { label: 'Customers',    href: '/customers',    icon: Users           },
   { label: 'Schemes',      href: '/schemes',      icon: BookOpen        },
-  // { label: 'Transfers',    href: '/transfers',    icon: ArrowLeftRight  },
-  // { label: 'Reservations', href: '/reservations', icon: Bookmark, comingSoon: true },
 ];
 
 export const BOTTOM_ITEMS = [

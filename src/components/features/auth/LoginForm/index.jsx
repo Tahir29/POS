@@ -1,6 +1,5 @@
 'use client';
 
-// src/components/features/auth/LoginForm/index.jsx
 // SEC-004: Login rate limiting added.
 // After 5 failed attempts the form locks for 5 minutes, preventing
 // brute-force attacks on staff credentials on the shared POS device.
@@ -35,9 +34,8 @@ import { cn }                    from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Label }  from '@/components/ui/label';
 
-// ── RATE LIMIT CONSTANTS ──────────────────────────────────────
 const MAX_ATTEMPTS    = 5;
-const LOCKOUT_MS      = 5 * 60 * 1000; // 5 minutes
+const LOCKOUT_MS      = 5 * 60 * 1000;
 
 // ── Large icon-prefixed input — local to this screen only ──────
 // Not folded into the shared <Input>: that component's h-9 size is the
@@ -78,10 +76,9 @@ export default function LoginForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // SEC-004 — rate limiting state
   const [failedAttempts, setFailedAttempts] = useState(0);
-  const [lockedUntil,    setLockedUntil]    = useState(null); // timestamp ms
-  const [lockCountdown,  setLockCountdown]  = useState(0);   // seconds remaining
+  const [lockedUntil,    setLockedUntil]    = useState(null);
+  const [lockCountdown,  setLockCountdown]  = useState(0);
 
   const {
     register,
@@ -92,12 +89,10 @@ export default function LoginForm() {
     defaultValues: { username: '', password: '' },
   });
 
-  // Redirect already-authenticated users away from the login screen
   useEffect(() => {
     if (isAuthenticated) router.replace('/dashboard');
   }, [isAuthenticated, router]);
 
-  // Countdown ticker — updates every second while locked out
   useEffect(() => {
     if (!lockedUntil) return;
 
@@ -127,7 +122,6 @@ export default function LoginForm() {
     setIsSubmitting(true);
     try {
       await login(data.username, data.password);
-      // On success, reset the counter
       setFailedAttempts(0);
     } catch (err) {
       const nextAttempts = failedAttempts + 1;
@@ -148,7 +142,6 @@ export default function LoginForm() {
     }
   };
 
-  // Format mm:ss countdown
   const formatCountdown = (secs) => {
     const m = Math.floor(secs / 60).toString().padStart(2, '0');
     const s = (secs % 60).toString().padStart(2, '0');
@@ -159,7 +152,6 @@ export default function LoginForm() {
     <div className="flex min-h-screen bg-background">
       <div className="flex w-full overflow-hidden sm:shadow-lg">
 
-        {/* ── Left — brand photo panel ─────────────────────────────── */}
         <div className="relative hidden w-[42%] shrink-0 flex-col overflow-hidden bg-primary sm:flex">
           <Image
             src="/images/login-banner.png"
@@ -195,11 +187,9 @@ export default function LoginForm() {
           </div>
         </div>
 
-        {/* ── Right — sign-in panel ───────────────────────────────── */}
         <div className="flex flex-1 items-center justify-center bg-card px-6 py-10 sm:px-14 sm:py-12">
           <div className="w-full max-w-sm">
 
-            {/* Logo shown only when the photo panel is hidden (small screens) */}
             <div className="mb-8 flex justify-center sm:hidden">
               <Logo variant="full" width={130} height={42} priority />
             </div>
@@ -211,7 +201,6 @@ export default function LoginForm() {
               Sign in to continue
             </h2>
 
-            {/* SEC-004: Lockout banner */}
             {isLockedOut && (
               <div className="mb-5 flex items-center gap-3 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3">
                 <Lock size={16} className="shrink-0 text-destructive" aria-hidden="true" />
@@ -225,7 +214,6 @@ export default function LoginForm() {
             <form onSubmit={handleSubmit(onSubmit)} noValidate>
               <div className="space-y-5">
 
-                {/* Username */}
                 <div className="space-y-1.5">
                   <Label
                     htmlFor="username"
@@ -253,7 +241,6 @@ export default function LoginForm() {
                   )}
                 </div>
 
-                {/* Password */}
                 <div className="space-y-1.5">
                   <Label
                     htmlFor="password"
@@ -294,7 +281,6 @@ export default function LoginForm() {
                   )}
                 </div>
 
-                {/* Submit */}
                 <Button
                   type="submit"
                   disabled={isSubmitting || isLockedOut}
@@ -318,7 +304,6 @@ export default function LoginForm() {
                   )}
                 </Button>
 
-                {/* SEC-004: Attempt counter hint (only after first failure) */}
                 {failedAttempts > 0 && !isLockedOut && (
                   <p className="text-center text-xs text-muted-foreground">
                     {MAX_ATTEMPTS - failedAttempts} attempt{MAX_ATTEMPTS - failedAttempts === 1 ? '' : 's'} remaining before lockout

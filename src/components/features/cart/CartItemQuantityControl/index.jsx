@@ -1,6 +1,5 @@
 'use client';
 
-// src/components/features/cart/CartItemQuantityControl/index.jsx
 // +/- quantity stepper for a cart item.
 // Decrementing to 0 removes the item (handled by parent via useCart.updateQuantity).
 

@@ -1,7 +1,5 @@
 'use client';
 
-// src/app/(pos)/products/[itemId]/page.jsx
-//
 // Product detail screen — revamped layout (split panel, sticky ATC bar,
 // image zoom, trust/certification sections) while preserving every piece
 // of existing functionality not shown in the static mockup:
@@ -22,6 +20,7 @@ import { Suspense, useState, useEffect, useCallback, useMemo, useRef } from 'rea
 import { useParams } from 'next/navigation';
 import { useSelector } from 'react-redux';
 import { toast }     from 'react-toastify';
+import { useReducedMotion } from 'motion/react';
 
 import { useProductDetail }     from '@/hooks/products/useProductDetail';
 import { useStockByStores }     from '@/hooks/products/useStockByStores';
@@ -41,6 +40,10 @@ import CustomizeSheet        from '@/components/features/products/CustomizeSheet
 import ProductStickyActionBar from '@/components/features/products/ProductStickyActionBar';
 import ProductTrustSection   from '@/components/features/products/ProductTrustSection';
 import ProductReviewsList    from '@/components/features/products/ProductReviewsList';
+import RecentlyViewedCarousel from '@/components/features/products/RecentlyViewedCarousel';
+import WishlistButton         from '@/components/features/products/WishlistButton';
+import { useRecordProductView } from '@/hooks/products/useRecentlyViewed';
+import { deriveKaratCode } from '@/lib/karat';
 
 import TOAST      from '@/constants/toastMessages';
 import tracker from '@/lib/analytics/tracker';
@@ -87,6 +90,7 @@ function ProductDetailScreen() {
   const [customizeOpen, setCustomizeOpen] = useState(false);
   const [selectedVariant, setSelectedVariant] = useState(null);
   const [quantity, setQuantity] = useState(1);
+  const reduceMotion = useReducedMotion();
 
   // Cross-store stock for the confirmed variant when one is selected,
   // otherwise the base product. MTO variants have no real item_id to check
@@ -142,13 +146,6 @@ function ProductDetailScreen() {
   // avoids the gallery flashing a hard "no image" state before either has
   // had a chance to return data.
   const imagesLoading = variantsLoading || shopifyImagesLoading;
-
-  // Reset when navigating to a different product
-  // useEffect(() => {
-  //   setSelectedVariant(null);
-  //   setCustomizeOpen(false);
-  //   setQuantity(1);
-  // }, [itemId]);
 
   useEffect(() => {
     if (detailError) toast.error(TOAST.GENERIC.SOMETHING_WRONG);
@@ -289,8 +286,83 @@ function ProductDetailScreen() {
   // own internal sane default (99) inside ProductStickyActionBar.
   const madeToOrderQty = Math.max(0, quantity - availableStock);
 
-  // Show Customize button when product has a style_id
   const hasCustomization = !!product?.style_id;
+
+  // Records this view for RecentlyViewedCarousel — only actually does
+  // anything when a customer is attached (see the hook's own header). Must
+  // run before the loading/error early returns below since hooks can't be
+  // conditional; it already no-ops internally while `product` is still null.
+  // Passes the raw status, NOT stockStatus === 'in_stock' — that comparison
+  // collapses 'loading' (null), 'error', AND 'out_stock' all into the same
+  // false, and Items/Retrieve (product) reliably resolves before the
+  // separate GetStockByStores call (stockStatus) does. The hook needs to
+  // tell "genuinely out of stock" apart from "don't know yet" itself, or it
+  // records has_stock:false for products that are actually in stock — see
+  // useRecordProductView's own comment for the bug this caused live.
+  useRecordProductView(product, stockStatus);
+
+  // Wishlist heart — keyed to activeItem (selectedVariant ?? product), NOT
+  // always the base product the way useRecordProductView just above
+  // deliberately stays. That's intentional divergence, not an
+  // inconsistency: "recently viewed" is about which PAGE you were on, but
+  // a wishlist is the customer saying "I want THIS one" — if they picked
+  // 18KT White Gold, Size 7 in Customize and hit Confirm before tapping the
+  // heart, the wishlist entry must be that exact combination, not the
+  // page's original default. FIXED 2026-08-24 — this used to always read
+  // from `product`, silently discarding any confirmed customization the
+  // instant the heart was tapped.
+  //
+  // item_id is always safe to key on here, including the MTO pseudo-
+  // fallback: mtoFallback (built above) sets `item_id: product.item_id` —
+  // the base product's own real id — it only overrides karat/color/size, so
+  // activeItem.item_id is never a fake/missing id regardless of which
+  // branch produced it.
+  //
+  // Every OTHER field falls back to `product` because a real matched
+  // variant row (from Style/Retrieve) isn't guaranteed to carry every field
+  // ProductCard wants (e.g. image) — see useDesignVariants.js's own
+  // documented shape, which doesn't list one. The MTO fallback doesn't need
+  // this fallback (it already spread ...product for everything it didn't
+  // override), but it's harmless there since activeItem's own value simply
+  // wins first.
+  //
+  // has_stock mirrors stockStatus (the "currently active" status, in sync
+  // with customization) rather than baseStockStatus, matching what the
+  // in-stock banner/details block above already show for this exact page
+  // state.
+  const wishlistProduct = useMemo(() => {
+    if (!activeItem?.item_id) return null;
+    return {
+      item_id:    activeItem.item_id,
+      item_code:  activeItem.item_code  ?? product.item_code  ?? null,
+      item_name:  activeItem.item_name  ?? product.item_name  ?? null,
+      image:      activeItem.image      ?? product.image      ?? null,
+      image_url:  activeItem.image_url  ?? product.image_url  ?? null,
+      image_1:    activeItem.image_1    ?? product.image_1    ?? null,
+      metal_id:   activeItem.metal_id   ?? product.metal_id   ?? null,
+      // Items/Retrieve (and Style/Retrieve variants) have no karat_code
+      // field at all (unlike ProductCatalogRow) — only the human karat_name
+      // ("14KT"). Same conversion useRecordProductView uses above, or every
+      // item wishlisted from the PDP would carry a null karat_code and
+      // silently lose its "14 Karat …" label.
+      karat_code: deriveKaratCode(activeItem.karat_name ?? product.karat_name),
+      // Items/Retrieve only ever has the full color name, not the catalog
+      // list's short code — see lib/metalColor.js.
+      metal_color_code: activeItem.metal_color_code ?? product.metal_color_code ?? null,
+      metal_color_name: activeItem.metal_color_name ?? product.metal_color_name ?? null,
+      has_stock:  stockStatus === 'in_stock' ? true : stockStatus === 'out_stock' ? false : null,
+      net_weight: activeItem.net_weight ?? product.net_weight ?? null,
+      weight:     activeItem.weight     ?? product.weight     ?? null,
+      // style_id belongs to the base design, not any one variant — every
+      // variant of a style shares it, so there's no activeItem branch here.
+      style_id:   product.style_id ?? null,
+      // Size is ONLY ever a confirmed selection (selectedVariant), never
+      // the base product — a bare, uncustomized product has no size chosen
+      // yet, so this stays null until Customize is actually confirmed.
+      item_size_id:   selectedVariant?.item_size_id   ?? null,
+      item_size_name: selectedVariant?.item_size_name ?? null,
+    };
+  }, [activeItem, product, selectedVariant, stockStatus]);
 
   // ── Callbacks ─────────────────────────────────────────────────────────────
   const handleCustomizeConfirm = useCallback((variant) => {
@@ -311,38 +383,46 @@ function ProductDetailScreen() {
 
         <div className="flex flex-col xl:flex-row gap-6 md:gap-8">
 
-          {/* Left — Image gallery */}
           <div className="w-full xl:w-[45%] shrink-0">
             <ProductImageGallery product={activeItem} shopifyImages={shopifyImages} shopifyVideos={shopifyVideos} activeColorName={activeItem?.metal_color_name ?? null} isLoading={imagesLoading} stockStatus={stockStatus} />
           </div>
 
-          {/* Right — Info + actions */}
           <div className="flex flex-col gap-4 flex-1 min-w-0">
 
-            {/* SKU */}
-            {product.item_code && (
-              <div className="flex items-center gap-1.5">
-                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                  {product.item_code}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => handleCopySku(product.item_code)}
-                  aria-label={`Copy SKU ${product.item_code}`}
-                  title="Copy SKU"
-                  className="flex items-center justify-center w-5 h-5 shrink-0 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                >
-                  {skuCopied
-                    ? <Check size={12} className="text-status-in-stock" aria-hidden="true" />
-                    : <Copy size={12} aria-hidden="true" />}
-                </button>
-              </div>
-            )}
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex flex-col gap-4 min-w-0">
+                {product.item_code && (
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                      {product.item_code}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => handleCopySku(product.item_code)}
+                      aria-label={`Copy SKU ${product.item_code}`}
+                      title="Copy SKU"
+                      className="flex items-center justify-center w-5 h-5 shrink-0 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                    >
+                      {skuCopied
+                        ? <Check size={12} className="text-status-in-stock" aria-hidden="true" />
+                        : <Copy size={12} aria-hidden="true" />}
+                    </button>
+                  </div>
+                )}
 
-            {/* Product name */}
-            <h1 className="font-heading text-xl text-foreground leading-snug md:text-3xl">
-              {product.item_name ?? 'Product'}
-            </h1>
+                <h1 className="font-heading text-xl text-foreground leading-snug md:text-3xl">
+                  {product.item_name ?? 'Product'}
+                </h1>
+              </div>
+
+              {wishlistProduct && (
+                <WishlistButton
+                  product={wishlistProduct}
+                  reduceMotion={reduceMotion}
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border bg-card shadow-sm transition-colors hover:bg-secondary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                />
+              )}
+            </div>
 
             {/* Price. No strikethrough/"% OFF" pair: compare_price is another
                 stale master field, and showing a discount against a figure
@@ -377,7 +457,6 @@ function ProductDetailScreen() {
               </div>
             </div>
 
-            {/* In-stock-at-current-store banner */}
             {stockStatus === 'in_stock' && activeStoreName && (
               <div className="flex items-center gap-2.5 rounded-xl bg-status-in-stock/10 border border-status-in-stock/20 px-4 py-3">
                 <CheckCircle2 size={18} className="shrink-0 text-status-in-stock" aria-hidden="true" />
@@ -430,7 +509,6 @@ function ProductDetailScreen() {
               </div>
             )}
 
-            {/* Customize button — shown when design has variants */}
             {hasCustomization && (
               <button
                 type="button"
@@ -456,7 +534,6 @@ function ProductDetailScreen() {
               </button>
             )}
 
-            {/* Made-to-order hint for out of stock items */}
             {stockStatus === 'out_stock' && (
               <p className="text-sm text-primary">
                 This item is currently out of stock — can be ordered as Made to Order.
@@ -501,18 +578,17 @@ function ProductDetailScreen() {
 
         <ProductTrustSection />
 
-        {/* {attributes.length > 0 && (
-          <ProductAttributeList attributes={attributes} />
-        )} */}
-
         {/* Customer reviews — infinite scroll, bottom of page. Uses the
             same externalProductId already resolved above for Shopify
             images, so this adds zero extra OrnaVerse calls. */}
         <ProductReviewsList shopifyProductId={externalProductId} />
 
+        {/* Recently viewed — bottom of page, only ever populated for an
+            attached customer (see useRecordProductView above). */}
+        <RecentlyViewedCarousel excludeItemId={product.item_id} />
+
       </div>
 
-      {/* Sticky bottom action bar */}
       <ProductStickyActionBar
         unitPrice={numericUnitPrice}
         quantity={quantity}
@@ -526,7 +602,6 @@ function ProductDetailScreen() {
         primaryImage={primaryImage}
       />
 
-      {/* Customize sheet — fully retained, untouched logic */}
       <CustomizeSheet
         isOpen={customizeOpen}
         onClose={() => setCustomizeOpen(false)}
@@ -541,6 +616,8 @@ function ProductDetailScreen() {
         findVariant={findVariant}
         onConfirm={handleCustomizeConfirm}
         isLoading={variantsLoading}
+        activeStoreId={activeStoreId}
+        activeStoreName={activeStoreName}
       />
 
     </div>

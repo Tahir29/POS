@@ -1,5 +1,3 @@
-// src/hooks/dailyClosing/useCreateDailyClosing.js
-// Creates and finalises a daily closing entry.
 // No Post step — Create is terminal per API design.
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -24,7 +22,6 @@ export function useCreateDailyClosing() {
         cardSales:  variables?.card_sales,
         upiSales:   variables?.upi_sales,
       });
-      // Bust the closing list for this store
       queryClient.invalidateQueries({ queryKey: ['daily-closing'] });
     },
 

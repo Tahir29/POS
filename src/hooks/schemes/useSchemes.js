@@ -1,4 +1,3 @@
-// src/hooks/schemes/useSchemes.js
 import { useQuery } from '@tanstack/react-query';
 import { useSelector } from 'react-redux';
 import { selectIsAuthenticated } from '@/store/slices/authSlice';

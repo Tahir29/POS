@@ -1,6 +1,3 @@
-// src/hooks/customer/useCustomerSession.js
-// Wraps cart.customerId/customerName/customerMobile + attach/detach actions.
-//
 // Analytics for attach/detach is handled centrally by
 // src/store/analyticsMiddleware.js (keyed off the cart/attachCustomer and
 // cart/detachCustomer action types) rather than here — useCart.js dispatches

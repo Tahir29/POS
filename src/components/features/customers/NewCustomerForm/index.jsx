@@ -1,6 +1,5 @@
 'use client';
 
-// src/components/features/customers/NewCustomerForm/index.jsx
 // New customer creation with mobile existence check.
 // Uses cascading Country → State → City dropdowns from location master.
 
@@ -95,7 +94,6 @@ export default function NewCustomerForm({ defaultMobile = '', defaultName = '', 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
 
-      {/* Name */}
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="party_name">
           Full name <span className="text-destructive">*</span>
@@ -111,7 +109,6 @@ export default function NewCustomerForm({ defaultMobile = '', defaultName = '', 
         )}
       </div>
 
-      {/* Mobile */}
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="mobile">
           Mobile number <span className="text-destructive">*</span>
@@ -129,7 +126,6 @@ export default function NewCustomerForm({ defaultMobile = '', defaultName = '', 
         )}
       </div>
 
-      {/* Email */}
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="email">
           Email <span className="text-muted-foreground text-xs">(optional)</span>
@@ -146,7 +142,6 @@ export default function NewCustomerForm({ defaultMobile = '', defaultName = '', 
         )}
       </div>
 
-      {/* PAN */}
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="pan_no">
           PAN <span className="text-muted-foreground text-xs">(optional)</span>
@@ -163,7 +158,6 @@ export default function NewCustomerForm({ defaultMobile = '', defaultName = '', 
         )}
       </div>
 
-      {/* Birth date */}
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="birth_date">
           Date of birth <span className="text-muted-foreground text-xs">(optional)</span>
@@ -180,7 +174,6 @@ export default function NewCustomerForm({ defaultMobile = '', defaultName = '', 
         )}
       </div>
 
-      {/* Anniversary */}
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="anniversary">
           Anniversary <span className="text-muted-foreground text-xs">(optional)</span>
@@ -197,7 +190,6 @@ export default function NewCustomerForm({ defaultMobile = '', defaultName = '', 
         )}
       </div>
 
-      {/* Gender */}
       <div className="flex flex-col gap-1.5">
         <Label>
           Gender <span className="text-muted-foreground text-xs">(optional)</span>
@@ -225,7 +217,6 @@ export default function NewCustomerForm({ defaultMobile = '', defaultName = '', 
         />
       </div>
 
-      {/* Marital status */}
       <div className="flex flex-col gap-1.5">
         <Label>
           Marital status <span className="text-muted-foreground text-xs">(optional)</span>
@@ -253,7 +244,6 @@ export default function NewCustomerForm({ defaultMobile = '', defaultName = '', 
         />
       </div>
 
-      {/* Address */}
       <div className="flex flex-col gap-1.5">
         <Label>
           Address <span className="text-muted-foreground text-xs">(optional)</span>
@@ -270,7 +260,6 @@ export default function NewCustomerForm({ defaultMobile = '', defaultName = '', 
         />
       </div>
 
-      {/* Country */}
       <div className="flex flex-col gap-1.5">
         <Label>Country</Label>
         <LocationSelect
@@ -284,7 +273,6 @@ export default function NewCustomerForm({ defaultMobile = '', defaultName = '', 
         />
       </div>
 
-      {/* State */}
       <div className="flex flex-col gap-1.5">
         <Label>State</Label>
         <LocationSelect
@@ -300,7 +288,6 @@ export default function NewCustomerForm({ defaultMobile = '', defaultName = '', 
         />
       </div>
 
-      {/* City */}
       <div className="flex flex-col gap-1.5">
         <Label>City</Label>
         <LocationSelect
@@ -316,7 +303,6 @@ export default function NewCustomerForm({ defaultMobile = '', defaultName = '', 
         />
       </div>
 
-      {/* PIN Code */}
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="pin_code">
           PIN Code <span className="text-muted-foreground text-xs">(optional)</span>

@@ -1,4 +1,3 @@
-// src/components/features/catalog/CatalogSortDropdown/index.jsx
 // Sort control for the catalog page.
 // Always shows "Sort by: {current label}" — including the default —
 // since "Name A→Z" (the real default) is meaningful, unlike a placeholder.

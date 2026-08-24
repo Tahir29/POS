@@ -1,7 +1,5 @@
 'use client';
 
-// src/components/features/products/ProductSpecifications.jsx
-//
 // Card-based product specifications layout — light-grey boxes, 2 per row,
 // matching the reference design (2026-07-26 revamp). Empty sections hidden
 // entirely.
@@ -17,8 +15,6 @@ import { useState } from 'react';
 import Image from 'next/image';
 import { Info } from 'lucide-react';
 import BottomSheet from '@/components/shared/BottomSheet';
-
-// ── Value helpers ─────────────────────────────────────────────────────────────
 
 function val(v) {
   if (v === null || v === undefined || v === '') return null;
@@ -49,7 +45,6 @@ function formatDimension(value) {
   return `${num} mm`;
 }
 
-// ── Info sheet content ────────────────────────────────────────────────────────
 // Static/educational, not per-product — same convention as ProductTrustSection.
 // Add new keys here (matching a SpecCard's `title`) as content is supplied.
 
@@ -196,8 +191,6 @@ function SpecInfoSheetBody({ title }) {
   );
 }
 
-// ── Primitives ────────────────────────────────────────────────────────────────
-
 function SpecRow({ label, value }) {
   if (!value) return null;
   return (
@@ -243,9 +236,6 @@ function SpecCard({ icon, title, rows, onOpenInfo }) {
   );
 }
 
-// ── Icon images ────────────────────────────────────────────────────────────────
-// Each icon is a small <img> pointing at the hosted Shopify CDN asset.
-
 const ICON_URLS = {
   metal: 'https://cdn.shopify.com/s/files/1/0739/8516/3482/files/PDPIcons_metal.svg',
   dimension: 'https://cdn.shopify.com/s/files/1/0739/8516/3482/files/PDPIcons_dimension.svg',
@@ -264,22 +254,17 @@ const DimensionIcon = () => <SpecIcon src={ICON_URLS.dimension} alt="Dimension" 
 const DiamondIcon = () => <SpecIcon src={ICON_URLS.diamond} alt="Diamond" />;
 const TagIcon = () => <SpecIcon src={ICON_URLS.classification} alt="Classification" />;
 
-// ── ProductSpecifications ─────────────────────────────────────────────────────
-
 export default function ProductSpecifications({ product }) {
   const [infoTitle, setInfoTitle] = useState(null);
 
   if (!product) return null;
 
-  // ── Metal ─────────────────────────────────────────────────────────────────
   const metalPurity = val(product.karat_name)
     ?? (product.purity && product.purity !== 0 ? String(product.purity) : null);
   const metalColor  = val(product.metal_color_name);
   const metalType   = val(product.metal_name);
-  // const hallmark    = val(product.hallmark ?? product.hallmark_no);
   const netWeight   = formatWeight(product.net_weight);
 
-  // ── Dimension / Weight ────────────────────────────────────────────────────
   const height        = formatDimension(product.height);
   const width         = formatDimension(product.width);
   const depth         = formatDimension(product.depth);
@@ -289,19 +274,14 @@ export default function ProductSpecifications({ product }) {
   const diamondWeight = formatWeight(product.diamond_weight);
   const pointerCt     = formatCarats(product.pointer_weight);
 
-  // ── Diamond & Stone ───────────────────────────────────────────────────────
   const diamondPieces    = product.diamond_pieces      > 0 ? String(product.diamond_pieces)     : null;
   const diamondCarats    = formatCarats(product.diamond_weight);
-  // const diamondQuality   = val(product.diamond_quality);
-  // const diamondShape     = val(product.diamond_shape);
-  // const diamondCarats    = formatCarats(product.diamond_carat ?? product.diamond_weight);
   const stonePieces      = product.stone_pieces        > 0 ? String(product.stone_pieces)       : null;
   const colorStonePieces = product.color_stone_pieces  > 0 ? String(product.color_stone_pieces) : null;
   const colorStoneWeight = formatWeight(product.color_stone_weight);
   const otherPieces      = product.other_pieces        > 0 ? String(product.other_pieces)       : null;
   const otherWeight      = formatWeight(product.other_weight);
 
-  // ── Classification ────────────────────────────────────────────────────────
   const itemGroup   = val(product.item_group_name);
   const category    = val(product.type_name);
   const subCategory = val(product.sub_type_name);
@@ -324,7 +304,6 @@ export default function ProductSpecifications({ product }) {
             { label: 'Color',      value: metalColor },
             { label: 'Metal Type', value: metalType },
             { label: 'Net Wt',     value: netWeight },
-            // { label: 'Hallmark',   value: hallmark },
           ]}
         />
 
@@ -349,8 +328,6 @@ export default function ProductSpecifications({ product }) {
           title="Diamond"
           onOpenInfo={setInfoTitle}
           rows={[
-            // { label: 'Quality',             value: diamondQuality },
-            // { label: 'Shape',               value: diamondShape },
             { label: 'Quantity',            value: diamondPieces },
             { label: 'Carat',               value: diamondCarats },
             { label: 'Stone Pieces',        value: stonePieces },
@@ -382,7 +359,10 @@ export default function ProductSpecifications({ product }) {
       <BottomSheet
         isOpen={!!infoTitle}
         onClose={() => setInfoTitle(null)}
-        title={infoTitle?.toUpperCase()}
+        // BottomSheet now uppercases its own title (2026-08-23) — this used
+        // to do it manually here since this was the one sheet that needed
+        // it; passing the real-case string now so aria-label reads normally.
+        title={infoTitle}
       >
         <SpecInfoSheetBody title={infoTitle} />
       </BottomSheet>

@@ -1,5 +1,3 @@
-// src/hooks/transactions/useTransactionLists.js
-//
 // Paginated list hooks for all 6 POS transaction types.
 // All hooks follow the identical pattern:
 //   - useQuery with QUERY_KEYS.[TYPE].LIST(params)
@@ -94,10 +92,7 @@ function makeTransactionListHook({ queryKeyFn, fetchFn }) {
   };
 }
 
-// ─── Named hooks ──────────────────────────────────────────────────────────────
-
 /**
- * Paginated returns list.
  * @param {{ skip?: number, enabled?: boolean }} [options]
  */
 export const useReturns = makeTransactionListHook({
@@ -107,7 +102,6 @@ export const useReturns = makeTransactionListHook({
 });
 
 /**
- * Paginated refunds list.
  * @param {{ skip?: number, enabled?: boolean }} [options]
  */
 export const useRefunds = makeTransactionListHook({
@@ -117,7 +111,6 @@ export const useRefunds = makeTransactionListHook({
 });
 
 /**
- * Paginated credit notes list.
  * @param {{ skip?: number, enabled?: boolean }} [options]
  */
 export const useCreditNotes = makeTransactionListHook({
@@ -127,7 +120,6 @@ export const useCreditNotes = makeTransactionListHook({
 });
 
 /**
- * Paginated exchange list.
  * @param {{ skip?: number, enabled?: boolean }} [options]
  */
 export const useExchanges = makeTransactionListHook({
@@ -137,7 +129,6 @@ export const useExchanges = makeTransactionListHook({
 });
 
 /**
- * Paginated buyback list.
  * @param {{ skip?: number, enabled?: boolean }} [options]
  */
 export const useBuybacks = makeTransactionListHook({
@@ -147,7 +138,6 @@ export const useBuybacks = makeTransactionListHook({
 });
 
 /**
- * Paginated URD purchase list.
  * @param {{ skip?: number, enabled?: boolean }} [options]
  */
 export const useURDPurchases = makeTransactionListHook({

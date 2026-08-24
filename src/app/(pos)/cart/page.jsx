@@ -1,6 +1,5 @@
 'use client';
 
-// src/app/(pos)/cart/page.jsx
 // Standalone cart page. Reuses the same components as CartDrawer
 // (CartItemRow, CartEmptyState, CartSummary, CartCustomerTag,
 // AppliedPromoTag, ProceedToCheckoutButton) in a full-page layout.
@@ -43,11 +42,6 @@ export default function CartPage() {
       ) : (
         <>
           <div className="flex flex-col gap-2">
-            {/* <CartCustomerTag
-              customerName={customerName}
-              customerMobile={customerMobile}
-              onDetach={detachCustomer}
-            /> */}
             {appliedPromos.map((promo) => (
               <AppliedPromoTag
                 key={promo.promoCode}
@@ -73,7 +67,6 @@ export default function CartPage() {
             <CartSummary />
           </div>
 
-          {/* Sticky footer */}
           <div className="fixed bottom-0 left-0 right-0 border-t border-border bg-card p-4 sm:static sm:border-0 sm:bg-transparent sm:p-0">
             <div className="max-w-5xl mx-auto w-full">
               <ProceedToCheckoutButton />

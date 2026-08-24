@@ -1,6 +1,5 @@
 'use client';
 
-// src/components/features/customer/CustomerSessionSheet/index.jsx
 // BottomSheet-based sheet for the header Customer Session control.
 // Flow: lookup by mobile (exact match) OR name (filters the customer
 // directory, may return several) -> show found customer(s) (attach/detach)
@@ -39,7 +38,7 @@ const MOBILE_REGEX = /^\d{10}$/;
  */
 export default function CustomerSessionSheet({ isOpen, onClose }) {
   const [searchQuery, setSearchQuery] = useState(null);
-  const [nameResultSelection, setNameResultSelection] = useState(null); // chosen from a name-search list
+  const [nameResultSelection, setNameResultSelection] = useState(null);
   const [pendingAction, setPendingAction] = useState(null); // { type: 'attach' | 'detach', payload? }
 
   const session = useCustomerSession();
@@ -74,7 +73,6 @@ export default function CustomerSessionSheet({ isOpen, onClose }) {
   // exact mobile match, or whichever name-search result was tapped.
   const customer = isMobileSearch ? mobileMatch : nameResultSelection;
 
-  // Show a toast once per failed mobile lookup
   useEffect(() => {
     if (isError && isMobileSearch) {
       toast.error(TOAST.CUSTOMER.LOAD_FAILED);
@@ -91,7 +89,6 @@ export default function CustomerSessionSheet({ isOpen, onClose }) {
     }
   };
 
-  // Reset search state whenever the sheet closes, so reopening starts fresh
   const handleClose = () => {
     setSearchQuery(null);
     setNameResultSelection(null);
@@ -139,7 +136,6 @@ export default function CustomerSessionSheet({ isOpen, onClose }) {
     }
   };
 
-  // Called by NewCustomerForm after a new customer is created
   const handleNewCustomerCreated = (newCustomer) => {
     if (wouldSwitchCustomer(newCustomer.customerId)) {
       setPendingAction({ type: 'attach', payload: newCustomer, options: { silent: true } });
@@ -157,7 +153,6 @@ export default function CustomerSessionSheet({ isOpen, onClose }) {
     handleClose();
   };
 
-  // ── Confirm dialog resolution ──────────────────────────────
   const handleConfirmClear = () => {
     clearCart();
     if (pendingAction?.type === 'attach') {
@@ -194,7 +189,6 @@ export default function CustomerSessionSheet({ isOpen, onClose }) {
         title="Customer"
       >
         <div className="flex flex-col gap-4">
-          {/* Currently attached customer (session) */}
           {session.isAttached && !searchQuery && (
             <>
               <CustomerDisplayCard
@@ -225,10 +219,8 @@ export default function CustomerSessionSheet({ isOpen, onClose }) {
             </>
           )}
 
-          {/* Lookup input */}
           <CustomerLookupInput onSearch={handleSearch} isLoading={isLoading || isNameSearching} />
 
-          {/* Mobile search: found */}
           {isMobileSearch && customer && (
             <div className="flex flex-col gap-3">
               {walkInKnown && (
@@ -268,7 +260,6 @@ export default function CustomerSessionSheet({ isOpen, onClose }) {
             </div>
           )}
 
-          {/* Mobile search: not found anywhere -> create new */}
           {isMobileSearch && notFound && !walkIn.isLoading && !walkInKnown && (
             <div className="flex flex-col gap-3">
               <p className="text-sm text-muted-foreground">{TOAST.CUSTOMER.NOT_FOUND}</p>
@@ -280,7 +271,6 @@ export default function CustomerSessionSheet({ isOpen, onClose }) {
             </div>
           )}
 
-          {/* Name search: loading directory */}
           {isNameSearch && isNameSearching && (
             <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
               <Loader2 size={16} className="animate-spin" aria-hidden="true" />
@@ -288,7 +278,6 @@ export default function CustomerSessionSheet({ isOpen, onClose }) {
             </div>
           )}
 
-          {/* Name search: a result was tapped -> confirm + attach */}
           {isNameSearch && !isNameSearching && nameResultSelection && (
             <div className="flex flex-col gap-3">
               <button
@@ -317,7 +306,6 @@ export default function CustomerSessionSheet({ isOpen, onClose }) {
             </div>
           )}
 
-          {/* Name search: multiple candidates -> pick one */}
           {isNameSearch && !isNameSearching && !nameResultSelection && nameResults.length > 0 && (
             <div className="flex flex-col gap-2">
               <p className="text-xs text-muted-foreground">{nameResults.length} match{nameResults.length === 1 ? '' : 'es'}</p>
@@ -331,7 +319,6 @@ export default function CustomerSessionSheet({ isOpen, onClose }) {
             </div>
           )}
 
-          {/* Name search: no matches -> create new */}
           {isNameSearch && !isNameSearching && !nameResultSelection && nameResults.length === 0 && (
             <div className="flex flex-col gap-3">
               <p className="text-sm text-muted-foreground">No matching customers found.</p>

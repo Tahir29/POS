@@ -1,7 +1,5 @@
 'use client';
 
-// src/components/features/products/ProductReviewsList.jsx
-//
 // Customer reviews section for the bottom of the product detail page.
 //
 // Bounded on the page itself (2026-07-26 revamp) — a product with 100+

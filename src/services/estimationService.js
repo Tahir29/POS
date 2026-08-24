@@ -1,4 +1,3 @@
-// src/services/estimationService.js
 // POS Estimation / Quotation — price estimate before a purchase.
 // All functions are pure HTTP wrappers — no business logic.
 //

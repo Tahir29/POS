@@ -33,7 +33,6 @@ export function useCatalogFilters() {
   const pathname    = usePathname();
   const params      = useSearchParams();
 
-  // ── Read from URL ──────────────────────────────────────────────────────────
   const activeCategorySlug  = params.get('category')     ?? null;
   const searchQuery         = params.get('q')            ?? '';
   const sortBy              = params.get('sort')         ?? DEFAULT_SORT;
@@ -42,7 +41,6 @@ export function useCatalogFilters() {
     ? Number(params.get('store'))
     : null;
 
-  // ── Write helper ───────────────────────────────────────────────────────────
   const setParam = useCallback((updates) => {
     const next = new URLSearchParams(params.toString());
     Object.entries(updates).forEach(([key, val]) => {
@@ -55,7 +53,6 @@ export function useCatalogFilters() {
     router.replace(`${pathname}?${next.toString()}`, { scroll: false });
   }, [params, pathname, router]);
 
-  // ── Actions ────────────────────────────────────────────────────────────────
   const actions = useMemo(() => ({
     setSearch: (q) => setParam({ q: q || null }),
 

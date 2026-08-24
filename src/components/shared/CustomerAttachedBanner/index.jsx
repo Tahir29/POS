@@ -1,7 +1,5 @@
 'use client';
 
-// src/components/shared/CustomerAttachedBanner/index.jsx
-//
 // The "customer attached / not attached" banner shown at the top of every
 // transaction-family form (repair, estimation, returns, exchange, buyback,
 // urd-purchase, schemes/enroll, transactions) — was copy-pasted verbatim

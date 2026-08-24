@@ -1,6 +1,5 @@
 'use client';
 
-// src/components/features/checkout/PaymentAmountInput/index.jsx
 // Amount entry for a single selected payment mode (split payment support).
 
 import { Input } from '@/components/ui/input';

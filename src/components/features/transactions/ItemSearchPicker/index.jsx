@@ -1,6 +1,5 @@
 'use client';
 
-// src/components/features/transactions/ItemSearchPicker/index.jsx
 // SKU search picker for Exchange/Buyback line items — the item being handed
 // in by the customer isn't necessarily in this store's live stock, so this
 // searches the master item catalogue (useItemMasterSearch), not

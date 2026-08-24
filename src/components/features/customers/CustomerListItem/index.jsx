@@ -1,8 +1,5 @@
 'use client';
 
-// src/components/features/customers/CustomerListItem/index.jsx
-// A single row in the customer directory list. Tappable to open details.
-
 import { User, Phone, MapPin, Mail } from 'lucide-react';
 import ListItemCard from '@/components/shared/ListItemCard';
 
@@ -18,7 +15,6 @@ export default function CustomerListItem({ customer, onSelect }) {
 
   return (
     <ListItemCard onSelect={onSelect}>
-      {/* Row 1: Customer */}
       <div className="flex items-center justify-between gap-2">
         <span className="flex items-center gap-2 text-[13px] text-muted-foreground min-w-0">
           <User size={13} className="shrink-0 text-muted-foreground/70" aria-hidden="true" />
@@ -26,7 +22,6 @@ export default function CustomerListItem({ customer, onSelect }) {
         </span>
       </div>
 
-      {/* Row 2: Mobile */}
       {customerMobile && (
         <div className="flex items-center gap-2 text-[13px] text-muted-foreground">
           <Phone size={13} className="shrink-0 text-muted-foreground/70" aria-hidden="true" />
@@ -34,7 +29,6 @@ export default function CustomerListItem({ customer, onSelect }) {
         </div>
       )}
 
-      {/* Row 3: Email */}
       {customerEmail && (
         <div className="flex items-center gap-2 text-[13px] text-muted-foreground">
           <Mail size={13} className="shrink-0 text-muted-foreground/70" aria-hidden="true" />
@@ -42,7 +36,6 @@ export default function CustomerListItem({ customer, onSelect }) {
         </div>
       )}
 
-      {/* Row 4: Location */}
       {location && (
         <div className="flex items-center gap-2 text-[13px] text-muted-foreground">
           <MapPin size={12} aria-hidden="true" className="shrink-0 text-muted-foreground/70" />

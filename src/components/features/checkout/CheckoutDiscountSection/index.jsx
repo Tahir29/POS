@@ -1,6 +1,5 @@
 'use client';
 
-// src/components/features/checkout/CheckoutDiscountSection/index.jsx
 // Checkout section for promo code entry and applied discount display.
 //
 // Multiple promos can be applied at once — each gets its own badge with an

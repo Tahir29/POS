@@ -1,5 +1,3 @@
-// src/lib/priceUtils.js
-
 import APP_CONFIG from '@/constants/appConfig';
 
 /**

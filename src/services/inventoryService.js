@@ -1,4 +1,3 @@
-// src/services/inventoryService.js
 // Service functions for inventory and stock operations.
 
 import axiosInstance from '@/lib/axios/axiosInstance';
@@ -36,17 +35,14 @@ export const getStockByStores = (itemId) =>
  * branch (1992 rows for HO alone), so omitting it can hand back a piece
  * sitting in another store.
  *
- * @param {{ itemId: number, companyId: number, take?: number }} params
- * @returns {Promise<import('axios').AxiosResponse>} { Entities: StockJournalRow[] }
- */
-/**
- * Physical pieces on the shelf, one row per piece.
- *
  * Accepts either a single `itemId` or an `itemIds` array — the plural filter
  * is honoured server-side (verified on UAT 2026-08-05: querying two ids where
  * only one has stock returns just that one's rows, in either order). That is
  * what lets the catalog price a whole page of products against real pieces in
  * ONE call instead of one call per card.
+ *
+ * @param {{ itemId: number, companyId: number, take?: number }} params
+ * @returns {Promise<import('axios').AxiosResponse>} { Entities: StockJournalRow[] }
  */
 export const getStockPieces = ({ itemId, itemIds, companyId, take = 50 }) =>
   axiosInstance.post(API.INVENTORY.STOCK_JOURNAL_LIST, {

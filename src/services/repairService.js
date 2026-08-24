@@ -1,4 +1,3 @@
-// src/services/repairService.js
 // POS Repair workflow — full lifecycle management.
 // All functions are pure HTTP wrappers — no business logic.
 //
@@ -343,8 +342,6 @@ export function buildRepairInPayload({ order, lines, documentDate }) {
   };
 }
 
-// ─── REPAIR IN (Intake) ───────────────────────────────────────────────────────
-
 /**
  * Paginated list of repair intake records.
  * @param {{ take?: number, skip?: number, company_id?: number }} params
@@ -424,8 +421,6 @@ export async function cancelRepairIn(transactionId) {
   return response.data;
 }
 
-// ─── REPAIR OUT (To craftsman) ────────────────────────────────────────────────
-
 /**
  * Paginated list of repair-out records.
  * @param {{ take?: number, skip?: number, company_id?: number }} params
@@ -463,8 +458,6 @@ export async function postRepairOut(transactionId) {
   });
   return response.data;
 }
-
-// ─── REPAIR INVOICE (Return to customer + billing) ────────────────────────────
 
 /**
  * Paginated list of repair invoices.
@@ -527,8 +520,6 @@ export async function createRepairInvoiceReceipt(receiptEntity) {
   });
   return response.data;
 }
-
-// ─── REPAIR INVOICE HELPERS (available balances at billing) ───────────────────
 
 /**
  * Get customer's advance payments available for repair invoice.

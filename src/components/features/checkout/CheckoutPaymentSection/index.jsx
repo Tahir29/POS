@@ -1,6 +1,5 @@
 'use client';
 
-// src/components/features/checkout/CheckoutPaymentSection/index.jsx
 // Payment section at checkout — shows available customer balances first,
 // then standard payment mode selection with split payment support.
 //
@@ -33,8 +32,6 @@ import APP_CONFIG from '@/constants/appConfig';
 import tracker from '@/lib/analytics/tracker';
 import EVENTS from '@/lib/analytics/events';
 
-// ── Invoice Helper Balance Row — toggle switch style ─────────────────────────
-
 function HelperBalanceRow({ label, amount, modeCode, rows, isApplied, onToggle, isLoading }) {
   if (isLoading) return null;
   if (!amount || amount <= 0) return null;
@@ -62,7 +59,6 @@ function HelperBalanceRow({ label, amount, modeCode, rows, isApplied, onToggle, 
   );
 }
 
-// ── CheckoutPaymentSection ────────────────────────────────────────────────────
 /**
  * @param {{ onChange: Function, amountDue?: number, allowPartial?: boolean }} props
  *   amountDue — the live-priced total. Payment must be collected against
@@ -96,7 +92,6 @@ export default function CheckoutPaymentSection({ onChange, amountDue, allowParti
   // (e.g. two Return receipts both carry mode_code "Return").
   const [payments, setPayments] = useState([]);
 
-  // ── Statutory cash ceiling ────────────────────────────────────────────────
   // OrnaVerse rejects the sale with "Cannot accept Cash above 199999.00" once
   // a party's cash receipts for the day reach the limit (s.269ST). Two things
   // make that error unusable at the counter, both confirmed live 2026-08-05:
@@ -125,7 +120,6 @@ export default function CheckoutPaymentSection({ onChange, amountDue, allowParti
   // Advances, none of which touch a bank) don't.
   const requiresBank = (p) => !p.isHelper && p.modeCode !== 'Cash';
 
-  // ── Standard mode toggle ──────────────────────────────────────────────────
   const handleModeToggle = (modeId) => {
     setPayments((prev) => {
       const exists = prev.find((p) => p.modeId === modeId);
@@ -161,7 +155,6 @@ export default function CheckoutPaymentSection({ onChange, amountDue, allowParti
     });
   };
 
-  // ── Helper balance toggle ─────────────────────────────────────────────────
   // The amounts these toggles show are real (useInvoiceHelpers.js reads them
   // from POSReceiptsSelect/List, confirmed 2026-08-18 — see its header
   // comment). Applying one now references the actual source receipt(s) it
@@ -304,7 +297,6 @@ export default function CheckoutPaymentSection({ onChange, amountDue, allowParti
     <section className="flex flex-col gap-3 rounded-xl border border-border bg-card p-5 shadow-sm">
       <h2 className="text-sm font-bold text-foreground">Payment</h2>
 
-      {/* Invoice Helper Balances — only shown when customer attached + has balance */}
       {customerId && (
         <div className="flex flex-col gap-2">
           {helpers.isLoading && (
@@ -336,7 +328,6 @@ export default function CheckoutPaymentSection({ onChange, amountDue, allowParti
         </div>
       )}
 
-      {/* Divider if helpers are shown */}
       {hasVisibleHelpers && (
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <div className="h-px flex-1 bg-border" />
@@ -345,7 +336,6 @@ export default function CheckoutPaymentSection({ onChange, amountDue, allowParti
         </div>
       )}
 
-      {/* Standard payment modes */}
       <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Payment Method</p>
 
       {/* Cash ceiling — see the note beside cashHeadroom above. Stated before
@@ -379,7 +369,6 @@ export default function CheckoutPaymentSection({ onChange, amountDue, allowParti
         isError={modesError}
       />
 
-      {/* Amount inputs */}
       {payments.length > 0 && (
         <div className="flex flex-col gap-2 pt-2 border-t border-border">
           {payments.map((p) => (
@@ -411,7 +400,6 @@ export default function CheckoutPaymentSection({ onChange, amountDue, allowParti
             </div>
           ))}
 
-          {/* Balances applied / Collected / Paid in full summary */}
           <div className="flex flex-col gap-1 text-sm pt-2 border-t border-border">
             {balancesApplied > 0 && (
               <div className="flex items-center justify-between text-muted-foreground">

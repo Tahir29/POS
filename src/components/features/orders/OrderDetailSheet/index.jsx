@@ -1,7 +1,5 @@
 'use client';
 
-// src/components/features/orders/OrderDetailSheet/index.jsx
-
 import { useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
 
@@ -13,7 +11,6 @@ import { Button } from '@/components/ui/button';
 import { useCancelOrder } from '@/hooks/orders/useCancelOrder';
 import APP_CONFIG from '@/constants/appConfig';
 
-// ── Helpers ───────────────────────────────────────────────────
 function Row({ label, value, bold, border }) {
   if (value === null || value === undefined || value === '') return null;
   return (
@@ -36,7 +33,6 @@ const STATUS_LABELS = {
   due:     'Payment Due',
 };
 
-// ── Order content — all raw accesses use optional chaining ────
 function OrderContent({ raw, status }) {
   if (!raw) return null;
 
@@ -108,7 +104,6 @@ function OrderContent({ raw, status }) {
   );
 }
 
-// ── Cancel confirmation inline banner ─────────────────────────
 function CancelConfirmBanner({ onConfirm, onDismiss, isPending }) {
   return (
     <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 flex flex-col gap-3">
@@ -142,7 +137,6 @@ function CancelConfirmBanner({ onConfirm, onDismiss, isPending }) {
   );
 }
 
-// ── Main component ────────────────────────────────────────────
 export default function OrderDetailSheet({ order, isOpen, onClose }) {
   const raw = order?.raw ?? null;
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);

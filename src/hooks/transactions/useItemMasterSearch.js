@@ -1,4 +1,3 @@
-// src/hooks/transactions/useItemMasterSearch.js
 // SKU search across the master item catalogue (NOT stock-scoped) — used by
 // Exchange/Buyback item pickers, where the item being handed in by the
 // customer isn't necessarily in this store's live stock.

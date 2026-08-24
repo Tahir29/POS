@@ -1,7 +1,5 @@
 'use client';
 
-// src/components/features/products/CrossStoreStockPanel.jsx
-//
 // Collapsible panel showing stock availability across all stores.
 // Data source: useStockByStores (GetStockByStores endpoint).
 // Active store row is highlighted with "Current" badge.
@@ -21,7 +19,6 @@ import { deriveStockStatus } from '@/components/shared/StockStatusBadge';
 
 const selectActiveStoreId = (state) => state.store.activeStoreId;
 
-// ── Stock quantity pill ───────────────────────────────────────────────────────
 // Reuses StockStatusBadge's shared derivation instead of re-implementing the
 // same in-stock/out-of-stock logic locally. Binary only — no "low stock"
 // tier (removed 2026-08-13, see StockStatusBadge/index.jsx).
@@ -37,13 +34,20 @@ function StockQty({ qty }) {
   const label = status === 'out_stock' ? 'Out of Stock' : `${n} in stock`;
 
   return (
-    <span className={`text-xs font-semibold text-nowrap ${STATUS_TEXT_CLASSES[status]}`}>
+    // Dot + label (2026-08-24), same pattern as the always-visible in-stock
+    // indicator further up this page — a quick color glance instead of
+    // having to read the text to tell stock apart at a row scan.
+    <span className={`flex shrink-0 items-center gap-1.5 text-xs font-semibold text-nowrap ${STATUS_TEXT_CLASSES[status]}`}>
+      <span
+        className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+          status === 'out_stock' ? 'bg-status-error' : 'bg-status-in-stock'
+        }`}
+        aria-hidden="true"
+      />
       {label}
     </span>
   );
 }
-
-// ── CrossStoreStockPanel ──────────────────────────────────────────────────────
 
 /**
  * @param {{
@@ -60,28 +64,39 @@ export default function CrossStoreStockPanel({ storeStocks = [], isLoading, isEr
   const totalStores   = storeStocks.length;
 
   return (
+    // Redesigned 2026-08-24 — was flat text rows with no real hierarchy and
+    // a "Current" pill borrowed from status-made-order (amber), the SAME
+    // color this app uses everywhere else for "made to order" stock —
+    // reusing it here for an unrelated "this is the active store" label
+    // read as a stock warning that wasn't actually there. Current now uses
+    // accent (this app's actual "selection/highlight" color) instead, and
+    // every row gets a small icon avatar for visual weight, matching the
+    // header's own icon treatment rather than being plain text.
     <div className="rounded-xl border border-border overflow-hidden shadow-sm">
       <Accordion type="single" collapsible defaultValue="stock">
         <AccordionItem value="stock" className="border-0">
           <AccordionTrigger
-            className="rounded-none px-4 py-3 bg-card hover:bg-muted hover:no-underline focus-visible:ring-inset focus-visible:ring-ring"
+            className="rounded-none px-4 py-3.5 bg-card hover:bg-muted/60 hover:no-underline focus-visible:ring-inset focus-visible:ring-ring"
           >
-            <div className="flex items-center gap-2">
-              <Store size={16} className="text-accent shrink-0" aria-hidden="true" />
-              <span className="text-sm font-semibold text-foreground/80">
-                Stock Across Stores
+            <div className="flex items-center gap-3">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent/10 text-accent">
+                <Store size={16} aria-hidden="true" />
               </span>
-              {!isLoading && totalStores > 0 && (
-                <span className="text-xs text-muted-foreground">
-                  ({storesInStock}/{totalStores} in stock)
+              <div className="flex flex-col items-start gap-0.5">
+                <span className="text-sm font-semibold text-foreground">
+                  Stock Across Stores
                 </span>
-              )}
+                {!isLoading && totalStores > 0 && (
+                  <span className="rounded-full bg-status-in-stock/10 px-2 py-0.5 text-[11px] font-semibold text-status-in-stock">
+                    {storesInStock} of {totalStores} in stock
+                  </span>
+                )}
+              </div>
             </div>
           </AccordionTrigger>
 
           <AccordionContent className="border-t border-border p-0">
 
-            {/* Loading skeleton */}
             {isLoading && (
               <div className="flex flex-col divide-y divide-border">
                 {[0, 1, 2].map((i) => (
@@ -113,14 +128,12 @@ export default function CrossStoreStockPanel({ storeStocks = [], isLoading, isEr
               </div>
             )}
 
-            {/* Empty */}
             {!isLoading && !isError && storeStocks.length === 0 && (
               <p className="px-4 py-4 text-sm text-muted-foreground text-center">
                 No stock information available.
               </p>
             )}
 
-            {/* Store rows */}
             {!isLoading && !isError && storeStocks.length > 0 && (
               <div className="flex flex-col divide-y divide-border">
                 {storeStocks.map((store) => {
@@ -129,19 +142,28 @@ export default function CrossStoreStockPanel({ storeStocks = [], isLoading, isEr
                     <div
                       key={store.company_id}
                       className={`
-                        flex items-center justify-between px-4 py-3 gap-2
-                        ${isActive ? 'bg-status-made-order/10' : 'bg-card'}
+                        flex items-center justify-between gap-3 px-4 py-3
+                        ${isActive ? 'bg-accent/5' : 'bg-card'}
                       `}
                     >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="text-sm text-foreground/80 truncate">
-                          {store.companyname}
+                      <div className="flex min-w-0 items-center gap-2.5">
+                        <span
+                          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
+                            isActive ? 'bg-accent/15 text-accent' : 'bg-muted text-muted-foreground'
+                          }`}
+                        >
+                          <Store size={13} aria-hidden="true" />
                         </span>
-                        {isActive && (
-                          <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-status-made-order bg-status-made-order/10 px-1.5 py-0.5 rounded-full">
-                            Current
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span className="truncate text-sm font-medium text-foreground">
+                            {store.companyname}
                           </span>
-                        )}
+                          {isActive && (
+                            <span className="shrink-0 rounded-full bg-accent px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+                              Current
+                            </span>
+                          )}
+                        </div>
                       </div>
                       <StockQty qty={store.pieces} />
                     </div>

@@ -4,8 +4,6 @@ import { TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 
-// ── KPI CARD ──────────────────────────────────────────────────
-//
 // `accent` marks this as the ONE primary metric on the dashboard row
 // (Today's Revenue) that gets the terracotta treatment; every other
 // card stays neutral so the accent still reads as a single signal

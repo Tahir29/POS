@@ -1,17 +1,7 @@
 'use client';
 
-// src/components/features/products/CustomizeSheet.jsx
-//
 // Customize sheet — shown when user taps "Customize" on product detail.
 // Uses shared BottomSheet (bottom on mobile, side sheet on tablet).
-//
-// FIXES:
-//   1. Stock detection uses raw variants array — checks ALL matching variants.
-//   2. OOS variants selectable as "Made to Order" (amber dot).
-//   3. MTO fallback: when no exact variant exists but all options selected,
-//      builds a pseudo-variant from base product + selections.
-//   4. canConfirm allows OOS and MTO variants.
-//   5. State resets cleanly on sheet close.
 
 import { useState, useCallback, useMemo } from 'react';
 import { Store, Loader2 } from 'lucide-react';
@@ -20,7 +10,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useVariantPricing } from '@/hooks/products/useVariantPricing';
 import { formatPrice } from '@/lib/priceUtils';
 
-// ── Metal color gradient map ──────────────────────────────────────────────────
 const COLOR_GRADIENTS = {
   yellow: 'linear-gradient(147.45deg, #c59922 17.98%, #ead59e 48.14%, #c59922 83.84%)',
   rose:   'linear-gradient(154.36deg, #f2b5b5 10.36%, #f8dbdb 68.09%)',
@@ -35,8 +24,6 @@ function resolveGradient(name) {
   if (lc.includes('white'))  return COLOR_GRADIENTS.white;
   return COLOR_GRADIENTS.yellow;
 }
-
-// ── Loading skeleton ──────────────────────────────────────────────────────────
 
 function LoadingSkeleton() {
   return (
@@ -64,29 +51,22 @@ function LoadingSkeleton() {
 }
 
 // ── Stock status dot ──────────────────────────────────────────────────────────
-// Green = in stock, Amber = made to order (OOS), null = no dot
+// Green dot = in stock, no dot at all otherwise (2026-08-23) — matches
+// lucirajewelry.com's own customize UI, confirmed against a real screenshot:
+// the site never marks a Made to Order option with any dot, it just leaves
+// it plain and lets the absence speak for itself. This used to also render
+// an amber dot for made_to_order, which read as a second, competing signal
+// next to the green one instead of matching the brand's plainer treatment.
 
-function StockDot({ status, isSelected }) {
-  if (status === 'in_stock') {
-    return (
-      <span
-        aria-label="In stock"
-        className="absolute top-1.5 left-1.5 w-2 h-2 rounded-full bg-status-in-stock"
-      />
-    );
-  }
-  if (status === 'made_to_order') {
-    return (
-      <span
-        aria-label="Made to order"
-        className="absolute top-1.5 left-1.5 w-2 h-2 rounded-full bg-status-made-order"
-      />
-    );
-  }
-  return null;
+function StockDot({ status }) {
+  if (status !== 'in_stock') return null;
+  return (
+    <span
+      aria-label="In stock"
+      className="absolute top-1.5 left-1.5 w-2 h-2 rounded-full bg-status-in-stock"
+    />
+  );
 }
-
-// ── Metal colour card ─────────────────────────────────────────────────────────
 
 function MetalColorCard({ color, karat, isSelected, stockStatus, onClick }) {
   const gradient = resolveGradient(color.name);
@@ -106,7 +86,7 @@ function MetalColorCard({ color, karat, isSelected, stockStatus, onClick }) {
           : 'border-border bg-card hover:border-accent/60',
       ].join(' ')}
     >
-      <StockDot status={stockStatus} isSelected={isSelected} />
+      <StockDot status={stockStatus} />
 
       <span
         aria-hidden="true"
@@ -128,8 +108,6 @@ function MetalColorCard({ color, karat, isSelected, stockStatus, onClick }) {
   );
 }
 
-// ── Karat pill ────────────────────────────────────────────────────────────────
-
 function KaratPill({ karat, isSelected, onClick }) {
   return (
     <button
@@ -150,8 +128,6 @@ function KaratPill({ karat, isSelected, onClick }) {
   );
 }
 
-// ── Size chip ─────────────────────────────────────────────────────────────────
-
 function SizeChip({ size, isSelected, stockStatus, onClick }) {
   return (
     <button
@@ -169,13 +145,11 @@ function SizeChip({ size, isSelected, stockStatus, onClick }) {
           : 'bg-card border-border text-foreground hover:border-accent/60',
       ].join(' ')}
     >
-      <StockDot status={stockStatus} isSelected={isSelected} />
+      <StockDot status={stockStatus} />
       {size.name}
     </button>
   );
 }
-
-// ── Section label ─────────────────────────────────────────────────────────────
 
 function SectionLabel({ label, value }) {
   return (
@@ -192,26 +166,6 @@ function SectionLabel({ label, value }) {
   );
 }
 
-// ── Confirm button label ──────────────────────────────────────────────────────
-
-function buildConfirmLabel(variant, sizes, selectedSizeId) {
-  if (!variant) return 'Select options to continue';
-
-  const parts = [];
-  if (variant.karat_name       && variant.karat_name       !== 'NA') parts.push(variant.karat_name);
-  if (variant.metal_color_name && variant.metal_color_name !== 'NA') parts.push(variant.metal_color_name);
-
-  const sizeName = sizes.find((s) => s.id === selectedSizeId)?.name;
-  if (sizeName) parts.push(`Size ${sizeName}`);
-
-  const isMTO = variant._isMTO || (variant.pieces ?? 0) === 0;
-  const stockLabel = isMTO ? ' (Made to Order)' : '';
-  if (parts.length === 0) return 'Confirm';
-  return `Confirm — ${parts.join(' · ')}${stockLabel}`;
-}
-
-// ── CustomizeSheet ────────────────────────────────────────────────────────────
-
 export default function CustomizeSheet({
   isOpen,
   onClose,
@@ -226,6 +180,8 @@ export default function CustomizeSheet({
   findVariant,
   onConfirm,
   isLoading,
+  activeStoreId   = null,
+  activeStoreName = null,
 }) {
   const [selectedMetalColorId, setSelectedMetalColorId] = useState(null);
   const [selectedKaratId,      setSelectedKaratId]      = useState(null);
@@ -253,8 +209,6 @@ export default function CustomizeSheet({
     }
   }
 
-  // ── Variant matching ──────────────────────────────────────────────────────
-  // Try to find an exact variant first
   const exactVariant = findVariant
     ? findVariant(selectedMetalColorId, selectedKaratId, selectedSizeId)
     : null;
@@ -268,7 +222,6 @@ export default function CustomizeSheet({
   const sizeOk     = !hasSizes       || selectedSizeId       != null;
   const allSelected = metalOk && karatOk && sizeOk;
 
-  // ── MTO fallback ──────────────────────────────────────────────────────────
   // When no exact variant exists but user has selected all options,
   // build a pseudo-variant from base product + selections.
   // This enables Made-to-Order for any valid combination.
@@ -297,6 +250,15 @@ export default function CustomizeSheet({
   const matchedVariant = exactVariant ?? mtoFallback;
   const canConfirm     = allSelected && !!matchedVariant;
 
+  // Single source of truth for "does the ACTIVE store itself have this
+  // matched variant" — matchedVariant.pieces is already patched by
+  // useDesignVariants to the active store's own stock count, never a
+  // network-wide total, so this is the one condition the badge, the card
+  // background, and the store-list copy below all key off — no more each
+  // repeating `matchedVariant._isMTO || (matchedVariant.pieces ?? 0) === 0`
+  // (or its inverse) slightly differently in three places.
+  const matchedVariantInStockHere = !matchedVariant?._isMTO && (matchedVariant?.pieces ?? 0) > 0;
+
   // ── Live price for the matched variant ────────────────────────────────────
   // Only for a real exact-variant match — the MTO fallback is a pseudo-item
   // with no real item_components[] BOM, so there's nothing for
@@ -318,17 +280,29 @@ export default function CustomizeSheet({
   // a wrong one.
   const matchedVariantPrice = formatPrice(livePricing?.sub_total);
 
-  // ── In-stock store list for the currently matched variant ────────────────
+  // ── Other-store stock list for the currently matched variant ──────────────
   // MTO (no real exact-variant match, or zero stock everywhere) always hides
   // this — there's no store to point to. Recomputes on every selection
   // change, so switching to a different variant updates/hides it live.
+  //
+  // ALWAYS excludes the active store itself (2026-08-22 fix). storesByItemId
+  // is built from the unfiltered stock rows (every company, not just the
+  // active one — see useDesignVariants.js), so before this filter, whenever
+  // the active store ALSO had stock it would appear in this same list right
+  // next to a GREEN "In Stock" badge that already said as much — redundant
+  // at best. Worse, when the active store had NONE (the badge reads amber
+  // "Made to Order"), the list still rendered as a bare "In stock at X" with
+  // nothing to say X wasn't the store the badge was talking about — read as
+  // a flat contradiction between the dot/badge and this line, even though
+  // both facts were individually correct. Excluding the active store here
+  // makes this list mean exactly one thing everywhere it's used: "elsewhere
+  // in the network," never "here too" — see the render below for the
+  // matching copy.
   const matchedVariantStores = useMemo(() => {
     if (!matchedVariant || matchedVariant._isMTO || matchedVariant.item_id == null) return [];
     const stores = storesByItemId.get(matchedVariant.item_id) ?? [];
-    return stores.filter((s) => (s.pieces ?? 0) > 0);
-  }, [matchedVariant, storesByItemId]);
-
-  // ── Stock helpers — use raw variants array ────────────────────────────────
+    return stores.filter((s) => (s.pieces ?? 0) > 0 && s.company_id !== activeStoreId);
+  }, [matchedVariant, storesByItemId, activeStoreId]);
 
   const getComboStockStatus = useCallback((metalColorId, karatId) => {
     const matching = variants.filter((v) => {
@@ -353,7 +327,6 @@ export default function CustomizeSheet({
     return hasStock ? 'in_stock' : 'made_to_order';
   }, [variants, selectedMetalColorId, selectedKaratId]);
 
-  // ── Section label helpers ──────────────────────────────────────────────────
   const metalKaratValue = (() => {
     const k = karats.find((k) => k.id === selectedKaratId)?.name;
     const c = metalColors.find((c) => c.id === selectedMetalColorId)?.name;
@@ -363,13 +336,11 @@ export default function CustomizeSheet({
 
   const sizeValue = sizes.find((s) => s.id === selectedSizeId)?.name ?? null;
 
-  // ── Confirm handler ────────────────────────────────────────────────────────
   const handleConfirm = () => {
     onConfirm(matchedVariant);
     onClose();
   };
 
-  // ── Footer ─────────────────────────────────────────────────────────────────
   const footer = (
     <button
       type="button"
@@ -384,7 +355,12 @@ export default function CustomizeSheet({
       ].join(' ')}
     >
       {canConfirm
-        ? buildConfirmLabel(matchedVariant, sizes, selectedSizeId)
+        // Plain "Confirm" (2026-08-23) — used to append the full selection
+        // as "Confirm — 14KT · Yellow Gold · Size 6.5 Inch", which is
+        // already shown just above in the matched-variant summary card and
+        // in the section labels next to each selector; repeating it here
+        // was the reason this button overflowed/wrapped in tablet width.
+        ? 'Confirm'
         : !metalOk || !karatOk
           ? 'Select a colour and karat to continue'
           : !sizeOk
@@ -394,7 +370,6 @@ export default function CustomizeSheet({
     </button>
   );
 
-  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <BottomSheet
       isOpen={isOpen}
@@ -408,8 +383,12 @@ export default function CustomizeSheet({
       ) : (
         <div className="flex flex-col gap-6">
 
-          {/* ── Metal colour + karat combined cards ──────────────────────── */}
           {hasMetalColors && hasKarats ? (
+            // No "🟢 In Stock" legend below the grid (removed 2026-08-23,
+            // along with the "Made to Order" line it originally paired
+            // with) — the brand site's own customize UI doesn't caption its
+            // dot either, and once there's only one dot meaning left it
+            // doesn't need a legend to be self-explanatory.
             <div className="flex flex-col gap-3">
               <SectionLabel
                 label="Select Gold Colour & Karat"
@@ -442,17 +421,6 @@ export default function CustomizeSheet({
                 )}
               </div>
 
-              {/* Legend */}
-              <div className="flex items-center gap-4 mt-1">
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-status-in-stock" />
-                  <span className="text-[10px] text-muted-foreground">In Stock</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-status-made-order" />
-                  <span className="text-[10px] text-muted-foreground">Made to Order</span>
-                </div>
-              </div>
             </div>
           ) : (
             <>
@@ -496,12 +464,10 @@ export default function CustomizeSheet({
             </>
           )}
 
-          {/* ── Divider ─────────────────────────────────────────────────── */}
           {(hasMetalColors || hasKarats) && hasSizes && (
             <hr className="border-border" />
           )}
 
-          {/* ── Size grid ───────────────────────────────────────────────── */}
           {hasSizes && (
             <div className="flex flex-col gap-3">
               <SectionLabel
@@ -524,22 +490,18 @@ export default function CustomizeSheet({
             </div>
           )}
 
-          {/* ── No options ──────────────────────────────────────────────── */}
           {!hasMetalColors && !hasKarats && !hasSizes && (
             <p className="text-sm text-muted-foreground text-center py-8">
               No customization options available for this product.
             </p>
           )}
 
-          {/* ── Matched variant summary card ────────────────────────────── */}
           {matchedVariant && (
             <div className={[
               'rounded-xl border px-4 py-3',
-              matchedVariant._isMTO
-                ? 'bg-status-made-order/10 border-status-made-order/30'
-                : (matchedVariant.pieces ?? 0) > 0
-                  ? 'bg-status-in-stock/10 border-status-in-stock/30'
-                  : 'bg-status-made-order/10 border-status-made-order/30',
+              matchedVariantInStockHere
+                ? 'bg-status-in-stock/10 border-status-in-stock/30'
+                : 'bg-status-made-order/10 border-status-made-order/30',
             ].join(' ')}>
               <div className="flex items-center justify-between gap-2">
                 <p className="text-sm font-semibold text-foreground leading-snug">
@@ -547,14 +509,11 @@ export default function CustomizeSheet({
                 </p>
                 <span className={[
                   'text-[11px] font-semibold px-2 py-0.5 rounded-full text-nowrap',
-                  matchedVariant._isMTO || (matchedVariant.pieces ?? 0) === 0
-                    ? 'bg-status-made-order/15 text-status-made-order'
-                    : 'bg-status-in-stock/15 text-status-in-stock',
+                  matchedVariantInStockHere
+                    ? 'bg-status-in-stock/15 text-status-in-stock'
+                    : 'bg-status-made-order/15 text-status-made-order',
                 ].join(' ')}>
-                  {matchedVariant._isMTO
-                    ? 'Made to Order'
-                    : (matchedVariant.pieces ?? 0) > 0 ? 'In Stock' : 'Made to Order'
-                  }
+                  {matchedVariantInStockHere ? 'In Stock' : 'Made to Order'}
                 </span>
               </div>
               <p className="text-xs text-muted-foreground mt-0.5">
@@ -592,19 +551,36 @@ export default function CustomizeSheet({
                 )
               )}
 
-              {/* In-stock store list — hidden entirely for MTO/no-stock
-                  variants, shown when this exact variant has real stock
-                  somewhere. Updates live as the selection changes above. */}
+              {/* Other-store availability. matchedVariantStores never
+                  includes the active store (filtered in the useMemo above),
+                  so it always means "elsewhere in the network" — worded
+                  differently depending on whether the badge above already
+                  says "In Stock" (this is bonus info: also available
+                  elsewhere) or "Made to Order" (this is the contrast: not
+                  here, but there — see the useMemo comment for why this
+                  distinction matters). */}
               {matchedVariantStores.length > 0 && (
-                <div className="flex items-start gap-1.5 mt-2 pt-2 border-t border-status-in-stock/30">
-                  <Store size={13} className="shrink-0 text-status-in-stock mt-0.5" aria-hidden="true" />
-                  <p className="text-xs text-status-in-stock">
-                    In stock at{' '}
-                    <span className="font-medium">
-                      {matchedVariantStores.map((s) => s.companyname).join(', ')}
-                    </span>
-                  </p>
-                </div>
+                matchedVariantInStockHere ? (
+                  <div className="flex items-start gap-1.5 mt-2 pt-2 border-t border-status-in-stock/30">
+                    <Store size={13} className="shrink-0 text-status-in-stock mt-0.5" aria-hidden="true" />
+                    <p className="text-xs text-status-in-stock">
+                      Also in stock at{' '}
+                      <span className="font-medium">
+                        {matchedVariantStores.map((s) => s.companyname).join(', ')}
+                      </span>
+                    </p>
+                  </div>
+                ) : (
+                  <div className="flex items-start gap-1.5 mt-2 pt-2 border-t border-status-made-order/30">
+                    <Store size={13} className="shrink-0 text-status-made-order mt-0.5" aria-hidden="true" />
+                    <p className="text-xs text-status-made-order">
+                      Made to order at {activeStoreName ?? 'this store'} — in stock at{' '}
+                      <span className="font-medium">
+                        {matchedVariantStores.map((s) => s.companyname).join(', ')}
+                      </span>
+                    </p>
+                  </div>
+                )
               )}
             </div>
           )}

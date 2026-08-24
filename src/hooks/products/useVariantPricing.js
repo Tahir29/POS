@@ -1,4 +1,3 @@
-// src/hooks/products/useVariantPricing.js
 // Live price for a single item/variant — THE figure the customer is quoted.
 //
 // Called for EVERY item, not just item_rate === 0 ones. The stored item_rate
