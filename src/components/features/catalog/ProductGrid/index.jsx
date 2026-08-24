@@ -65,9 +65,15 @@ function FetchingSpinner() {
  *   hasMore:         boolean,
  *   hasFilters:      boolean,
  *   showStockBadge:  boolean,
+ *   storeCode:       string|null,
  *   onLoadMore:      () => void,
  *   onClearFilters:  () => void,
  * }} props
+ *   storeCode (2026-08-24) — fixes every card's "In Stock" badge to THIS
+ *   store's code instead of the page's own active store. Used by
+ *   OtherStoreSection, whose grid shows a different store's stock than the
+ *   one the operator is browsing/signed into; omitted for the primary
+ *   catalog grid, where each card falls back to the active store as before.
  */
 export default function ProductGrid({
   products       = [],
@@ -76,6 +82,7 @@ export default function ProductGrid({
   hasMore,
   hasFilters,
   showStockBadge = false,
+  storeCode,
   onLoadMore,
   onClearFilters,
 }) {
@@ -117,6 +124,7 @@ export default function ProductGrid({
             key={product.item_id ?? product.item_code}
             product={product}
             showStockBadge={showStockBadge}
+            storeCode={storeCode}
           />
         ))}
       </div>

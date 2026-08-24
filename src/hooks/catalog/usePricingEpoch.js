@@ -140,6 +140,11 @@ function isBlindEpoch(epoch) {
 /**
  * @param {object[]} products — current display list, used once per store to
  *   choose the canaries. Later changes to it are ignored on purpose.
+ * @param {number|null} [storeIdOverride] — prices the canaries against THIS
+ *   store instead of the Redux global active store. Needed because the
+ *   catalog page's own store filter (catalogStoreId) can browse a different
+ *   store than the one the operator is signed into — see useLiveCatalogPrices
+ *   for the full story and the live-confirmed bug this fixed (2026-08-24).
  * @returns {{ epoch: string|undefined, isBlind: boolean }}
  *   `epoch` is undefined until the first canary result lands — callers MUST
  *   NOT fetch prices before then, or those prices would be cached under a key
@@ -147,8 +152,9 @@ function isBlindEpoch(epoch) {
  *   `isBlind` means the epoch cannot detect change and must not be trusted as
  *   a licence to cache indefinitely.
  */
-export function usePricingEpoch(products) {
-  const storeId = useSelector(selectActiveStoreId);
+export function usePricingEpoch(products, storeIdOverride) {
+  const activeStoreId = useSelector(selectActiveStoreId);
+  const storeId = storeIdOverride ?? activeStoreId;
   const queryClient = useQueryClient();
 
   const canaryIds = useMemo(

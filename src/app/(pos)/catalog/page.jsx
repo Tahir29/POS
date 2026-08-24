@@ -21,11 +21,14 @@ import CatalogSortDropdown   from '@/components/features/catalog/CatalogSortDrop
 import CatalogStoreSelector  from '@/components/features/catalog/CatalogStoreSelector';
 import OutOfStockToggle      from '@/components/features/catalog/OutOfStockToggle';
 import CatalogSkeleton       from '@/components/features/catalog/CatalogSkeleton';
+import OtherStoreSection     from '@/components/features/catalog/OtherStoreSection';
 
+import { sortProducts } from '@/lib/catalogSort';
 import APP_CONFIG from '@/constants/appConfig';
 import tracker from '@/lib/analytics/tracker';
 import EVENTS from '@/lib/analytics/events';
 import TOAST from '@/constants/toastMessages';
+import { selectAvailableStores } from '@/store/slices/storeSlice';
 
 const { SEARCH } = APP_CONFIG;
 const MAX_RECENT  = 5;
@@ -36,39 +39,6 @@ const selectActiveStoreId = (s) => s.store.activeStoreId;
 
 function isInStock(product) {
   return product.has_stock === true;
-}
-
-function getWeight(product) {
-  return product.net_weight ?? product.weight ?? 0;
-}
-
-function getPrice(product) {
-  return product.price ?? null;
-}
-
-/**
- * Shared comparator for both search-mode and browse-mode sorting.
- * Items with no price (not every product has one — see
- * catalogService.enrichWithPrice) always sort after priced ones,
- * regardless of ascending/descending direction.
- */
-function compareProducts(a, b, sortBy) {
-  switch (sortBy) {
-    case 'name_asc':  return (a.item_name ?? '').localeCompare(b.item_name ?? '');
-    case 'name_desc': return (b.item_name ?? '').localeCompare(a.item_name ?? '');
-    case 'price_asc':
-    case 'price_desc': {
-      const pa = getPrice(a);
-      const pb = getPrice(b);
-      if (pa == null && pb == null) return 0;
-      if (pa == null) return 1;
-      if (pb == null) return -1;
-      return sortBy === 'price_asc' ? pa - pb : pb - pa;
-    }
-    case 'weight_asc':  return getWeight(a) - getWeight(b);
-    case 'weight_desc': return getWeight(b) - getWeight(a);
-    default: return 0;
-  }
 }
 
 /**
@@ -159,20 +129,6 @@ function applyBasicFilterOnly(products, { activeCategoryId, showOutOfStock }) {
   return result;
 }
 
-/**
- * THE ONLY sort step, for both browse and search mode, applied ONCE — after
- * live prices are merged in (see pricedDisplayProducts in the page
- * component). Previously each mode sorted its own raw, unpriced rows
- * (applyBrowseSort / the tail of applySearchFilters / applyBasicFilters),
- * which is exactly what made price_asc/price_desc a no-op: those rows never
- * carry a real price. Always genuinely sorts, including name_asc — the old
- * "skip when name_asc" shortcut assumed the server's default order was
- * already alphabetical, which was never actually confirmed.
- */
-function sortProducts(products, sortBy) {
-  return [...products].sort((a, b) => compareProducts(a, b, sortBy));
-}
-
 // ── CatalogScreen ─────────────────────────────────────────────────────────────
 
 function CatalogScreen() {
@@ -192,6 +148,15 @@ function CatalogScreen() {
 
   const effectiveStoreId = catalogStoreId ?? reduxStoreId;
   const isSearchMode     = !!searchQuery && searchQuery.length >= SEARCH.MIN_QUERY_LENGTH;
+
+  // Every OTHER store the operator is assigned to, for the "Available at
+  // other stores" lane below — see the OtherStoreSection render further
+  // down, gated on the primary store's own list actually running out.
+  const availableStores = useSelector(selectAvailableStores);
+  const otherStores = useMemo(
+    () => availableStores.filter((s) => s.company_id !== effectiveStoreId),
+    [availableStores, effectiveStoreId]
+  );
 
   // ── Categories ────────────────────────────────────────────────────────────
   const { data: categories = [], isError: catsError } = useCategories();
@@ -329,7 +294,13 @@ function CatalogScreen() {
   // Live (SetSalesItems) prices for items whose price couldn't come from the
   // fast tier — fetched in the background so they never hold up the page
   // itself; see useLiveCatalogPrices for why this had to be split out.
-  const { priceById: livePriceById, settledIds } = useLiveCatalogPrices(displayProducts);
+  // effectiveStoreId, not reduxStoreId — the catalog's own store filter lets
+  // an operator browse a different store than the one they're signed into,
+  // and pricing must follow whatever store is actually on screen (see
+  // useLiveCatalogPrices' own header for the live-confirmed bug this fixed:
+  // switching this filter re-fetched the product list from the new store,
+  // but every price kept coming from the signed-in store's stock).
+  const { priceById: livePriceById, settledIds } = useLiveCatalogPrices(displayProducts, effectiveStoreId);
   const pricedDisplayProducts = useMemo(
     () => displayProducts.map((p) => {
       const price = p.price ?? livePriceById.get(p.item_id) ?? null;
@@ -571,6 +542,32 @@ function CatalogScreen() {
             onClearFilters={handleClearFilters}
           />
         </div>
+
+        {/* "Available at other stores" — only once this store's own catalog
+            has genuinely run out (never during search: a name/SKU search is
+            scoped to the store being searched, not a browse-everything
+            action) and only once the primary grid has settled (isLoading
+            false), so this doesn't flash in ahead of the primary results on
+            first paint, when hasMore briefly reads false before data
+            arrives. Keyed by effectiveStoreId + category + OOS so a filter
+            change fully remounts every section instead of carrying over
+            stale pagination state from the previous store/filter combo. */}
+        {!isSearchMode && !isLoading && !hasMore && otherStores.length > 0 && (
+          <div className="flex flex-col gap-5 pt-2">
+            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              Available at other stores
+            </p>
+            {otherStores.map((store) => (
+              <OtherStoreSection
+                key={`${store.company_id}-${effectiveStoreId}-${activeCategoryId ?? 'all'}-${showOutOfStock}`}
+                store={store}
+                showOutOfStock={showOutOfStock}
+                categoryId={activeCategoryId}
+                sortBy={sortBy}
+              />
+            ))}
+          </div>
+        )}
       </div>
 
     </div>

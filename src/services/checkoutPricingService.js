@@ -94,13 +94,40 @@ export async function applyPromotionsToLines({
   for (const promo of appliedPromos) {
     if (!promo?.promoDetails) continue;
 
-    const response = await applyPromotions({
-      selected_products: lines,
-      promotion:         promo.promoDetails,
-      promotions:        promotionDetails,
-      document_id:       documentId,
-      exchange_rate:     exchangeRate,
-    });
+    // FIX (2026-08-24, confirmed against OrnaVerse's OWN POS on UAT, not
+    // just guessed at): the comment below about "comes back with no items"
+    // was only ever true for SOME rejections. A component-scoped promotion
+    // ("20% Off Diamond") on an item with zero diamond value gets a normal
+    // 200 with the basket unchanged — the graceful case this function
+    // already handled. But a flat/whole-value promotion applied to a gold
+    // coin (e.g. "lucirablume5%") gets an outright 400: {"Error":{"Message":
+    // "No items match the promotion criteria"}} — reproduced live in
+    // OrnaVerse's own native POS, so this is a genuine server-side
+    // eligibility rule (bullion/coin excluded from that class of promotion),
+    // not a bug to route around. Before this try/catch, that 400 was
+    // UNCAUGHT: it threw out of this whole function, failed
+    // useCheckoutPricing's query for the ENTIRE cart, and disabled Place
+    // Order — for every line, not just the gold coin — while giving the
+    // operator no indication why. Caught here and folded into the exact
+    // same "declined to price" path below, so it now reaches the operator
+    // via CheckoutDiscountSection's existing "Doesn't apply to these items"
+    // message instead of silently blocking the sale.
+    let response;
+    try {
+      response = await applyPromotions({
+        selected_products: lines,
+        promotion:         promo.promoDetails,
+        promotions:        promotionDetails,
+        document_id:       documentId,
+        exchange_rate:     exchangeRate,
+      });
+    } catch (err) {
+      console.warn(
+        `[checkoutPricingService] promotion "${promo.promoCode}" rejected by server`,
+        err?.serverMessage ?? err?.message ?? err,
+      );
+      continue;
+    }
 
     const items = response?.data?.items;
     const rows  = response?.data?.invoice_promotions ?? [];

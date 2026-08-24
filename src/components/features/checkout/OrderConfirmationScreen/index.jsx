@@ -12,9 +12,11 @@
 // "invoice": a balance outstanding is a defect on one and the entire point of
 // the other, and it reads back from a different Retrieve endpoint.
 
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { CheckCircle2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import Confetti from '@/components/shared/Confetti';
 import InvoiceReportButton from '@/components/features/checkout/InvoiceReportButton';
 import { useInvoiceDetail } from '@/hooks/checkout/useInvoiceDetail';
 import { useOrderDetail } from '@/hooks/checkout/useOrderDetail';
@@ -45,6 +47,14 @@ export default function OrderConfirmationScreen({
   const router = useRouter();
   const isOrder = documentType === 'order';
 
+  // This screen only ever mounts right after a real order/invoice was just
+  // placed (see checkout/page.jsx's isConfirmed gate) — never on an ordinary
+  // re-render of it — so firing once per mount IS "once per successful
+  // order." showConfetti removes it from the tree once the burst finishes
+  // rather than leaving an inert (if invisible) overlay mounted for the
+  // rest of the time the operator spends on this screen.
+  const [showConfetti, setShowConfetti] = useState(true);
+
   // Only the relevant Retrieve fires — the other is disabled by a null id
   // rather than skipped, so the hook order stays fixed across renders.
   const invoiceQuery = useInvoiceDetail(isOrder ? null : transactionId);
@@ -73,6 +83,8 @@ export default function OrderConfirmationScreen({
 
   return (
     <div className="flex flex-col items-center gap-6 px-4 py-10 text-center">
+      {showConfetti && <Confetti onDone={() => setShowConfetti(false)} />}
+
       <div className="flex h-16 w-16 items-center justify-center rounded-full bg-status-in-stock/15">
         <CheckCircle2 size={36} className="text-status-in-stock" aria-hidden="true" />
       </div>

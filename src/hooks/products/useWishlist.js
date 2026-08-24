@@ -21,6 +21,12 @@
 //   and something (refocus, remount) triggered a refetch, so a removed
 //   item visibly lingered for a while after its heart had already emptied.
 //   Fixed 2026-08-23.
+//
+//   Toasts on add/remove (2026-08-24) — the heart's own fill/empty state
+//   already confirms the toggle on the card itself, but nothing said so
+//   anywhere else on screen, unlike cart add/remove which already toast
+//   (see AddToCartButton / useCart.handleRemoveItem). Matches that
+//   convention for consistency across the two "save this item" actions.
 
 import { useDispatch, useSelector } from 'react-redux';
 import { useQueryClient } from '@tanstack/react-query';
@@ -32,6 +38,7 @@ import {
 } from '@/store/slices/wishlistSlice';
 import { useCustomerSession } from '@/hooks/customer/useCustomerSession';
 import { QUERY_KEYS } from '@/constants/queryKeys';
+import TOAST from '@/constants/toastMessages';
 
 export function useIsWishlisted(itemId) {
   const wishlistedIds = useSelector(selectWishlistedItemIds);
@@ -67,6 +74,7 @@ export function useToggleWishlist() {
       queryClient.setQueryData(wishlistQueryKey, (old) => (
         Array.isArray(old) ? old.filter((i) => i.item_id !== product.item_id) : old
       ));
+      toast.success(TOAST.WISHLIST.ITEM_REMOVED(product.item_name ?? 'Item'));
     } else {
       const item = {
         item_id:    product.item_id,
@@ -97,6 +105,7 @@ export function useToggleWishlist() {
       queryClient.setQueryData(wishlistQueryKey, (old) => (
         Array.isArray(old) ? [item, ...old.filter((i) => i.item_id !== item.item_id)] : old
       ));
+      toast.success(TOAST.WISHLIST.ITEM_ADDED(item.item_name ?? 'Item'));
     }
   };
 }

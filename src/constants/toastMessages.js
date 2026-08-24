@@ -26,6 +26,11 @@ const TOAST = {
     LOAD_FAILED: 'Failed to load store list. Please try again.',
   },
 
+  WISHLIST: {
+    ITEM_ADDED:   (itemName) => `${itemName} added to wishlist.`,
+    ITEM_REMOVED: (itemName) => `${itemName} removed from wishlist.`,
+  },
+
   CART: {
     ITEM_ADDED:   (itemName) => `${itemName} added to cart.`,
     ITEM_REMOVED: (itemName) => `${itemName} removed from cart.`,

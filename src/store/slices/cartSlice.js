@@ -130,11 +130,18 @@ const cartSlice = createSlice({
       state.customerAddress = customerAddress ?? null;
     },
 
-    detachCustomer: (state) => {
-      state.customerId      = null;
-      state.customerName    = null;
-      state.customerMobile  = null;
-      state.customerAddress = null;
+    // Full reset, not just the customer fields (2026-08-24) — a detach means
+    // this customer's session with the POS is over. Whatever was in the cart
+    // is exactly what abandonedCartMiddleware's own 'cart/detachCustomer'
+    // case just snapshotted to Mongo under this customer (it reads
+    // PRE-action state, so it already captured the items by the time this
+    // runs) — so nothing is lost, and leaving them sitting in a now-
+    // customerless cart would only mean stale items silently carrying into
+    // whatever uses this cart next (a new guest sale, a different
+    // customer). Re-attaching this same customer later restores them from
+    // that Mongo snapshot (see the middleware's 'cart/attachCustomer' case).
+    detachCustomer: () => {
+      return initialState;
     },
 
     // Apply a validated promo code and its discount — appends to the list.
