@@ -20,6 +20,7 @@ import { toast } from 'react-toastify';
 import { ShoppingCart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { addItem } from '@/store/slices/cartSlice';
+import { openCart } from '@/store/slices/uiSlice';
 import { resolveImageSrc } from '@/lib/resolveImageSrc';
 import TOAST from '@/constants/toastMessages';
 import tracker from '@/lib/analytics/tracker';
@@ -92,6 +93,14 @@ export default function AddToCartButton({
     });
 
     toast.success(TOAST.CART.ITEM_ADDED(product.item_name ?? 'Item'));
+
+    // Every Add to Cart opens the mini cart (2026-08-24) — the item was
+    // landing in the cart correctly already, but nothing surfaced it; a
+    // toast alone doesn't show WHAT'S actually in the cart now, and the
+    // operator had to remember to check manually. CartDrawer itself is
+    // global (mounted once in Header, driven by uiSlice's cartOpen), so
+    // this is the single place every Add to Cart flows through.
+    dispatch(openCart());
   };
 
   return (

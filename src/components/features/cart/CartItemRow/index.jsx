@@ -3,10 +3,19 @@
 // Single cart line item: image, name, SKU, attributes, quantity control,
 // unit price, line total, and a remove action.
 //
-// readOnly MODE (new): when true, hides the qty stepper and remove button,
-// showing a plain "N ×" static label instead — used to reuse this exact
-// row on the Checkout "Order Items" summary (per instruction: no need to
-// build a second item-list component there) where editing doesn't belong.
+// readOnly MODE: when true, hides the qty stepper, showing a plain "N ×"
+// static label instead — used to reuse this exact row on the Checkout
+// "Order Items" summary (per instruction: no need to build a second
+// item-list component there), where changing HOW MANY of a piece is being
+// bought doesn't belong once pricing/payment is already underway.
+//
+// Removing a line entirely is independent of readOnly (2026-08-24) — the
+// checkout page had no way to drop an item that shouldn't be in the sale
+// (wrong pick, customer changed their mind) short of abandoning checkout
+// and going back to the cart. Whether the trash icon shows is governed
+// purely by whether an onRemove handler was passed, same as the qty
+// stepper's onUpdateQuantity — readOnly only ever meant "no quantity
+// editing here", not "no removal".
 
 import { useState } from 'react';
 import Image from 'next/image';
@@ -105,7 +114,7 @@ export default function CartItemRow({
           >
             {item.itemName ?? 'Unknown Product'}
           </button>
-          {!readOnly && onRemove && (
+          {onRemove && (
             <button
               type="button"
               onClick={() => onRemove(item)}
