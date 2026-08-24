@@ -87,7 +87,6 @@ const BLIND_FALLBACK_STALE = 60 * 60 * 1000; // 1h
 // asserted unpriceable, because we genuinely have not asked.
 const PRICE_WINDOW = 240;
 
-// ── Request batcher ──────────────────────────────────────────────────────────
 // One bucket per store: the price of an item depends on which physical piece
 // that store holds, so ids for different stores must never share a batch.
 
@@ -170,8 +169,6 @@ async function flush(storeId) {
     Array.from({ length: Math.min(CONCURRENCY, chunks.length) }, worker)
   );
 }
-
-// ── Hook ─────────────────────────────────────────────────────────────────────
 
 /**
  * @param {object[]} products — current display list (ProductCatalogRow[]),

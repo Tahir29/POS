@@ -1,6 +1,5 @@
 'use client';
 
-// src/app/(pos)/customers/page.jsx
 // Customer directory — search, list, view details, and attach a customer
 // to the current cart session.
 //
@@ -165,7 +164,6 @@ export default function CustomersPage() {
         )}
       </div>
 
-      {/* List */}
       <StaggerList className="grid grid-cols-1 md:grid-cols-2 gap-2">
         {isBusy ? (
           <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">

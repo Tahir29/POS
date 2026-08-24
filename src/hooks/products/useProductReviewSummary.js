@@ -1,4 +1,3 @@
-// src/hooks/products/useProductReviewSummary.js
 // Average rating + review count for one product (catalog card stars, and
 // the product detail page's reviews header).
 

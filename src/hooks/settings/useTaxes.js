@@ -1,4 +1,3 @@
-// src/hooks/settings/useTaxes.js
 // Applicable tax slabs for a store — read-only reference, no write endpoint
 // exists for this (see settingsService.js getTaxes header for the required
 // exchange_rate field and the "Tax Template Not Defined!" per-store gap).

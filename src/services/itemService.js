@@ -1,4 +1,3 @@
-// src/services/itemService.js
 // Service functions for product item master data.
 // One function per endpoint — no business logic.
 

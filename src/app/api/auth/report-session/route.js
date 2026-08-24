@@ -1,5 +1,3 @@
-// src/app/api/auth/report-session/route.js
-//
 // Establishes (POST) or tears down (DELETE) the operator's OrnaVerse cookie
 // session, used only for rendering invoice reports.
 //

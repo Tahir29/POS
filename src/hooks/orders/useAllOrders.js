@@ -1,4 +1,3 @@
-// src/hooks/orders/useAllOrders.js
 // Background fetch of ALL sales for in-memory search and date filtering on
 // the /orders page — merging BOTH POS document types.
 //

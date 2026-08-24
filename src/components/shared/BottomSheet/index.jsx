@@ -1,7 +1,5 @@
 'use client';
 
-// src/components/shared/BottomSheet/index.jsx
-//
 // Reusable bottom sheet / side sheet primitive.
 //
 // On tablet (md+): renders as a right-side drawer (side sheet).
@@ -45,13 +43,11 @@ export default function BottomSheet({
   const isDesktop = useMediaQuery('(min-width: 768px)'); // matches the md: breakpoint below
   const reduceMotion = useReducedMotion();
 
-  // Lock body scroll when open
   useEffect(() => {
     document.body.style.overflow = isOpen ? 'hidden' : '';
     return () => { document.body.style.overflow = ''; };
   }, [isOpen]);
 
-  // Close on Escape key
   useEffect(() => {
     if (!isOpen) return;
     const handleKey = (e) => { if (e.key === 'Escape') onClose(); };
@@ -59,7 +55,6 @@ export default function BottomSheet({
     return () => window.removeEventListener('keydown', handleKey);
   }, [isOpen, onClose]);
 
-  // Move focus into the sheet when it opens
   useEffect(() => {
     if (isOpen && sheetRef.current) sheetRef.current.focus();
   }, [isOpen]);
@@ -77,7 +72,6 @@ export default function BottomSheet({
     <AnimatePresence>
       {isOpen && (
         <>
-          {/* ── Backdrop ───────────────────────────────────────────────── */}
           <motion.div
             aria-hidden="true"
             onClick={onClose}
@@ -88,11 +82,6 @@ export default function BottomSheet({
             transition={{ duration: DURATION.standard }}
           />
 
-          {/* ── Sheet panel ────────────────────────────────────────────── */}
-          {/*
-            Mobile  (< md): slides up from the bottom, full width, max 85vh
-            Tablet  (md+) : slides in from the right, full height, capped width
-          */}
           <motion.div
             ref={sheetRef}
             role="dialog"
@@ -115,9 +104,16 @@ export default function BottomSheet({
             {...panelMotion}
             transition={{ duration: DURATION.panel, ease: EASE_PREMIUM }}
           >
-            {/* ── Header ─────────────────────────────────────────────── */}
             <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-border shrink-0">
-              <h2 className="text-base font-bold text-foreground">
+              {/* uppercase (2026-08-23) — every sidesheet in the app renders
+                  its title through this one component, so this is the
+                  single place that makes them all consistent (was Title
+                  Case, inconsistent with the CONFIRM-style buttons
+                  elsewhere) rather than uppercasing the title string at
+                  each of the ~11 call sites. aria-label above already
+                  carries the real-case title for screen readers, so this
+                  is purely visual. */}
+              <h2 className="text-base font-bold uppercase tracking-wide text-foreground">
                 {title}
               </h2>
               <button
@@ -135,12 +131,10 @@ export default function BottomSheet({
               </button>
             </div>
 
-            {/* ── Scrollable body ────────────────────────────────────── */}
             <div className="flex-1 overflow-y-auto px-5 py-5">
               {children}
             </div>
 
-            {/* ── Sticky footer (optional) ───────────────────────────── */}
             {footer && (
               <div className="shrink-0 px-5 py-4 border-t border-border">
                 {footer}

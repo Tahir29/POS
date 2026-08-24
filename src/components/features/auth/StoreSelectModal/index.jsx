@@ -1,4 +1,3 @@
-// src/components/features/auth/StoreSelectModal/index.jsx
 'use client';
 
 import { useState } from 'react';
@@ -33,7 +32,6 @@ export default function StoreSelectModal({ isOpen, onClose }) {
   if (!isOpen) return null;
 
   const handleSelect = async (store) => {
-    // Already active — just close
     if (store.company_id === activeStoreId) {
       onClose();
       return;
@@ -50,14 +48,12 @@ export default function StoreSelectModal({ isOpen, onClose }) {
 
   return (
     <>
-      {/* Backdrop */}
       <div
         className="fixed inset-0 z-40 bg-black/20 backdrop-blur-sm"
         aria-hidden="true"
         onClick={onClose}
       />
 
-      {/* Panel */}
       <div
         role="dialog"
         aria-modal="true"
@@ -69,7 +65,6 @@ export default function StoreSelectModal({ isOpen, onClose }) {
           'flex flex-col overflow-hidden'
         )}
       >
-        {/* Header */}
         <div className="flex items-center justify-between border-b px-4 py-3">
           <div className="flex items-center gap-2 text-sm font-medium">
             <Store size={15} aria-hidden="true" />
@@ -89,7 +84,6 @@ export default function StoreSelectModal({ isOpen, onClose }) {
           </button>
         </div>
 
-        {/* Store list */}
         <ul className="flex flex-col py-1" role="listbox" aria-label="Available stores">
           {availableStores.length === 0 ? (
             <li className="px-4 py-6 text-center text-sm text-muted-foreground">

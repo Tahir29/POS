@@ -34,7 +34,6 @@ const initialState = {
   fulfillmentOrderNo:  null,
 };
 
-// ── HELPERS ──────────────────────────────────────────────────
 // Recalculates subtotal, tax and total after any cart mutation.
 //
 // THE CART DOES NOT KNOW WHAT A PROMOTION IS WORTH, and no longer pretends
@@ -70,7 +69,6 @@ const cartSlice = createSlice({
   initialState,
   reducers: {
 
-    // Add a new item or increment quantity if item already exists
     addItem: (state, action) => {
       const incoming = action.payload;
       const existing = state.items.find(
@@ -99,7 +97,6 @@ const cartSlice = createSlice({
       recalculateTotals(state);
     },
 
-    // Remove an item from the cart entirely
     removeItem: (state, action) => {
       const { itemId, sizeId, styleId } = action.payload;
       state.items = state.items.filter(
@@ -111,7 +108,6 @@ const cartSlice = createSlice({
       recalculateTotals(state);
     },
 
-    // Update quantity for a specific cart item
     updateQuantity: (state, action) => {
       const { itemId, sizeId, styleId, quantity } = action.payload;
       const item = state.items.find(
@@ -126,7 +122,6 @@ const cartSlice = createSlice({
       recalculateTotals(state);
     },
 
-    // Attach a found/created customer to the cart
     attachCustomer: (state, action) => {
       const { customerId, customerName, customerMobile, customerAddress } = action.payload;
       state.customerId      = customerId;
@@ -135,7 +130,6 @@ const cartSlice = createSlice({
       state.customerAddress = customerAddress ?? null;
     },
 
-    // Remove the attached customer from the cart
     detachCustomer: (state) => {
       state.customerId      = null;
       state.customerName    = null;
@@ -159,19 +153,16 @@ const cartSlice = createSlice({
       recalculateTotals(state);
     },
 
-    // Remove one applied promo by code
     removePromo: (state, action) => {
       const promoCode = action.payload;
       state.appliedPromos = state.appliedPromos.filter((p) => p.promoCode !== promoCode);
       recalculateTotals(state);
     },
 
-    // Apply a validated gift card
     applyGiftCard: (state, action) => {
       state.appliedGiftCard = action.payload;
     },
 
-    // Apply a validated gift voucher
     applyGiftVoucher: (state, action) => {
       state.appliedGiftVoucher = action.payload;
     },
@@ -179,6 +170,20 @@ const cartSlice = createSlice({
     // Clear the entire cart — called after successful order creation
     clearCart: (state) => {
       return initialState;
+    },
+
+    // Restores a previously-abandoned cart (see store/abandonedCartMiddleware.js)
+    // once a customer with one attaches to an empty cart. Deliberately only
+    // touches items + totals — customerId/Name/Mobile are already correct
+    // from the attach that triggered this, and there's no fulfillment
+    // reference to carry (unlike hydrateFromOrder, this isn't tied to a
+    // specific OrnaVerse order). unitPrice on these items is whatever was
+    // last shown in the cart, same "display estimate, re-priced live at
+    // checkout" caveat every other cart item already carries — nothing
+    // about a restored item bypasses that.
+    restoreCart: (state, action) => {
+      state.items = action.payload.items ?? [];
+      recalculateTotals(state);
     },
 
     // "Fulfill from order" — replaces the ENTIRE cart wholesale (not a merge;
@@ -251,7 +256,6 @@ const cartSlice = createSlice({
   },
 });
 
-// ── ACTIONS ──────────────────────────────────────────────────
 export const {
   addItem,
   removeItem,
@@ -263,10 +267,10 @@ export const {
   applyGiftCard,
   applyGiftVoucher,
   clearCart,
+  restoreCart,
   hydrateFromOrder,
 } = cartSlice.actions;
 
-// ── SELECTORS ────────────────────────────────────────────────
 export const selectCartItems          = (state) => state.cart.items;
 export const selectCartItemCount      = (state) => state.cart.items.reduce((sum, i) => sum + i.quantity, 0);
 export const selectCartSubtotal       = (state) => state.cart.subtotal;

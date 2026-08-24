@@ -9,7 +9,6 @@ import { getCategories, getSubTypes, getItemGroups } from '@/services/categorySe
 import { QUERY_KEYS }                            from '@/constants/queryKeys';
 import APP_CONFIG                                from '@/constants/appConfig';
 
-// response.data shape: { Entities: [...] }
 const selectList = (data) => {
   const result = data?.Entities ?? data?.data ?? [];
   return Array.isArray(result) ? result : [];

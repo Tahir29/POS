@@ -1,6 +1,5 @@
 'use client';
 
-// src/components/features/checkout/CheckoutPanCapture/index.jsx
 // Mandatory PAN capture once the order total crosses the statutory
 // ₹2,00,000 threshold (Income Tax Rule 114B — not a store policy, see
 // APP_CONFIG.COMPLIANCE). The customer's latest record may already carry a

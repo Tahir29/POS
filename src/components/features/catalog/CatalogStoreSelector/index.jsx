@@ -1,7 +1,5 @@
 'use client';
 
-// src/components/features/catalog/CatalogStoreSelector/index.jsx
-
 import { useMemo }     from 'react';
 import { useSelector } from 'react-redux';
 import { Store } from 'lucide-react';
@@ -33,7 +31,6 @@ export default function CatalogStoreSelector({ catalogStoreId, onStoreChange }) 
     return match?.mailing_name ?? activeStoreName ?? 'Store';
   }, [availableStores, effectiveId, activeStoreName]);
 
-  // Single store — static label, no dropdown
   if (availableStores.length <= 1) {
     return (
       <div className="flex h-11 w-full items-center gap-2 rounded-lg border border-border bg-card px-4 text-sm font-medium text-foreground sm:w-auto sm:shrink-0">

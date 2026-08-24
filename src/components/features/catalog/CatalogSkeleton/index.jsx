@@ -1,6 +1,5 @@
 'use client';
 
-// src/components/features/catalog/CatalogSkeleton/index.jsx
 // Loading skeleton for the product grid.
 // Renders N placeholder cards that match ProductCard proportions.
 // Shown while useCatalogProducts is in loading state.
@@ -12,9 +11,7 @@ const SKELETON_COUNT = 12;
 function ProductCardSkeleton() {
   return (
     <div className="flex flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-      {/* Image placeholder */}
       <Skeleton className="aspect-square w-full rounded-none" />
-      {/* Text lines */}
       <div className="flex flex-col gap-2 p-3">
         <Skeleton className="h-2.5 w-16" />
         <Skeleton className="h-3.5 w-full" />

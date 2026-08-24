@@ -1,5 +1,3 @@
-// src/hooks/dailyClosing/useDailyClosingReconciliation.js
-//
 // Real payment-mode receipt totals for the active store on a given date —
 // lets the manual EOD entry form be checked against something real instead
 // of being 100% typed from memory. See dailyClosingService.js header for

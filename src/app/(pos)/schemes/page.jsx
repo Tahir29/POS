@@ -1,10 +1,5 @@
 'use client';
 
-// src/app/(pos)/schemes/page.jsx
-// Schemes module — two tabs:
-//   Schemes    — available scheme products (existing SchemeCard grid)
-//   Enrollments — customer enrollments with inline receipt payment
-
 import { Suspense, useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useSelector } from 'react-redux';
@@ -40,8 +35,6 @@ import { Input }   from '@/components/ui/input';
 import { Label }   from '@/components/ui/label';
 import { formatCurrency, formatDate } from '@/lib/schemeFormat';
 
-// ── Helpers ───────────────────────────────────────────────────
-
 // Enrollment lifecycle status (not a payment-settlement concept, so this
 // doesn't route through PaymentStatusBadge). completed/matured keep a raw
 // blue — no existing semantic token maps to an "info" state.
@@ -53,7 +46,6 @@ const STATUS_STYLES = {
   default:   'bg-muted  text-muted-foreground',
 };
 
-// ── Receipt payment schema ────────────────────────────────────
 const MONTH_NAMES = [
   '', 'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December',
@@ -70,7 +62,6 @@ const receiptSchema = z.object({
   month_ids:     z.array(z.number()).min(1, 'Select at least one month'),
 });
 
-// ── Receipt Sheet ─────────────────────────────────────────────
 function ReceiptSheet({ enrollment, isOpen, onClose }) {
   const storeId = useSelector(selectActiveStoreId);
   const { paymentModes, isLoading: modesLoading } = usePaymentModes();
@@ -180,7 +171,6 @@ function ReceiptSheet({ enrollment, isOpen, onClose }) {
     <BottomSheet isOpen={isOpen} onClose={onClose} title="Record Payment">
       <div className="flex flex-col gap-4">
 
-        {/* Enrollment summary */}
         <div className="rounded-xl border border-border bg-muted p-3 text-sm flex flex-col gap-1">
           <p className="font-medium text-foreground">{enrollment.schemeName}</p>
           <p className="text-muted-foreground">
@@ -191,7 +181,6 @@ function ReceiptSheet({ enrollment, isOpen, onClose }) {
 
         <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
 
-          {/* Amount */}
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="rcpt_amount">
               Amount (₹) <span className="text-destructive">*</span>
@@ -209,7 +198,6 @@ function ReceiptSheet({ enrollment, isOpen, onClose }) {
             {errors.amount && <p className="text-xs text-destructive">{errors.amount.message}</p>}
           </div>
 
-          {/* Which instalment(s) this pays */}
           <div className="flex flex-col gap-1.5">
             <Label>Paying For <span className="text-destructive">*</span></Label>
             {unpaidMonths.length === 0 ? (
@@ -252,7 +240,6 @@ function ReceiptSheet({ enrollment, isOpen, onClose }) {
             {errors.month_ids && <p className="text-xs text-destructive">{errors.month_ids.message}</p>}
           </div>
 
-          {/* Payment mode */}
           <div className="flex flex-col gap-1.5">
             <Label>Payment Mode <span className="text-destructive">*</span></Label>
             <PaymentModeSelect
@@ -266,7 +253,6 @@ function ReceiptSheet({ enrollment, isOpen, onClose }) {
             {errors.mode_id && <p className="text-xs text-destructive">{errors.mode_id.message}</p>}
           </div>
 
-          {/* Date */}
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="rcpt_date">Payment Date <span className="text-destructive">*</span></Label>
             <Input id="rcpt_date" type="date" max={today} {...register('document_date')} className="h-11" />
@@ -282,7 +268,6 @@ function ReceiptSheet({ enrollment, isOpen, onClose }) {
   );
 }
 
-// ── Schemes Tab ───────────────────────────────────────────────
 function SchemesTab() {
   const { schemes, isLoading, isError, refetch } = useSchemes();
 
@@ -310,7 +295,6 @@ function SchemesTab() {
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Enroll CTA */}
       <Button asChild className="w-full gap-2">
         <Link href="/schemes/enroll">
           <Plus size={16} /> Enroll Customer
@@ -326,12 +310,10 @@ function SchemesTab() {
   );
 }
 
-// ── Enrollments Tab ───────────────────────────────────────────
 function EnrollmentsTab() {
   const customerId   = useSelector(selectCartCustomerId);
   const customerName = useSelector(selectCartCustomerName);
 
-  // If customer is attached, show their enrollments; else show all store enrollments
   const { data: enrollments = [], isLoading, isError, refetch } =
     useSchemeEnrollments(customerId ? { partyId: customerId } : {});
 
@@ -348,7 +330,6 @@ function EnrollmentsTab() {
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Context banner */}
       {customerId && (
         <div className="rounded-xl border border-status-in-stock/30 bg-status-in-stock/10 px-3 py-2 text-sm text-status-in-stock">
           Showing enrollments for <strong>{customerName}</strong>
@@ -434,14 +415,12 @@ function EnrollmentsTab() {
         ))
       )}
 
-      {/* Receipt sheet */}
       <ReceiptSheet
         enrollment={receiptTarget}
         isOpen={!!receiptTarget}
         onClose={() => setReceiptTarget(null)}
       />
 
-      {/* Monthly schedule + payment history */}
       <EnrollmentDetailSheet
         enrollment={detailTarget}
         isOpen={!!detailTarget}
@@ -451,7 +430,6 @@ function EnrollmentsTab() {
   );
 }
 
-// ── Page ──────────────────────────────────────────────────────
 function SchemesScreen() {
   const [activeTab, setActiveTab] = useState('schemes');
 

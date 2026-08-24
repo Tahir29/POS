@@ -1,4 +1,3 @@
-// src/hooks/settings/useAddMetalRate.js
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-toastify';
 import { addMetalRate } from '@/services/settingsService';

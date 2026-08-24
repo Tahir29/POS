@@ -1,4 +1,3 @@
-// src/services/orderFulfillmentService.js
 // "Fulfill from order" — an Order (53) raised earlier, converted into an
 // Invoice (54) once the piece is ready to bill.
 //

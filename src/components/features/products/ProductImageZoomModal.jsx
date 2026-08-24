@@ -1,7 +1,5 @@
 'use client';
 
-// src/components/features/products/ProductImageZoomModal/index.jsx
-//
 // Fullscreen image zoom modal — pinch/pan gestures via react-zoom-pan-pinch.
 // Opened by tapping the main product image or the dedicated zoom button.
 //
@@ -31,7 +29,6 @@ export default function ProductImageZoomModal({
   currentIndex,
   onIndexChange,
 }) {
-  // Lock background scroll while the modal is open
   useEffect(() => {
     if (!isOpen) return;
     const prevOverflow = document.body.style.overflow;
@@ -39,7 +36,6 @@ export default function ProductImageZoomModal({
     return () => { document.body.style.overflow = prevOverflow; };
   }, [isOpen]);
 
-  // Close on Escape
   useEffect(() => {
     if (!isOpen) return;
     const handleKey = (e) => { if (e.key === 'Escape') onClose(); };
@@ -62,7 +58,6 @@ export default function ProductImageZoomModal({
       aria-label="Zoomed product image"
       className="fixed inset-0 z-[100] flex flex-col bg-black/95"
     >
-      {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 shrink-0">
         <span className="text-sm text-white/60">
           {images.length > 1 ? `${currentIndex + 1} / ${images.length}` : ''}
@@ -77,7 +72,6 @@ export default function ProductImageZoomModal({
         </button>
       </div>
 
-      {/* Zoom stage */}
       <div className="relative flex-1 min-h-0">
         <TransformWrapper
           key={current.src}
@@ -102,7 +96,6 @@ export default function ProductImageZoomModal({
                 />
               </TransformComponent>
 
-              {/* Zoom controls */}
               <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 rounded-full bg-black/60 backdrop-blur-sm px-2 py-2">
                 <button type="button" onClick={() => zoomOut()} aria-label="Zoom out"
                   className="flex items-center justify-center w-9 h-9 rounded-full text-white/80 hover:bg-white/10 transition-colors">
@@ -121,7 +114,6 @@ export default function ProductImageZoomModal({
           )}
         </TransformWrapper>
 
-        {/* Prev/next — only when multiple images */}
         {images.length > 1 && (
           <>
             <button type="button" onClick={goPrev} aria-label="Previous image"

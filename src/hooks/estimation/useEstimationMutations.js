@@ -1,4 +1,3 @@
-// src/hooks/estimation/useEstimationMutations.js
 // Mutation hooks for Estimation/Quotation: Create → Post (convert to sale),
 // or Cancel (customer declined). Mirrors useTransactionMutations.js.
 

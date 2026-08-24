@@ -1,6 +1,5 @@
 'use client';
 
-// src/components/features/checkout/BankPosSelect/index.jsx
 // "Which bank account" picker for a bank-settled payment mode (Credit Card,
 // Debit Card, UPI) at checkout — added 2026-08-13 alongside
 // useBankPosAccounts. Mirrors SalesPersonSelect's plain controlled

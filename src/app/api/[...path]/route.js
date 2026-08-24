@@ -1,5 +1,3 @@
-// src/app/api/[...path]/route.js
-//
 // Server-side reverse proxy for every OrnaVerse API call.
 //
 // Replaces the next.config.mjs rewrites()-based proxy that previously

@@ -1,6 +1,5 @@
 'use client';
 
-// src/app/(pos)/customers/[customerId]/page.jsx
 // Full customer profile page — reached via "View Full Profile" from CustomerDetailSheet.
 //
 // TABS: Profile | Edit | Orders | Schemes | History | Points
@@ -15,7 +14,7 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowLeft, Phone, Mail, MapPin, CreditCard,
   ClipboardList, BookOpen,
-  ShoppingCart, FileText, RotateCcw, ArrowLeftRight, Coins, Gem, Receipt, Star, Info,
+  ShoppingCart, FileText, RotateCcw, ArrowLeftRight, Coins, Gem, Receipt, Star, Info, Heart,
 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -35,7 +34,10 @@ import { useUpdateCustomer }      from '@/hooks/customer/useUpdateCustomer';
 import { useCustomerEnrollments } from '@/hooks/customer/useCustomerEnrollments';
 import { useCustomerLoyalty }     from '@/hooks/customer/useCustomerLoyalty';
 import { useCustomer360 }         from '@/hooks/customer/useCustomer360';
+import { useCustomerWishlist }    from '@/hooks/customer/useCustomerWishlist';
+import { useLiveCatalogPrices }   from '@/hooks/catalog/useLiveCatalogPrices';
 import { useCountries, useStates, useCities } from '@/hooks/settings/useLocation';
+import ProductCard from '@/components/features/catalog/ProductCard';
 import APP_CONFIG from '@/constants/appConfig';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -64,13 +66,19 @@ function maskPan(pan) {
 // for) — kept as separate tabs, they were just the same data shown twice.
 // useCustomerOrders/useCustomerHistory hooks are left in place (still valid,
 // just no longer wired to this page) rather than deleted outright.
-const TABS    = ['profile', 'edit', 'schemes', 'points', '360'];
+// 'wishlist' added 2026-08-23 — reads lib/mongo/wishlist.js directly by
+// party_id (see useCustomerWishlist.js), independent of wishlistSlice
+// (which only ever describes whoever's currently ATTACHED to the POS
+// session, not whoever's profile is being viewed here — often different
+// people).
+const TABS    = ['profile', 'edit', 'schemes', 'points', '360', 'wishlist'];
 const TAB_LABELS = {
-  profile: 'Profile',
-  edit:    'Edit',
-  schemes: 'Schemes',
-  points:  'Points',
-  '360':   '360',
+  profile:  'Profile',
+  edit:     'Edit',
+  schemes:  'Schemes',
+  points:   'Points',
+  '360':    '360',
+  wishlist: 'Wishlist',
 };
 
 // Document-type sub-tabs inside the 360 tab's transaction table. Keys match
@@ -402,7 +410,6 @@ function Customer360Tab({ customerId }) {
   return (
     <div className="flex flex-col gap-4">
 
-      {/* Stat tiles */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
         <div className="rounded-lg border border-border p-3">
           <p className="text-xs text-muted-foreground/70">Total Earnings</p>
@@ -428,7 +435,6 @@ function Customer360Tab({ customerId }) {
         </div>
       </div>
 
-      {/* Sales Insights — backend-computed, render whatever comes back */}
       {insights.length > 0 && (
         <div className="flex flex-col gap-2">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Sales Insights</p>
@@ -438,7 +444,6 @@ function Customer360Tab({ customerId }) {
         </div>
       )}
 
-      {/* Transaction-type tabs */}
       <div className="flex flex-col gap-2">
         <PillTabs
           tabs={DOC_TYPES}
@@ -493,6 +498,42 @@ function PointsTab({ customerId }) {
   );
 }
 
+// ── Wishlist Tab ──────────────────────────────────────────────────────────────
+// Renders the exact catalog ProductCard component (2026-08-23) — same
+// reasoning as RecentlyViewedCarousel: reuse, not a look-alike, so stock
+// badges/star ratings/tap-to-navigate all come for free. A plain grid
+// rather than a carousel — this is a dedicated tab with room to show
+// everything at once, not a bottom-of-page strip fighting for space.
+function WishlistTab({ customerId }) {
+  const { items, isLoading, isError } = useCustomerWishlist(customerId);
+
+  // Same live-pricing pipeline the catalog page uses — a wishlisted item's
+  // price is exactly as likely to have moved since it was saved as a
+  // recently-viewed one, so it gets the same "never trust a stored price"
+  // treatment (see useLiveCatalogPrices' own header for why).
+  const { priceById, settledIds } = useLiveCatalogPrices(items);
+
+  if (isLoading) return <TabLoading label="Loading wishlist…" />;
+  if (isError)   return <TabError label="Failed to load wishlist." />;
+  if (items.length === 0) return <TabEmpty icon={Heart} label="No wishlisted products yet." />;
+
+  return (
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+      {items.map((item) => {
+        const price = priceById.get(item.item_id) ?? null;
+        const isPricing = price == null && !settledIds.has(item.item_id);
+        return (
+          <ProductCard
+            key={item.item_id}
+            product={{ ...item, price, is_pricing: isPricing }}
+            showStockBadge
+          />
+        );
+      })}
+    </div>
+  );
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function CustomerDetailPage() {
   const params       = useParams();
@@ -510,7 +551,6 @@ export default function CustomerDetailPage() {
     return TABS.includes(requested) ? requested : 'edit';
   });
 
-  // Fetch full customer record directly by party_id
   const { customer, isLoading, isError, refetch } = useRetrieveCustomer(partyId, {
     enabled: !!partyId,
   });
@@ -522,7 +562,6 @@ export default function CustomerDetailPage() {
   return (
     <div className="flex flex-col gap-4 max-w-3xl mx-auto w-full">
 
-      {/* Header */}
       <div className="flex items-center gap-2">
         <Button
           type="button"
@@ -539,10 +578,8 @@ export default function CustomerDetailPage() {
         </h1>
       </div>
 
-      {/* Loading */}
       {isLoading && <InlineLoader className="py-16" label="Loading customer…" />}
 
-      {/* Error */}
       {isError && !isLoading && (
         <div className="flex flex-col items-center gap-3 py-16 text-center">
           <p className="text-sm text-destructive">Failed to load customer.</p>
@@ -553,11 +590,9 @@ export default function CustomerDetailPage() {
         </div>
       )}
 
-      {/* Content */}
       {customer && !isLoading && (
         <div className="rounded-xl border border-border bg-card p-4 flex flex-col gap-4 shadow-sm">
 
-          {/* Customer name + code header */}
           <div>
             <h2 className="text-base font-bold text-foreground">{customer.customerName}</h2>
             {customer.raw?.party_code && customer.raw.party_code !== 'NA' && (
@@ -565,24 +600,34 @@ export default function CustomerDetailPage() {
             )}
           </div>
 
-          {/* Tab bar */}
+          {/* Tab bar — variant="chip" made explicit 2026-08-24. This was
+              relying on PillTabs' default ('pill'), which used to look
+              close enough to 'chip' by coincidence (both were content-
+              hugging separate pills). 'pill' is now a full-width segmented
+              control instead (see PillTabs' own header comment) — right
+              for a 2-3-option toggle, wrong for these 6 scrollable tabs,
+              which stretched into evenly-spaced, oddly-gapped pills once
+              'pill' started spanning the full row. 'chip' is what this
+              always actually was: a compact, scrollable, content-hugging
+              strip. */}
           <PillTabs
             tabs={TABS}
             value={activeTab}
             onChange={setActiveTab}
             getKey={(t) => t}
             getLabel={(t) => TAB_LABELS[t]}
+            variant="chip"
             scrollable
             className="-mx-1 px-1 pb-1"
           />
 
-          {/* Tab content */}
           <div>
             {activeTab === 'profile' && <ProfileTab customer={customer} />}
             {activeTab === 'edit'    && <EditTab customer={customer} onSaved={handleSaved} />}
             {activeTab === 'schemes' && <SchemesTab customerId={customer.customerId} />}
             {activeTab === 'points'  && <PointsTab customerId={customer.customerId} />}
             {activeTab === '360'     && <Customer360Tab customerId={customer.customerId} />}
+            {activeTab === 'wishlist' && <WishlistTab customerId={customer.customerId} />}
           </div>
 
         </div>

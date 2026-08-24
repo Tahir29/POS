@@ -1,7 +1,5 @@
 'use client';
 
-// src/components/features/products/ProductImageGallery.jsx
-//
 // IMAGE SOURCE PRIORITY (future-proof):
 //   1. shopifyImages prop  — passed from product detail page via useShopifyProductImages
 //   2. OrnaVerse fields    — product.image, image_1 … image_8 (currently null on UAT)
@@ -29,11 +27,12 @@
 
 import { useState, useRef } from 'react';
 import Image from 'next/image';
-import { ChevronLeft, ChevronRight, ZoomIn, Gem, Play } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ZoomIn, Play } from 'lucide-react';
 import ProductImageZoomModal from '@/components/features/products/ProductImageZoomModal';
 import { resolveImageSrc } from '@/lib/resolveImageSrc';
 import { Skeleton } from '@/components/ui/skeleton';
 import StockStatusBadge from '@/components/shared/StockStatusBadge';
+import Logo from '@/components/shared/Logo';
 
 // Known colour keywords used in Shopify image `alt` text. Anything whose alt
 // doesn't match one of these (e.g. "Cert") is treated as colour-agnostic and
@@ -68,10 +67,14 @@ function filterShopifyImagesByColor(shopifyImages, activeColorName) {
 
 
 
+// Same Logo asset as the sidebar mark / ProductCard's own no-image state
+// (2026-08-23, swapped from a generic lucide Gem icon) — consistent branding
+// wherever a product genuinely has no photo, rather than each surface
+// picking its own throwaway icon.
 function NoImagePlaceholder() {
   return (
     <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-muted">
-      <Gem size={44} strokeWidth={1.25} className="text-accent/50" aria-hidden="true" />
+      <Logo variant="icon" color="brown" width={48} height={48} className="opacity-40" />
       <span className="text-xs text-muted-foreground/70">No image available</span>
     </div>
   );
@@ -115,7 +118,6 @@ export default function ProductImageGallery({
   const [zoomOpen, setZoomOpen]         = useState(false);
   const touchStartX                     = useRef(null);
 
-  // ── Build image list ───────────────────────────────────────────────────────
     // Priority 1: Shopify images (sorted by position, already done in hook),
   //             filtered down to the active variant's colour.
   // Priority 2: OrnaVerse image fields (currently null on UAT)
@@ -127,7 +129,6 @@ export default function ProductImageGallery({
         alt: img.alt ?? product?.item_name ?? 'Product image',
       }));
     }
-    // Fall back to OrnaVerse fields
     const fields = [
       product?.image,
       product?.image_1,
@@ -166,7 +167,6 @@ export default function ProductImageGallery({
   // exists in the new, shorter filtered list.
   const safeIndex = currentIndex < slides.length ? currentIndex : 0;
 
-  // ── Touch swipe ───────────────────────────────────────────────────────────
   const handleTouchStart = (e) => { touchStartX.current = e.touches[0].clientX; };
   const handleTouchEnd   = (e) => {
     if (touchStartX.current === null) return;
@@ -240,7 +240,6 @@ export default function ProductImageGallery({
           the main image at that width and nowhere else. */}
       <div className="flex flex-col md:flex-row md:items-stretch xl:flex-col gap-3">
 
-        {/* Tablet-only thumbnail rail */}
         {slides.length > 1 && (
           <div
             role="tablist"
@@ -251,7 +250,6 @@ export default function ProductImageGallery({
           </div>
         )}
 
-        {/* Main slide */}
         <div
           className="relative w-full flex-1 min-w-0 overflow-hidden rounded-2xl bg-muted"
           style={{ aspectRatio: '1 / 1' }}
@@ -333,7 +331,6 @@ export default function ProductImageGallery({
         </div>
       </div>
 
-      {/* Zoom hint — image slides only */}
       {showImage && (
         <p className="text-center text-xs text-muted-foreground -mt-1">
           Tap image to zoom

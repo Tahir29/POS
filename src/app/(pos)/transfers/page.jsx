@@ -1,6 +1,5 @@
 'use client';
 
-// src/app/(pos)/transfers/page.jsx
 // Phase 11 — Transfers (informational placeholder).
 //
 // Direct inter-store stock transfer endpoints (initiate, view requests,

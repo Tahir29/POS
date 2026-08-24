@@ -1,9 +1,5 @@
 'use client';
 
-// src/components/features/orders/OrderListItem/index.jsx
-// A single card in the orders list. Tappable to open details.
-// Shows order number, customer, date, store, total, and payment status badge.
-
 import { User, Calendar, Store } from 'lucide-react';
 import ListItemCard from '@/components/shared/ListItemCard';
 import PaymentStatusBadge, { mapOrderStatus } from '@/components/shared/PaymentStatusBadge';
@@ -34,7 +30,6 @@ export default function OrderListItem({ order, onSelect }) {
         </>
       )}
     >
-      {/* Customer + Date */}
       <div className="flex items-center justify-between gap-2">
         <span className="flex items-center gap-2 text-[13px] text-muted-foreground min-w-0">
           <User size={13} className="shrink-0 text-muted-foreground/70" aria-hidden="true" />
@@ -52,7 +47,6 @@ export default function OrderListItem({ order, onSelect }) {
         )}
       </div>
 
-      {/* Store */}
       {companyName && (
         <div className="flex items-center gap-2 text-[13px] text-muted-foreground">
           <Store size={13} className="shrink-0 text-muted-foreground/70" aria-hidden="true" />

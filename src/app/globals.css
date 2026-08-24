@@ -85,14 +85,28 @@
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
 
-  /* Border radius scale */
+  /* Border radius scale — flattened 2026-08-23 to match lucirajewelry.com:
+     the marketing site uses a small, near-uniform corner radius everywhere
+     (~6px on product cards/badges/inputs; measured live against the real
+     site), not an escalating scale where bigger surfaces get progressively
+     rounder corners the way this app's rounded-xl/2xl cards/sheets used to.
+     Every tier below now resolves to the exact same value as --radius-sm
+     (still calc(var(--radius) * 0.6) = 6px at the current --radius: 0.625rem)
+     — every existing rounded-md/lg/xl/2xl/3xl/4xl class across the app
+     renders visually identical to rounded-sm with NO per-component class
+     changes needed, since they're all Tailwind utilities reading from this
+     one scale. rounded-full/rounded-none are separate Tailwind utilities
+     untouched by this — avatars, toggle switches, circular icon buttons,
+     spinners, and pill-shaped tabs/filters stay genuinely round, matching
+     how the brand site itself still uses a real pill shape for its one
+     rounded-full toggle chip. */
   --radius-sm:  calc(var(--radius) * 0.6);
-  --radius-md:  calc(var(--radius) * 0.8);
-  --radius-lg:  var(--radius);
-  --radius-xl:  calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
+  --radius-md:  var(--radius-sm);
+  --radius-lg:  var(--radius-sm);
+  --radius-xl:  var(--radius-sm);
+  --radius-2xl: var(--radius-sm);
+  --radius-3xl: var(--radius-sm);
+  --radius-4xl: var(--radius-sm);
 
   /* Shadow scale — premium revamp (2026-07-22). None of these existed
      before; Button/Card previously fell back to Tailwind's flat default

@@ -1,7 +1,5 @@
 'use client';
 
-// src/components/features/invoices/InvoiceListItem/index.jsx
-// A single card in the invoice list. Tappable to open details.
 // Invoice number sourced from invoice.raw.document_no (confirmed from
 // InvoiceDetailSheet). Design mirrors OrderListItem card layout.
 
@@ -41,7 +39,6 @@ export default function InvoiceListItem({ invoice, onSelect }) {
         </p>
       )}
     >
-      {/* Row 1: Customer + Date */}
       <div className="flex items-center justify-between gap-2">
         <span className="flex items-center gap-2 text-[13px] text-muted-foreground min-w-0">
           <User size={13} className="shrink-0 text-muted-foreground/70" aria-hidden="true" />
@@ -59,7 +56,6 @@ export default function InvoiceListItem({ invoice, onSelect }) {
         )}
       </div>
 
-      {/* Row 2: Store */}
       {storeName && (
         <div className="flex items-center gap-2 text-[13px] text-muted-foreground">
           <Store size={13} className="shrink-0 text-muted-foreground/70" aria-hidden="true" />
@@ -67,7 +63,6 @@ export default function InvoiceListItem({ invoice, onSelect }) {
         </div>
       )}
 
-      {/* Row 3: Mobile */}
       {customerMobile && (
         <div className="flex items-center gap-2 text-[13px] text-muted-foreground">
           <Phone size={13} className="shrink-0 text-muted-foreground/70" aria-hidden="true" />
@@ -75,7 +70,6 @@ export default function InvoiceListItem({ invoice, onSelect }) {
         </div>
       )}
 
-      {/* Row 4: Email */}
       {customerEmail && (
         <div className="flex items-center gap-2 text-[13px] text-muted-foreground">
           <Mail size={13} className="shrink-0 text-muted-foreground/70" aria-hidden="true" />

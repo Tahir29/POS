@@ -6,10 +6,14 @@
 // one place — two copies of this would silently drift the day someone
 // switches environments.
 //
-// To switch back to LIVE, change ACTIVE_ENV here. See route.js for why the
-// LIVE client needs a secret and UAT (a public OAuth client) does not.
+// To switch environments, change ACTIVE_ENV in environment.js (not here —
+// that file is also imported by client-safe authConfig.js, so the flag
+// lives in one place both sides can reach). See route.js for why the LIVE
+// client needs a secret and UAT (a public OAuth client) does not.
 
-export const ACTIVE_ENV = 'UAT'; // 'LIVE' | 'UAT'
+import { ACTIVE_ENV } from './environment';
+
+export { ACTIVE_ENV };
 
 export const UPSTREAM = (
   (ACTIVE_ENV === 'LIVE'

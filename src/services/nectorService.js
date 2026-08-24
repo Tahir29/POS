@@ -1,5 +1,3 @@
-// src/services/nectorService.js
-//
 // Client-side service for Nector product reviews.
 // Calls our own /api/nector proxy — never Nector directly — so the API key
 // never reaches the browser. See src/app/api/nector/[...path]/route.js for

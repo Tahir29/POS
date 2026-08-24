@@ -1,4 +1,3 @@
-// src/components/layout/Header/index.jsx
 'use client';
 
 import { useState } from 'react';
@@ -28,7 +27,6 @@ import { NAV_ITEMS, BOTTOM_ITEMS } from '@/constants/navItems';
 import { cn } from '@/lib/utils';
 import { EASE_PREMIUM, DURATION } from '@/lib/motion';
 
-// ── PAGE TITLE ────────────────────────────────────────────────
 // Derives the header title from the SAME NAV_ITEMS/BOTTOM_ITEMS the
 // Sidebar uses — no second hardcoded label list to keep in sync.
 // Routes not present in nav config (e.g. detail/sub-pages) fall back
@@ -55,8 +53,6 @@ function usePageTitle() {
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join(' ');
 }
-
-// ── CART BADGE ────────────────────────────────────────────────
 
 function CartBadge({ onOpen }) {
   const itemCount = useCartItemCount();
@@ -93,8 +89,6 @@ function CartBadge({ onOpen }) {
   );
 }
 
-// ── STORE INDICATOR ───────────────────────────────────────────
-
 function StoreIndicator({ onOpen }) {
   const { activeStoreName, availableStores } = useActiveStore();
   const hasMultipleStores = availableStores.length > 1;
@@ -116,7 +110,15 @@ function StoreIndicator({ onOpen }) {
       )}
     >
       <Store size={15} aria-hidden="true" className="shrink-0 text-muted-foreground" />
-      <span className="hidden sm:inline truncate max-w-[140px]">
+      {/* Text hidden below 1200px (2026-08-23) — icon-only at tablet width,
+          where this sits alongside HeaderCustomerControl/CartBadge/UserMenu
+          in a fixed-width row that doesn't have room for the full store
+          name; was previously just `sm:inline` (640px), wide enough that
+          the header's action cluster still overflowed on real tablet
+          viewports. min-[1200px] is an arbitrary Tailwind breakpoint, not
+          one of the named sm/md/lg/xl ones — chosen to match this specific
+          overflow point, not a new app-wide breakpoint. */}
+      <span className="hidden min-[1200px]:inline truncate max-w-[140px]">
         {activeStoreName ?? '—'}
       </span>
       {hasMultipleStores && (
@@ -126,7 +128,6 @@ function StoreIndicator({ onOpen }) {
   );
 }
 
-// ── USER MENU ─────────────────────────────────────────────────
 // Trigger shows a circular initials avatar (matches the dashboard redesign
 // reference) instead of a generic person icon — still the same DropdownMenu
 // underneath, sign-out functionality unchanged.
@@ -166,8 +167,6 @@ function UserMenu() {
   );
 }
 
-// ── HEADER ────────────────────────────────────────────────────
-
 export default function Header() {
   const dispatch = useDispatch();
   const [storeModalOpen, setStoreModalOpen] = useState(false);
@@ -182,7 +181,6 @@ export default function Header() {
         className="flex items-center justify-between gap-4 border-b bg-card px-4 min-h-[64px] shrink-0"
         role="banner"
       >
-        {/* Left — mobile menu toggle + back button (route-dependent) + page title */}
         <div className="flex items-center gap-2 shrink-0 min-w-0">
           <Button
             type="button"
@@ -214,7 +212,6 @@ export default function Header() {
         {/* Spacer — pushes the action cluster to the right on wide screens */}
         <div className="hidden flex-1 md:block" />
 
-        {/* Right — actions: customer session, cart, store, account */}
         <div className="flex items-center gap-2 shrink-0 overflow-x-auto">
           <HeaderCustomerControl />
           <CartBadge onOpen={() => dispatch(openCart())} />

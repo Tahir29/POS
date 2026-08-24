@@ -1,4 +1,3 @@
-// src/services/hrService.js
 // HR / Employee lookups.
 // All functions are pure HTTP wrappers — no business logic.
 

@@ -1,4 +1,3 @@
-// src/hooks/customer/useWalkInLookup.js
 // Store-entry check via Services/POS/WalkIn/Lookup.
 //
 // A useMutation, not a useQuery: every call WRITES a customer_visits row

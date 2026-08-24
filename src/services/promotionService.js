@@ -1,11 +1,8 @@
-// src/services/promotionService.js
 // Promotions and gift vouchers — CRM module.
 // All functions are pure HTTP wrappers — no business logic.
 
 import axiosInstance from '@/lib/axios/axiosInstance';
 import API from '@/constants/apiEndpoints';
-
-// ─── PROMOTIONS ───────────────────────────────────────────────────────────────
 
 /**
  * Fetches every promotion record. GetPromotion does not filter by code
@@ -83,8 +80,6 @@ export function applyPromotions({
 export function reversePromotion({ transaction_id }) {
   return axiosInstance.post(API.CRM.REVERSE_PROMOTION, { transaction_id });
 }
-
-// ─── GIFT VOUCHERS ────────────────────────────────────────────────────────────
 
 /**
  * Check whether a gift voucher code is valid and has balance remaining.

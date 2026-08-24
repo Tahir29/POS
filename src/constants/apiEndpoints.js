@@ -50,9 +50,6 @@ const API = {
     EMPLOYEE_LIST: 'Services/HR/Employee/List',
   },
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // SETTINGS & CONFIGURATION
-  // ─────────────────────────────────────────────────────────────────────────
   SETTINGS: {
     GET_PAYMENT_MODES:        'Services/Administration/PaymentReceiptMode/List',
     GET_PAYMENT_MODES_REFUND: 'Services/Administration/PaymentReceiptMode/PaymentModesForRefund',
@@ -115,9 +112,6 @@ const API = {
     GET_STOCK_BY_STORES_BATCH: 'Services/Inventory/ProductCatalog/GetStockByStoresBatch',
   },
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // INVENTORY
-  // ─────────────────────────────────────────────────────────────────────────
   INVENTORY: {
     GET_STOCK:          'Services/Inventory/GetStock',
     STOCK_JOURNAL_LIST: 'Services/Inventory/StockJournal/List',
@@ -570,9 +564,6 @@ const API = {
     SALES_INSIGHTS:     'Services/Reports/CustomerHistory/GetSalesInsights',
   },
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // REWARDS / LOYALTY POINTS
-  // ─────────────────────────────────────────────────────────────────────────
   REWARDS: {
     GET_POINTS:      'Services/CRM/CustomerRewards/GetCustomerPoints',
     LOYALTY_HISTORY: 'Services/CRM/CustomerRewards/LoyaltyHistories',

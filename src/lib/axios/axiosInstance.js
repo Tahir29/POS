@@ -7,7 +7,6 @@
 import axios from 'axios';
 import { attachInterceptors } from './interceptors';
 
-// ── SEC-007: BASE URL ASSERTION ───────────────────────────────
 // Fail loudly at startup if the env var is missing or empty.
 // A silent undefined baseURL would let requests go to the wrong host
 // or fail with cryptic CORS/network errors in production.
@@ -20,8 +19,6 @@ if (!BASE_URL) {
   );
 }
 
-// ── CREATE INSTANCE ───────────────────────────────────────────
-// baseURL: '/api',
 const axiosInstance = axios.create({
   baseURL: BASE_URL,
   headers: {
@@ -37,7 +34,6 @@ const axiosInstance = axios.create({
   timeout: 30000,
 });
 
-// ── ATTACH INTERCEPTORS ───────────────────────────────────────
 // Interceptors are attached separately to keep this file clean.
 // The interceptors file receives the instance and the store reference.
 attachInterceptors(axiosInstance);

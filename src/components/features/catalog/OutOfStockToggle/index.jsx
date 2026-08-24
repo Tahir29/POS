@@ -1,6 +1,5 @@
 'use client';
 
-// src/components/features/catalog/OutOfStockToggle/index.jsx
 // Labeled toggle switch — shows/hides out-of-stock products.
 // Restyled to a plain label + switch (no icon/pill/border) to match
 // the new design's minimal treatment.

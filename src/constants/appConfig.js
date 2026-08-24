@@ -10,6 +10,8 @@
 //   ADDED:   STALE_TIME.ANALYTICS
 //   ADDED:   REPAIR.STAGES, ESTIMATION.STATUSES for UI state tracking
 
+import { ORNAVERSE_AUTH } from '@/lib/ornaverse/authConfig';
+
 const APP_CONFIG = {
 
   // ── METAL TYPE IDs ────────────────────────────────────────────────────────
@@ -37,7 +39,6 @@ const APP_CONFIG = {
     GOLD: 46875,
   },
 
-  // ── CURRENCY ──────────────────────────────────────────────────────────────
   CURRENCY: {
     INR_ID:     103,
     INR_CODE:   'INR',
@@ -125,51 +126,26 @@ const APP_CONFIG = {
   },
 
   // ── AUTHENTICATION ────────────────────────────────────────────────────────
-  // UAT OrnaVerse client (2026-07-29) — client_id/scope only, no secret.
-  // Confirmed from the UAT admin panel's "Edit OAuth Client (api_access)"
-  // screen: OAuth Client Type is **Public**, so no client_secret exists for
-  // this client at all (public clients are secretless by definition — that's
-  // the whole distinction from a confidential client). Nothing to park in
-  // .env.local for UAT; ORNAVERSE_UAT_CLIENT_SECRET stays unset.
+  // CLIENT_ID / GRANT_TYPE_PASSWORD / SCOPE now come from ornaverse/authConfig.js,
+  // which derives them from the SAME ACTIVE_ENV flag upstream.js uses — flip
+  // ACTIVE_ENV in ornaverse/environment.js and the upstream URL, the
+  // server-injected secret, AND these three fields all switch together. See authConfig.js
+  // for the full per-environment values and why they differ (confidential
+  // vs public client, client_credentials vs password grant, offline_access
+  // support) — this used to be 3 values hand-copied here on every
+  // environment switch, which is exactly what caused the 2026-08-22 LIVE
+  // cutover to 401 on every request (upstream.js flipped to LIVE, this
+  // block didn't, so the browser kept sending UAT's client_id to LIVE's
+  // token endpoint — "invalid_client" on login, no valid bearer token
+  // after that for anything).
   //
-  // GRANT_TYPE_PASSWORD is 'password' — the UAT client's allowed Grant Types
-  // are exactly Password / Authorization Code / Refresh Token. It was briefly
-  // set to 'client_credentials' during the LIVE service-account work; against
-  // this public client that produced a misleading
-  // 400 "The 'client_secret' or 'client_assertion' parameter must be
-  // specified when using the client credentials grant" — which reads like a
-  // missing-secret problem but is really "that grant isn't enabled for this
-  // client, so it assumed you must be a confidential client." Don't chase a
-  // nonexistent UAT secret if this reappears; check the grant type first.
-  //
-  // NOTE for switching back to LIVE: LIVE's client IS confidential and its
-  // secret lives in .env.local as ORNAVERSE_LIVE_CLIENT_SECRET (server-only,
-  // injected by the api/[...path] proxy — never in this browser-shipped
-  // file). LIVE also used client_credentials; if reverting, both CLIENT_ID
-  // and GRANT_TYPE_PASSWORD here need to go back alongside route.js's
-  // ACTIVE_ENV.
-  // SCOPE — FIXED 2026-08-21: 'profile email' alone never got a refresh_token
-  // back from OrnaVerse's /connect/token AT ALL, confirmed live by diffing the
-  // raw response with and without offline_access — { access_token, token_type,
-  // expires_in } only vs. + refresh_token once offline_access is requested.
-  // This is standard OpenIddict/OAuth behaviour (offline_access is what a
-  // client asks for to be ISSUED a refresh token in the first place), not an
-  // OrnaVerse quirk. Every real login before this fix ran with refreshToken
-  // permanently null — interceptors.js's proactive-refresh branch requires a
-  // truthy refreshToken and so silently never fired, and worse, its reactive
-  // 401 handler treats a missing refreshToken as "log out immediately, no
-  // refresh attempt." So the ONLY thing standing between a signed-in operator
-  // and a forced logout was the access token's own 60-minute clock — any
-  // request that landed after that (checkout's own post-Create/Post burst of
-  // invalidateQueries calls being a very likely moment to land on) hit a real
-  // 401 with nothing to recover it, and appeared as "the customer got signed
-  // out right after placing the order." Not a race condition, not a checkout
-  // bug — checkout just happens to be a reliable place for A request to land
-  // after however long the session had actually been open.
+  // GRANT_TYPE_REFRESH stays here (not env-derived): only UAT's
+  // password grant issues a refresh_token at all — see the SCOPE note in
+  // authConfig.js. On LIVE this constant is simply unused; interceptors.js's
+  // refresh branch requires a truthy refreshToken and one never exists
+  // there, so it re-authenticates via client_credentials instead.
   AUTH: {
-    CLIENT_ID:                 '65948cb671ae46e1a04653f505e29332',
-    SCOPE:                     'profile email offline_access',
-    GRANT_TYPE_PASSWORD:       'password',
+    ...ORNAVERSE_AUTH,
     GRANT_TYPE_REFRESH:        'refresh_token',
     TOKEN_REFRESH_THRESHOLD_MS: 5 * 60 * 1000, // refresh proactively 5 min before expiry
   },
@@ -198,6 +174,14 @@ const APP_CONFIG = {
     ORDERS:     2 * 60 * 1000, // 2 min  — orders, invoices, transactions
     STOCK:      1 * 60 * 1000, // 1 min  — live stock levels
     ANALYTICS: 10 * 60 * 1000, // 10 min — analytics charts (slow-changing)
+    // 24h (2026-08-23) — "master data" that only changes when someone edits
+    // a product in OrnaVerse/Shopify: the whole-store catalog list
+    // (useAllCatalog) and per-item Shopify photos (useShopifyProductImages).
+    // Paired with lib/queryPersister.js, which persists exactly these two
+    // to IndexedDB so a page reload doesn't re-fetch them either. NEVER use
+    // this for price — see usePricingEpoch.js for why price stays on a
+    // live change-detector instead of any timer, however long.
+    MASTER_DATA: 24 * 60 * 60 * 1000,
   },
 
   // ── SESSION ───────────────────────────────────────────────────────────────
@@ -210,10 +194,9 @@ const APP_CONFIG = {
     CLICK_DEBOUNCE:        300,
   },
 
-  // ── SEARCH ────────────────────────────────────────────────────────────────
   SEARCH: {
-    DEBOUNCE_MS:      300, // ms to wait before triggering search
-    MIN_QUERY_LENGTH:   2, // minimum chars before triggering search
+    DEBOUNCE_MS:      300,
+    MIN_QUERY_LENGTH:   2,
   },
 
   // ── PAYMENT MODES ─────────────────────────────────────────────────────────

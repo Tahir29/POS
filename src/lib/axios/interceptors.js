@@ -17,7 +17,6 @@ import axios from 'axios';
 import APP_CONFIG from '@/constants/appConfig';
 import API from '@/constants/apiEndpoints';
 
-// ── TOKEN REFRESH STATE ───────────────────────────────────────
 // ONE in-flight refresh promise, shared by BOTH the request interceptor's
 // proactive refresh (token nearing expiry) and the response interceptor's
 // reactive refresh (401 came back). These used to be two independent code
@@ -57,12 +56,10 @@ const getRefreshedToken = (instance, refreshToken, store) => {
   return refreshPromise;
 };
 
-// ── STORE REFERENCE ───────────────────────────────────────────
 // We import the store lazily (inside functions) to avoid circular
 // dependency issues between axiosInstance → interceptors → store.
 const getStore = () => require('@/store').store;
 
-// ── ATTACH INTERCEPTORS ───────────────────────────────────────
 /**
  * Attaches request and response interceptors to the provided Axios instance.
  * Called once during axiosInstance creation.
@@ -71,7 +68,6 @@ const getStore = () => require('@/store').store;
  */
 export const attachInterceptors = (instance) => {
 
-  // ── REQUEST INTERCEPTOR ─────────────────────────────────────
   instance.interceptors.request.use(
     async (config) => {
       const store = getStore();
@@ -81,7 +77,6 @@ export const attachInterceptors = (instance) => {
       const tokenExpiry  = state.auth.tokenExpiry;
       const refreshToken = state.auth.refreshToken;
 
-      // Skip auth header for the token endpoint itself
       const isAuthEndpoint = config.url?.includes('connect/token');
       if (isAuthEndpoint) {
         return config;
@@ -107,7 +102,6 @@ export const attachInterceptors = (instance) => {
         }
       }
 
-      // Attach current access token
       if (accessToken) {
         config.headers['Authorization'] = `Bearer ${accessToken}`;
       }
@@ -117,24 +111,19 @@ export const attachInterceptors = (instance) => {
     (error) => Promise.reject(error)
   );
 
-  // ── RESPONSE INTERCEPTOR ────────────────────────────────────
   instance.interceptors.response.use(
-    // Success — pass through unchanged
     (response) => response,
 
-    // Error — handle 401 and normalize all errors
     async (error) => {
       const originalRequest = error.config;
       const status          = error.response?.status;
       const store           = getStore();
 
-      // ── 401 HANDLING ───────────────────────────────────────
       if (status === 401 && !originalRequest._retry) {
         originalRequest._retry = true;
 
         const refreshToken = store.getState().auth.refreshToken;
 
-        // No refresh token available — log out immediately
         if (!refreshToken) {
           handleLogout(store);
           return Promise.reject(normalizeError(error));
@@ -153,13 +142,11 @@ export const attachInterceptors = (instance) => {
         }
       }
 
-      // ── ALL OTHER ERRORS ────────────────────────────────────
       return Promise.reject(normalizeError(error));
     }
   );
 };
 
-// ── REFRESH ACCESS TOKEN ──────────────────────────────────────
 /**
  * Calls the OrnaVerse refresh token endpoint and updates Redux auth state.
  * Returns the new access token string on success.
@@ -182,7 +169,6 @@ const refreshAccessToken = async (instance, refreshToken, store) => {
 
   const { access_token, refresh_token, expires_in } = response.data;
 
-  // Update Redux auth state with new tokens
   const { updateTokens } = require('@/store/slices/authSlice');
   store.dispatch(updateTokens({
     accessToken:  access_token,
@@ -193,7 +179,6 @@ const refreshAccessToken = async (instance, refreshToken, store) => {
   return access_token;
 };
 
-// ── HANDLE LOGOUT ─────────────────────────────────────────────
 /**
  * Clears Redux auth and store state, then redirects to login.
  * Called when refresh token is expired or missing.
@@ -217,7 +202,6 @@ const handleLogout = (store) => {
   }
 };
 
-// ── NORMALIZE ERROR ───────────────────────────────────────────
 /**
  * Pulls the human-readable reason out of an OrnaVerse error body.
  *
@@ -282,7 +266,6 @@ const normalizeError = (error) => {
     );
   }
 
-  // Network error — no response received
   if (!error.response) {
     return {
       code:          0,

@@ -1,6 +1,5 @@
 'use client';
 
-// src/app/(pos)/schemes/enroll/page.jsx
 // Enroll the currently-attached customer into a jewellery savings scheme.
 //
 // Requires a customer to be attached to the session (header control).
@@ -171,7 +170,6 @@ function EnrollScreen() {
   return (
     <div className="flex flex-col gap-4 p-4 pb-8 max-w-2xl mx-auto">
 
-      {/* Back */}
       <button
         type="button"
         onClick={() => router.back()}
@@ -182,7 +180,6 @@ function EnrollScreen() {
 
       <h1 className="text-xl font-semibold text-foreground">Enroll in Scheme</h1>
 
-      {/* Customer context */}
       <CustomerAttachedBanner
         customerId={customerId}
         customerName={customerName}
@@ -192,7 +189,6 @@ function EnrollScreen() {
 
       <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5">
 
-        {/* Scheme picker */}
         <div className="flex flex-col gap-1.5">
           <Label>Scheme <span className="text-destructive">*</span></Label>
           <Controller
@@ -219,7 +215,6 @@ function EnrollScreen() {
           />
           {errors.scheme_id && <p className="text-xs text-destructive">{errors.scheme_id.message}</p>}
 
-          {/* Scheme info card */}
           {selectedScheme && (
             <div className="rounded-lg border border-border bg-muted p-3 text-xs text-foreground/80 flex flex-col gap-1 mt-1">
               {selectedScheme.scheme_description && (
@@ -232,7 +227,6 @@ function EnrollScreen() {
           )}
         </div>
 
-        {/* Monthly amount */}
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="enroll_amount">
             Monthly Amount (₹) <span className="text-destructive">*</span>
@@ -252,7 +246,6 @@ function EnrollScreen() {
           {errors.scheme_amount && <p className="text-xs text-destructive">{errors.scheme_amount.message}</p>}
         </div>
 
-        {/* Tenure */}
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="enroll_tenure">
             Tenure (months) <span className="text-destructive">*</span>
@@ -269,14 +262,12 @@ function EnrollScreen() {
           {errors.tenure && <p className="text-xs text-destructive">{errors.tenure.message}</p>}
         </div>
 
-        {/* Enrollment date */}
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="enroll_date">Start Date <span className="text-destructive">*</span></Label>
           <Input id="enroll_date" type="date" {...register('document_date')} className="h-11" max={today} />
           {errors.document_date && <p className="text-xs text-destructive">{errors.document_date.message}</p>}
         </div>
 
-        {/* Payment plan preview — same schedule sent as scheme_monthly_details[] */}
         {monthlyPreview.length > 0 && (
           <div className="rounded-xl border border-border bg-muted p-4 flex flex-col gap-2">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
@@ -304,7 +295,6 @@ function EnrollScreen() {
           </div>
         )}
 
-        {/* Sales person */}
         <div className="flex flex-col gap-1.5">
           <Label>Sales Person <span className="text-destructive">*</span></Label>
           <Controller
@@ -321,7 +311,6 @@ function EnrollScreen() {
           {errors.sales_person_id && <p className="text-xs text-destructive">{errors.sales_person_id.message}</p>}
         </div>
 
-        {/* Nominee (optional) */}
         <div className="rounded-xl border border-border bg-muted p-4 flex flex-col gap-4">
           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Nominee (Optional)</p>
 

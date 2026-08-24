@@ -1,4 +1,3 @@
-// src/services/checkoutPricingService.js
 // Builds Invoice/Order Create line_items[] from the REAL STOCK PIECES being
 // sold — captured verbatim from OrnaVerse's own UAT sales counter on
 // 2026-08-05, not inferred.
@@ -151,27 +150,6 @@ async function claimStockPieces({ item, activeStoreId, claimed }) {
 }
 
 /**
- * Builds Invoice/Order Create line_items[] from live cart items.
- *
- * Returns ONE LINE PER PHYSICAL PIECE, which is how the ERP models a sale —
- * a cart line for 2 becomes two line items, each with its own stock SKU and
- * line number. That is also why nothing is scaled by quantity any more: each
- * row already describes exactly one piece at its own weight and cost.
- *
- * `salesPersonId` is optional: useCheckoutPricing calls this to quote the
- * cart before a sales person has necessarily been picked, and the field is
- * stamped on at submit. It is the only thing OrnaVerse's own client adds
- * after pricing, so adding it later changes nothing else.
- *
- * @param {{
- *   items: {itemId, itemName, quantity}[],
- *   activeStoreId: number,
- *   salesPersonId?: number,
- *   documentId: number,
- * }} params
- * @returns {Promise<object[]>} line_items ready to attach to the Entity
- */
-/**
  * Resolves a cart item back to its FULL master record — the Style variant
  * when we know the style, else the plain Items/Retrieve Entity. Both shapes
  * carry the item_components[] BOM that SetSalesItems recomputes against.
@@ -287,14 +265,6 @@ export async function buildPricedLineItems({ items, activeStoreId, salesPersonId
 }
 
 /**
- * Sums the authoritative per-line totals (computed by SetSalesItems, not
- * the cart's display-only flat-3%-GST estimate) into header-level figures —
- * including the aggregate pieces/weight/net_weight the header itself
- * carries (confirmed live 2026-07-28: omitting these was part of what
- * still 500'd even after every other header field was correct).
- * @param {object[]} lineItems — output of buildPricedLineItems
- */
-/**
  * Maps priced line items back onto the cart lines that produced them.
  *
  * Both pricing paths emit ONE ROW PER PIECE, in cart order, expanding a cart
@@ -333,6 +303,14 @@ export function mapPricedLinesToCart(items, lineItems) {
   return byCartIndex;
 }
 
+/**
+ * Sums the authoritative per-line totals (computed by SetSalesItems, not
+ * the cart's display-only flat-3%-GST estimate) into header-level figures —
+ * including the aggregate pieces/weight/net_weight the header itself
+ * carries (confirmed live 2026-07-28: omitting these was part of what
+ * still 500'd even after every other header field was correct).
+ * @param {object[]} lineItems — output of buildPricedLineItems
+ */
 export function summarizeLineItems(lineItems) {
   const sum = (field) => +lineItems.reduce((s, li) => s + (li[field] ?? 0), 0).toFixed(2);
   return {

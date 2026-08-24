@@ -1,4 +1,3 @@
-// src/hooks/transactions/useCustomerCredits.js
 // Outstanding credit a customer is owed — raised by Returns / Exchanges /
 // Buy Backs, and settled by a Refund. Feeds the Refund form's picker.
 

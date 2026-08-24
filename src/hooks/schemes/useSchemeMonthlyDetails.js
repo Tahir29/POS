@@ -1,4 +1,3 @@
-// src/hooks/schemes/useSchemeMonthlyDetails.js
 // Month-by-month payment schedule for a single scheme enrollment.
 //
 // Confirmed live 2026-07-22 — Services/POS/SchemeMonthlyDetails/List

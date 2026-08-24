@@ -1,5 +1,3 @@
-// src/components/features/dashboard/KPICard/icons.jsx
-//
 // Custom KPI icons supplied by design (line-art, 24x24, stroke-width 1.8).
 // Use `currentColor` rather than the original hardcoded #6B4A42 so each
 // icon inherits its badge's text color (text-accent / text-primary),

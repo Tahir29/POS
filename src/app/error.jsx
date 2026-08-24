@@ -5,15 +5,10 @@ import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 /**
- * Route-level error boundary screen.
- * Rendered by Next.js when an unhandled error occurs within a route segment.
- * Must be a Client Component per Next.js App Router requirements.
- *
  * @param {{ error: Error, reset: Function }} props
  */
 export default function Error({ error, reset }) {
   useEffect(() => {
-    // Log to console in development — replace with error monitoring in production
     console.error('[Route Error]', error);
   }, [error]);
 

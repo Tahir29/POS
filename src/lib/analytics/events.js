@@ -34,22 +34,18 @@
 const PREFIX = 'POS_';
 
 const RAW_EVENTS = {
-  // ── Agent (no session, just logs) ────────────────
   AGENT_LOGIN:           'agent_login',
   AGENT_LOGOUT:          'agent_logout',
   AGENT_IDLE_LOGOUT:     'agent_idle_logout',
   STORE_SELECTED:        'store_selected',
   STORE_SWITCHED:        'store_switched',
 
-  // ── Customer Session ─────────────────────────────
   SESSION_START:         'session_start',
   SESSION_END:           'session_end',
   SESSION_IDLE_TIMEOUT:  'session_idle_timeout',
 
-  // ── Navigation ───────────────────────────────────
   PAGE_VIEW:             'page_view',
 
-  // ── Catalog ──────────────────────────────────────
   PRODUCT_VIEWED:        'product_viewed',
   PRODUCT_SEARCHED:      'product_searched',
   PRODUCT_SEARCH_EMPTY:  'product_search_empty',
@@ -57,14 +53,12 @@ const RAW_EVENTS = {
   BARCODE_SCANNED:       'barcode_scanned',
   BARCODE_SCAN_FAILED:   'barcode_scan_failed',
 
-  // ── Cart ─────────────────────────────────────────
   CART_ITEM_ADDED:       'cart_item_added',
   CART_ITEM_REMOVED:     'cart_item_removed',
   CART_ITEM_QTY_CHANGED: 'cart_item_qty_changed',
   CART_OPENED:           'cart_opened',
   CART_CLEARED:          'cart_cleared',
 
-  // ── Checkout ─────────────────────────────────────
   CHECKOUT_STARTED:      'checkout_started',
   PAYMENT_SELECTED:      'payment_selected',
   PROMO_APPLIED:         'promo_applied',
@@ -73,53 +67,44 @@ const RAW_EVENTS = {
   ORDER_PLACED:          'order_placed',
   ORDER_FAILED:          'order_failed',
 
-  // ── Orders ────────────────────────────────────────
   ORDER_CANCELLED:        'order_cancelled',
   ORDER_CANCEL_FAILED:    'order_cancel_failed',
 
-  // ── Invoices ──────────────────────────────────────
   INVOICE_CANCELLED:      'invoice_cancelled',
   INVOICE_CANCEL_FAILED:  'invoice_cancel_failed',
   INVOICE_RECEIPT_ADDED:  'invoice_receipt_added',
   INVOICE_RECEIPT_FAILED: 'invoice_receipt_failed',
 
-  // ── Returns ───────────────────────────────────────
   RETURN_CREATED:         'return_created',
   RETURN_POSTED:          'return_posted',
   RETURN_CANCELLED:       'return_cancelled',
   RETURN_FAILED:          'return_failed',
 
-  // ── Refunds ───────────────────────────────────────
   REFUND_CREATED:         'refund_created',
   REFUND_RECEIPT_ADDED:   'refund_receipt_added',
   REFUND_DELETED:         'refund_deleted',
   REFUND_FAILED:          'refund_failed',
 
-  // ── Credit Notes ────────────────────────────────────
   CREDIT_NOTE_CREATED:    'credit_note_created',
   CREDIT_NOTE_POSTED:     'credit_note_posted',
   CREDIT_NOTE_CANCELLED:  'credit_note_cancelled',
   CREDIT_NOTE_FAILED:     'credit_note_failed',
 
-  // ── Exchange ─────────────────────────────────────
   EXCHANGE_CREATED:       'exchange_created',
   EXCHANGE_POSTED:        'exchange_posted',
   EXCHANGE_CANCELLED:     'exchange_cancelled',
   EXCHANGE_FAILED:        'exchange_failed',
 
-  // ── Buyback ──────────────────────────────────────
   BUYBACK_CREATED:        'buyback_created',
   BUYBACK_POSTED:         'buyback_posted',
   BUYBACK_CANCELLED:      'buyback_cancelled',
   BUYBACK_FAILED:         'buyback_failed',
 
-  // ── URD Purchase ─────────────────────────────────
   URD_PURCHASE_CREATED:   'urd_purchase_created',
   URD_PURCHASE_POSTED:    'urd_purchase_posted',
   URD_PURCHASE_CANCELLED: 'urd_purchase_cancelled',
   URD_PURCHASE_FAILED:    'urd_purchase_failed',
 
-  // ── Repair ───────────────────────────────────────
   REPAIR_IN_CREATED:       'repair_in_created',
   REPAIR_IN_POSTED:        'repair_in_posted',
   REPAIR_IN_CANCELLED:     'repair_in_cancelled',
@@ -133,33 +118,27 @@ const RAW_EVENTS = {
   REPAIR_RECEIPT_CREATED:  'repair_receipt_created',
   REPAIR_RECEIPT_FAILED:   'repair_receipt_failed',
 
-  // ── Estimation ───────────────────────────────────
   ESTIMATION_CREATED:      'estimation_created',
   ESTIMATION_POSTED:       'estimation_posted',
   ESTIMATION_CANCELLED:    'estimation_cancelled',
   ESTIMATION_FAILED:       'estimation_failed',
 
-  // ── Daily Closing ────────────────────────────────
   DAILY_CLOSING_CREATED:   'daily_closing_created',
   DAILY_CLOSING_FAILED:    'daily_closing_failed',
 
-  // ── Schemes ──────────────────────────────────────
   SCHEME_ENROLLED:         'scheme_enrolled',
   SCHEME_ENROLL_FAILED:    'scheme_enroll_failed',
   SCHEME_PAYMENT_RECORDED: 'scheme_payment_recorded',
   SCHEME_PAYMENT_FAILED:   'scheme_payment_failed',
 
-  // ── Settings ─────────────────────────────────────
   METAL_RATE_ADDED:        'metal_rate_added',
   METAL_RATE_ADD_FAILED:   'metal_rate_add_failed',
 
-  // ── Customer ─────────────────────────────────────
   CUSTOMER_SEARCHED:     'customer_searched',
   CUSTOMER_SELECTED:     'customer_selected',
   CUSTOMER_CREATED:      'customer_created',
   CUSTOMER_DETACHED:     'customer_detached',
 
-  // ── UI Interactions ──────────────────────────────
   CLICK:                 'click',
   CUSTOMIZE_OPENED:      'customize_opened',
   CUSTOMIZE_CONFIRMED:   'customize_confirmed',

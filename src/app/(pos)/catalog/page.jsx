@@ -1,7 +1,5 @@
 'use client';
 
-// src/app/(pos)/catalog/page.jsx
-
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter }   from 'next/navigation';
 import { useSelector } from 'react-redux';
@@ -125,28 +123,22 @@ function applySearchFilterOnly(allProducts, {
 }) {
   let result = allProducts;
 
-  // 1. OOS — hide when toggle is OFF
   if (!showOutOfStock) {
     result = result.filter(isInStock);
   }
 
-  // 2. Category chip filter (AND — user explicitly selected a category)
   if (activeCategoryId) {
     result = result.filter((p) => p.type_id === activeCategoryId);
   }
 
-  // 3. Text search
   const q = searchQuery?.trim().toLowerCase() ?? '';
   if (q.length >= SEARCH.MIN_QUERY_LENGTH) {
-    // Find type_ids whose type_name matches the query — enables "rings" → ring products
     const matchingTypeIds = getMatchingTypeIds(q, categories);
 
     result = result.filter((p) => {
-      // SKU / item_code match
       if (p.item_code?.toLowerCase().includes(q)) return true;
       // item_name match (on UAT same as code, but may differ on live)
       if (p.item_name?.toLowerCase().includes(q)) return true;
-      // Category name match — "rings", "earrings", "mangalsutra" etc.
       if (matchingTypeIds.length && matchingTypeIds.includes(p.type_id)) return true;
       return false;
     });
@@ -464,11 +456,44 @@ function CatalogScreen() {
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="flex h-full flex-col bg-background">
+    // h-full REMOVED (2026-08-24) — it capped this root to exactly
+    // #main-content's own viewport-height, which is what broke the sticky
+    // filter bar below: position:sticky can only stay "stuck" for as long
+    // as it hasn't scrolled past the bottom of ITS OWN containing block, and
+    // that block was only ever one viewport tall regardless of how much
+    // product-grid content actually rendered beneath it (confirmed live —
+    // the bar detached and started scrolling away exactly once scroll
+    // passed containerHeight-barHeight, ~684px, matching measured drift
+    // exactly). The h-full + flex-1 overflow-y-auto pairing below it was
+    // meant to make the GRID scroll in its own internal box instead of the
+    // whole page — but flex-1 was set on a child of a plain (non-flex)
+    // p-4/md:p-6 wrapper, so it was already inert and never actually
+    // constrained anything; #main-content was doing 100% of the real
+    // scrolling all along. Dropping h-full just makes that the case
+    // honestly — this page now grows to its natural content height like
+    // every other page in the app (orders, invoices, …), which is also
+    // exactly what a sticky filter bar needs: a containing block tall
+    // enough to give it room to stay pinned through the whole scroll.
+    <div className="flex flex-col bg-background">
 
       {/* Light grey wash — subtle enough not to draw the eye, just enough to
-          read as its own "filters" region distinct from the white product grid below */}
-      <div className="px-4 pt-4 pb-3 md:px-6 md:pt-5 bg-muted/60 border-b border-border">
+          read as its own "filters" region distinct from the white product
+          grid below. Sticky (2026-08-24, same treatment as /orders and
+          /invoices) — pins to the top of #main-content once the grid
+          scrolls past it, and releases back to its normal spot the instant
+          you scroll back to the top (native position:sticky behavior, no
+          scroll-position JS needed). bg-muted/60 → bg-muted (full opacity,
+          not translucent) — a see-through bar would let product cards
+          scrolling underneath show faintly through it once pinned, which
+          orders/invoices' sticky bars avoid the same way. */}
+      {/* z-20, not z-10 (2026-08-24 fix): ProductCard's wishlist heart is
+          `absolute ... z-10` too, and neither the card nor this bar creates
+          its own stacking context — with equal z-index the tie breaks on
+          DOM order, and the grid (painted after this bar) won, so a card's
+          heart icon showed through on TOP of the pinned filter bar as it
+          scrolled underneath. z-20 keeps this bar above anything at the
+          card level regardless of that ordering. */}
+      <div className="sticky top-0 z-20 px-4 pt-4 pb-3 md:px-6 md:pt-5 bg-muted border-b border-border">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
           {/* Search — left, grows on wide screens but caps out so it doesn't
               dominate the row; always full-width on its own line below lg */}
@@ -528,7 +553,13 @@ function CatalogScreen() {
           </p>
         )}
 
-        <div className="flex-1 overflow-y-auto py-2">
+        {/* flex-1/overflow-y-auto removed (2026-08-24) — inert: this div's
+            parent (just above) is a plain block element, not a flex
+            container, so flex-1 never did anything, and with no bounded
+            height overflow-y-auto had nothing to ever actually clip/scroll.
+            #main-content was always the real scroller — see the root div's
+            own comment above. */}
+        <div className="py-2">
           <ProductGrid
             products={sortedDisplayProducts}
             isLoading={isLoading}

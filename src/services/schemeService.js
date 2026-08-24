@@ -1,4 +1,3 @@
-// src/services/schemeService.js
 // Jewellery savings/instalment scheme management.
 // All functions are pure HTTP wrappers — no business logic.
 //
@@ -34,8 +33,6 @@
 import axiosInstance from '@/lib/axios/axiosInstance';
 import API from '@/constants/apiEndpoints';
 
-// ─── SCHEME DEFINITIONS ───────────────────────────────────────────────────────
-
 /**
  * All available scheme products (savings plans) at this store.
  * Static-ish — cache for session.
@@ -45,8 +42,6 @@ export async function getSchemes() {
   const response = await axiosInstance.post(API.SCHEMES.LIST, { Take: 0 });
   return response.data;
 }
-
-// ─── ENROLLMENTS ──────────────────────────────────────────────────────────────
 
 /**
  * List of scheme enrollments — optionally filtered by customer.
@@ -127,8 +122,6 @@ export async function createSchemeEnrollment(payload) {
   });
   return response.data;
 }
-
-// ─── SCHEME RECEIPTS (Monthly payments) ──────────────────────────────────────
 
 /**
  * List of monthly payment receipts for a scheme enrollment.
@@ -243,8 +236,6 @@ export async function createSchemeReceipt(payload) {
   });
   return response.data;
 }
-
-// ─── SCHEME MONTHLY DETAILS ───────────────────────────────────────────────────
 
 /**
  * Month-by-month payment breakdown for a scheme enrollment.

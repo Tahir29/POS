@@ -1,6 +1,5 @@
 'use client';
 
-// src/components/shared/ConfirmDialog/index.jsx
 // Generic confirm/cancel dialog built on shadcn Dialog.
 // Used for destructive or state-changing confirmations (e.g. clearing
 // the cart when switching/detaching the session customer).

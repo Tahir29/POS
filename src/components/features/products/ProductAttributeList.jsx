@@ -1,6 +1,5 @@
 'use client';
 
-// src/components/features/products/ProductAttributeList/index.jsx
 // Renders product attributes returned from Attributes/List as a
 // labeled chip grid. Attributes are grouped by attribute_type_name
 // when present, otherwise rendered as a flat list.
@@ -13,7 +12,6 @@
 export default function ProductAttributeList({ attributes = [] }) {
   if (!attributes.length) return null;
 
-  // ── Group by attribute_type_name if available ─────────────────────────────
   const grouped = attributes.reduce((acc, attr) => {
     const group = attr.attribute_type_name ?? attr.attribute_type ?? 'Attributes';
     if (!acc[group]) acc[group] = [];

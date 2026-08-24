@@ -1,7 +1,5 @@
 'use client';
 
-// src/app/(pos)/daily-closing/page.jsx
-//
 // Daily Closing — End of Day Screen
 //
 // TWO TABS:
@@ -172,7 +170,6 @@ function NewClosingTab() {
     },
   });
 
-  // Live total
   const watched = watch(['cash_sales', 'card_sales', 'upi_sales', 'other_sales', 'opening_balance']);
   const [cashSales, cardSales, upiSales, otherSales, openingBalance] = watched.map(Number);
   const totalSales     = (cashSales || 0) + (cardSales || 0) + (upiSales || 0) + (otherSales || 0);
@@ -247,14 +244,12 @@ function NewClosingTab() {
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5">
 
-      {/* Date */}
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="dc_date">Closing Date <span className="text-destructive">*</span></Label>
         <Input id="dc_date" type="date" max={today} {...register('closing_date')} className="h-11" />
         {errors.closing_date && <p className="text-xs text-destructive">{errors.closing_date.message}</p>}
       </div>
 
-      {/* Opening balance */}
       <Field id="dc_opening"  label="Opening Cash Balance" name="opening_balance" required />
 
       {/* System-recorded totals — a check, not a source of truth. Real
@@ -312,7 +307,6 @@ function NewClosingTab() {
         )}
       </div>
 
-      {/* Sales by mode */}
       <div className="rounded-xl border border-border bg-muted shadow-sm p-4 flex flex-col gap-4">
         <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Sales by Payment Mode</p>
         <Field id="dc_cash"  label="Cash Sales"  name="cash_sales"  required />
@@ -321,7 +315,6 @@ function NewClosingTab() {
         <Field id="dc_other" label="Other Sales" name="other_sales" />
       </div>
 
-      {/* Live summary */}
       <div className="rounded-xl border border-border bg-card shadow-sm px-4 py-3 flex flex-col gap-2 text-sm">
         <div className="flex justify-between">
           <span className="text-muted-foreground">Total Sales</span>
@@ -334,7 +327,6 @@ function NewClosingTab() {
         <p className="text-xs text-muted-foreground">Closing balance = opening balance + cash sales</p>
       </div>
 
-      {/* Notes */}
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="dc_notes">Notes (optional)</Label>
         <Input id="dc_notes" {...register('notes')} className="h-11" placeholder="Any remarks for today's closing" />

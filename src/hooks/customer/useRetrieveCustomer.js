@@ -1,5 +1,3 @@
-// src/hooks/customer/useRetrieveCustomer.js
-// Fetches the full CustomerRow for a single customer by party_id.
 // Used by the edit form to pre-load the latest data before update.
 // Also used by CustomerDetailSheet when opened from the directory.
 
@@ -17,7 +15,6 @@ export function useRetrieveCustomer(partyId, { enabled = true } = {}) {
   const query = useQuery({
     queryKey: QUERY_KEYS.CUSTOMERS.RETRIEVE(partyId),
     queryFn:  async () => {
-      // retrieveCustomer returns AxiosResponse — unwrap .data.Entity
       const response = await retrieveCustomer(partyId);
       const entity   = response?.data?.Entity ?? null;
       return entity ? normalizeCustomer(entity) : null;

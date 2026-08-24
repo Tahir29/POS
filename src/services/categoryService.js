@@ -1,4 +1,3 @@
-// src/services/categoryService.js
 // OrnaVerse Categories module — Types, SubTypes, ItemGroups.
 // All functions are pure HTTP wrappers. No business logic.
 // Source of truth: API_MAPPING.md Section 4

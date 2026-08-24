@@ -39,7 +39,6 @@ export function deriveStockStatus(stockData) {
   return null;
 }
 
-// ── Badge config ──────────────────────────────────────────────────────────────
 // PREMIUM REVAMP (2026-07-22) — was hardcoding its own emerald/amber/red
 // Tailwind palette instead of routing through this app's own
 // --status-in-stock/--status-made-order/--status-error tokens (already

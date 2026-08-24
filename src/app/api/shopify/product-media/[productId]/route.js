@@ -1,5 +1,3 @@
-// src/app/api/shopify/product-media/[productId]/route.js
-//
 // Server-side proxy for Shopify product media (images + video).
 //
 // WHY THIS EXISTS:
@@ -31,8 +29,8 @@
 
 import { NextResponse } from 'next/server';
 
-const SHOPIFY_STORE = process.env.SHOPIFY_STORE;           // luciraonline.myshopify.com
-const SHOPIFY_TOKEN = process.env.SHOPIFY_ADMIN_TOKEN;     // shpat_...
+const SHOPIFY_STORE = process.env.SHOPIFY_STORE;
+const SHOPIFY_TOKEN = process.env.SHOPIFY_ADMIN_TOKEN;
 const API_VERSION   = '2025-10';
 
 const MEDIA_QUERY = `
@@ -64,7 +62,6 @@ const MEDIA_QUERY = `
 export async function GET(request, { params }) {
   const { productId } = await params;
 
-  // ── Guard: missing config ────────────────────────────────────────────────
   if (!SHOPIFY_STORE || !SHOPIFY_TOKEN) {
     console.error('[Shopify] Missing SHOPIFY_STORE or SHOPIFY_ADMIN_TOKEN env vars');
     return NextResponse.json(
@@ -73,7 +70,6 @@ export async function GET(request, { params }) {
     );
   }
 
-  // ── Guard: invalid productId ─────────────────────────────────────────────
   if (!productId || !/^\d+$/.test(productId)) {
     return NextResponse.json(
       { images: [], videos: [], error: 'Invalid product ID' },
@@ -81,7 +77,6 @@ export async function GET(request, { params }) {
     );
   }
 
-  // ── Fetch from Shopify GraphQL Admin API ─────────────────────────────────
   const url = `https://${SHOPIFY_STORE}/admin/api/${API_VERSION}/graphql.json`;
 
   try {

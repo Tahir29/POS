@@ -1,10 +1,5 @@
 'use client';
 
-// src/components/features/checkout/PaymentModeSelector/index.jsx
-// List of payment modes as selectable icon tiles. Supports multi-select
-// for split payments — selecting a mode adds it to the active payment split;
-// deselecting removes it.
-//
 // Restyled to icon-on-top tiles matching the new checkout design. The
 // mode SET itself remains fully data-driven from usePaymentModes (real
 // PaymentReceiptMode/List data) — only the icon per tile is a cosmetic

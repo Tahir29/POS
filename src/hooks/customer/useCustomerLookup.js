@@ -1,7 +1,3 @@
-// src/hooks/customer/useCustomerLookup.js
-// Customer lookup by mobile number.
-// Returns the first matching CustomerRow or null if not found.
-//
 // ADDED 2026-08-21: also mirrors the found record into Mongo (see
 // api/customers/sync/route.js) — the first wire-up point for the
 // personalization/retargeting data layer discussed separately. Fire-and-
@@ -40,7 +36,6 @@ export function useCustomerLookup(mobile, options = {}) {
   const query = useQuery({
     queryKey: QUERY_KEYS.CUSTOMERS.LOOKUP(mobile),
     queryFn:  async () => {
-      // getCustomer returns AxiosResponse — unwrap .data here
       const response = await getCustomer(mobile);
       const entities = response?.data?.Entities ?? [];
       if (entities.length === 0) return null;

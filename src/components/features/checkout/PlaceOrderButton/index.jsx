@@ -1,6 +1,5 @@
 'use client';
 
-// src/components/features/checkout/PlaceOrderButton/index.jsx
 // Submits the sale via useCreateInvoice or useCreateOrder. Disabled until
 // checkoutSchema validation passes (customer attached, sales person picked).
 //

@@ -1,5 +1,3 @@
-// src/app/api/nector/[...path]/route.js
-//
 // Server-side proxy for the Nector reviews API.
 //
 // WHY THIS EXISTS:

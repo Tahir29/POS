@@ -1,4 +1,3 @@
-// src/services/documentConfigService.js
 // Per-document-type header config needed by Order/Invoice Create — see
 // apiEndpoints.js DOCUMENT_CONFIG block for the full story on why these two
 // lookups exist (root cause of the Order/Invoice/Create 500s: financial_year_id

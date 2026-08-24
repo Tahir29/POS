@@ -1,4 +1,3 @@
-// src/hooks/invoices/useAddInvoiceReceipt.js
 // Records a payment against an EXISTING invoice (Partial/Due → less due,
 // or Paid in full). createInvoiceReceipt() has existed fully implemented
 // in orderService.js from the start but had zero callers — this is the

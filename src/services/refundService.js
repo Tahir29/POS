@@ -1,4 +1,3 @@
-// src/services/refundService.js
 // A POS Refund pays out credit that a Return / Exchange / Buy Back already
 // raised. It is NOT a transaction with line items.
 //

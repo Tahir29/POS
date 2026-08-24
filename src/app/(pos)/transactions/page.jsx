@@ -1,21 +1,9 @@
-// src/app/(pos)/transactions/page.jsx
 'use client';
 
-// PHASE 22.5 — Transaction Architecture Consolidation
-//
-// Single tabbed page covering all 6 POS transaction types:
-//   Returns | Refunds | Credit Notes | Exchange | Buyback | URD Purchase
-//
-// ARCHITECTURE:
-//   - One tab per transaction type. Each tab has two views: List (default)
-//     and New (create form), toggled with the header "+ New" / "Cancel" button.
-//   - This page is now the ONLY place transactions are created or viewed —
-//     the previously-separate /returns, /exchange, /buyback, /urd-purchase
-//     standalone pages (and their dedicated services/hooks) have been
-//     deleted. Everything here runs on transactionService.js via
-//     useTransactionLists.js + useTransactionMutations.js.
-//   - Deep-linkable: /transactions?tab=returns opens straight to a tab
-//     (dashboard Quick Actions link here).
+// This page is the only place transactions are created or viewed — the
+// previously-separate /returns, /exchange, /buyback, /urd-purchase pages
+// (and their dedicated services/hooks) were deleted; everything here runs
+// on transactionService.js via useTransactionLists.js + useTransactionMutations.js.
 //
 // SCHEMA FACTS:
 //   - All transaction rows share: transaction_id, document_no,
@@ -114,8 +102,6 @@ import { Button }                          from '@/components/ui/button';
 import { Input }                           from '@/components/ui/input';
 import { Label }                           from '@/components/ui/label';
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
 function formatINR(amount) {
   if (amount == null) return '—';
   return `₹${Number(amount).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
@@ -137,8 +123,6 @@ function getErrorMessage(error) {
   );
 }
 
-// ─── Shared field-level building blocks ────────────────────────────────────────
-
 function FormField({ label, required, error, children }) {
   return (
     <div className="flex flex-col gap-1.5">
@@ -148,8 +132,6 @@ function FormField({ label, required, error, children }) {
     </div>
   );
 }
-
-// ─── Returns — New form ─────────────────────────────────────────────────────────
 
 // REBUILT 2026-07-30 to match how a return actually works.
 //
@@ -506,7 +488,6 @@ function SoldItemFlowForm({ flow, onDone }) {
   );
 }
 
-// ─── Exchange / Buyback / URD Purchase — shared metal line-item form ───────────
 // All three share the same weight/purity/rate shape, differing in how the
 // line item's `item_id` is resolved and whether a receipt (payout) section
 // is shown. Configured per type rather than duplicated three times.
@@ -782,7 +763,6 @@ function MetalLineItemForm({ type, onDone }) {
   );
 }
 
-// ─── Credit Notes — New form ────────────────────────────────────────────────────
 // Issued as a lump-sum store credit rather than an itemised return — matches
 // CreditNoteRow, which supports a header net_amount without requiring
 // line_items to be populated for a simple issuance.
@@ -887,7 +867,6 @@ function CreditNoteNewForm({ onDone }) {
   );
 }
 
-// ─── Refunds — New form ─────────────────────────────────────────────────────────
 // REBUILT 2026-07-31 after capturing the ERP's own Refund dialog.
 //
 // A refund PAYS OUT credit that a Return / Exchange / Buy Back already
@@ -1079,8 +1058,6 @@ function RefundNewForm({ onDone }) {
   );
 }
 
-// ─── Transaction Detail Sheet (unchanged from prior version) ──────────────────
-
 function TransactionDetailSheet({ transaction, onClose }) {
   if (!transaction) return null;
   const raw = transaction.raw ?? {};
@@ -1208,8 +1185,6 @@ function TransactionList({ hook: useHook, emptyMessage }) {
   );
 }
 
-// ─── Tab config ───────────────────────────────────────────────────────────────
-
 const TABS = [
   { id: 'returns',      label: 'Returns',      icon: RotateCcw,      hook: useReturns,      emptyMessage: 'No return transactions found.',      NewForm: (props) => <SoldItemFlowForm flow="return" {...props} /> },
   { id: 'refunds',      label: 'Refunds',      icon: CreditCard,     hook: useRefunds,      emptyMessage: 'No refund transactions found.',      NewForm: (props) => <RefundNewForm {...props} /> },
@@ -1218,8 +1193,6 @@ const TABS = [
   { id: 'buyback',      label: 'Buyback',      icon: ShoppingBag,    hook: useBuybacks,     emptyMessage: 'No buyback transactions found.',     NewForm: (props) => <SoldItemFlowForm flow="buyback" {...props} /> },
   { id: 'urd',          label: 'URD Purchase', icon: Coins,          hook: useURDPurchases, emptyMessage: 'No URD purchase transactions found.',NewForm: (props) => <MetalLineItemForm type="urd" {...props} /> },
 ];
-
-// ─── Page ─────────────────────────────────────────────────────────────────────
 
 function TransactionsScreen() {
   const searchParams = useSearchParams();

@@ -1,5 +1,3 @@
-// src/hooks/products/useDesignVariants.js
-//
 // Fetches all style variants for a product via Style/Retrieve (GetDesignDetail).
 // Enabled only when product has a style_id.
 //
@@ -64,7 +62,6 @@ function unique(arr, keyFn) {
 // When OrnaVerse starts serving images natively, remove the Shopify hook
 // call in the product detail page; this field can stay or be removed then.
 function selectStyleData(response) {
-  // Primary path: response.data.Entity
   const entity = response?.data?.Entity;
   if (entity?.style_variants && Array.isArray(entity.style_variants)) {
     return {
@@ -72,7 +69,6 @@ function selectStyleData(response) {
       externalProductId: entity.external_product_id ?? null,
     };
   }
-  // Fallback 1: response.data.Entities[0] (list shape)
   const firstEntity = response?.data?.Entities?.[0];
   if (firstEntity?.style_variants && Array.isArray(firstEntity.style_variants)) {
     return {
@@ -80,12 +76,10 @@ function selectStyleData(response) {
       externalProductId: firstEntity.external_product_id ?? null,
     };
   }
-  // Fallback 2: response.data.style_variants (flat)
   const flat = response?.data?.style_variants;
   if (Array.isArray(flat)) {
     return { variants: flat, externalProductId: null };
   }
-  // Nothing found
   return { variants: [], externalProductId: null };
 }
 
@@ -177,7 +171,6 @@ export function useDesignVariants(styleId, storeId) {
 
   const isLoading = designLoading || (itemIds.length > 0 && stockLoading);
 
-  // Unique metal colour options — filter out NA values
   const metalColors = useMemo(() =>
     unique(
       variants.filter((v) => isValid(v.metal_color_name) && v.metal_color_id != null),
@@ -196,7 +189,6 @@ export function useDesignVariants(styleId, storeId) {
     .sort((a, b) => parseFloat(a.name) - parseFloat(b.name)),
   [variants]);
 
-  // Unique size options — sorted numerically
   const sizes = useMemo(() =>
     unique(
       variants.filter((v) => v.item_size_id != null && isValid(v.item_size_name)),
@@ -206,8 +198,6 @@ export function useDesignVariants(styleId, storeId) {
     .sort((a, b) => parseFloat(a.name) - parseFloat(b.name)),
   [variants]);
 
-  // Map of item_id → pieces (real per-store count) for in-stock dot indicators.
-  // pieces > 0 means in stock.
   const variantStock = useMemo(() => {
     const map = new Map();
     for (const v of variants) {

@@ -1,4 +1,3 @@
-// src/hooks/customer/useUpdateCustomer.js
 // Update an existing customer via POS/Customer/Update.
 //
 // IMPORTANT: OrnaVerse requires the FULL CustomerRow on update.
@@ -34,7 +33,6 @@ export function useUpdateCustomer() {
       const customerName = formChanges.party_name;
       toast.success(TOAST.CUSTOMER.UPDATED(customerName));
 
-      // Invalidate all caches that may hold stale customer data
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CUSTOMERS.RETRIEVE(partyId) });
       queryClient.invalidateQueries({ queryKey: ['customers'] });
     },

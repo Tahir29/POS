@@ -1,10 +1,5 @@
 'use client';
 
-// src/components/features/catalog/CategoryFilter/index.jsx
-// Horizontal scrolling category chip bar.
-// Active chip: filled dark brown (primary). Inactive: outlined pill.
-// Matches target UI design exactly.
-
 const ALLOWED_CATEGORIES = [
   'Rings',
   'Earrings',
@@ -19,8 +14,6 @@ const ALLOWED_CATEGORIES = [
 function toSlug(name) {
   return name.toLowerCase().replace(/\s+/g, '-');
 }
-
-// ── CategoryChip ──────────────────────────────────────────────────────────────
 
 function CategoryChip({ label, isActive, onClick }) {
   return (
@@ -41,8 +34,6 @@ function CategoryChip({ label, isActive, onClick }) {
     </button>
   );
 }
-
-// ── CategoryFilter ────────────────────────────────────────────────────────────
 
 /**
  * @param {object}      props
@@ -76,14 +67,12 @@ export default function CategoryFilter({
     <div className="relative">
       <div className="flex items-center gap-2 overflow-x-auto scrollbar-none py-1 pr-6">
 
-        {/* ALL chip */}
         <CategoryChip
           label="ALL"
           isActive={!activeCategorySlug}
           onClick={() => onSelectCategory(null)}
         />
 
-        {/* Category chips */}
         {visibleCategories.map((cat) => {
           const slug     = toSlug(cat.displayName);
           const isActive = activeCategorySlug === slug;
@@ -97,7 +86,6 @@ export default function CategoryFilter({
           );
         })}
 
-        {/* Clear filters — only when a non-category filter is active */}
         {hasActiveFilters && activeCategorySlug && (
           <>
             <div className="w-px h-5 bg-border shrink-0 mx-1" aria-hidden="true" />

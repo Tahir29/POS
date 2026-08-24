@@ -1,5 +1,3 @@
-// src/app/api/customers/sync/route.js
-//
 // Mirrors a customer record into Mongo. Fire-and-forget from the client —
 // never something a real sale waits on. See lib/mongo/customerProfile.js
 // for what does (and does NOT — no PAN) get stored.

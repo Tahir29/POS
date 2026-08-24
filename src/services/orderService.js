@@ -1,4 +1,3 @@
-// src/services/orderService.js
 // POS Orders and Invoices — all via native POS endpoints.
 // MarketPlace/Order/Generate has been replaced by POS/Order/Create → Post.
 //
@@ -35,8 +34,6 @@
 
 import axiosInstance from '@/lib/axios/axiosInstance';
 import API from '@/constants/apiEndpoints';
-
-// ─── ORDERS ───────────────────────────────────────────────────────────────────
 
 /**
  * Paginated list of POS orders for the active store.
@@ -134,8 +131,6 @@ export async function applyOrderDiscount({ transaction_id, additional_discount }
   });
   return response.data;
 }
-
-// ─── INVOICES ─────────────────────────────────────────────────────────────────
 
 /**
  * Paginated list of POS invoices for the active store.
@@ -289,8 +284,6 @@ export async function getPartyDailyCash({ party_id, company_id }) {
   });
   return response.data;
 }
-
-// ─── INVOICE RECEIPTS ─────────────────────────────────────────────────────────
 
 /**
  * Create a payment receipt entry against an invoice.

@@ -1,7 +1,3 @@
-// src/hooks/orders/useCancelOrder.js
-// Cancels a posted POS order via POS/Order/Cancel.
-// On success: invalidates orders list cache and shows a toast.
-
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-toastify';
 import { cancelOrder } from '@/services/orderService';

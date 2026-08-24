@@ -1,6 +1,5 @@
 'use client';
 
-// src/components/features/customer/CustomerLookupInput/index.jsx
 // Free-text search + button for customer lookup: a 10-digit number
 // triggers an exact mobile lookup, any other text (2+ chars) triggers a
 // name search across the customer directory. Mirrors the search behavior

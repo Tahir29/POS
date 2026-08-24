@@ -1,6 +1,3 @@
-// src/hooks/dailyClosing/useDailyClosing.js
-// Paginated list of daily closing records.
-//
 // The underlying DailyClosing/List call can't be scoped server-side — it
 // crashes with a 500 the moment any company-scoping param is sent, in any
 // spelling (confirmed 2026-07-16, see dailyClosingService.js header), so it

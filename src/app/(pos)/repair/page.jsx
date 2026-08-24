@@ -1,7 +1,5 @@
 'use client';
 
-// src/app/(pos)/repair/page.jsx
-//
 // Repair workflow — 3 linked stages, one tab each:
 //   Repair In  — customer drops off an item for repair (intake)
 //   Repair Out — item sent to the craftsman/workshop

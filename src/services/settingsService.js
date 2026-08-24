@@ -1,4 +1,3 @@
-// src/services/settingsService.js
 // Settings, payment modes, taxes, metal rates, reason codes.
 // All functions are pure HTTP wrappers — no business logic.
 //
@@ -7,8 +6,6 @@
 
 import axiosInstance from '@/lib/axios/axiosInstance';
 import API from '@/constants/apiEndpoints';
-
-// ─── PAYMENT MODES ────────────────────────────────────────────────────────────
 
 /**
  * All payment receipt modes available for a sale (Cash, Card, UPI, etc.).
@@ -48,8 +45,6 @@ export async function getBankPosAccounts() {
   return response.data;
 }
 
-// ─── TAXES ────────────────────────────────────────────────────────────────────
-
 /**
  * Fetches applicable taxes for the store (GST slabs, etc.).
  *
@@ -70,8 +65,6 @@ export async function getTaxes({ company_id } = {}) {
   });
   return response.data;
 }
-
-// ─── METAL RATE UTILITIES ────────────────────────────────────────────────────
 
 /**
  * Check whether a metal rate has been entered for today.
@@ -99,8 +92,6 @@ export async function addMetalRate(payload) {
   return response.data;
 }
 
-// ─── EXCHANGE RATE ────────────────────────────────────────────────────────────
-
 /**
  * Currency exchange rate — required on Order/Invoice Create alongside
  * currency_id. Confirmed via direct UAT test 2026-07-16: currency_id 103
@@ -115,8 +106,6 @@ export async function getExchangeRate({ currency_id, company_id } = {}) {
   });
   return response.data;
 }
-
-// ─── REASON CODES ─────────────────────────────────────────────────────────────
 
 /**
  * Fetches reason codes used for returns, cancellations, exchanges.

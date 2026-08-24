@@ -1,4 +1,3 @@
-// src/hooks/settings/useReasonCodes.js
 // Reason codes (returns/cancellations/exchanges) — read-only reference.
 // CONFIRMED BROKEN server-side as of 2026-08-14 — see getReasonCodes'
 // header in settingsService.js. isError will be true unconditionally on

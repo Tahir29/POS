@@ -1,4 +1,3 @@
-// src/services/dailyClosingService.js
 // POS Daily Closing — end-of-day cash reconciliation.
 // No Post step — Create finalises immediately.
 //

@@ -1,6 +1,5 @@
 'use client';
 
-// src/app/(pos)/orders/page.jsx
 // Orders directory — paginated browse + full-dataset search/filter.
 //
 // Search/filter behavior (mirrors /customers pattern):
@@ -40,7 +39,6 @@ export default function OrdersPage() {
   const [skip, setSkip] = useState(0);
   const [selectedOrder, setSelectedOrder] = useState(null);
 
-  // Raw input state
   const [inputVal, setInputVal]     = useState('');
   const [searchQuery, setSearchQuery] = useState(''); // debounced
   const [fromDate, setFromDate]     = useState('');
@@ -150,15 +148,29 @@ export default function OrdersPage() {
 
   return (
     <div className="flex flex-col gap-3 max-w-3xl mx-auto w-full p-4 md:p-6">
-      {isAllFetching && !isAllLoading && (
-        <div className="flex justify-end -mb-1">
-          <Loader2 size={14} className="animate-spin text-muted-foreground" aria-hidden="true" />
-        </div>
-      )}
+      {/* ── Filters — sticky (2026-08-24) ──────────────────
+          Pins to the top of #main-content (AppShell's scrolling region)
+          once the list scrolls past it, and releases back to its normal
+          spot the instant you scroll back to the top — that's
+          `position: sticky`'s own native behavior, not something driven by
+          JS/scroll-position state, so there's no "unpin" logic to write.
+          The negative margin + matching padding cancels this page's own
+          p-4/md:p-6 for just this block and re-adds it as the sticky
+          element's OWN padding — otherwise the sticky bar would stick
+          flush at y:0 leaving an awkward gap where the page's top padding
+          used to be, and its background (needed so list rows scrolling
+          underneath don't show through) would only cover the padded
+          content width, not the full column. border-b stays visible in
+          both states (stuck or not) rather than only while stuck — that
+          would need scroll-position JS just for a cosmetic shadow, not
+          worth it for what's otherwise a pure-CSS fix. */}
+      <div className="sticky top-0 z-10 -mx-4 -mt-4 flex flex-col gap-2 border-b border-border bg-background px-4 pt-4 pb-3 md:-mx-6 md:-mt-6 md:px-6 md:pt-6">
+        {isAllFetching && !isAllLoading && (
+          <div className="flex justify-end -mb-1">
+            <Loader2 size={14} className="animate-spin text-muted-foreground" aria-hidden="true" />
+          </div>
+        )}
 
-      {/* ── Filters ─────────────────────────────────────── */}
-      <div className="flex flex-col gap-2">
-        {/* Search input */}
         <div className="relative">
           <Search
             size={16}
@@ -189,9 +201,7 @@ export default function OrdersPage() {
           )}
         </div>
 
-        {/* Date range + Status dropdown + Clear — all on one row (stacked on mobile) */}
         <div className="flex flex-col gap-2 md:flex-row md:items-center">
-          {/* Date range */}
           <div className="flex items-center gap-2 flex-1">
             <Input
               type="date"
@@ -212,7 +222,6 @@ export default function OrdersPage() {
             />
           </div>
 
-          {/* Status dropdown */}
           <Select value={statusFilter || undefined} onValueChange={setStatusFilter}>
             <SelectTrigger className="w-full md:w-36" aria-label="Filter by status">
               <SelectValue placeholder="Status" />
@@ -226,7 +235,6 @@ export default function OrdersPage() {
             </SelectContent>
           </Select>
 
-          {/* Clear all */}
           {hasFilters && (
             <Button
               type="button"
@@ -242,7 +250,6 @@ export default function OrdersPage() {
           )}
         </div>
 
-        {/* Active filter summary */}
         {isSearchActive && !isFilterBusy && (
           <p className="text-xs text-muted-foreground">
             {filteredOrders.length} order{filteredOrders.length !== 1 ? 's' : ''} found

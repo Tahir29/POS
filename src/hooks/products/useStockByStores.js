@@ -24,7 +24,6 @@ export function useStockByStores(itemId) {
     enabled:   !!itemId,
     staleTime: APP_CONFIG.STALE_TIME.STOCK,
     select: (response) => {
-      // Confirmed shape: response.data.Entities[]
       const entities = response?.data?.Entities;
       if (!Array.isArray(entities)) return [];
 

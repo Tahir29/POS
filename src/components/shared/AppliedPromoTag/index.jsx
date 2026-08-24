@@ -1,7 +1,5 @@
 'use client';
 
-// src/components/shared/AppliedPromoTag/index.jsx
-//
 // Applied-promo-code pill with a remove action, shown on both the
 // cart (drawer + standalone page) and checkout screens. Was two
 // near-identical components (cart's AppliedPromoTag, checkout's

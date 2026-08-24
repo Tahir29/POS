@@ -1,5 +1,3 @@
-// src/app/api/report/render/route.js
-//
 // Renders an OrnaVerse document report (invoice, e-certificate, ...) and
 // returns its HTML, so our POS can show it inline instead of bouncing the
 // operator to OrnaVerse's own site.

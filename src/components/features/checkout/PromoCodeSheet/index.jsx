@@ -1,6 +1,5 @@
 'use client';
 
-// src/components/features/checkout/PromoCodeSheet/index.jsx
 // Side sheet listing every currently-active promo code — tapping one
 // applies it immediately, same as typing it into PromoCodeInput.
 //
@@ -41,8 +40,6 @@ function getDiscountValue(promo) {
   return null;
 }
 
-// ── Offer Ticket ──────────────────────────────────────────────────────────────
-
 function OfferTicket({ promo, isApplied, isApplying, onSelect }) {
   const discountValue = getDiscountValue(promo);
   const expiryLabel = promo.to_date ? `Valid till ${formatDate(promo.to_date)}` : null;
@@ -78,10 +75,8 @@ function OfferTicket({ promo, isApplied, isApplying, onSelect }) {
         <span className="absolute -bottom-2 right-0 h-4 w-4 -translate-x-1/2 rounded-full bg-popover" aria-hidden="true" />
       </div>
 
-      {/* Perforated seam */}
       <div className="relative w-px shrink-0 border-l border-dashed border-border" aria-hidden="true" />
 
-      {/* Details */}
       <div className="flex flex-1 items-center justify-between gap-3 px-3.5 py-3 min-w-0">
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold text-foreground">

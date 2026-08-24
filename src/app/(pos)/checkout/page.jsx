@@ -1,6 +1,5 @@
 'use client';
 
-// src/app/(pos)/checkout/page.jsx
 // Checkout screen — ONE price, ONE flow, no mode to choose.
 //
 // THERE IS DELIBERATELY NO "COMPLETE AS" CHOICE. A Bill Now / Place Order
@@ -266,7 +265,6 @@ function CheckoutScreen() {
 
       <div className='grid grid-cols-1 items-start gap-5 lg:grid-cols-2'>
         <div className="flex flex-col gap-5 w-full">
-          {/* Customer attached to this sale */}
           <CheckoutCustomerSummary />
 
           {/* Mandatory PAN once the sale crosses the statutory threshold.
@@ -316,7 +314,6 @@ function CheckoutScreen() {
             </div>
           </section>
 
-          {/* Order summary */}
           <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
             <h2 className="text-sm font-bold text-foreground mb-1">Order Summary</h2>
             {/* Driven by the priced stock pieces, so this reads the same
@@ -360,7 +357,6 @@ function CheckoutScreen() {
       {/* Reassurance strip — exchange/certification/warranty + accepted payment networks */}
       <CheckoutTrustStrip />
 
-      {/* Sticky Place Order button */}
       <div className="fixed bottom-0 left-0 right-0 border-t border-border bg-card p-4 sm:static sm:border-0 sm:bg-transparent sm:p-0">
         <div className="max-w-6xl mx-auto w-full flex flex-col items-center gap-2">
           <PlaceOrderButton

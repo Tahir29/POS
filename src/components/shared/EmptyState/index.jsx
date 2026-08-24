@@ -1,4 +1,3 @@
-// src/components/shared/EmptyState/index.jsx
 import { PackageOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
 

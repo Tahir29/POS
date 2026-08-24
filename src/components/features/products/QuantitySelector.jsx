@@ -1,10 +1,5 @@
 'use client';
 
-// src/components/features/products/QuantitySelector/index.jsx
-// +/- quantity control.
-// Min: 1. Max: maxQty (derived from stock, defaults to 99 if stock unknown).
-// Controlled: quantity + onChange prop driven by parent.
-
 import QuantityStepper from '@/components/shared/QuantityStepper';
 
 /**

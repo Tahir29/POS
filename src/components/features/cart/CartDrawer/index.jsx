@@ -1,6 +1,5 @@
 'use client';
 
-// src/components/features/cart/CartDrawer/index.jsx
 // Slide-in cart panel, opened from the header cart badge.
 // Uses the shared BottomSheet primitive (bottom sheet on mobile,
 // right side sheet on tablet).
@@ -51,7 +50,6 @@ export default function CartDrawer({ isOpen, onClose }) {
         <CartEmptyState onNavigate={onClose} />
       ) : (
         <div className="flex flex-col gap-4">
-          {/* Tags */}
           <div className="flex flex-col gap-2">
             <CartCustomerTag
               customerName={customerName}
@@ -68,7 +66,6 @@ export default function CartDrawer({ isOpen, onClose }) {
             ))}
           </div>
 
-          {/* Items */}
           <div className="flex flex-col">
             {items.map((item) => (
               <CartItemRow

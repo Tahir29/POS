@@ -1,5 +1,3 @@
-// src/hooks/transactions/useTransactionMutations.js
-//
 // Mutation hooks for all 6 POS transaction types.
 //
 // PATTERNS:
@@ -47,8 +45,6 @@ import TOAST                           from '@/constants/toastMessages';
 import tracker                         from '@/lib/analytics/tracker';
 import EVENTS                          from '@/lib/analytics/events';
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
 function getErrorMessage(error) {
   return (
     error?.response?.data?.Message ??
@@ -57,8 +53,6 @@ function getErrorMessage(error) {
     'Something went wrong.'
   );
 }
-
-// ─── RETURNS ──────────────────────────────────────────────────────────────────
 
 export function useCreateReturn({ onSuccess } = {}) {
   const queryClient = useQueryClient();
@@ -114,8 +108,6 @@ export function useCancelReturn({ onSuccess } = {}) {
   });
 }
 
-// ─── REFUNDS ──────────────────────────────────────────────────────────────────
-
 export function useCreateRefund({ onSuccess } = {}) {
   const queryClient = useQueryClient();
 
@@ -157,8 +149,6 @@ export function useDeleteRefund({ onSuccess } = {}) {
     },
   });
 }
-
-// ─── CREDIT NOTES ─────────────────────────────────────────────────────────────
 
 export function useCreateCreditNote({ onSuccess } = {}) {
   const queryClient = useQueryClient();
@@ -214,8 +204,6 @@ export function useCancelCreditNote({ onSuccess } = {}) {
   });
 }
 
-// ─── EXCHANGE ─────────────────────────────────────────────────────────────────
-
 export function useCreateExchange({ onSuccess } = {}) {
   const queryClient = useQueryClient();
 
@@ -270,8 +258,6 @@ export function useCancelExchange({ onSuccess } = {}) {
   });
 }
 
-// ─── BUYBACK ──────────────────────────────────────────────────────────────────
-
 export function useCreateBuyback({ onSuccess } = {}) {
   const queryClient = useQueryClient();
 
@@ -325,8 +311,6 @@ export function useCancelBuyback({ onSuccess } = {}) {
     },
   });
 }
-
-// ─── URD PURCHASE ─────────────────────────────────────────────────────────────
 
 export function useCreateURDPurchase({ onSuccess } = {}) {
   const queryClient = useQueryClient();

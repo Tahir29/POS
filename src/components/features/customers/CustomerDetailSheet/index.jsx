@@ -1,6 +1,5 @@
 'use client';
 
-// src/components/features/customers/CustomerDetailSheet/index.jsx
 // Quick-access sheet from the customer directory.
 // TABS: Profile | Edit only.
 // Orders / Schemes / History / Points → full profile page (/customers/[id])
@@ -19,22 +18,20 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import Link from 'next/link';
 
 import BottomSheet from '@/components/shared/BottomSheet';
-import { Button }  from '@/components/ui/button';
-import { Input }   from '@/components/ui/input';
-import { Label }   from '@/components/ui/label';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import LocationSelect from '@/components/shared/LocationSelect';
 import PillTabs from '@/components/shared/PillTabs';
 
 import { updateCustomerSchema } from '@/validators/customerSchema';
-import { useRetrieveCustomer }  from '@/hooks/customer/useRetrieveCustomer';
-import { useUpdateCustomer }    from '@/hooks/customer/useUpdateCustomer';
+import { useRetrieveCustomer } from '@/hooks/customer/useRetrieveCustomer';
+import { useUpdateCustomer } from '@/hooks/customer/useUpdateCustomer';
 import { useCountries, useStates, useCities } from '@/hooks/settings/useLocation';
 
-// ── Tab config ────────────────────────────────────────────────────────────────
-const TABS       = ['profile', 'edit'];
+const TABS = ['profile', 'edit'];
 const TAB_LABELS = { profile: 'Profile', edit: 'Edit' };
 
-// ── Profile Tab ───────────────────────────────────────────────────────────────
 function ProfileTab({ customer, onAttach, isAttached, onClose }) {
   const { customerName, customerMobile, customerEmail, customerAddress, customerPan, raw } = customer;
   const partyCode = raw?.party_code && raw.party_code !== 'NA' ? raw.party_code : null;
@@ -128,9 +125,7 @@ function looksMasked(value) {
   return typeof value === 'string' && value.includes('*');
 }
 
-// ── Edit Tab ──────────────────────────────────────────────────────────────────
 function EditTab({ customer }) {
-  // Fetch full record for the update payload merge
   const { customer: fullCustomer, isLoading: loadingFull } = useRetrieveCustomer(customer.customerId);
   const updateCustomer = useUpdateCustomer();
 
@@ -141,8 +136,8 @@ function EditTab({ customer }) {
   // from `raw` (not the top-level normalized customer.customerMobile etc.)
   // so this stays in sync with what the reset() effect below does once the
   // fuller Retrieve record replaces the initial List-sourced one.
-  const maskedMobile  = looksMasked(raw?.mobile)  ? raw.mobile  : null;
-  const maskedEmail   = looksMasked(raw?.email)   ? raw.email   : null;
+  const maskedMobile = looksMasked(raw?.mobile) ? raw.mobile : null;
+  const maskedEmail = looksMasked(raw?.email) ? raw.email : null;
   const maskedAddress = looksMasked(raw?.address) ? raw.address : null;
 
   const {
@@ -152,42 +147,41 @@ function EditTab({ customer }) {
     resolver: zodResolver(updateCustomerSchema),
     defaultValues: {
       party_name: customer.customerName ?? '',
-      mobile:     maskedMobile ? '' : customer.customerMobile ?? '',
-      email:      maskedEmail  ? '' : customer.customerEmail  ?? '',
-      pan_no:     customer.customerPan ?? '',
-      address:    maskedAddress ? '' : customer.customerAddress?.address ?? '',
-      address_1:  customer.customerAddress?.address1 ?? '',
+      mobile: maskedMobile ? '' : customer.customerMobile ?? '',
+      email: maskedEmail ? '' : customer.customerEmail ?? '',
+      pan_no: customer.customerPan ?? '',
+      address: maskedAddress ? '' : customer.customerAddress?.address ?? '',
+      address_1: customer.customerAddress?.address1 ?? '',
       country_id: customer.customerAddress?.country_id ?? null,
-      state_id:   customer.customerAddress?.state_id ?? null,
-      city_id:    customer.customerAddress?.city_id ?? null,
-      pin_code:   customer.customerAddress?.zip ?? '',
+      state_id: customer.customerAddress?.state_id ?? null,
+      city_id: customer.customerAddress?.city_id ?? null,
+      pin_code: customer.customerAddress?.zip ?? '',
     },
   });
 
-  // Re-fill once the full record arrives (has more complete data)
   useEffect(() => {
     if (!fullCustomer?.raw) return;
     const r = fullCustomer.raw;
     reset({
-      party_name: r.party_name  ?? '',
-      mobile:     looksMasked(r.mobile) ? '' : r.mobile ?? '',
-      email:      looksMasked(r.email)  ? '' : (r.email && r.email !== 'NA' ? r.email : ''),
-      pan_no:     r.pan_no && r.pan_no !== 'NA' ? r.pan_no : '',
-      address:    looksMasked(r.address) ? '' : r.address ?? '',
-      address_1:  r.address_1   ?? '',
-      country_id: r.country_id  ?? null,
-      state_id:   r.state_id    ?? null,
-      city_id:    r.city_id     ?? null,
-      pin_code:   r.pin_code ? String(r.pin_code) : '',
+      party_name: r.party_name ?? '',
+      mobile: looksMasked(r.mobile) ? '' : r.mobile ?? '',
+      email: looksMasked(r.email) ? '' : (r.email && r.email !== 'NA' ? r.email : ''),
+      pan_no: r.pan_no && r.pan_no !== 'NA' ? r.pan_no : '',
+      address: looksMasked(r.address) ? '' : r.address ?? '',
+      address_1: r.address_1 ?? '',
+      country_id: r.country_id ?? null,
+      state_id: r.state_id ?? null,
+      city_id: r.city_id ?? null,
+      pin_code: r.pin_code ? String(r.pin_code) : '',
     });
   }, [fullCustomer, reset]);
 
   const countryId = watch('country_id');
-  const stateId   = watch('state_id');
+  const stateId = watch('state_id');
 
   // Only cascade-reset when user actually changes the value
   const initialCountryId = raw?.country_id ?? null;
-  const initialStateId   = raw?.state_id   ?? null;
+  const initialStateId = raw?.state_id ?? null;
   useEffect(() => {
     if (countryId !== initialCountryId) {
       setValue('state_id', null);
@@ -201,8 +195,8 @@ function EditTab({ customer }) {
   }, [stateId, initialStateId, setValue]);
 
   const { countries, isLoading: countriesLoading } = useCountries();
-  const { states,    isLoading: statesLoading }    = useStates(countryId);
-  const { cities,    isLoading: citiesLoading }    = useCities(stateId);
+  const { states, isLoading: statesLoading } = useStates(countryId);
+  const { cities, isLoading: citiesLoading } = useCities(stateId);
 
   const onSubmit = async (formChanges) => {
     if (!raw) return;
@@ -211,12 +205,12 @@ function EditTab({ customer }) {
     // value rather than submitting an empty string, since Update requires
     // the full record.
     await updateCustomer.mutateAsync({
-      partyId:     customer.customerId,
+      partyId: customer.customerId,
       originalRaw: raw,
       formChanges: {
         ...formChanges,
-        mobile:  formChanges.mobile  || raw.mobile,
-        email:   formChanges.email   || raw.email,
+        mobile: formChanges.mobile || raw.mobile,
+        email: formChanges.email || raw.email,
         address: formChanges.address || raw.address,
       },
     });
@@ -224,7 +218,6 @@ function EditTab({ customer }) {
 
   return (
     <div className="relative">
-      {/* Subtle loading overlay while full record fetches — form is still usable */}
       {loadingFull && (
         <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-3">
           <Loader2 size={11} className="animate-spin" />
@@ -335,7 +328,6 @@ function EditTab({ customer }) {
   );
 }
 
-// ── CustomerDetailSheet ───────────────────────────────────────────────────────
 export default function CustomerDetailSheet({ customer, isOpen, onClose, onAttach, isAttached }) {
   const [activeTab, setActiveTab] = useState('profile');
 
@@ -349,18 +341,23 @@ export default function CustomerDetailSheet({ customer, isOpen, onClose, onAttac
   return (
     <BottomSheet isOpen={isOpen} onClose={onClose} title={customer.customerName || 'Customer'}>
 
-      {/* Tab bar — Profile + Edit only */}
+      {/* Tab bar — Profile + Edit only. pb-3 removed 2026-08-24: that padded
+          INSIDE the tab track's own bg-muted box (stretching its background
+          taller), which isn't the same as space AFTER it — the content
+          below still started right at the track's true bottom edge and
+          read as stuck to it. Spacing now lives on the content wrapper's
+          own margin-top instead, so it's real breathing room between the
+          track and the data below, not padding hidden inside the track. */}
       <PillTabs
         tabs={TABS}
         value={activeTab}
         onChange={setActiveTab}
         getKey={(t) => t}
         getLabel={(t) => TAB_LABELS[t]}
-        className="pb-3 -mx-1 px-1"
+        className="-mx-1 px-1"
       />
 
-      {/* Tab content */}
-      <div className="mt-1">
+      <div className="mt-4">
         {activeTab === 'profile' && (
           <ProfileTab
             customer={customer}

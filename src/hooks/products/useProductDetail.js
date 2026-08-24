@@ -1,5 +1,3 @@
-// src/hooks/products/useProductDetail.js
-//
 // Fetches a single item's full detail from Items/Retrieve.
 // OrnaVerse /Retrieve endpoints always wrap single records in Entity (not Entities).
 
@@ -16,7 +14,6 @@ export function useProductDetail(itemId) {
     queryFn:   () => getItemDetail(id),
     enabled:   !!id,
     staleTime: APP_CONFIG.STALE_TIME.CATALOG,
-    // /Retrieve → response.data.Entity
     select: (response) => {
       const item = response?.data?.Entity ?? null;
       return item && typeof item === 'object' && !Array.isArray(item) ? item : null;

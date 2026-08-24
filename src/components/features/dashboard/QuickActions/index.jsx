@@ -14,8 +14,6 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-// ── QUICK ACTION CONFIG ───────────────────────────────────────
-//
 // PHASE 22.5 — all six transaction types (Returns, Refunds, Credit Notes,
 // Exchange, Buyback, URD Purchase) now live as tabs on the single
 // /transactions page, which supports deep-linking via ?tab=<id>. The
@@ -98,8 +96,6 @@ const QUICK_ACTIONS = [
   },
 ];
 
-// ── QUICK ACTION BUTTON ───────────────────────────────────────
-
 function QuickActionButton({ action, onClick }) {
   const Icon = action.icon;
 
@@ -123,8 +119,6 @@ function QuickActionButton({ action, onClick }) {
     </button>
   );
 }
-
-// ── QUICK ACTION GRID ─────────────────────────────────────────
 
 export default function QuickActionGrid() {
   const router = useRouter();

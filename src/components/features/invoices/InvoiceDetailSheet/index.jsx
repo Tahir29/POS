@@ -1,8 +1,5 @@
 'use client';
 
-// src/components/features/invoices/InvoiceDetailSheet/index.jsx
-// Invoice detail view, opened from /invoices.
-//
 // Uses the full record already returned by Invoice/List (passed in as
 // `invoice.raw`) — no second Invoice/Retrieve call needed.
 //
@@ -118,7 +115,6 @@ function InvoiceContent({ raw }) {
   );
 }
 
-// ── Collect Payment panel ──────────────────────────────────────
 function CollectPaymentPanel({ raw, onDone, onDismiss }) {
   const storeId = useSelector(selectActiveStoreId);
   const { paymentModes, isLoading: modesLoading } = usePaymentModes();

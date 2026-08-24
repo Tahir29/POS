@@ -1,10 +1,5 @@
 'use client';
 
-// src/components/features/products/AddToCartButton.jsx
-// Primary CTA on the product detail screen.
-// Dispatches cart/addItem Redux action.
-// Shows TOAST.CART.ITEM_ADDED(itemName) on success.
-//
 // Enabled by default — out of stock items can be added as made-to-order.
 // Stock status display is handled separately by StockStatusBadge.
 // Disabled when there's no valid price — the item couldn't be priced live,

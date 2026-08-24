@@ -1,6 +1,5 @@
 'use client';
 
-// src/components/features/cart/ProceedToCheckoutButton/index.jsx
 // CTA navigating to the checkout screen. Disabled when cart is empty.
 // Checkout route/screen itself is built in Phase 9.
 

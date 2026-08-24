@@ -1,9 +1,5 @@
 'use client';
 
-// src/components/features/checkout/OrderConfirmationScreen/index.jsx
-// Shown after a successful invoice/order creation.
-// Displays the document number, summary, print formats, and New Sale action.
-//
 // CONFIRMED InvoiceRow / OrderRow field names (v1.json — the two rows share
 // them, see orderService.js):
 //   document_no  — invoice/order number (NOT invoice_no)
@@ -59,7 +55,6 @@ export default function OrderConfirmationScreen({
 
   const docLabel = isOrder ? 'Order' : 'Invoice';
 
-  // Use confirmed field names from InvoiceRow schema
   const displayNo   = invoice?.document_no  ?? invoiceNo ?? transactionId;
   const customerName= invoice?.party_name   ?? null;     // party_name, NOT customer_name
   const totalAmount = invoice?.net_amount   ?? null;     // net_amount, NOT total_amount
@@ -78,12 +73,10 @@ export default function OrderConfirmationScreen({
 
   return (
     <div className="flex flex-col items-center gap-6 px-4 py-10 text-center">
-      {/* Success icon */}
       <div className="flex h-16 w-16 items-center justify-center rounded-full bg-status-in-stock/15">
         <CheckCircle2 size={36} className="text-status-in-stock" aria-hidden="true" />
       </div>
 
-      {/* Header */}
       <div>
         <h1 className="text-xl font-bold text-foreground">
           {isOrder ? 'Order placed' : 'Sale completed'}
@@ -91,7 +84,6 @@ export default function OrderConfirmationScreen({
         <p className="mt-1 text-sm text-muted-foreground">{docLabel} #{displayNo}</p>
       </div>
 
-      {/* Invoice summary */}
       <div className="w-full max-w-md rounded-xl border border-border bg-card p-4 text-left shadow-sm">
         {isLoading ? (
           <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">

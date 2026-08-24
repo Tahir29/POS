@@ -1,6 +1,5 @@
 'use client';
 
-// src/components/features/cart/CartSummary/index.jsx
 // Subtotal / discount / total breakdown.
 //
 // REUSE NOTE: This component is intentionally pure/presentational and

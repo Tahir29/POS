@@ -1,5 +1,4 @@
 // src/lib/dateUtils.js
-// Small date helpers shared across forms/filters.
 
 /**
  * Today's date as YYYY-MM-DD in the browser's LOCAL timezone — use as the

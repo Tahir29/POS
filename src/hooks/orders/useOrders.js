@@ -1,4 +1,3 @@
-// src/hooks/orders/useOrders.js
 // Paginated sales list — (pos)/orders page.
 //
 // Paginates CLIENT-SIDE over the same merged Orders+Invoices dataset as

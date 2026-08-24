@@ -1,4 +1,3 @@
-// src/hooks/settings/useLocation.js
 // Cascading location dropdowns: Countries → States → Cities.
 // Each level enabled only when parent selection is made.
 // Cached for STALE_TIME.STATIC (30 min).
@@ -23,7 +22,7 @@ export function useCountries({ enabled = true } = {}) {
       const data = await getCountries();
       return data?.Entities ?? [];
     },
-    enabled:   enabled && isAuthenticated,  // ← auth guard added
+    enabled:   enabled && isAuthenticated,
     staleTime: APP_CONFIG.STALE_TIME.STATIC,
     retry:     1,
   });
@@ -44,7 +43,7 @@ export function useStates(countryId, { enabled = true } = {}) {
       const data = await getStates({ country_id: countryId });
       return data?.Entities ?? [];
     },
-    enabled:   enabled && isAuthenticated && !!countryId,  // ← auth guard added
+    enabled:   enabled && isAuthenticated && !!countryId,
     staleTime: APP_CONFIG.STALE_TIME.STATIC,
     retry:     1,
   });
@@ -65,7 +64,7 @@ export function useCities(stateId, { enabled = true } = {}) {
       const data = await getCities({ state_id: stateId });
       return data?.Entities ?? [];
     },
-    enabled:   enabled && isAuthenticated && !!stateId,  // ← auth guard added
+    enabled:   enabled && isAuthenticated && !!stateId,
     staleTime: APP_CONFIG.STALE_TIME.STATIC,
     retry:     1,
   });

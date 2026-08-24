@@ -1,4 +1,3 @@
-// src/hooks/invoices/useAllInvoices.js
 // Full-dataset invoice fetch for client-side search and filter.
 // Fetched once with Take:0, cached for STALE_TIME.ORDERS.
 // Used by /invoices page when any filter is active.

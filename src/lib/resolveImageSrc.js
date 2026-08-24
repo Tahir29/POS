@@ -19,6 +19,16 @@ const UPLOAD_SEGMENT = 'upload/';
 export function resolveImageSrc(raw) {
   if (!raw || raw === 'NA') return null;
   if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
+  // Already resolved by an earlier call (e.g. AddToCartButton resolves once
+  // before storing an image in the cart; CartItemRow used to call this a
+  // SECOND time on that already-resolved value) — confirmed live 2026-08-24:
+  // a second pass on "/api/upload/ProductImage/x.jpg" doesn't match the
+  // upload-prefix guard below (that checks for a leading "upload/", not
+  // "api/upload/"), so it prepended ANOTHER "upload/" in front of the "api/"
+  // segment, producing a nonsense path the image server 404s on. Recognize
+  // our own output and return it unchanged, the same way an absolute URL
+  // already short-circuits above.
+  if (raw.startsWith('/api/upload/')) return raw;
 
   // Strip any leading slash so we don't end up with "upload//ProductImage/..."
   const cleaned = raw.replace(/^\/+/, '');

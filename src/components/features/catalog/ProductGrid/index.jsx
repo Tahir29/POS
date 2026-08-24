@@ -1,7 +1,5 @@
 'use client';
 
-// src/components/features/catalog/ProductGrid/index.jsx
-//
 // Renders the product grid with automatic infinite scroll.
 // Uses IntersectionObserver on a sentinel div at the bottom —
 // when it enters the viewport, onLoadMore is called automatically.
@@ -14,7 +12,6 @@ import CatalogSkeleton from '@/components/features/catalog/CatalogSkeleton';
 import EmptyState      from '@/components/shared/EmptyState';
 import { Button }      from '@/components/ui/button';
 
-// ── Empty state ───────────────────────────────────────────────────────────────
 // Delegates to the shared EmptyState (same card/badge/icon convention used
 // everywhere else) instead of a one-off hand-rolled version — this was the
 // only catalog-specific empty state left over from before that convention existed.
@@ -41,8 +38,6 @@ function CatalogEmptyState({ hasFilters, onClearFilters }) {
   );
 }
 
-// ── Fetch more spinner ────────────────────────────────────────────────────────
-
 function FetchingSpinner() {
   return (
     <div className="flex justify-center py-6" aria-label="Loading more products">
@@ -61,8 +56,6 @@ function FetchingSpinner() {
     </div>
   );
 }
-
-// ── ProductGrid ───────────────────────────────────────────────────────────────
 
 /**
  * @param {{
@@ -88,7 +81,6 @@ export default function ProductGrid({
 }) {
   const sentinelRef = useRef(null);
 
-  // Intersection Observer — auto-triggers onLoadMore when sentinel is visible
   useEffect(() => {
     if (!hasMore || isFetchingMore) return;
 
@@ -119,7 +111,6 @@ export default function ProductGrid({
 
   return (
     <div>
-      {/* Grid */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
         {products.map((product) => (
           <ProductCard
@@ -135,10 +126,8 @@ export default function ProductGrid({
         <div ref={sentinelRef} className="h-1 w-full" aria-hidden="true" />
       )}
 
-      {/* Fetching spinner */}
       {isFetchingMore && <FetchingSpinner />}
 
-      {/* End of catalog */}
       {!hasMore && products.length > 0 && (
         <p className="py-6 text-center text-xs text-muted-foreground">
           All {products.length} products loaded

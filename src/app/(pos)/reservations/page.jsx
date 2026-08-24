@@ -1,6 +1,5 @@
 'use client';
 
-// src/app/(pos)/reservations/page.jsx
 // Phase 12 — Reservations (Coming Soon placeholder).
 //
 // Product reservation / hold endpoints (create, view active, cancel,
