@@ -46,8 +46,14 @@ function addToWishlist(partyId, customerName, customerMobile, item, token) {
   }).catch((err) => console.warn('[wishlistMiddleware] add failed', err));
 }
 
-function removeFromWishlist(partyId, itemId, token) {
-  fetch(`/api/customers/wishlist?party_id=${partyId}&item_id=${itemId}`, {
+// itemSizeId (2026-08-24) — must reach Mongo too, or the DELETE would match
+// by item_id alone there and remove every size variant of this item_id
+// instead of just the one that was actually un-hearted. See
+// lib/mongo/wishlist.js's removeWishlistItem.
+function removeFromWishlist(partyId, itemId, itemSizeId, token) {
+  const params = new URLSearchParams({ party_id: partyId, item_id: itemId });
+  if (itemSizeId != null) params.set('item_size_id', itemSizeId);
+  fetch(`/api/customers/wishlist?${params.toString()}`, {
     method:  'DELETE',
     headers: { Authorization: `Bearer ${token}` },
   }).catch((err) => console.warn('[wishlistMiddleware] remove failed', err));
@@ -102,7 +108,8 @@ export const wishlistMiddleware = (store) => (next) => (action) => {
       const token = state.auth?.accessToken;
       if (!customerId || !token) break;
 
-      removeFromWishlist(customerId, action.payload, token);
+      const { item_id, item_size_id } = action.payload;
+      removeFromWishlist(customerId, item_id, item_size_id, token);
       break;
     }
 

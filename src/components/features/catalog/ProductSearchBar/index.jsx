@@ -123,7 +123,7 @@ export default function ProductSearchBar({
   return (
     <>
       <div className="flex flex-col gap-2 w-full">
-        <div className="relative flex-1">
+        <div className="relative flex-1 bg-white">
 
           <span
             aria-hidden="true"

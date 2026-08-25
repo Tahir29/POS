@@ -27,15 +27,24 @@ const MAX_ITEMS = 200;
  * Adds one item, moving it to the front if already present (matches
  * recentlyViewed's "most recent first" convention for consistency, even
  * though recency is less central to a wishlist than a view history).
+ *
+ * The $pull below matches on (item_id, item_size_id) TOGETHER, not item_id
+ * alone (2026-08-24 fix) — an item's real identity here is that pair: the
+ * bare base design (item_size_id null) and "item_id X, Size 7 confirmed via
+ * Customize" are different things a customer can each independently want.
+ * Matching on item_id alone meant wishlisting one variant silently deleted
+ * and replaced whichever OTHER variant of that same item_id was already
+ * saved, instead of the two coexisting as separate entries.
  * @param {{ party_id: number, customerName?: string, customerMobile?: string, item: object }} params
  */
 export async function addWishlistItem({ party_id, customerName, customerMobile, item }) {
   const db = await getDb();
   const coll = db.collection(COLLECTION);
+  const itemSizeId = item.item_size_id ?? null;
 
   await coll.updateOne(
     { party_id },
-    { $pull: { items: { item_id: item.item_id } } },
+    { $pull: { items: { item_id: item.item_id, item_size_id: itemSizeId } } },
   );
 
   await coll.updateOne(
@@ -56,13 +65,16 @@ export async function addWishlistItem({ party_id, customerName, customerMobile, 
 }
 
 /**
- * @param {{ party_id: number, item_id: number }} params
+ * item_size_id (2026-08-24) — matched together with item_id, same reasoning
+ * as addWishlistItem above: without it, removing one size variant of an
+ * item_id would $pull every OTHER variant of that same item_id too.
+ * @param {{ party_id: number, item_id: number, item_size_id?: number|null }} params
  */
-export async function removeWishlistItem({ party_id, item_id }) {
+export async function removeWishlistItem({ party_id, item_id, item_size_id = null }) {
   const db = await getDb();
   await db.collection(COLLECTION).updateOne(
     { party_id },
-    { $pull: { items: { item_id } }, $set: { updatedAt: new Date() } },
+    { $pull: { items: { item_id, item_size_id } }, $set: { updatedAt: new Date() } },
   );
 }
 
