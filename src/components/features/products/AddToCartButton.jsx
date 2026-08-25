@@ -34,8 +34,16 @@ import EVENTS, { GA_ECOMMERCE_EVENTS } from '@/lib/analytics/events';
  *   selectedSizeId:   number | null,
  *   selectedSizeName: string | null,
  *   primaryImage:     { src: string, alt: string|null } | null,
+ *   stockStatus?:     'in_stock' | 'out_stock' | 'error' | null,
  *   disabled?:        boolean,
  * }} props
+ *   stockStatus — ProductStickyActionBar already computes and passes this
+ *   (the page's own "currently active" status, in sync with customization —
+ *   see products/[itemId]/page.jsx); NOT read from product.has_stock, which
+ *   Items/Retrieve doesn't reliably carry (that field belongs to
+ *   ProductCatalogRow). Carried onto the cart line as hasStock (2026-08-24)
+ *   so the Cart page/drawer/Checkout can show an In Stock/Made to Order
+ *   badge per line — see CartItemRow.
  */
 export default function AddToCartButton({
   product,
@@ -44,6 +52,7 @@ export default function AddToCartButton({
   selectedSizeId,
   selectedSizeName,
   primaryImage = null,
+  stockStatus = null,
   disabled = false,
 }) {
   const dispatch = useDispatch();
@@ -73,6 +82,7 @@ export default function AddToCartButton({
       sizeId:     selectedSizeId           ?? product.item_size_id   ?? null,
       sizeName:   selectedSizeName         ?? product.item_size_name ?? null,
       image:      resolvedImage,
+      hasStock:   stockStatus === 'in_stock' ? true : stockStatus === 'out_stock' ? false : null,
       styleId:    product.style_id         ?? null,
       attributes: {
         karat:      product.karat_name       ?? null,

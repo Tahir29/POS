@@ -121,8 +121,9 @@ export default function RecentlyViewedCarousel({ excludeItemId = null }) {
           slidesPerView={1.5}
           spaceBetween={12}
           breakpoints={{
-            768:  { slidesPerView: 3, spaceBetween: 12 }, // tablet
-            1024: { slidesPerView: 5, spaceBetween: 16 }, // desktop
+            768:  { slidesPerView: 2.5, spaceBetween: 12 }, // tablet
+            1024: { slidesPerView: 3.5, spaceBetween: 16 }, // desktop
+            1200: { slidesPerView: 5, spaceBetween: 16 }, // desktop
           }}
         >
           {items.map((item) => {

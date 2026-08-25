@@ -26,7 +26,11 @@ import { useIsWishlisted, useToggleWishlist } from '@/hooks/products/useWishlist
 import { EASE_PREMIUM } from '@/lib/motion';
 
 export default function WishlistButton({ product, reduceMotion, className }) {
-  const isWishlisted = useIsWishlisted(product.item_id);
+  // item_size_id (2026-08-24) — a confirmed customization on the product
+  // detail page is a DIFFERENT wishlist entry than the item's bare base
+  // design; see useWishlist.js. Catalog/carousel/profile cards never carry
+  // a size, so this is null there, same as always.
+  const isWishlisted = useIsWishlisted(product.item_id, product.item_size_id ?? null);
   const toggleWishlist = useToggleWishlist();
 
   return (

@@ -1,7 +1,7 @@
 'use client';
 
-// Single cart line item: image, name, SKU, attributes, quantity control,
-// unit price, line total, and a remove action.
+// Single cart line item: image, name, SKU, an In Stock/Made to Order badge,
+// attributes, quantity control, unit price, line total, and a remove action.
 //
 // readOnly MODE: when true, hides the qty stepper, showing a plain "N ×"
 // static label instead — used to reuse this exact row on the Checkout
@@ -20,7 +20,9 @@
 import { useState } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { Trash2, ImageOff } from 'lucide-react';
+import { Trash2 } from 'lucide-react';
+import Logo from '@/components/shared/Logo';
+import StockStatusBadge from '@/components/shared/StockStatusBadge';
 import CartItemQuantityControl from '@/components/features/cart/CartItemQuantityControl';
 
 /**
@@ -77,6 +79,16 @@ export default function CartItemRow({
     item.attributes?.metalColor,
   ].filter(Boolean);
 
+  // In Stock / Made to Order per line (2026-08-24) — same signal
+  // ProductCard/the product detail page already show for this product,
+  // carried onto the cart item at add-to-cart time (see AddToCartButton).
+  // null for a line added before this field existed or via a path that
+  // doesn't set it (order fulfillment, abandoned-cart restore);
+  // StockStatusBadge already renders nothing for a null status.
+  const stockStatus = item.hasStock === true ? 'in_stock'
+    : item.hasStock === false ? 'out_stock'
+    : null;
+
   return (
     <div className="flex gap-3 py-3 border-b border-border last:border-b-0">
       {/* Thumbnail — clickable through to the product page (2026-08-24),
@@ -100,12 +112,28 @@ export default function CartItemRow({
             onError={() => setImgError(true)}
           />
         ) : (
-          <ImageOff size={20} className="text-muted-foreground/50" aria-hidden="true" />
+          // Same Logo asset as ProductCard's / ProductImageGallery's own
+          // no-image state (2026-08-24) — a missing-photo cart line
+          // shouldn't look like a rendering error with a generic broken-
+          // image glyph; it's a real, expected state (most catalog rows
+          // genuinely have no photo asset yet), so it gets the same small
+          // brand touch as everywhere else instead of its own throwaway icon.
+          <Logo variant="icon" color="brown" width={24} height={24} className="opacity-40" />
         )}
       </button>
 
-      <div className="flex-1 min-w-0 flex flex-col gap-1">
-        <div className="flex items-start justify-between gap-2">
+      {/* Two-column split (2026-08-24), not one stacked column with the
+          remove button floated into the name's row — that forced the whole
+          top row up to the remove button's own 44px touch-target height
+          regardless of the name's actual (single-line) height, which read
+          as an oversized gap before the SKU line that none of the other
+          lines below it had. Left = every product detail, stacked tight;
+          right = remove button pinned top, price pinned bottom (via its own
+          mt-auto — works whether or not a remove button is even present,
+          since the outer row's default stretch gives this column the
+          left column's full height to push against). */}
+      <div className="flex-1 min-w-0 flex justify-between gap-2">
+        <div className="min-w-0 flex flex-col gap-1">
           <button
             type="button"
             onClick={handleViewProduct}
@@ -114,49 +142,58 @@ export default function CartItemRow({
           >
             {item.itemName ?? 'Unknown Product'}
           </button>
+
+          {item.sku && (
+            <p className="text-xs text-muted-foreground">SKU: {item.sku}</p>
+          )}
+
+          {/* The physical piece(s) this line will consume. Only an invoice
+              claims stock — an order is a booking, so there is nothing to
+              name and `priced.skus` comes back empty. */}
+          {priced?.skus?.length > 0 && (
+            <p className="text-xs text-muted-foreground">
+              Piece{priced.skus.length > 1 ? 's' : ''}: {priced.skus.join(', ')}
+            </p>
+          )}
+
+          {metaParts.length > 0 && (
+            <p className="text-xs text-muted-foreground">{metaParts.join(' • ')}</p>
+          )}
+
+          {stockStatus && (
+            <div>
+              <StockStatusBadge status={stockStatus} size="sm" />
+            </div>
+          )}
+
+          <div className="mt-1">
+            {readOnly ? (
+              <span className="text-xs text-muted-foreground tabular-nums">
+                {item.quantity} ×
+              </span>
+            ) : (
+              <CartItemQuantityControl
+                quantity={item.quantity}
+                onIncrement={() => onUpdateQuantity(item, item.quantity + 1)}
+                onDecrement={() => onUpdateQuantity(item, item.quantity - 1)}
+              />
+            )}
+          </div>
+        </div>
+
+        <div className="shrink-0 flex flex-col items-end">
           {onRemove && (
             <button
               type="button"
               onClick={() => onRemove(item)}
               aria-label={`Remove ${item.itemName ?? 'item'} from cart`}
-              className="shrink-0 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-full text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+              className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-full text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
             >
               <Trash2 size={16} aria-hidden="true" />
             </button>
           )}
-        </div>
 
-        {item.sku && (
-          <p className="text-xs text-muted-foreground">SKU: {item.sku}</p>
-        )}
-
-        {/* The physical piece(s) this line will consume. Only an invoice
-            claims stock — an order is a booking, so there is nothing to name
-            and `priced.skus` comes back empty. */}
-        {priced?.skus?.length > 0 && (
-          <p className="text-xs text-muted-foreground">
-            Piece{priced.skus.length > 1 ? 's' : ''}: {priced.skus.join(', ')}
-          </p>
-        )}
-
-        {metaParts.length > 0 && (
-          <p className="text-xs text-muted-foreground">{metaParts.join(' • ')}</p>
-        )}
-
-        <div className="flex items-end justify-between mt-1">
-          {readOnly ? (
-            <span className="text-xs text-muted-foreground tabular-nums">
-              {item.quantity} ×
-            </span>
-          ) : (
-            <CartItemQuantityControl
-              quantity={item.quantity}
-              onIncrement={() => onUpdateQuantity(item, item.quantity + 1)}
-              onDecrement={() => onUpdateQuantity(item, item.quantity - 1)}
-            />
-          )}
-
-          <div className="text-right">
+          <div className="text-right mt-auto">
             {/* Capped at 2dp: live prices carry fractional paise
                 (226444.105), and the default shows 3 — "₹2,26,444.105 each"
                 reads like a rendering fault next to a rounded total. */}
