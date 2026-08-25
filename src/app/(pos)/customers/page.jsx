@@ -134,34 +134,35 @@ export default function CustomersPage() {
 
   return (
     <div className="flex flex-col gap-4 max-w-3xl mx-auto w-full p-4 md:p-6">
-      <div className="flex items-center justify-end gap-2">
-        <Button type="button" onClick={() => setIsNewCustomerOpen(true)} className="gap-2">
-          <UserPlus size={16} aria-hidden="true" />
-          New Customer
-        </Button>
-      </div>
-
-      <div className="relative">
-        <Search size={16} aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          type="text"
-          inputMode="search"
-          placeholder="Search by name or mobile number"
-          value={inputVal}
-          onChange={handleChange}
-          className="h-11 pl-9 pr-9"
-          aria-label="Search customers"
-        />
-        {inputVal.length > 0 && (
-          <button
-            type="button"
-            onClick={handleClear}
-            aria-label="Clear search"
-            className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center justify-center h-7 w-7 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-          >
-            <X size={15} aria-hidden="true" />
-          </button>
-        )}
+      <div className='sticky top-0 z-10 -mx-4 -mt-4 flex flex-col gap-2 border-b border-border bg-background px-4 pt-4 pb-3 md:-mx-6 md:-mt-6 md:px-6 md:pt-6'>
+        <div className='flex align-center justify-between gap-4'>
+          <div className="relative w-full">
+            <Search size={16} aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              type="text"
+              inputMode="search"
+              placeholder="Search by name or mobile number"
+              value={inputVal}
+              onChange={handleChange}
+              className="h-11 pl-9 pr-9"
+              aria-label="Search customers"
+            />
+            {inputVal.length > 0 && (
+              <button
+                type="button"
+                onClick={handleClear}
+                aria-label="Clear search"
+                className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center justify-center h-7 w-7 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              >
+                <X size={15} aria-hidden="true" />
+              </button>
+            )}
+          </div>
+          <Button type="button" onClick={() => setIsNewCustomerOpen(true)} className="gap-2 h-11">
+            <UserPlus size={16} aria-hidden="true" />
+            New Customer
+          </Button>
+        </div>
       </div>
 
       <StaggerList className="grid grid-cols-1 md:grid-cols-2 gap-2">

@@ -1242,7 +1242,7 @@ function TransactionsScreen() {
             getKey={(t) => t.id}
             variant="chip"
             scrollable
-            className="pb-1 -mx-4 px-4"
+            className="-mx-4 px-4"
           />
 
           {view === 'list' && (
