@@ -102,6 +102,7 @@ function CheckoutScreen() {
     totals: pricedTotals,
     promotionDetails,
     isStockBacked,
+    documentId,
     amountDue,
     isLoading: isPricing,
     error: pricingError,
@@ -290,6 +291,8 @@ function CheckoutScreen() {
           <CheckoutDiscountSection
             promotionDetails={promotionDetails}
             isPricing={isPricing}
+            pricedLineItems={pricedLineItems}
+            documentId={documentId}
           />
         </div>
         <div className="flex flex-col gap-5 w-full">
