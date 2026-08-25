@@ -37,7 +37,7 @@ export default function QuantityStepper({
 }) {
   return (
     <div
-      className={cn('flex items-center gap-1 rounded-lg border border-border bg-card', className)}
+      className={cn('inline-flex items-center gap-1 rounded-lg border border-border bg-card', className)}
       aria-label="Quantity selector"
     >
       <button

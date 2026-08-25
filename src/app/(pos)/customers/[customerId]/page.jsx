@@ -451,7 +451,7 @@ function Customer360Tab({ customerId }) {
           onChange={setDocType}
           variant="chip"
           scrollable
-          className="-mx-1 px-1 pb-1"
+          className="-mx-1 px-1"
         />
         {activeDocs.length === 0 ? (
           <TabEmpty icon={ClipboardList} label={`No ${activeLabel.toLowerCase()} records.`} />
@@ -523,8 +523,12 @@ function WishlistTab({ customerId }) {
         const price = priceById.get(item.item_id) ?? null;
         const isPricing = price == null && !settledIds.has(item.item_id);
         return (
+          // item_size_id in the key too (2026-08-24) — the base design and a
+          // confirmed customization of the same item_id are now distinct
+          // wishlist entries that can coexist (see wishlistSlice's
+          // wishlistKey); item_id alone would collide once they do.
           <ProductCard
-            key={item.item_id}
+            key={`${item.item_id}-${item.item_size_id ?? 'base'}`}
             product={{ ...item, price, is_pricing: isPricing }}
             showStockBadge
           />
@@ -562,7 +566,7 @@ export default function CustomerDetailPage() {
   return (
     <div className="flex flex-col gap-4 max-w-3xl mx-auto w-full">
 
-      <div className="flex items-center gap-2">
+      {/* <div className="flex items-center gap-2">
         <Button
           type="button"
           variant="ghost"
@@ -576,7 +580,7 @@ export default function CustomerDetailPage() {
         <h1 className="text-base font-bold text-foreground truncate">
           {customer?.customerName ?? 'Customer Profile'}
         </h1>
-      </div>
+      </div> */}
 
       {isLoading && <InlineLoader className="py-16" label="Loading customer…" />}
 
@@ -592,13 +596,26 @@ export default function CustomerDetailPage() {
 
       {customer && !isLoading && (
         <div className="rounded-xl border border-border bg-card p-4 flex flex-col gap-4 shadow-sm">
-
-          <div>
-            <h2 className="text-base font-bold text-foreground">{customer.customerName}</h2>
-            {customer.raw?.party_code && customer.raw.party_code !== 'NA' && (
-              <p className="text-xs text-muted-foreground/70 mt-0.5">Code: {customer.raw.party_code}</p>
-            )}
+          <div className='flex align-top justify-start gap-4'>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={() => router.push('/customers')}
+              aria-label="Back to customers"
+              className="h-9 w-9 -ml-2 shrink-0"
+            >
+              <ArrowLeft size={18} aria-hidden="true" />
+            </Button>
+            <div>
+              <h2 className="text-base font-bold text-foreground">{customer.customerName}</h2>
+              {customer.raw?.party_code && customer.raw.party_code !== 'NA' && (
+                <p className="text-xs text-muted-foreground/70 mt-0.5">Code: {customer.raw.party_code}</p>
+              )}
+            </div>
           </div>
+
+          
 
           {/* Tab bar — variant="chip" made explicit 2026-08-24. This was
               relying on PillTabs' default ('pill'), which used to look
@@ -618,7 +635,7 @@ export default function CustomerDetailPage() {
             getLabel={(t) => TAB_LABELS[t]}
             variant="chip"
             scrollable
-            className="-mx-1 px-1 pb-1"
+            className="-mx-1 px-1"
           />
 
           <div>

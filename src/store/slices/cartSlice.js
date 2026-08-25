@@ -92,6 +92,17 @@ const cartSlice = createSlice({
           sizeName:   incoming.sizeName ?? null,
           attributes: incoming.attributes ?? {},
           image:      incoming.image    ?? incoming.imageUrl ?? null,
+          // Whether THIS product is normally shelf stock or made-to-order
+          // (2026-08-24) — same has_stock signal ProductCard/the product
+          // detail page already show, carried onto the cart line so the
+          // Cart page, mini cart drawer, and Checkout's Order Items summary
+          // (all three render via CartItemRow) can show it too, without
+          // waiting on checkout's own live per-piece pricing. null for any
+          // pre-existing cart line added before this field existed, or via
+          // a path that doesn't pass it (order fulfillment/abandoned-cart
+          // restore) — StockStatusBadge renders nothing for null, so this
+          // degrades to "no badge," never a wrong one.
+          hasStock:   incoming.hasStock ?? null,
         });
       }
       recalculateTotals(state);

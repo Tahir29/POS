@@ -10,7 +10,10 @@
 //          used both by wishlistMiddleware (attached customer, for heart-
 //          icon state) and by the customer profile page's Wishlist tab
 //          (any customer being viewed, whether attached or not).
-// DELETE — remove one item (party_id + item_id query params).
+// DELETE — remove one item (party_id + item_id query params, plus an
+//          optional item_size_id — see removeWishlistItem's own header for
+//          why a wishlist entry's real identity is (item_id, item_size_id),
+//          not item_id alone).
 
 import { addWishlistItemSchema } from '@/validators/wishlistSchema';
 import { addWishlistItem, removeWishlistItem, getWishlist } from '@/lib/mongo/wishlist';
@@ -22,6 +25,16 @@ function requireBearerToken(request) {
 
 function parseIntParam(url, name) {
   const value = Number(new URL(url).searchParams.get(name));
+  return Number.isInteger(value) && value > 0 ? value : null;
+}
+
+// Distinct from parseIntParam above: an ABSENT item_size_id is the normal,
+// valid case (the item's bare base design, no customization confirmed) —
+// null here means "no size", not "missing/invalid param".
+function parseOptionalIntParam(url, name) {
+  const raw = new URL(url).searchParams.get(name);
+  if (raw == null || raw === '') return null;
+  const value = Number(raw);
   return Number.isInteger(value) && value > 0 ? value : null;
 }
 
@@ -75,14 +88,15 @@ export async function DELETE(request) {
     return Response.json({ error: 'Missing bearer token' }, { status: 401 });
   }
 
-  const partyId = parseIntParam(request.url, 'party_id');
-  const itemId  = parseIntParam(request.url, 'item_id');
+  const partyId    = parseIntParam(request.url, 'party_id');
+  const itemId     = parseIntParam(request.url, 'item_id');
+  const itemSizeId = parseOptionalIntParam(request.url, 'item_size_id');
   if (!partyId || !itemId) {
     return Response.json({ error: 'Invalid party_id or item_id' }, { status: 400 });
   }
 
   try {
-    await removeWishlistItem({ party_id: partyId, item_id: itemId });
+    await removeWishlistItem({ party_id: partyId, item_id: itemId, item_size_id: itemSizeId });
     return Response.json({ ok: true });
   } catch (err) {
     console.error('[api/customers/wishlist] DELETE', err);
