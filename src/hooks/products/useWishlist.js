@@ -1,8 +1,9 @@
 // Two hooks:
 //
-//   useIsWishlisted(itemId) — O(1) read for a single ProductCard, backed by
-//   wishlistSlice's memoized Set selector (see that slice's own comment on
-//   why it has to be memoized).
+//   useIsWishlisted(itemId, itemSizeId?) — O(1) read for a single
+//   ProductCard, backed by wishlistSlice's memoized Set selector (see that
+//   slice's own comment on why it has to be memoized). itemSizeId matters
+//   on the product detail page — see this function's own comment below.
 //
 //   useToggleWishlist() — returns a function ProductCard's heart button
 //   calls on tap. Requires a customer to be attached, same rule
@@ -35,14 +36,21 @@ import {
   addWishlistItemLocal,
   removeWishlistItemLocal,
   selectWishlistedItemIds,
+  wishlistKey,
 } from '@/store/slices/wishlistSlice';
 import { useCustomerSession } from '@/hooks/customer/useCustomerSession';
 import { QUERY_KEYS } from '@/constants/queryKeys';
 import TOAST from '@/constants/toastMessages';
 
-export function useIsWishlisted(itemId) {
+// itemSizeId (2026-08-24) — a heart's filled/outline state must match the
+// EXACT (item_id, size) combination on screen, not just the item_id. Without
+// it, wishlisting a product's bare base design (no size) then confirming ANY
+// customization of that same item_id in Customize — even a size never
+// actually hearted — read as already wishlisted, because the two were
+// indistinguishable by item_id alone. See wishlistSlice's wishlistKey.
+export function useIsWishlisted(itemId, itemSizeId = null) {
   const wishlistedIds = useSelector(selectWishlistedItemIds);
-  return itemId != null && wishlistedIds.has(itemId);
+  return itemId != null && wishlistedIds.has(wishlistKey(itemId, itemSizeId));
 }
 
 export function useToggleWishlist() {
@@ -69,10 +77,15 @@ export function useToggleWishlist() {
     // different cache entry than the one the profile page actually reads.
     const wishlistQueryKey = QUERY_KEYS.CUSTOMERS.WISHLIST(Number(customerId));
 
-    if (wishlistedIds.has(product.item_id)) {
-      dispatch(removeWishlistItemLocal(product.item_id));
+    // (item_id, item_size_id) is the real identity here — see wishlistKey.
+    const sizeId = product.item_size_id ?? null;
+
+    if (wishlistedIds.has(wishlistKey(product.item_id, sizeId))) {
+      dispatch(removeWishlistItemLocal({ item_id: product.item_id, item_size_id: sizeId }));
       queryClient.setQueryData(wishlistQueryKey, (old) => (
-        Array.isArray(old) ? old.filter((i) => i.item_id !== product.item_id) : old
+        Array.isArray(old)
+          ? old.filter((i) => !(i.item_id === product.item_id && (i.item_size_id ?? null) === sizeId))
+          : old
       ));
       toast.success(TOAST.WISHLIST.ITEM_REMOVED(product.item_name ?? 'Item'));
     } else {
@@ -103,7 +116,9 @@ export function useToggleWishlist() {
       };
       dispatch(addWishlistItemLocal(item));
       queryClient.setQueryData(wishlistQueryKey, (old) => (
-        Array.isArray(old) ? [item, ...old.filter((i) => i.item_id !== item.item_id)] : old
+        Array.isArray(old)
+          ? [item, ...old.filter((i) => !(i.item_id === item.item_id && (i.item_size_id ?? null) === sizeId))]
+          : old
       ));
       toast.success(TOAST.WISHLIST.ITEM_ADDED(item.item_name ?? 'Item'));
     }

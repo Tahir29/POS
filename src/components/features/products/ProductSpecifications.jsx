@@ -224,7 +224,7 @@ function SpecCard({ icon, title, rows, onOpenInfo }) {
           onClick={() => onOpenInfo(title)}
           className="text-muted-foreground/50 hover:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-full"
         >
-          <Info size={15} aria-hidden="true" />
+          {title !== "Classification" ? <Info size={15} aria-hidden="true" /> : ""}
         </button>
       </div>
       <div className="flex flex-col">

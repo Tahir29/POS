@@ -39,6 +39,24 @@ const TOAST = {
     PROMO_APPLIED: (code) => `Promo code ${code} applied successfully.`,
     PROMO_REMOVED: 'Promo code removed.',
     PROMO_INVALID: (code) => `Promo code ${code} is not valid.`,
+    // Distinct from PROMO_INVALID — the code IS real and active, it just
+    // doesn't apply to what's in THIS basket (see checkoutPricingService.js
+    // — most promos here are scoped to a component like the diamond or
+    // making charge). usePromoValidation checks this BEFORE ever applying
+    // the code (2026-08-24), so a promo that fails this never enters
+    // appliedPromos at all — no tag, no toggle, just this one toast.
+    PROMO_NOT_APPLICABLE: (code) => `Promo code ${code} doesn't apply to these items — no discount given.`,
+    // Cart still pricing when Apply was pressed — there's nothing to check
+    // eligibility against yet (see usePromoValidation). The input is also
+    // disabled during this window; this only covers a click that landed a
+    // beat before the disabled state did.
+    PROMO_NOT_READY: 'Still pricing your cart — try applying this again in a moment.',
+    // Different from PROMO_NOT_APPLICABLE: this promo WAS genuinely eligible
+    // when applied, but the cart changed afterward (an item was added or
+    // removed) and it no longer gives anything for what's in the basket now
+    // — the defensive auto-removal in CheckoutDiscountSection catches this
+    // case, which the up-front check above cannot.
+    PROMO_NO_LONGER_APPLIES: (code) => `Promo code ${code} no longer applies to your cart — removed.`,
     PROMO_FAILED:  'Failed to validate promo code. Please try again.',
     PROMO_SIMILAR_APPLIED: 'A similar promotion is already applied.',
     LOADED_FROM_ORDER: (orderNo) => `Loaded ${orderNo} into a new invoice.`,

@@ -33,7 +33,7 @@ const PAYMENT_LOGOS = [
 
 export default function CheckoutTrustStrip() {
   return (
-    <section className="flex flex-col gap-4 rounded-xl border border-border bg-muted/40 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+    <section className="flex flex-col gap-4 rounded-xl border border-border bg-muted/40 px-4 py-4 sm:flex-row sm:items-center justify-center sm:px-5">
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2.5">
         {TRUST_ITEMS.map(({ icon: Icon, label }) => (
           <div key={label} className="flex items-center gap-1.5">
@@ -44,8 +44,7 @@ export default function CheckoutTrustStrip() {
           </div>
         ))}
       </div>
-
-      <div className="flex items-center gap-3 border-t border-border/60 pt-3 sm:border-t-0 sm:pt-0">
+      {/* <div className="flex items-center gap-3 border-t border-border/60 pt-3 sm:border-t-0 sm:pt-0">
         {PAYMENT_LOGOS.map((logo) => (
           <img
             key={logo.alt}
@@ -57,7 +56,7 @@ export default function CheckoutTrustStrip() {
             className="h-5 w-auto object-contain opacity-60 grayscale"
           />
         ))}
-      </div>
+      </div> */}
     </section>
   );
 }

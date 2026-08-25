@@ -91,8 +91,8 @@ export default function ProductStickyActionBar({
               unitPrice={unitPrice}
               selectedSizeId={selectedSizeId}
               selectedSizeName={selectedSizeName}
-              stockStatus={stockStatus}
               primaryImage={primaryImage}
+              stockStatus={stockStatus}
               disabled={unitPrice == null}
             />
           </div>
