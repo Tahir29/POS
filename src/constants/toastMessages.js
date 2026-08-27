@@ -13,12 +13,18 @@
 
 const TOAST = {
 
+  // SESSION_EXPIRED/REFRESH_FAILED removed 2026-08-27 — dead: never
+  // referenced anywhere. src/lib/axios/interceptors.js owns this wording
+  // itself, deliberately as its own self-contained literal strings (see its
+  // header comment on why 401/403 "keep the fixed copy" over the server's
+  // own reason) — its own generic errorMap's 401 entry, and the distinct,
+  // more detailed forced-logout toast in handleLogout() ("check Orders/
+  // Invoices for anything you were just placing"), which is intentionally
+  // NOT the same message as a generic session-expired toast.
   AUTH: {
     LOGIN_SUCCESS:   'Logged in successfully.',
     LOGIN_FAILED:    'Invalid username or password. Please try again.',
-    SESSION_EXPIRED: 'Your session has expired. Please log in again.',
     LOGOUT_SUCCESS:  'Logged out successfully.',
-    REFRESH_FAILED:  'Session could not be renewed. Please log in again.',
   },
 
   STORE: {
@@ -54,7 +60,7 @@ const TOAST = {
     // Different from PROMO_NOT_APPLICABLE: this promo WAS genuinely eligible
     // when applied, but the cart changed afterward (an item was added or
     // removed) and it no longer gives anything for what's in the basket now
-    // — the defensive auto-removal in CheckoutDiscountSection catches this
+    // — the defensive auto-removal in DiscountSection catches this
     // case, which the up-front check above cannot.
     PROMO_NO_LONGER_APPLIES: (code) => `Promo code ${code} no longer applies to your cart — removed.`,
     PROMO_FAILED:  'Failed to validate promo code. Please try again.',
@@ -77,7 +83,14 @@ const TOAST = {
   ORDERS: {
     CREATED:      (orderNo) => `Order #${orderNo} placed successfully.`,
     CREATE_FAILED:'Failed to place order. Please try again.',
-    POST_FAILED:  'Failed to finalise order. Please try again.',
+    // transactionId (2026-08-27) — Create had already succeeded by the time
+    // Post failed, so a real draft exists server-side even though the
+    // operator sees this as "failed". Naming it here is what turns "the
+    // order vanished" into "the order is transaction #271, still needs
+    // finalising" — see useCreateOrder.js's onError for how this is called.
+    POST_FAILED:  (transactionId) => transactionId
+      ? `Order created (ref #${transactionId}) but couldn't be finalised. Check Orders before retrying — it may already exist as a draft.`
+      : 'Failed to finalise order. Please try again.',
     CANCELLED:    'Order cancelled successfully.',
     CANCEL_FAILED:'Failed to cancel order. Please try again.',
     LOAD_FAILED:  'Failed to load orders. Please try again.',
@@ -86,7 +99,11 @@ const TOAST = {
   INVOICES: {
     CREATED:      (invoiceNo) => `Invoice #${invoiceNo} created successfully.`,
     CREATE_FAILED:'Failed to create invoice. Please try again.',
-    POST_FAILED:  'Failed to finalise invoice. Please try again.',
+    // See ORDERS.POST_FAILED above — same reasoning, same risk of an
+    // orphaned draft transaction the operator has no other way to find.
+    POST_FAILED:  (transactionId) => transactionId
+      ? `Invoice created (ref #${transactionId}) but couldn't be finalised. Check Invoices before retrying — it may already exist as a draft.`
+      : 'Failed to finalise invoice. Please try again.',
     CANCELLED:    'Invoice cancelled successfully.',
     CANCEL_FAILED:'Failed to cancel invoice. Please try again.',
     LOAD_FAILED:  'Failed to load invoice. Please try again.',

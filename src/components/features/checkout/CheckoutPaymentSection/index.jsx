@@ -36,15 +36,39 @@ function HelperBalanceRow({ label, amount, modeCode, rows, isApplied, onToggle, 
   if (isLoading) return null;
   if (!amount || amount <= 0) return null;
 
+  const handleToggle = () => onToggle({ modeCode, label, amount, rows });
+
+  // role="switch" on a <div>, not a real <button> (2026-08-27) — the visual
+  // Switch rendered inside is ITSELF a real <button> under the hood (Radix's
+  // SwitchPrimitive.Root renders role="switch" as an actual <button>, see
+  // ui/switch.jsx), so this used to be a <button> containing another
+  // <button>. Same failure mode already fixed once in this codebase for
+  // ProductCard's wishlist heart (see that file's own comment): the
+  // browser's HTML parser auto-closes the OUTER button the instant it
+  // meets the nested one, silently detaching everything after that point
+  // from this row's real click target — confirmed live 2026-08-27, this is
+  // what a customer with an Exchange Credit balance (or any second helper
+  // balance row) hit at checkout: a React hydration error that broke the
+  // payment section, one repro away from an order that never actually
+  // reaches Create. tabIndex + onKeyDown reproduce real button/switch
+  // keyboard behaviour (Enter/Space), which a plain div gets neither of
+  // for free. The inner <Switch> stays purely decorative — already
+  // pointer-events-none/tabIndex=-1/aria-hidden, unchanged here.
   return (
-    <button
-      type="button"
-      onClick={() => onToggle({ modeCode, label, amount, rows })}
+    <div
       role="switch"
       aria-checked={isApplied}
+      tabIndex={0}
+      onClick={handleToggle}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          handleToggle();
+        }
+      }}
       className={`
-        flex w-full items-center justify-between rounded-lg border px-3 py-2.5 text-left
-        transition-colors
+        flex w-full cursor-pointer items-center justify-between rounded-lg border px-3 py-2.5 text-left
+        transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
         ${isApplied ? 'border-primary/40 bg-primary/5' : 'border-border bg-muted'}
       `}
     >
@@ -55,7 +79,7 @@ function HelperBalanceRow({ label, amount, modeCode, rows, isApplied, onToggle, 
         </p>
       </div>
       <Switch checked={isApplied} className="pointer-events-none" tabIndex={-1} aria-hidden="true" />
-    </button>
+    </div>
   );
 }
 
@@ -91,6 +115,14 @@ export default function CheckoutPaymentSection({ onChange, amountDue, allowParti
   // own payments[] entry, and they'd otherwise collide on a shared modeCode
   // (e.g. two Return receipts both carry mode_code "Return").
   const [payments, setPayments] = useState([]);
+  // Tracks the last `total` the single-mode pre-fill below has already run
+  // against — lets a render-time comparison detect "total changed" without
+  // an effect. See ProductSearchBar's identical pattern/comment for why:
+  // calling setPayments conditionally here, mid-render, re-renders with the
+  // corrected amount before anything paints, instead of painting the
+  // stale amount first and correcting it a frame later the way the
+  // previous useEffect(..., [total]) version did.
+  const [lastPricedTotal, setLastPricedTotal] = useState(total);
 
   // OrnaVerse rejects the sale with "Cannot accept Cash above 199999.00" once
   // a party's cash receipts for the day reach the limit (s.269ST). Two things
@@ -189,7 +221,22 @@ export default function CheckoutPaymentSection({ onChange, amountDue, allowParti
       const exists = prev.some((p) => p.isHelper && p.helperCategory === modeCode);
       if (exists) return prev.filter((p) => !(p.isHelper && p.helperCategory === modeCode));
 
-      const applyAmount = Math.min(amount, total);
+      // FIXED: this used to cap against the grand `total` alone, ignoring
+      // money already collected from other payment modes or other already-
+      // applied helper balances — same `remaining` handleModeToggle already
+      // computes above, just not reused here. Real failure this caused: due
+      // ₹10,000, operator enters ₹5,000 Cash, then applies an ₹8,000
+      // Exchange Credit balance — the old capping let the full ₹8,000
+      // through, pushing paid total to ₹13,000 ("Over total"), which then
+      // silently failed checkoutSchema's "Advance cannot be more than the
+      // order total" check and blocked Place Order until the operator
+      // manually edited the helper row's amount down.
+      const nonHelperPaid = prev.filter((p) => !p.isHelper)
+        .reduce((s, p) => s + (Number(p.amount) || 0), 0);
+      const helperPaid = prev.filter((p) => p.isHelper)
+        .reduce((s, p) => s + (Number(p.amount) || 0), 0);
+      const remaining = Math.max(0, total - helperPaid - nonHelperPaid);
+      const applyAmount = Math.min(amount, remaining);
       const allocations = allocateCreditRows(rows, applyAmount);
       const entries = allocations.map(({ row, amount: rowAmount }) => ({
         key:            row.receipt_id ?? `${modeCode}-${row.transaction_id}`,
@@ -219,8 +266,10 @@ export default function CheckoutPaymentSection({ onChange, amountDue, allowParti
     setPayments((prev) => prev.map((p) => (p.key === key ? { ...p, refNo } : p)));
   };
 
-  // Recompute single-mode pre-fill when total changes
-  useEffect(() => {
+  // Recompute single-mode pre-fill when total changes — during render, not
+  // in an effect (see lastPricedTotal's comment above).
+  if (total !== lastPricedTotal) {
+    setLastPricedTotal(total);
     setPayments((prev) => {
       const nonHelpers = prev.filter((p) => !p.isHelper);
       if (nonHelpers.length !== 1) return prev;
@@ -229,7 +278,7 @@ export default function CheckoutPaymentSection({ onChange, amountDue, allowParti
       const remaining = Math.max(0, total - helperPaid);
       return prev.map((p) => (!p.isHelper ? { ...p, amount: String(remaining) } : p));
     });
-  }, [total]);
+  }
 
   // Notify parent.
   // ledgerId + raw travel with each row because receipt_details[] needs them:

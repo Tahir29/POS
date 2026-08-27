@@ -52,7 +52,7 @@ export function isWebEngageServerConfigured() {
  *                                  server- and client-fired events land on
  *                                  the same profile
  *   eventName: string,          — use EVENTS from './events', same as the
- *                                  client path — one shared vocabulary
+ *                                  client path — one shared vocabularyen
  *   attributes?: object,
  * }} params
  * @returns {Promise<boolean>} true if WebEngage accepted the event

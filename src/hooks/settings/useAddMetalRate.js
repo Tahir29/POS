@@ -1,8 +1,27 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-toastify';
 import { addMetalRate } from '@/services/settingsService';
+import TOAST from '@/constants/toastMessages';
 import tracker from '@/lib/analytics/tracker';
 import EVENTS from '@/lib/analytics/events';
+
+// FIXED 2026-08-27: this used to hardcode its own success/failure strings
+// (close to, but not the same wording as, TOAST.METAL_RATES.ADDED/
+// ADD_FAILED — the constants this app's toast messages are supposed to be
+// centralized in), and unlike every other mutation hook in this codebase
+// (see useTransactionMutations.js/useRepairMutations.js's identical
+// getErrorMessage), it never surfaced OrnaVerse's own server reason on
+// failure — always the same flat generic string, even when the server
+// sent back something specific like "Rate for this metal/purity already
+// exists today."
+function getErrorMessage(error, fallback = TOAST.METAL_RATES.ADD_FAILED) {
+  return (
+    error?.response?.data?.Message ??
+    error?.response?.data?.message ??
+    error?.message ??
+    fallback
+  );
+}
 
 /**
  * Mutation hook for creating a metal rate entry.
@@ -31,7 +50,7 @@ export function useAddMetalRate({ onSuccess } = {}) {
       queryClient.invalidateQueries({ queryKey: ['catalog', 'price-epoch'] });
       queryClient.invalidateQueries({ queryKey: ['items', 'pricing'] });
 
-      toast.success('Metal rate saved successfully.');
+      toast.success(TOAST.METAL_RATES.ADDED);
       tracker.track(EVENTS.METAL_RATE_ADDED, {
         metalTypeId:  variables?.metal_type_id,
         purchaseRate: variables?.purchase_rate,
@@ -40,8 +59,9 @@ export function useAddMetalRate({ onSuccess } = {}) {
       onSuccess?.();
     },
     onError: (error) => {
-      toast.error('Failed to save metal rate. Please try again.');
-      tracker.track(EVENTS.METAL_RATE_ADD_FAILED, { error: error?.message ?? 'unknown' });
+      const message = getErrorMessage(error);
+      toast.error(message);
+      tracker.track(EVENTS.METAL_RATE_ADD_FAILED, { error: message });
     },
   });
 }

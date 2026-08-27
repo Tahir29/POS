@@ -1,5 +1,6 @@
 'use client'
 
+import { usePathname } from 'next/navigation';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import Sidebar from '@/components/layout/Sidebar';
 import Header from '@/components/layout/Header';
@@ -16,6 +17,13 @@ import { NavigationGuardProvider } from '@/contexts/NavigationGuardContext';
  * the global back button (see useBackGuard) — e.g. Checkout's unsaved-changes dialog.
  */
 export default function AppShell({ children }) {
+  // Keys ScrollToTopButton by route so it fully remounts on navigation —
+  // its own isVisible starts fresh (false) instead of needing an effect to
+  // reset it, which used to call setState synchronously on every route
+  // change purely to undo potentially-stale visibility from the PREVIOUS
+  // page. See ScrollToTopButton's own comment.
+  const pathname = usePathname();
+
   return (
     <TooltipProvider delayDuration={300}>
       <NavigationGuardProvider>
@@ -33,7 +41,7 @@ export default function AppShell({ children }) {
             </main>
           </div>
           <PageLoader />
-          <ScrollToTopButton />
+          <ScrollToTopButton key={pathname} />
         </div>
       </NavigationGuardProvider>
     </TooltipProvider>

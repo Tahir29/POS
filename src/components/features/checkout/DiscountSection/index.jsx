@@ -1,6 +1,23 @@
 'use client';
 
-// Checkout section for promo code entry and applied discount display.
+// Promo code entry + applied discount display — for the cart, wherever it's
+// shown. Was CheckoutDiscountSection, checkout-only (2026-08-24); renamed
+// and made self-contained (2026-08-26) so a customer can apply a code
+// without reaching checkout first. Currently used on the mini cart drawer
+// and the full cart page — deliberately NOT the product detail page
+// (removed same day per product decision: applying a promo there was
+// confusing before an item is even in the cart to price against). It's the
+// SAME cart-wide `appliedPromos` state everywhere it IS shown (a promo was
+// never product-scoped), so applying it on one screen and seeing it
+// reflected on another is exactly the same state, not a sync problem to
+// solve.
+//
+// Pricing is fetched HERE, not passed down from the page — useCheckoutPricing
+// takes no arguments (reads the cart/store straight from Redux), so every
+// screen that renders this component shares ONE query, keyed on cart
+// contents + applied promo codes (see that hook). Applying a promo in the
+// mini cart and then opening the full cart page reads the exact same cached
+// result — no separate fetch, no chance of the two disagreeing.
 //
 // Multiple promos can be applied at once — each gets its own badge with an
 // independent remove action. The add-more input/picker stays visible even
@@ -11,6 +28,7 @@ import { useEffect } from 'react';
 import { useDispatch } from 'react-redux';
 import { toast } from 'react-toastify';
 import { useCart } from '@/hooks/cart/useCart';
+import { useCheckoutPricing } from '@/hooks/checkout/useCheckoutPricing';
 import { usePromoValidation } from '@/hooks/checkout/usePromoValidation';
 import { removePromo as removePromoAction } from '@/store/slices/cartSlice';
 import PromoCodeInput from '@/components/features/checkout/PromoCodeInput';
@@ -18,31 +36,26 @@ import PromoCodeSheet from '@/components/features/checkout/PromoCodeSheet';
 import AppliedPromoTag from '@/components/shared/AppliedPromoTag';
 import TOAST from '@/constants/toastMessages';
 
-/**
- * @param {{
- *   promotionDetails?: object[],
- *   isPricing?: boolean,
- *   pricedLineItems?: object[]|null,
- *   documentId?: number|null,
- * }} props
- *   promotionDetails — the `invoice_promotions[]` rows Helper/ApplyPromotions
- *   returned for this basket (see useCheckoutPricing). Each carries the
- *   promotion's real `promotion_amount`; a promo with no row is one the
- *   server declined to apply to these items.
- *   pricedLineItems/documentId — this basket's own priced lines, passed
- *   through to usePromoValidation so a candidate code can be checked for
- *   real eligibility BEFORE it's ever applied (2026-08-24), not after.
- */
-export default function CheckoutDiscountSection({
-  promotionDetails = [], isPricing = false, pricedLineItems = null, documentId = null,
-}) {
+export default function DiscountSection() {
   const dispatch = useDispatch();
-  const { appliedPromos, removePromo } = useCart();
+  const { appliedPromos, removePromo, isEmpty } = useCart();
+  const {
+    lineItems: pricedLineItems,
+    documentId,
+    promotionDetails,
+    isLoading: isPricing,
+  } = useCheckoutPricing();
   const { validatePromo, isValidating } = usePromoValidation(pricedLineItems, documentId);
   // Nothing to check eligibility against yet — same gate usePromoValidation
   // itself falls back on (PROMO_NOT_READY), surfaced here too so the input
-  // is disabled rather than accepting a click it can only reject.
+  // is disabled rather than accepting a click it can only reject. Two
+  // distinct reasons, two distinct hints — an empty cart isn't "still
+  // pricing," and saying so on the product page (where the cart is often
+  // genuinely empty) would just be wrong.
   const notReadyToCheck = !pricedLineItems?.length;
+  const disabledHint = isEmpty
+    ? 'Add items to your cart before applying a promo code.'
+    : 'Still pricing your cart — promo codes can be applied once that’s done.';
 
   const amountFor = (promoCode) =>
     promotionDetails.find((row) => row.promotion_code === promoCode)?.promotion_amount ?? null;
@@ -99,7 +112,7 @@ export default function CheckoutDiscountSection({
         onApply={validatePromo}
         isValidating={isValidating}
         disabled={notReadyToCheck}
-        disabledHint="Still pricing your cart — promo codes can be applied once that's done."
+        disabledHint={disabledHint}
       />
       <PromoCodeSheet onApply={validatePromo} isApplying={isValidating} appliedPromos={appliedPromos} />
     </section>

@@ -95,22 +95,11 @@ import { useCartTotals } from '@/hooks/cart/useCartTotals';
 import { useCustomerSession } from '@/hooks/customer/useCustomerSession';
 import { useExchangeRate } from '@/hooks/checkout/useExchangeRate';
 import { useOrderHeaderConfig } from '@/hooks/checkout/useOrderHeaderConfig';
-import { selectActiveStoreId } from '@/store/slices/storeSlice';
-import { QUERY_KEYS } from '@/constants/queryKeys';
+import { selectActiveStoreId, selectActiveStoreCode, selectActiveStoreName } from '@/store/slices/storeSlice';
+import { selectCartCustomerAddress } from '@/store/slices/cartSlice';
 import APP_CONFIG from '@/constants/appConfig';
 import TOAST from '@/constants/toastMessages';
-import tracker from '@/lib/analytics/tracker';
-import EVENTS, { GA_ECOMMERCE_EVENTS } from '@/lib/analytics/events';
-
-function toGAItems(items) {
-  return items.map((item) => ({
-    item_id:   String(item.itemId),
-    item_name: item.itemName,
-    item_sku:  item.sku,
-    price:     item.unitPrice,
-    quantity:  item.quantity,
-  }));
-}
+import { trackDocumentPlaced, trackDocumentFailed } from '@/lib/analytics/orderTracking';
 
 /**
  * Builds InvoiceRow Entity from already-priced line items + session state.
@@ -236,7 +225,10 @@ export function useCreateInvoice() {
   // document now comes from the priced, promotion-applied line items.
   const { total: cartTotal } = useCartTotals();
   const { customerId, customerName, customerMobile } = useCustomerSession();
-  const activeStoreId = useSelector(selectActiveStoreId);
+  const customerAddress = useSelector(selectCartCustomerAddress);
+  const activeStoreId   = useSelector(selectActiveStoreId);
+  const activeStoreCode = useSelector(selectActiveStoreCode);
+  const activeStoreName = useSelector(selectActiveStoreName);
   const { exchangeRate } = useExchangeRate();
   const headerConfig = useOrderHeaderConfig(APP_CONFIG.DOCUMENT_TYPES.POS_INVOICE);
 
@@ -339,21 +331,24 @@ export function useCreateInvoice() {
         }
       }
 
-      // net_amount travels back so analytics reports what was actually
-      // invoiced. It used to report the cart's catalog total, which since
+      // entity + lineItems travel back (not just netAmount) so onSuccess can
+      // report the full order — price breakup, per-item detail — not just
+      // the total. It used to report the cart's catalog total, which since
       // checkout started pricing the real pieces has been a different — and
       // on stone-set items, much smaller — number than the sale.
-      return { transactionId, createResponse, postResponse, netAmount: entity.net_amount };
+      return { transactionId, createResponse, postResponse, entity, lineItems };
     },
 
-    onSuccess: ({ transactionId, netAmount }) => {
+    onSuccess: ({ transactionId, entity, lineItems }, variables) => {
       toast.success(TOAST.INVOICES.CREATED(transactionId));
 
-      tracker.trackEcommerce(GA_ECOMMERCE_EVENTS.PURCHASE, EVENTS.ORDER_PLACED, {
-        transaction_id: transactionId,
-        value:          netAmount,
-        currency:       APP_CONFIG.CURRENCY.INR_CODE,
-        items:          toGAItems(items),
+      trackDocumentPlaced({
+        documentType: 'invoice',
+        transactionId, entity, lineItems,
+        customerId, customerName, customerMobile, customerAddress,
+        activeStoreId, activeStoreCode, activeStoreName,
+        paymentModes:  variables?.paymentModes,
+        salesPersonId: variables?.salesPersonId,
       });
 
       // NOT clearing the cart here. Clearing resets the attached customer,
@@ -382,19 +377,24 @@ export function useCreateInvoice() {
       // succeed.
       const reason = error?.serverMessage ?? error?.message ?? null;
 
-      tracker.track(EVENTS.ORDER_FAILED, {
+      trackDocumentFailed({
+        documentType: 'invoice',
         stage: failedAtPost ? 'post' : 'create',
         value: attemptedValue,
         error: reason ?? 'unknown',
       });
 
-      // If create succeeded but post failed, the draft sits on the server.
-      // The user can re-attempt posting from the invoices list.
-      const fallback = failedAtPost
-        ? TOAST.INVOICES.POST_FAILED
-        : TOAST.INVOICES.CREATE_FAILED;
+      // If create succeeded but post failed, the draft sits on the server —
+      // error.transactionId is stamped above specifically so this can name
+      // it. That fact (and which ref number to go find) matters more than
+      // whatever raw reason the failed Post call carries, so it always wins
+      // over `reason` here — see TOAST.INVOICES.POST_FAILED's own comment.
+      if (failedAtPost && error?.transactionId) {
+        toast.error(TOAST.INVOICES.POST_FAILED(error.transactionId));
+        return;
+      }
 
-      toast.error(reason ?? fallback);
+      toast.error(reason ?? TOAST.INVOICES.CREATE_FAILED);
     },
   });
 

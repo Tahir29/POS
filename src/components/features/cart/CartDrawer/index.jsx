@@ -4,14 +4,17 @@
 // Uses the shared BottomSheet primitive (bottom sheet on mobile,
 // right side sheet on tablet).
 
+import { useMemo } from 'react';
 import BottomSheet from '@/components/shared/BottomSheet';
 import CartItemRow from '@/components/features/cart/CartItemRow';
 import CartEmptyState from '@/components/features/cart/CartEmptyState';
 import CartSummary from '@/components/features/cart/CartSummary';
 import CartCustomerTag from '@/components/features/cart/CartCustomerTag';
-import AppliedPromoTag from '@/components/shared/AppliedPromoTag';
+import DiscountSection from '@/components/features/checkout/DiscountSection';
 import ProceedToCheckoutButton from '@/components/features/cart/ProceedToCheckoutButton';
 import { useCart } from '@/hooks/cart/useCart';
+import { useCheckoutPricing } from '@/hooks/checkout/useCheckoutPricing';
+import { mapPricedLinesToCart } from '@/services/checkoutPricingService';
 
 /**
  * @param {{
@@ -24,13 +27,20 @@ export default function CartDrawer({ isOpen, onClose }) {
     items,
     customerName,
     customerMobile,
-    appliedPromos,
     isEmpty,
     removeItem,
     updateQuantity,
     detachCustomer,
-    removePromo,
   } = useCart();
+
+  // Same query DiscountSection/the cart page/checkout all share, keyed on
+  // cart contents + applied promo codes — applying a code anywhere shows up
+  // everywhere with zero extra requests. See cart/page.jsx's own comment.
+  const { lineItems: pricedLineItems, totals: pricedTotals, isLoading: isPricing } = useCheckoutPricing();
+  const pricedByCartIndex = useMemo(
+    () => mapPricedLinesToCart(items, pricedLineItems),
+    [items, pricedLineItems]
+  );
 
   return (
     <BottomSheet
@@ -40,7 +50,7 @@ export default function CartDrawer({ isOpen, onClose }) {
       footer={
         !isEmpty && (
           <div className="flex flex-col gap-3">
-            <CartSummary />
+            <CartSummary totals={pricedTotals} isPricing={isPricing} />
             <ProceedToCheckoutButton onNavigate={onClose} />
           </div>
         )
@@ -56,23 +66,17 @@ export default function CartDrawer({ isOpen, onClose }) {
               customerMobile={customerMobile}
               onDetach={detachCustomer}
             />
-            {appliedPromos.map((promo) => (
-              <AppliedPromoTag
-                key={promo.promoCode}
-                promoCode={promo.promoCode}
-                discountAmount={promo.discountAmount}
-                onRemove={() => removePromo(promo.promoCode)}
-              />
-            ))}
+            <DiscountSection />
           </div>
 
           <div className="flex flex-col">
-            {items.map((item) => (
+            {items.map((item, index) => (
               <CartItemRow
                 key={`${item.itemId}-${item.sizeId}-${item.styleId}`}
                 item={item}
                 onUpdateQuantity={updateQuantity}
                 onRemove={removeItem}
+                priced={pricedByCartIndex.get(index) ?? null}
               />
             ))}
           </div>

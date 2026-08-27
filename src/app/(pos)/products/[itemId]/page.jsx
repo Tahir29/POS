@@ -24,19 +24,18 @@ import { useReducedMotion } from 'motion/react';
 
 import { useProductDetail }     from '@/hooks/products/useProductDetail';
 import { useStockByStores }     from '@/hooks/products/useStockByStores';
-import { useProductAttributes } from '@/hooks/products/useProductAttributes';
 import { useDesignVariants }    from '@/hooks/products/useDesignVariants';
 import { useShopifyProductImages } from '@/hooks/products/useShopifyProductImages';
 import { useVariantPricing }    from '@/hooks/products/useVariantPricing';
 
 import ProductImageGallery   from '@/components/features/products/ProductImageGallery';
 import ProductSpecifications from '@/components/features/products/ProductSpecifications';
-import ProductAttributeList  from '@/components/features/products/ProductAttributeList';
 import ProductBreadcrumb     from '@/components/features/products/ProductBreadcrumb';
 import ProductDetailSkeleton from '@/components/features/products/ProductDetailSkeleton';
 import CrossStoreStockPanel  from '@/components/features/products/CrossStoreStockPanel';
 import ProductTrustBadge     from '@/components/features/products/ProductTrustBadge';
 import CustomizeSheet        from '@/components/features/products/CustomizeSheet';
+import PriceBreakdown        from '@/components/features/products/PriceBreakdown';
 import ProductStickyActionBar from '@/components/features/products/ProductStickyActionBar';
 import ProductTrustSection   from '@/components/features/products/ProductTrustSection';
 import ProductReviewsList    from '@/components/features/products/ProductReviewsList';
@@ -53,6 +52,11 @@ import { Settings2, CheckCircle2, Copy, Check } from 'lucide-react';
 
 const selectActiveStoreId   = (s) => s.store.activeStoreId;
 const selectActiveStoreName = (s) => s.store.activeStoreName;
+const selectActiveStoreCode = (s) => s.store.activeStoreCode;
+const selectCartCustomerId       = (s) => s.cart.customerId;
+const selectCartCustomerName     = (s) => s.cart.customerName;
+const selectCartCustomerMobile   = (s) => s.cart.customerMobile;
+const selectCartCustomerAddress  = (s) => s.cart.customerAddress;
 
 // ── Not found ─────────────────────────────────────────────────────────────────
 
@@ -73,6 +77,11 @@ function ProductDetailScreen() {
   const { itemId } = useParams();
   const activeStoreId   = useSelector(selectActiveStoreId);
   const activeStoreName = useSelector(selectActiveStoreName);
+  const activeStoreCode = useSelector(selectActiveStoreCode);
+  const cartCustomerId      = useSelector(selectCartCustomerId);
+  const cartCustomerName    = useSelector(selectCartCustomerName);
+  const cartCustomerMobile  = useSelector(selectCartCustomerMobile);
+  const cartCustomerAddress = useSelector(selectCartCustomerAddress);
 
   // ── Server state ──────────────────────────────────────────────────────────
   const {
@@ -80,8 +89,6 @@ function ProductDetailScreen() {
     isLoading: detailLoading,
     isError:   detailError,
   } = useProductDetail(itemId);
-
-  const { data: attributes = [] } = useProductAttributes(null);
 
   // ── UI state ──────────────────────────────────────────────────────────────
   // Declared before useStockByStores below so the "Stock Across Stores"
@@ -128,7 +135,6 @@ function ProductDetailScreen() {
     variants,
     externalProductId,
     metalColors,
-    variantStock,
     storesByItemId,
     karats,
     sizes,
@@ -260,10 +266,34 @@ function ProductDetailScreen() {
 
   const price = formatPrice(numericUnitPrice);
 
+  // The real, scannable per-piece SKU (e.g. "LJ11255071") — distinct from
+  // `activeCode`/`product.item_code` (e.g. "LJ-PR0329-14RGLGD-12"), the
+  // catalog/style code. `product.sku` on the master record is always an
+  // empty string (confirmed live 2026-08-26) — a catalog item has no
+  // serialized piece attached to it. Only `livePricing` (SetSalesItems,
+  // resolved against one real StockJournal row) ever carries a genuine sku,
+  // and only once a piece was actually found to price against — so this is
+  // null until then, same gating as numericUnitPrice above. The QR/barcode
+  // scanner reads THIS value, not the item code, hence showing both.
+  const activeSku = livePricing?.sku && livePricing.sku.trim() ? livePricing.sku : null;
+
   // view_item — once per product, and only once the live price is in.
   // It used to fire on load with the stale item_rate/sale_price/mrp chain,
   // which reported a figure to analytics that the shop never charges. Waiting
   // costs a beat but keeps reported value equal to real value.
+  //
+  // WEBENGAGE-ONLY DETAIL (2026-08-27) — everything the GA4 call above
+  // deliberately leaves out, on the same event, via trackEcommerce()'s
+  // webengageExtra bag (see tracker.js's jsdoc: this never reaches GA4,
+  // only WebEngage). Nothing here is new data — every field already lives
+  // on `activeItem`/`product`, `livePricing` (the same row PriceBreakdown
+  // renders), the cart's attached-customer slice, or storeSlice; this just
+  // makes sure none of it stops at this page instead of reaching WebEngage.
+  // Flat scalars only, no nested objects/arrays (address is destructured
+  // out into its own fields) — WebEngage's SDK only accepts
+  // string/number/boolean/Date per attribute, and omitNullish() in
+  // tracker.js strips anything not on hand yet rather than sending a
+  // stray null.
   const trackedItemIdRef = useRef(null);
   useEffect(() => {
     if (!product || numericUnitPrice == null) return;
@@ -279,8 +309,67 @@ function ProductDetailScreen() {
         item_sku:  product.item_code ?? '',
         price:     numericUnitPrice,
       }],
+    }, {
+      // Full product details — base identity + whichever variant is
+      // currently active (customized or not), same activeItem-then-product
+      // fallback the rest of this page already uses.
+      product_item_id:          activeItem?.item_id ?? product.item_id,
+      product_item_code:        activeItem?.item_code ?? product.item_code,
+      product_item_name:        activeItem?.item_name ?? product.item_name,
+      product_sku:              activeSku,
+      product_style_id:         product.style_id,
+      product_item_group:       product.item_group_name,
+      product_category:         product.type_name,
+      product_sub_category:     product.sub_type_name,
+      product_collection:       product.collection_name,
+      product_brand:            product.brand_name,
+      product_karat:            activeKarat,
+      product_metal:            activeItem?.metal_name ?? product.metal_name,
+      product_metal_color:      activeColor,
+      product_size:             activeSize,
+      product_net_weight:       activeItem?.net_weight ?? product.net_weight,
+      product_gross_weight:     activeItem?.weight ?? product.weight,
+      product_stone_weight:     product.stone_weight,
+      product_diamond_weight:   product.diamond_weight,
+      product_diamond_pieces:   product.diamond_pieces,
+      product_stone_pieces:     product.stone_pieces,
+      product_hsn:              product.hsn,
+      product_stock_status:     stockStatus,
+      // Price breakup — the exact row PriceBreakdown renders on this same
+      // page, not re-derived.
+      price_currency:           'INR',
+      price_metal_amount:       livePricing?.metal_amount,
+      price_diamond_amount:     livePricing?.diamond_amount,
+      price_stone_amount:       livePricing?.stone_amount,
+      price_color_stone_amount: livePricing?.color_stone_amount,
+      price_other_amount:       livePricing?.other_amount,
+      price_making_charges:     livePricing?.item_labour,
+      price_sub_total:          livePricing?.sub_total,
+      price_taxable_amount:     livePricing?.taxable_amount,
+      price_tax_amount:         livePricing?.tax_amount,
+      price_net_amount:         livePricing?.net_amount,
+      // Attached-customer data — "entirely" whatever the cart session
+      // already has (there's no fuller profile loaded on this page); an
+      // unattached browse (no customer yet) simply omits these, via
+      // omitNullish() in tracker.js.
+      customer_id:              cartCustomerId,
+      customer_name:            cartCustomerName,
+      customer_mobile:          cartCustomerMobile,
+      customer_city:            cartCustomerAddress?.city,
+      customer_state:           cartCustomerAddress?.state,
+      customer_country:         cartCustomerAddress?.country,
+      customer_zip:             cartCustomerAddress?.zip,
+      // Store context — company id + code, same values every other
+      // store-scoped call in this app already keys on.
+      store_id:                 activeStoreId,
+      store_code:               activeStoreCode,
+      store_name:               activeStoreName,
     });
-  }, [product, numericUnitPrice]);
+  }, [
+    product, numericUnitPrice, activeItem, activeSku, activeKarat, activeColor, activeSize,
+    livePricing, stockStatus, cartCustomerId, cartCustomerName, cartCustomerMobile,
+    cartCustomerAddress, activeStoreId, activeStoreCode, activeStoreName,
+  ]);
 
   // No stock-based ceiling — quantity is only bounded by QuantitySelector's
   // own internal sane default (99) inside ProductStickyActionBar.
@@ -399,8 +488,8 @@ function ProductDetailScreen() {
                     <button
                       type="button"
                       onClick={() => handleCopySku(product.item_code)}
-                      aria-label={`Copy SKU ${product.item_code}`}
-                      title="Copy SKU"
+                      aria-label={`Copy item code ${product.item_code}`}
+                      title="Copy item code"
                       className="flex items-center justify-center w-5 h-5 shrink-0 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
                     >
                       {skuCopied
@@ -504,7 +593,13 @@ function ProductDetailScreen() {
                   )}
                 </div>
                 {activeCode && (
-                  <p className="text-xs text-muted-foreground mt-0.5">{activeCode}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Item Code: {activeCode}
+                    {/* Real per-piece SKU — the scanner reads this, not the
+                        item code above. Only shown once pricing has actually
+                        resolved a physical piece (see activeSku's comment). */}
+                    {activeSku && <> · SKU: {activeSku}</>}
+                  </p>
                 )}
               </div>
             )}
@@ -569,12 +664,22 @@ function ProductDetailScreen() {
               />
             )}
 
+            {/* Price Breakdown — moved off the very top of the page (was
+            directly under the headline price, competing with Add to Cart
+            for the first thing seen) but placed BEFORE the spec cards
+            (2026-08-27, per explicit placement request), not beside them —
+            a full-width horizontal strip a customer reads top-to-bottom:
+            what this piece costs, THEN what it's made of. Same component
+            Cart/Checkout reuse per product; here it's simply given the full
+            page width instead of a per-line one. */}
+            {numericUnitPrice != null && <PriceBreakdown priced={livePricing} />}
+
           </div>
         </div>
 
         <ProductTrustBadge />
 
-        <ProductSpecifications product={activeItem} />
+        <ProductSpecifications product={activeItem} pricedItem={livePricing} />
 
         <ProductTrustSection />
 
@@ -611,7 +716,6 @@ function ProductDetailScreen() {
         metalColors={metalColors}
         karats={karats}
         sizes={sizes}
-        variantStock={variantStock}
         storesByItemId={storesByItemId}
         findVariant={findVariant}
         onConfirm={handleCustomizeConfirm}

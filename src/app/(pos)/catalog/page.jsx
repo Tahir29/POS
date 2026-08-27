@@ -158,6 +158,20 @@ function CatalogScreen() {
     [availableStores, effectiveStoreId]
   );
 
+  // The primary grid's own stock badge must show whichever store's catalog
+  // is actually on screen — effectiveStoreId, not the signed-in store.
+  // ProductCard's own fallback (activeStoreCode from Redux) is ALWAYS the
+  // signed-in store, so it silently showed the wrong code the moment
+  // catalogStoreId (the store filter above) pointed somewhere else —
+  // confirmed live 2026-08-26, same class of bug already fixed for Recently
+  // Viewed/Wishlist. Looked up from availableStores (already in Redux,
+  // covers every store this operator can browse, not just the signed-in
+  // one) rather than trusting a second network round-trip for one code.
+  const effectiveStoreCode = useMemo(
+    () => availableStores.find((s) => s.company_id === effectiveStoreId)?.company_code ?? null,
+    [availableStores, effectiveStoreId]
+  );
+
   // ── Categories ────────────────────────────────────────────────────────────
   const { data: categories = [], isError: catsError } = useCategories();
 
@@ -538,6 +552,7 @@ function CatalogScreen() {
             hasMore={hasMore}
             hasFilters={hasActiveFilters || isSearchMode}
             showStockBadge={showStockBadge}
+            storeCode={effectiveStoreCode}
             onLoadMore={handleLoadMore}
             onClearFilters={handleClearFilters}
           />

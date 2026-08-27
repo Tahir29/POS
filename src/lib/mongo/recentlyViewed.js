@@ -22,7 +22,9 @@
 
 import { getDb } from './client';
 
-const COLLECTION = 'recentlyViewed';
+// _POS suffix (2026-08-27) — see wishlist.js's identical comment; same
+// live rename (5 docs before and after, confirmed), same reasoning.
+const COLLECTION = 'recentlyViewed_POS';
 
 // Mirrors MAX_ITEMS in store/slices/recentlyViewedSlice.js — keep the two
 // in sync manually if either changes; there's no shared import between a

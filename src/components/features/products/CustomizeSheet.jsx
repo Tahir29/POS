@@ -175,7 +175,6 @@ export default function CustomizeSheet({
   metalColors     = [],
   karats          = [],
   sizes           = [],
-  variantStock    = new Map(),
   storesByItemId  = new Map(),
   findVariant,
   onConfirm,
@@ -519,7 +518,16 @@ export default function CustomizeSheet({
               <p className="text-xs text-muted-foreground mt-0.5">
                 {matchedVariant._isMTO
                   ? `${matchedVariant.karat_name} · ${matchedVariant.metal_color_name}${matchedVariant.item_size_name ? ` · Size ${matchedVariant.item_size_name}` : ''}`
-                  : <>SKU: {matchedVariant.item_code}{(matchedVariant.pieces ?? 0) > 0 && ` · ${matchedVariant.pieces} pc${matchedVariant.pieces !== 1 ? 's' : ''}`}</>
+                  : <>
+                      Item Code: {matchedVariant.item_code}
+                      {/* The real, scannable per-piece sku — only resolves
+                          once useVariantPricing above has actually priced a
+                          physical piece for this variant (never for MTO,
+                          which has none). item_code alone is what this line
+                          used to mislabel "SKU:". */}
+                      {livePricing?.sku && <> · SKU: {livePricing.sku}</>}
+                      {(matchedVariant.pieces ?? 0) > 0 && ` · ${matchedVariant.pieces} pc${matchedVariant.pieces !== 1 ? 's' : ''}`}
+                    </>
                 }
               </p>
 

@@ -26,13 +26,16 @@
 
 import { getDb } from './client';
 
-const COLLECTION = 'abandonedCarts';
+// _POS suffix (2026-08-27) — see wishlist.js's identical comment; same
+// live rename (3 docs before and after, confirmed), same reasoning.
+const COLLECTION = 'abandonedCarts_POS';
 
 /**
  * @param {{ party_id: number, customerName?: string, customerMobile?: string,
- *   items: object[], subtotal?: number, taxAmount?: number, total?: number }} params
+ *   items: object[], subtotal?: number, taxAmount?: number, total?: number,
+ *   company_id?: number }} params
  */
-export async function upsertAbandonedCart({ party_id, customerName, customerMobile, items, subtotal, taxAmount, total }) {
+export async function upsertAbandonedCart({ party_id, customerName, customerMobile, items, subtotal, taxAmount, total, company_id }) {
   const db = await getDb();
   await db.collection(COLLECTION).updateOne(
     { party_id },
@@ -45,6 +48,10 @@ export async function upsertAbandonedCart({ party_id, customerName, customerMobi
         subtotal:  subtotal  ?? null,
         taxAmount: taxAmount ?? null,
         total:     total     ?? null,
+        // Which store was active when this snapshot was saved (2026-08-27)
+        // — tagged on so the cart data carries its store instead of losing
+        // it; not used to scope the lookup, still keyed on party_id alone.
+        company_id: company_id ?? null,
         updatedAt: new Date(),
       },
       $setOnInsert: { createdAt: new Date() },

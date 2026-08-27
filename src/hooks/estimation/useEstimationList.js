@@ -27,6 +27,7 @@ export function normalizeEstimation(entity) {
     amount:        get(entity, 'net_amount'),
     isOrdered:     entity.line_items?.[0]?.is_ordered ?? false,
     isClosed:      entity.line_items?.[0]?.is_closed  ?? false,
+    companyId:     get(entity, 'company_id'),
     lineItems:     Array.isArray(entity.line_items) ? entity.line_items : [],
     raw: entity,
   };
@@ -41,8 +42,16 @@ export function useEstimations({ skip = 0, enabled = true } = {}) {
     queryFn:  async () => {
       const data     = await getEstimations({ company_id: storeId, take, skip });
       const entities = data?.Entities ?? [];
+      // Client-side backstop (2026-08-27) — confirmed live that
+      // Estimation/List silently ignores its own company_id filter, same
+      // gap as Order/List and RepairOut/List. See useDailyClosing.js for
+      // the pattern this mirrors.
+      const items = entities
+        .map(normalizeEstimation)
+        .filter(Boolean)
+        .filter((e) => e.companyId === storeId);
       return {
-        items:      entities.map(normalizeEstimation).filter(Boolean),
+        items,
         totalCount: data?.TotalCount ?? entities.length,
       };
     },

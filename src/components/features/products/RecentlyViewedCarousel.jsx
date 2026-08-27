@@ -32,6 +32,7 @@
 // stale by the time this renders, and this app treats a stale price as a
 // real bug everywhere else (see that hook's own header comment).
 
+import { useMemo } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Swiper, SwiperSlide } from 'swiper/react';
 import { FreeMode, Navigation, Mousewheel } from 'swiper/modules';
@@ -53,6 +54,7 @@ import 'swiper/css/free-mode';
 // horizontal scrollbar instead of just this strip. Confirmed live 2026-08-22.
 import ProductCard from '@/components/features/catalog/ProductCard';
 import { useLiveCatalogPrices } from '@/hooks/catalog/useLiveCatalogPrices';
+import { useCrossStoreStockCodes } from '@/hooks/catalog/useCrossStoreStockCodes';
 import { useRecentlyViewedItems } from '@/hooks/products/useRecentlyViewed';
 
 // Arrow buttons target Swiper's own nav elements by class (swiper-button-prev/
@@ -90,6 +92,13 @@ export default function RecentlyViewedCarousel({ excludeItemId = null }) {
   // Same shape useLiveCatalogPrices expects elsewhere: objects with
   // item_id + price (always null here — see header comment for why).
   const { priceById, settledIds } = useLiveCatalogPrices(items);
+
+  // Real cross-store stock, not the has_stock snapshot stored on the item
+  // at view time (stale the instant the operator switches stores, or comes
+  // back later) — see useCrossStoreStockCodes' own header for why this
+  // exists at all.
+  const itemIds = useMemo(() => items.map((i) => i.item_id), [items]);
+  const { stockByItemId, isLoading: stockLoading } = useCrossStoreStockCodes(itemIds);
 
   if (items.length === 0) return null;
 
@@ -134,10 +143,14 @@ export default function RecentlyViewedCarousel({ excludeItemId = null }) {
                 {/* showStockBadge — matches the catalog grid's own card
                     exactly (same component, same props), so this carousel
                     reads as the same product picker, not a stripped-down
-                    variant of it. */}
+                    variant of it. realStock (2026-08-26) — the genuine,
+                    live, cross-store answer; withheld (showStockBadge=false)
+                    while it's still loading rather than flash the item's
+                    stale stored has_stock/current store first. */}
                 <ProductCard
                   product={{ ...item, price, is_pricing: isPricing }}
-                  showStockBadge
+                  showStockBadge={!stockLoading}
+                  realStock={stockByItemId.get(item.item_id) ?? null}
                 />
               </SwiperSlide>
             );

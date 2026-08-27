@@ -13,7 +13,7 @@
 
 import { useState } from 'react';
 import Image from 'next/image';
-import { Info } from 'lucide-react';
+import { Info, Gem } from 'lucide-react';
 import BottomSheet from '@/components/shared/BottomSheet';
 
 function val(v) {
@@ -43,6 +43,44 @@ function formatDimension(value) {
   const num = parseFloat(value);
   if (isNaN(num) || num === 0) return null;
   return `${num} mm`;
+}
+
+// Gemstone (a.k.a. "Colour Stone" in OrnaVerse's own vocabulary — item_group_id
+// 113) details live one level down, on the BOM row for that component, not as
+// a top-level field the way karat/metal_color do. Both the master record
+// (`item_components` on Items/Retrieve, `components` on Style/Retrieve) and
+// the live-priced SetSalesItems entity carry one BOM row per material —
+// filter to the colour-stone group to find it.
+function getColorStoneComponents(list) {
+  return (list ?? []).filter(
+    (c) => c.item_group_id === 113 || c.item_group_name === 'Color Stone'
+  );
+}
+
+// shape_id -> shape_name, built from every component on the product's OWN
+// master BOM (never a hardcoded/guessed table) — diamond and colour-stone
+// rows share the same shape vocabulary (shape_id 4 is "Princess" whether
+// it's cut into a diamond or a gemstone), so this can resolve a friendly
+// name for a live-priced colour-stone row that only carries the raw id.
+function buildShapeNameMap(components) {
+  const map = new Map();
+  (components ?? []).forEach((c) => {
+    const name = val(c.shape_name);
+    if (c.shape_id && name) map.set(c.shape_id, name);
+  });
+  return map;
+}
+
+// `attribute` on every BOM row is "{ShapeCode}/{ColorCode}/{MetalCode}/
+// {Size}/{QualityCode}" (e.g. "PR/RED/NA/4.5*4.5/NA") — confirmed live
+// 2026-08-26 against item 61679's colour-stone row on both the master
+// record and SetSalesItems. Used as a fallback when a row has no resolved
+// _name field for that piece (the live-priced row never does for shape/
+// colour), since the codes themselves (colour especially — "RED", "PINK")
+// are already human-readable without a lookup table.
+function parseAttribute(attribute) {
+  const parts = typeof attribute === 'string' ? attribute.split('/') : [];
+  return { shapeCode: parts[0], colorCode: parts[1], sizeCode: parts[3] };
 }
 
 // Static/educational, not per-product — same convention as ProductTrustSection.
@@ -117,6 +155,28 @@ const SPEC_INFO_CONTENT = {
       },
     ],
   },
+  Gemstone: {
+    sections: [
+      {
+        heading: 'COLOR',
+        image: 'https://cdn.shopify.com/s/files/1/0739/8516/3482/files/Frame_1437257506_1_8d9ce413-b8c0-4273-865c-f77702ff25bb.png',
+        imageAlt: 'Gemstone Colors'
+      },
+      {
+        heading: 'SHAPE',
+        image: 'https://cdn.shopify.com/s/files/1/0739/8516/3482/files/Frame_1437257506_6987bc69-acbf-4dfb-b2e0-df136b4f6ed5.png',
+        imageAlt: 'Gemstone Shapes'
+      },
+      {
+        heading: 'QUANTITY',
+        text: 'Quantity indicates the total number of Gemstones used in the jewelry.'
+      },
+      {
+        heading: 'CARAT',
+        text: 'Carat (ct) is the standard unit of measurement used to indicate the weight of Gemstones used in the jewelry.'
+      }
+    ]
+  }
 };
 
 function SpecInfoColumn({ heading, image, imageAlt }) {
@@ -241,6 +301,7 @@ const ICON_URLS = {
   dimension: 'https://cdn.shopify.com/s/files/1/0739/8516/3482/files/PDPIcons_dimension.svg',
   diamond: 'https://cdn.shopify.com/s/files/1/0739/8516/3482/files/PDPIcons_diamond.svg',
   classification: 'https://cdn.shopify.com/s/files/1/0739/8516/3482/files/PDPIcons_diamond.svg',
+  gemstone: 'https://www.lucirajewelry.com/images/icons/gemstone.svg'
 };
 
 function SpecIcon({ src, alt }) {
@@ -253,8 +314,22 @@ const MetalIcon = () => <SpecIcon src={ICON_URLS.metal} alt="Metal" />;
 const DimensionIcon = () => <SpecIcon src={ICON_URLS.dimension} alt="Dimension" />;
 const DiamondIcon = () => <SpecIcon src={ICON_URLS.diamond} alt="Diamond" />;
 const TagIcon = () => <SpecIcon src={ICON_URLS.classification} alt="Classification" />;
+const GemstoneIcon = () => <SpecIcon src={ICON_URLS.gemstone} alt="Gemstone" />;
 
-export default function ProductSpecifications({ product }) {
+/**
+ * @param {{ product: object, pricedItem?: object|null }} props
+ *   product — the master record (Items/Retrieve/Style/Retrieve), source for
+ *   every card except the gemstone one, which prefers `pricedItem` when it's
+ *   resolved.
+ *   pricedItem — the live-priced SetSalesItems entity (useVariantPricing's
+ *   `data`), same object PriceBreakdown renders. The master's colour-stone
+ *   BOM row is only a per-DESIGN default; the physical piece actually being
+ *   priced/sold can carry a different colour stone (confirmed live 2026-08-26
+ *   on item 61679: master default "Ruby/RED", live-priced piece "Pink
+ *   Sapphire/PINK") — so the gemstone card prefers this over `product` and
+ *   only falls back to the master row before pricing has resolved.
+ */
+export default function ProductSpecifications({ product, pricedItem = null }) {
   const [infoTitle, setInfoTitle] = useState(null);
 
   if (!product) return null;
@@ -277,10 +352,40 @@ export default function ProductSpecifications({ product }) {
   const diamondPieces    = product.diamond_pieces      > 0 ? String(product.diamond_pieces)     : null;
   const diamondCarats    = formatCarats(product.diamond_weight);
   const stonePieces      = product.stone_pieces        > 0 ? String(product.stone_pieces)       : null;
-  const colorStonePieces = product.color_stone_pieces  > 0 ? String(product.color_stone_pieces) : null;
-  const colorStoneWeight = formatWeight(product.color_stone_weight);
   const otherPieces      = product.other_pieces        > 0 ? String(product.other_pieces)       : null;
   const otherWeight      = formatWeight(product.other_weight);
+
+  // Gemstone card — see the JSDoc above for why pricedItem is preferred.
+  const masterComponents = product.item_components ?? product.components ?? [];
+  const shapeNameById     = buildShapeNameMap(masterComponents);
+  const liveColorStones   = getColorStoneComponents(pricedItem?.item_components);
+  const masterColorStones = getColorStoneComponents(masterComponents);
+  const colorStoneRows    = liveColorStones.length ? liveColorStones : masterColorStones;
+
+  const uniqueJoined = (values) => {
+    const list = [...new Set(values.filter(Boolean))];
+    return list.length ? list.join(', ') : null;
+  };
+
+  const gemstonePieces = (pricedItem?.color_stone_pieces ?? product.color_stone_pieces) > 0
+    ? String(pricedItem?.color_stone_pieces ?? product.color_stone_pieces)
+    : null;
+  const gemstoneWeight = formatCarats(pricedItem?.color_stone_weight ?? product.color_stone_weight);
+  const gemstoneType   = uniqueJoined(colorStoneRows.map((c) => val(c.type_name) ?? val(c.type_code)));
+  const gemstoneName   = uniqueJoined(colorStoneRows.map((c) => val(c.sub_type_name) ?? val(c.sub_type_code)));
+  const gemstoneShape  = uniqueJoined(colorStoneRows.map((c) => {
+    const { shapeCode } = parseAttribute(c.attribute);
+    return (c.shape_id && shapeNameById.get(c.shape_id)) || val(c.shape_name) || val(shapeCode);
+  }));
+  const gemstoneColor  = uniqueJoined(colorStoneRows.map((c) => {
+    const { colorCode } = parseAttribute(c.attribute);
+    return val(c.stone_color_name) || val(colorCode);
+  }));
+  const gemstoneSize   = uniqueJoined(colorStoneRows.map((c) => {
+    const { sizeCode } = parseAttribute(c.attribute);
+    if (val(c.sieve_name)) return `${val(c.sieve_name)} mm`;
+    return sizeCode && sizeCode !== 'NA' ? `${sizeCode} mm` : null;
+  }));
 
   const itemGroup   = val(product.item_group_name);
   const category    = val(product.type_name);
@@ -289,7 +394,13 @@ export default function ProductSpecifications({ product }) {
   const brand       = val(product.brand_name);
   const baseItem    = val(product.base_item);
   const hsn         = val(product.hsn);
-  const sku         = val(product.item_code ?? product.sku);
+  const itemCode    = val(product.item_code)
+  // product.sku (the master/catalog record) is always an empty string —
+  // confirmed live 2026-08-26 — a catalog item has no serialized piece
+  // attached to it. Only pricedItem (SetSalesItems, resolved against a real
+  // StockJournal row) ever carries a genuine per-piece sku, and only once
+  // pricing found a piece to price against.
+  const sku         = val(pricedItem?.sku) ?? val(product.sku);
 
   return (
     <>
@@ -328,13 +439,29 @@ export default function ProductSpecifications({ product }) {
           title="Diamond"
           onOpenInfo={setInfoTitle}
           rows={[
-            { label: 'Quantity',            value: diamondPieces },
-            { label: 'Carat',               value: diamondCarats },
-            { label: 'Stone Pieces',        value: stonePieces },
-            { label: 'Colour Stone Pieces', value: colorStonePieces },
-            { label: 'Colour Stone Weight', value: colorStoneWeight },
-            { label: 'Other Pieces',        value: otherPieces },
-            { label: 'Other Weight',        value: otherWeight },
+            { label: 'Quantity',     value: diamondPieces },
+            { label: 'Carat',        value: diamondCarats },
+            { label: 'Stone Pieces', value: stonePieces },
+            { label: 'Other Pieces', value: otherPieces },
+            { label: 'Other Weight', value: otherWeight },
+          ]}
+        />
+
+        {/* Colour stone / gemstone details — only ever present on a
+            "Gemstone" design (e.g. LJ-PR0329-14RGLGD-12), self-hidden
+            everywhere else via SpecCard's own hasAny check. */}
+        <SpecCard
+          icon={<GemstoneIcon />}
+          title="Gemstone"
+          onOpenInfo={setInfoTitle}
+          rows={[
+            { label: 'Type',     value: gemstoneType },
+            { label: 'Stone',    value: gemstoneName },
+            { label: 'Shape',    value: gemstoneShape },
+            { label: 'Colour',   value: gemstoneColor },
+            { label: 'Size',     value: gemstoneSize },
+            { label: 'Quantity', value: gemstonePieces },
+            { label: 'Weight',   value: gemstoneWeight },
           ]}
         />
 
@@ -350,6 +477,7 @@ export default function ProductSpecifications({ product }) {
             { label: 'Brand',        value: brand },
             { label: 'Base Item',    value: baseItem },
             { label: 'HSN Code',     value: hsn },
+            { label: 'Item Code',    value: itemCode },
             { label: 'SKU',          value: sku },
           ]}
         />

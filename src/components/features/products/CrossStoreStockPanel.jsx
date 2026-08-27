@@ -73,7 +73,7 @@ export default function CrossStoreStockPanel({ storeStocks = [], isLoading, isEr
     // every row gets a small icon avatar for visual weight, matching the
     // header's own icon treatment rather than being plain text.
     <div className="rounded-xl border border-border overflow-hidden shadow-sm">
-      <Accordion type="single" collapsible defaultValue="stock">
+      <Accordion type="single" collapsible defaultValue="">
         <AccordionItem value="stock" className="border-0">
           <AccordionTrigger
             className="rounded-none px-4 py-3.5 bg-card hover:bg-muted/60 hover:no-underline focus-visible:ring-inset focus-visible:ring-ring"

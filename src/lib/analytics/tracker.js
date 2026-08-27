@@ -93,6 +93,24 @@ function omitUndefined(obj) {
   return result;
 }
 
+// Drops null AND undefined — stricter than omitUndefined() above, and used
+// ONLY on the optional `webengageExtra` bag (see track()/trackEcommerce()
+// below), which callers build by spreading a raw product/pricing/customer
+// object full of legitimately-absent fields (a piece with no diamond has
+// diamond_amount: null, not 0). WebEngage's SDK only accepts
+// string/number/boolean/Date per attribute (see webengage.js's own jsdoc) —
+// a stray null triggers the same "unsupported type" console warning
+// undefined does, so both get stripped here before the SDK ever sees them.
+// properties/params (the GA4-shared payload) intentionally keep their own,
+// looser omitUndefined() — changing that risks changing what GA4 receives.
+function omitNullish(obj) {
+  const result = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (value !== undefined && value !== null) result[key] = value;
+  }
+  return result;
+}
+
 const SESSION_KEY = 'lucira_session';
 const EVENTS_KEY  = 'lucira_events';
 const MAX_EVENTS  = 500;
@@ -182,8 +200,18 @@ const tracker = {
    * Includes session context (customer/store) when one is active; still
    * logs with nulls when it isn't, since tracking now runs from login
    * onward, not just during an attached customer session.
+   *
+   * @param {object} webengageExtra — OPTIONAL, additional properties sent
+   *   ONLY to WebEngage, never GA4. For events that need to carry real
+   *   detail — full product attributes, a price breakup, customer PII, the
+   *   active store's company id/code — that GA4's PII terms forbid mixing
+   *   into `properties` above (see the PII note at the top of this file).
+   *   Kept as a separate argument rather than folded into `properties` so
+   *   there is no way for a future edit to accidentally widen what GA4
+   *   receives; see PRODUCT_VIEWED on the product detail page for the
+   *   intended shape of this bag.
    */
-  track(eventName, properties = {}) {
+  track(eventName, properties = {}, webengageExtra = {}) {
     if (typeof window === 'undefined') return;
 
     const session = this.getSession();
@@ -231,6 +259,11 @@ const tracker = {
       customer_mobile: session?.customerMobile,
       ...SOURCE_PROPS,
       ...properties,
+      // Extra, WebEngage-only detail — see this method's jsdoc. Spread last
+      // so a richer explicit value (e.g. a real customer_mobile from the
+      // caller) wins over the session-derived default above, never the
+      // other way round.
+      ...omitNullish(webengageExtra),
     }));
   },
 
@@ -268,13 +301,16 @@ const tracker = {
    * @param {string} gaEventName  — exact GA4 reserved name, e.g. 'purchase'
    * @param {string} posEventName — POS_-prefixed equivalent, e.g. EVENTS.ORDER_PLACED
    * @param {object} params — GA4 ecommerce params (items[], value, currency, ...)
+   * @param {object} webengageExtra — OPTIONAL, WebEngage-only detail, passed
+   *   straight through to track() — see its jsdoc. Never reaches either GA4
+   *   call below (the POS_-prefixed one is the bare-name one), by design.
    */
-  trackEcommerce(gaEventName, posEventName, params = {}) {
+  trackEcommerce(gaEventName, posEventName, params = {}, webengageExtra = {}) {
     // Fires the POS_-prefixed name to sessionStorage + GA4 + WebEngage +
     // console — see track() above. Only the bare GA4-reserved name below
     // needs its own extra call, since GA4 (not WebEngage) is the only
     // destination that treats that exact string specially.
-    this.track(posEventName, params);
+    this.track(posEventName, params, webengageExtra);
     logEvent(gaEventName, params);     // also log the GA-reserved-name fire
     sendToGA(gaEventName, omitUndefined({
       timestamp: new Date().toISOString(),

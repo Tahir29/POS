@@ -60,17 +60,18 @@ export default function ScrollToTopButton() {
   const enabled = isScrollToTopEnabled(pathname);
 
   useEffect(() => {
-    if (!enabled) {
-      setIsVisible(false);
-      return;
-    }
+    // No setIsVisible(false) resets in this effect (there used to be one
+    // here and one below) — AppShell now renders this component with
+    // key={pathname}, so a route change fully remounts it and isVisible
+    // starts fresh at false on its own. That's also what makes it safe to
+    // just bail out here while disabled (isVisible is irrelevant anyway
+    // once the component returns null below) instead of resetting it.
+    if (!enabled) return;
 
     let container = getScrollContainer();
     if (!container) return;
 
-    // Reset on route change
     lastScrollTopRef.current = container.scrollTop;
-    setIsVisible(false);
 
     const handleScroll = () => {
       const scrollTop = container.scrollTop;

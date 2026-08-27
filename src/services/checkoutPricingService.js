@@ -110,7 +110,7 @@ export async function applyPromotionsToLines({
     // Order — for every line, not just the gold coin — while giving the
     // operator no indication why. Caught here and folded into the exact
     // same "declined to price" path below, so it now reaches the operator
-    // via CheckoutDiscountSection's existing "Doesn't apply to these items"
+    // via DiscountSection's existing "Doesn't apply to these items"
     // message instead of silently blocking the sale.
     let response;
     try {
@@ -152,6 +152,18 @@ export async function applyPromotionsToLines({
  * same piece can never be billed twice — possible when the same product sits
  * in the cart under two lines (different size/style selections).
  *
+ * is_allocated (2026-08-27) — every StockJournal row carries this field;
+ * confirmed live against OrnaVerse's own UAT tenant that it's a real,
+ * populated flag (not always false), meaning a row can come back already
+ * reserved by ANOTHER transaction. This is what OrnaVerse's own Invoice
+ * flow means by "in stock" — not merely "a row exists for this item", but
+ * "a row exists AND nothing else has already claimed it". Filtered out
+ * here alongside the in-session `claimed` set (same intent, two different
+ * scopes: `claimed` stops double-claiming a piece within THIS cart,
+ * `is_allocated` stops claiming one some OTHER transaction already holds)
+ * — this is the actual mechanism that decides whether a cart becomes an
+ * Invoice (stock-backed) or an Order (made-to-order), so getting this
+ * filter right IS "how the made to order and in stock order is placed".
  * @param {{ item: object, activeStoreId: number, claimed: Set<number> }} params
  * @returns {Promise<object[]>} exactly `item.quantity` stock rows
  * @throws when the store cannot supply that many pieces
@@ -163,7 +175,7 @@ async function claimStockPieces({ item, activeStoreId, claimed }) {
   });
   const rows = response?.data?.Entities ?? [];
 
-  const available = rows.filter((r) => !claimed.has(r.stock_journal_id));
+  const available = rows.filter((r) => !r.is_allocated && !claimed.has(r.stock_journal_id));
   const wanted = item.quantity ?? 1;
 
   // Short stock is NOT an error here any more. The counter no longer asks the
@@ -300,8 +312,14 @@ export async function buildPricedLineItems({ items, activeStoreId, salesPersonId
  * the price it is really being sold for, and name the physical piece.
  *
  * @param {object[]} items      — cart items, in order
- * @param {object[]} lineItems  — buildPricedLineItems output
- * @returns {Map<number, { lineTotal: number, unitPrice: number, skus: string[] }>}
+ * @param {object[]} lineItems  — buildPricedLineItems output, AFTER
+ *   applyPromotionsToLines has run if any promo is applied — that's what
+ *   writes the per-row `discount` field this now also surfaces (see its
+ *   own header, and summarizeLineItems' identical sum for the header total).
+ * @returns {Map<number, {
+ *   lineTotal: number, unitPrice: number, discount: number, skus: string[],
+ *   breakdown: object,
+ * }>}
  *   keyed by cart index; empty when the two don't line up (never guess a
  *   mapping — showing the cart's own figure is better than the wrong piece's)
  */
@@ -318,12 +336,40 @@ export function mapPricedLinesToCart(items, lineItems) {
     const rows = lineItems.slice(cursor, cursor + quantity);
     cursor += quantity;
 
-    const lineTotal = +rows.reduce((sum, r) => sum + (r.sub_total ?? 0), 0).toFixed(2);
+    const sumField = (field) => +rows.reduce((sum, r) => sum + (r[field] ?? 0), 0).toFixed(2);
+    const lineTotal = sumField('sub_total');
     byCartIndex.set(index, {
       lineTotal,
       unitPrice: +(lineTotal / quantity).toFixed(2),
+      // Per-line discount bifurcation (2026-08-26) — how much of the
+      // cart-wide discount landed on THIS line specifically. A component-
+      // scoped promo ("20% Off Diamond") can give ₹0 here on a line with no
+      // diamond even while it discounts others, which is correct, not a bug.
+      discount: sumField('discount'),
       // Only invoices claim stock rows, so this is empty for an order.
       skus: rows.map((r) => r.sku).filter(Boolean),
+      // Full per-product cost breakdown (2026-08-26) — same fields, same
+      // shape components/products/PriceBreakdown already renders on the
+      // product detail page (metal/diamond/stone/colour-stone/other +
+      // making charges + subtotal/taxable/tax/total), summed across every
+      // physical piece this line represents (quantity > 1 means >1 row).
+      // Deliberately the SAME snake_case field names SetSalesItems itself
+      // uses so this object can be handed straight to <PriceBreakdown
+      // priced={...} /> with no remapping — one component, one source of
+      // truth for what "the breakup" looks like, whether it's shown on the
+      // product page, the cart, or checkout.
+      breakdown: {
+        metal_amount:       sumField('metal_amount'),
+        diamond_amount:     sumField('diamond_amount'),
+        stone_amount:       sumField('stone_amount'),
+        color_stone_amount: sumField('color_stone_amount'),
+        other_amount:       sumField('other_amount'),
+        item_labour:        sumField('item_labour'),
+        sub_total:          lineTotal,
+        taxable_amount:     sumField('taxable_amount'),
+        tax_amount:         sumField('tax_amount'),
+        net_amount:         sumField('net_amount'),
+      },
     });
   });
 

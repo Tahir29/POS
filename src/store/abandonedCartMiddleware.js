@@ -70,7 +70,7 @@ async function fetchAbandonedCart(partyId, token) {
   }
 }
 
-function saveAbandonedCart(partyId, cart, token) {
+function saveAbandonedCart(partyId, cart, token, companyId) {
   fetch('/api/customers/abandoned-cart', {
     method:  'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -82,6 +82,11 @@ function saveAbandonedCart(partyId, cart, token) {
       subtotal:       cart.subtotal,
       taxAmount:      cart.taxAmount,
       total:          cart.total,
+      // Store active at save time (2026-08-27) — so the record carries
+      // which store it belongs to instead of that being lost. See
+      // storeSlice's activeStoreId, the same value every other feature
+      // scopes by.
+      company_id:     companyId ?? null,
     }),
   }).catch((err) => console.warn('[abandonedCartMiddleware] save failed', err));
 }
@@ -104,6 +109,7 @@ export const abandonedCartMiddleware = (store) => (next) => (action) => {
 
   const state = store.getState();
   const token = state.auth?.accessToken;
+  const companyId = state.store?.activeStoreId;
 
   switch (action.type) {
     case 'cart/attachCustomer': {
@@ -122,7 +128,7 @@ export const abandonedCartMiddleware = (store) => (next) => (action) => {
         if (freshCart.items.length > 0) {
           // Items already in the cart at attach time — carried over from a
           // "Keep Cart" switch. They belong to this customer now.
-          saveAbandonedCart(customerId, freshCart, token);
+          saveAbandonedCart(customerId, freshCart, token, store.getState().store?.activeStoreId);
         } else if (hasSaved) {
           store.dispatch(restoreCart({ items: record.items }));
           toast.success(
@@ -135,7 +141,7 @@ export const abandonedCartMiddleware = (store) => (next) => (action) => {
 
     case 'cart/detachCustomer': {
       if (preCart.customerId && preCart.items.length > 0 && token) {
-        saveAbandonedCart(preCart.customerId, preCart, token);
+        saveAbandonedCart(preCart.customerId, preCart, token, companyId);
       }
       store.dispatch(clearAbandonedCartState());
       break;
@@ -155,7 +161,7 @@ export const abandonedCartMiddleware = (store) => (next) => (action) => {
       // so the default (no reason) behavior stays "delete".
       if (preCart.customerId && token) {
         if (action.payload?.reason === 'session_reset') {
-          if (preCart.items.length > 0) saveAbandonedCart(preCart.customerId, preCart, token);
+          if (preCart.items.length > 0) saveAbandonedCart(preCart.customerId, preCart, token, companyId);
         } else {
           deleteAbandonedCart(preCart.customerId, token);
         }
@@ -176,7 +182,7 @@ export const abandonedCartMiddleware = (store) => (next) => (action) => {
           if (latestCart.items.length === 0) {
             deleteAbandonedCart(customerId, token);
           } else {
-            saveAbandonedCart(customerId, latestCart, token);
+            saveAbandonedCart(customerId, latestCart, token, store.getState().store?.activeStoreId);
           }
         }, SAVE_DEBOUNCE_MS);
       }

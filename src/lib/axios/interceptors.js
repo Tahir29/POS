@@ -180,25 +180,102 @@ const refreshAccessToken = async (instance, refreshToken, store) => {
 };
 
 /**
- * Clears Redux auth and store state, then redirects to login.
- * Called when refresh token is expired or missing.
+ * Clears Redux auth/store/cart/recently-viewed/wishlist state, the query
+ * cache, and the analytics tracker, then redirects to login. Called when
+ * the refresh token is expired or missing — i.e. the session simply timed
+ * out, not something an operator chose.
+ *
+ * FIXED 2026-08-27: this used to only clear auth/store/cookies — a much
+ * thinner cleanup than useAuth.js's manual logout(), which explicitly
+ * clears cart, recentlyViewed, wishlist, purges the persistor, clears the
+ * tracker, and clears the query client (see that function's own comments
+ * for why each one matters on a SHARED terminal). A forced session-expiry
+ * logout is exactly as much a "this operator's session is over" moment as
+ * a manual one — arguably more so, since it can happen mid-shift with no
+ * warning — so it needs the same cleanup, not a lighter one. Concretely:
+ * `cart` IS in persistConfig's whitelist (unlike recentlyViewed/wishlist,
+ * which reset for free on the reload below since they're in-memory-only),
+ * so without dispatching clearCart here, a customer's in-progress cart
+ * survived in localStorage straight through a forced logout and was still
+ * there for whoever logged in next on the same terminal — confirmed by
+ * reading persistConfig.js's whitelist, not assumed.
+ *
+ * FIXED 2026-08-27 (second pass) — the reported bug: "once the order is
+ * placed, the customer logs out automatically, which shouldn't happen at
+ * all". Root cause traced end to end: checkout's Create→Post chain is
+ * exactly the slow, sequential, multi-call flow the race-condition comment
+ * on `refreshPromise` above already describes crossing into the token's
+ * refresh window. When the reactive refresh on a mid-chain 401 ALSO fails
+ * (refresh token already used/expired), this function used to redirect via
+ * `window.location.href` in the SAME synchronous tick that the failed
+ * request's promise rejects — before the rejection had even propagated
+ * back to useCreateOrder/useCreateInvoice's onError, let alone before
+ * React had a chance to paint that mutation's own toast.error(...). The
+ * operator saw the screen just vanish to /login with no explanation, and —
+ * worse — Create had usually already succeeded (a real transaction_id
+ * exists server-side), so it read as data loss, not just an abrupt logout;
+ * see TOAST.ORDERS/INVOICES.POST_FAILED for the other half of this fix
+ * (naming that transaction_id so it's findable instead of just "failed").
+ * Fixed by explicitly showing a toast HERE and delaying the actual
+ * navigation — long enough for both toasts (this one, and whatever
+ * mutation's own onError just fired) to render before the page tears down.
  *
  * @param {object} store - Redux store
  */
 const handleLogout = (store) => {
   const { clearAuth }  = require('@/store/slices/authSlice');
   const { clearStore } = require('@/store/slices/storeSlice');
+  const { clearCart } = require('@/store/slices/cartSlice');
+  const { clearRecentlyViewed } = require('@/store/slices/recentlyViewedSlice');
+  const { clearWishlist } = require('@/store/slices/wishlistSlice');
   const { clearAllCookies } = require('@/lib/cookies');
+  const { persistor } = require('@/store');
+  const queryClient = require('@/lib/queryClient').default;
+  const tracker = require('@/lib/analytics/tracker').default;
+  const { destroyReportSession } = require('@/services/authService');
+  const { toast } = require('react-toastify');
+
+  // Best-effort — a session that's already timed out server-side may well
+  // reject this too; it must never block the local cleanup below.
+  destroyReportSession().catch(() => {});
 
   store.dispatch(clearAuth());
   store.dispatch(clearStore());
+  // reason: 'session_reset' — same as useAuth.js's manual logout: this is
+  // the SESSION ending, not the customer's cart being resolved, so an
+  // unpaid cart is preserved as abandoned rather than deleted outright
+  // (see abandonedCartMiddleware's cart/clearCart case).
+  store.dispatch(clearCart({ reason: 'session_reset' }));
+  store.dispatch(clearRecentlyViewed());
+  store.dispatch(clearWishlist());
   // Match normal logout — don't let a stale backend cookie survive
   // a forced logout any more than a manual one.
   clearAllCookies();
+  // Actually deletes the persisted localStorage entry rather than leaving
+  // an empty-but-present one — see useAuth.js logout()'s own comment on
+  // why the resets above aren't enough by themselves.
+  persistor.purge();
+  tracker.clear();
+  // NOTE: queryClient.clear() is deliberately NOT called synchronously here
+  // any more — it used to run before the delayed redirect below, which
+  // meant a mutation's own onError (still queued for this same tick) could
+  // fire against an already-cleared query client. Clearing happens right
+  // before the redirect instead, after every pending toast has had its
+  // chance to render.
 
-  // Redirect to login — works in both browser and Next.js context
+  toast.error('Your session has expired. Please log in again — check Orders/Invoices for anything you were just placing.');
+
+  // Redirect to login — works in both browser and Next.js context. Delayed
+  // (not immediate) so a mutation's own onError — e.g. useCreateOrder's
+  // "Order created (ref #X) but couldn't be finalised" — has time to reach
+  // the toast container and actually be seen before the page tears down.
   if (typeof window !== 'undefined') {
-    window.location.href = '/login';
+    setTimeout(() => {
+      queryClient.clear();
+      window.location.href = '/login';
+    }, 2500);
+  } else {
+    queryClient.clear();
   }
 };
 

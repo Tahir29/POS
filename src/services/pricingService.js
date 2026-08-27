@@ -91,10 +91,17 @@ export async function priceItemAsSold({ item, companyId }) {
   if (!item?.item_id) return null;
 
   if (companyId) {
-    // The first available row is the one claimStockPieces would take, so the
-    // quote matches the piece that will actually be billed.
-    const response = await getStockPieces({ itemId: item.item_id, companyId, take: 1 });
-    const [row] = response?.data?.Entities ?? [];
+    // The first AVAILABLE row is the one claimStockPieces would take, so the
+    // quote matches the piece that will actually be billed — "available"
+    // now explicitly excludes is_allocated rows (2026-08-27), matching
+    // claimStockPieces' own filter (see its header for why: a row can come
+    // back already reserved by another transaction, confirmed live against
+    // OrnaVerse's own tenant). take: 5, not 1 — with is_allocated now
+    // filtered client-side, take:1 could land exactly on an allocated row
+    // and see nothing else, quoting made-to-order for an item that
+    // genuinely has other real stock one row further down.
+    const response = await getStockPieces({ itemId: item.item_id, companyId, take: 5 });
+    const row = (response?.data?.Entities ?? []).find((r) => !r.is_allocated);
     if (row) {
       const [priced] = await priceStockPiecesForSale(
         [row], APP_CONFIG.DOCUMENT_TYPES.POS_INVOICE

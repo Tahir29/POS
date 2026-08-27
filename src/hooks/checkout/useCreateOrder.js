@@ -51,13 +51,15 @@ import {
 } from '@/services/checkoutPricingService';
 import { localDocumentDate, buildReceiptDetails } from '@/lib/checkout/documentFields';
 import { useCart } from '@/hooks/cart/useCart';
+import { useCartTotals } from '@/hooks/cart/useCartTotals';
 import { useCustomerSession } from '@/hooks/customer/useCustomerSession';
 import { useExchangeRate } from '@/hooks/checkout/useExchangeRate';
 import { useOrderHeaderConfig } from '@/hooks/checkout/useOrderHeaderConfig';
-import { selectActiveStoreId } from '@/store/slices/storeSlice';
-import { QUERY_KEYS } from '@/constants/queryKeys';
+import { selectActiveStoreId, selectActiveStoreCode, selectActiveStoreName } from '@/store/slices/storeSlice';
+import { selectCartCustomerAddress } from '@/store/slices/cartSlice';
 import APP_CONFIG from '@/constants/appConfig';
 import TOAST from '@/constants/toastMessages';
+import { trackDocumentPlaced, trackDocumentFailed } from '@/lib/analytics/orderTracking';
 
 /**
  * Builds the OrderRow Entity payload from cart state.
@@ -153,8 +155,14 @@ function buildOrderEntity({
 export function useCreateOrder() {
   const queryClient = useQueryClient();
   const { items, appliedPromos, fulfillmentOrderId, fulfillmentOrderNo } = useCart();
+  // Fallback for analytics only on a failed order — same reasoning as
+  // useCreateInvoice.js's identical cartTotal.
+  const { total: cartTotal } = useCartTotals();
   const { customerId, customerName, customerMobile } = useCustomerSession();
-  const activeStoreId = useSelector(selectActiveStoreId);
+  const customerAddress = useSelector(selectCartCustomerAddress);
+  const activeStoreId   = useSelector(selectActiveStoreId);
+  const activeStoreCode = useSelector(selectActiveStoreCode);
+  const activeStoreName = useSelector(selectActiveStoreName);
   const { exchangeRate } = useExchangeRate();
   const headerConfig = useOrderHeaderConfig(APP_CONFIG.DOCUMENT_TYPES.POS_ORDER);
 
@@ -246,15 +254,30 @@ export function useCreateOrder() {
           throw err;
         }
       }
-      return {
-        transactionId, createResponse, postResponse,
-        netAmount:     entity.net_amount,
-        balanceAmount: entity.balance_amount,
-      };
+      // entity + lineItems travel back so onSuccess can report the full
+      // order — price breakup, per-item detail — not just the total. See
+      // useCreateInvoice.js's identical reasoning.
+      return { transactionId, createResponse, postResponse, entity, lineItems };
     },
 
-    onSuccess: ({ transactionId }) => {
+    onSuccess: ({ transactionId, entity, lineItems }, variables) => {
       toast.success(TOAST.ORDERS.CREATED(transactionId));
+
+      // THE previously-missing tracking this hook never fired at all (see
+      // this file's own header comment on how easily this document type
+      // goes unwired) — an Order is a real completed step in the funnel
+      // (a deposit/reserve taken), just not a fully-paid sale, so it's
+      // still worth an ORDER_PLACED event, tagged document_type: 'order'
+      // to stay distinguishable from useCreateInvoice.js's immediate sales.
+      trackDocumentPlaced({
+        documentType: 'order',
+        transactionId, entity, lineItems,
+        customerId, customerName, customerMobile, customerAddress,
+        activeStoreId, activeStoreCode, activeStoreName,
+        paymentModes:  variables?.paymentModes,
+        salesPersonId: variables?.salesPersonId,
+      });
+
       // NOT clearing the cart here — same reason as useCreateInvoice: clearing
       // drops the attached customer a render before `orderResult` is set, and
       // the checkout screen's own guards bounce the operator to /cart before
@@ -263,16 +286,37 @@ export function useCreateOrder() {
       queryClient.invalidateQueries({ queryKey: ['orders'] });
     },
 
-    onError: (error) => {
+    onError: (error, variables) => {
       console.error('[useCreateOrder]', error);
 
-      // Show OrnaVerse's own reason when it sent one — see useCreateInvoice.js.
+      const failedAtPost = error?.stage === 'post';
+      // Nothing was saved, so report what the counter was trying to
+      // collect/reserve rather than the cart's unrelated estimate.
+      const attemptedValue = variables?.paymentModes
+        ?.reduce((sum, p) => sum + (p.amount ?? 0), 0) ?? cartTotal;
       const reason = error?.serverMessage ?? error?.message ?? null;
-      const fallback = error?.stage === 'post'
-        ? TOAST.ORDERS.POST_FAILED
-        : TOAST.ORDERS.CREATE_FAILED;
 
-      toast.error(reason ?? fallback);
+      trackDocumentFailed({
+        documentType: 'order',
+        stage: failedAtPost ? 'post' : 'create',
+        value: attemptedValue,
+        error: reason ?? 'unknown',
+      });
+
+      // A post-stage failure means Create ALREADY succeeded — there is a
+      // real draft order sitting server-side under error.transactionId
+      // (stamped above). That fact matters more than whatever raw reason
+      // the failed Post call carries, so it always wins here rather than
+      // falling through to OrnaVerse's own wording (which could be as
+      // unhelpful as "invalid_grant" for a session-expiry-triggered
+      // failure) — see TOAST.ORDERS.POST_FAILED's own comment for why.
+      if (failedAtPost && error?.transactionId) {
+        toast.error(TOAST.ORDERS.POST_FAILED(error.transactionId));
+        return;
+      }
+
+      // Show OrnaVerse's own reason when it sent one — see useCreateInvoice.js.
+      toast.error(reason ?? TOAST.ORDERS.CREATE_FAILED);
     },
   });
 

@@ -114,7 +114,13 @@ export default function LoginForm() {
 
   if (isAuthenticated) return null;
 
-  const isLockedOut = lockedUntil && Date.now() < lockedUntil;
+  // Derived from lockCountdown (state), not a fresh Date.now() read — the
+  // ticking effect above already keeps lockCountdown in sync with
+  // lockedUntil every second, including nulling lockedUntil out at exactly
+  // 0, so this stays accurate without calling an impure function during
+  // render (which React Compiler now flags as an error — reading the
+  // clock directly here could disagree with what the last render computed).
+  const isLockedOut = lockCountdown > 0;
 
   const onSubmit = async (data) => {
     if (isLockedOut) return; // belt-and-suspenders; button is also disabled
@@ -128,6 +134,15 @@ export default function LoginForm() {
       setFailedAttempts(nextAttempts);
 
       if (nextAttempts >= MAX_ATTEMPTS) {
+        // Not a render-purity violation despite the lint rule's name: this
+        // whole block only ever runs inside a real submit event, via
+        // handleSubmit(onSubmit) below — never during render. The
+        // react-hooks/purity rule's static analysis can't see through
+        // react-hook-form's handleSubmit() wrapper to know that (the same
+        // documented "incompatible library" limitation this file already
+        // hits on react-hook-form's watch(), and the same class of gap
+        // useMediaQuery.js's own comment calls out elsewhere).
+        // eslint-disable-next-line react-hooks/purity
         const until = Date.now() + LOCKOUT_MS;
         setLockedUntil(until);
         toast.error(`Too many failed attempts. Please wait 5 minutes before trying again.`);

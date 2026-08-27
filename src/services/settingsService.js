@@ -6,6 +6,7 @@
 
 import axiosInstance from '@/lib/axios/axiosInstance';
 import API from '@/constants/apiEndpoints';
+import APP_CONFIG from '@/constants/appConfig';
 
 /**
  * All payment receipt modes available for a sale (Cash, Card, UPI, etc.).
@@ -89,6 +90,32 @@ export async function checkMetalRateToday() {
  */
 export async function addMetalRate(payload) {
   const response = await axiosInstance.post(API.COSTING.ADD_METAL_RATE, payload);
+  return response.data;
+}
+
+/**
+ * TODAY's live sales rate for one specific karat/purity — the same call
+ * (and the same fixed set of karat_ids) that powers the highlighted rate
+ * strip on OrnaVerse's own POS header (confirmed live 2026-08-27 against
+ * lucira.uat.ornaverse.in/pos — see useMetalRates.js for the full write-up
+ * and where the karat_id list comes from). One call per karat, not a list
+ * endpoint — GetMetalRate needs karat_id up front; nothing here returns
+ * "every configured karat" for a store.
+ * @param {{ karatId: number, companyId: number }} params
+ * @returns {Promise<{ is_cutomer_item: boolean, rate: number }>}
+ *   `is_cutomer_item` is OrnaVerse's own field name (their typo, not ours).
+ */
+export async function getMetalRate({ karatId, companyId }) {
+  const today = new Date().toUTCString();
+  const response = await axiosInstance.post(API.HELPERS.GET_METAL_RATE, {
+    item_group_id:   APP_CONFIG.METAL_TYPES.GOLD, // 106 — confirmed constant across EVERY karat_id captured, gold or otherwise; see useMetalRates.js
+    karat_id:         karatId,
+    is_purchase:      false,
+    from_date:        today,
+    to_date:          today,
+    company_id:       companyId,
+    use_karat_rate:   true,
+  });
   return response.data;
 }
 

@@ -17,8 +17,14 @@ export function useSchemeEnrollments({ partyId } = {}) {
   const params = { storeId, partyId };
 
   return useQuery({
+    // FIXED 2026-08-27: the partyId branch's key used to omit storeId even
+    // though the network call below already sends company_id — switching
+    // the store dropdown with a customer selected served stale enrollments
+    // from whichever store was active when this query first ran, instead
+    // of refetching. The no-partyId branch was already correct (storeId is
+    // part of `params`); this just brings the other branch in line.
     queryKey: partyId
-      ? QUERY_KEYS.SCHEMES.CUSTOMER_ENROLLMENTS(partyId)
+      ? QUERY_KEYS.SCHEMES.CUSTOMER_ENROLLMENTS(partyId, storeId)
       : QUERY_KEYS.SCHEMES.ENROLLMENTS(params),
 
     queryFn: () => getSchemeEnrollments({
