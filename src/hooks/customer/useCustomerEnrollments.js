@@ -13,7 +13,9 @@
 //   coming back on this List response specifically — normalized defensively below.
 
 import { useQuery } from '@tanstack/react-query';
+import { useSelector } from 'react-redux';
 import { getSchemeEnrollments } from '@/services/schemeService';
+import { selectActiveStoreId } from '@/store/slices/storeSlice';
 import { QUERY_KEYS } from '@/constants/queryKeys';
 import APP_CONFIG from '@/constants/appConfig';
 
@@ -61,18 +63,25 @@ export function normalizeEnrollment(entity) {
 }
 
 export function useCustomerEnrollments({ customerId, enabled = true } = {}) {
+  // FIXED 2026-08-27: company_id was never sent here even though
+  // getSchemeEnrollments/SchemeEnrollment/List supports it and is confirmed
+  // live to filter correctly by it (see useSchemeEnrollments.js, the main
+  // /schemes page's own hook, which already sends it) — this profile-tab
+  // hook showed a customer's scheme enrollments across every store.
+  const activeStoreId = useSelector(selectActiveStoreId);
+
   const query = useQuery({
-    queryKey: QUERY_KEYS.SCHEMES.CUSTOMER_ENROLLMENTS(customerId ?? 'none'),
+    queryKey: QUERY_KEYS.SCHEMES.CUSTOMER_ENROLLMENTS(customerId ?? 'none', activeStoreId),
     queryFn:  async () => {
-      // Pass party_id for server-side filtering — no client-side filter needed
-      const data     = await getSchemeEnrollments({ take: 0, party_id: customerId });
+      // party_id + company_id together — both server-side filtered.
+      const data     = await getSchemeEnrollments({ take: 0, party_id: customerId, company_id: activeStoreId });
       // SchemeEnrollment/List may return bare array or wrapped Entities
       const entities = Array.isArray(data)
         ? data
         : (data?.Entities ?? data?.data ?? []);
       return entities.map(normalizeEnrollment).filter(Boolean);
     },
-    enabled:   enabled && !!customerId,
+    enabled:   enabled && !!customerId && !!activeStoreId,
     staleTime: APP_CONFIG.STALE_TIME.ORDERS,
   });
 

@@ -122,7 +122,11 @@ function NoImagePlaceholder() {
 // it later from Recently Viewed/Wishlist. Shown only alongside "In Stock":
 // "Made to Order" already means not on this store's shelf, so tagging it
 // with a store code would read as a contradiction.
-function StockBadge({ inStock, storeCode }) {
+//
+// storeCodes (2026-08-26) — plural now: a card backed by real cross-store
+// data (see realStock below) can be in stock at several stores at once, and
+// every one of them is worth showing, not just the first/active one.
+function StockBadge({ inStock, storeCodes }) {
   return (
     <Badge
       className={[
@@ -131,14 +135,37 @@ function StockBadge({ inStock, storeCode }) {
       ].join(' ')}
     >
       {inStock ? 'In Stock' : 'Made to Order'}
-      {inStock && storeCode && (
-        <span className="ml-1 font-bold opacity-90">· {storeCode}</span>
+      {inStock && storeCodes?.length > 0 && (
+        <span className="ml-1 font-bold opacity-90">· {storeCodes.join(', ')}</span>
       )}
     </Badge>
   );
 }
 
-export default function ProductCard({ product, showStockBadge = false, storeCode: storeCodeOverride }) {
+/**
+ * @param {{
+ *   product: object,
+ *   showStockBadge?: boolean,
+ *   storeCode?: string,
+ *   realStock?: { hasStock: boolean, storeCodes: string[] } | null,
+ * }} props
+ *   realStock (2026-08-26) — genuine cross-store stock for THIS exact
+ *   item_id (== this exact customization — size/metal color/etc. are baked
+ *   into item_id in this ERP model), from useCrossStoreStockCodes
+ *   (GetStockByStoresBatch). Pass this from any context where `product`'s
+ *   own has_stock can't be trusted as a live, correctly-scoped verdict —
+ *   Recently Viewed (has_stock is a snapshot from whenever it was viewed,
+ *   possibly at a different store) and Wishlist (has_stock is never set at
+ *   all in the wishlist write path) are the two callers that need it. When
+ *   provided, it overrides BOTH product.has_stock and the storeCode/
+ *   activeStoreCode guess below — the badge shows every store that
+ *   genuinely has this piece, never just the one the operator happens to
+ *   be signed into right now. Omitted on the main catalog grid and
+ *   OtherStoreSection, where has_stock already comes back correctly scoped
+ *   to that grid's own store server-side (see catalogService.js's
+ *   current_company_id) and re-fetching per card would be pure waste.
+ */
+export default function ProductCard({ product, showStockBadge = false, storeCode: storeCodeOverride, realStock = null }) {
   const router = useRouter();
   const [imgError, setImgError] = useState(false);
   const reduceMotion = useReducedMotion();
@@ -147,7 +174,8 @@ export default function ProductCard({ product, showStockBadge = false, storeCode
   // at other stores" lane (see OtherStoreSection), whose "In Stock" badge
   // must show THAT store's code, never the page's own active/browsing
   // store. Omitted everywhere else, so the badge falls back to the active
-  // store as before.
+  // store as before. Ignored entirely once realStock is passed — that's
+  // already the real, possibly-multi-store answer.
   const storeCode = storeCodeOverride ?? activeStoreCode;
 
   const {
@@ -178,7 +206,8 @@ export default function ProductCard({ product, showStockBadge = false, storeCode
   const { externalProductId } = useStyleExternalProductId(style_id ?? null);
   const { average: ratingAverage, count: ratingCount } = useProductReviewSummary(externalProductId);
 
-  const inStock      = has_stock === true;
+  const inStock      = realStock ? realStock.hasStock : has_stock === true;
+  const badgeStoreCodes = realStock ? realStock.storeCodes : (storeCode ? [storeCode] : []);
   const metalLabel   = getMetalLabel(metal_id);
   const weightLabel  = formatWeight(net_weight ?? weight ?? null);
   // Purity/karat when the API gives us a real one — "NA" (mostly synthetic
@@ -270,7 +299,7 @@ export default function ProductCard({ product, showStockBadge = false, storeCode
 
         {showStockBadge && (
           <div className="absolute left-0 top-3">
-            <StockBadge inStock={inStock} storeCode={storeCode} />
+            <StockBadge inStock={inStock} storeCodes={badgeStoreCodes} />
           </div>
         )}
 

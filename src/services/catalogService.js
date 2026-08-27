@@ -219,7 +219,12 @@ export async function getLivePricesForItems(itemIds, companyId) {
         itemIds: toPrice.map((d) => d.item_id), companyId, take: 200,
       });
       for (const row of response?.data?.Entities ?? []) {
-        // First row per item — the one claimStockPieces would take.
+        // First AVAILABLE row per item — the one claimStockPieces would
+        // take. is_allocated (2026-08-27) excluded here too, matching that
+        // function's own filter — a card must never quote a piece that's
+        // already reserved by another transaction and would be skipped at
+        // actual checkout time. See claimStockPieces' header for the source.
+        if (row.is_allocated) continue;
         if (!stockRowByItemId.has(row.item_id)) stockRowByItemId.set(row.item_id, row);
       }
     } catch (err) {

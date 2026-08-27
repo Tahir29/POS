@@ -16,7 +16,12 @@
 
 import { getDb } from './client';
 
-const COLLECTION = 'wishlist';
+// _POS suffix (2026-08-27) — namespaces this app's collections on the
+// shared Atlas cluster/database. Live collection was renamed in place via
+// db.renameCollection (atomic, preserves every document/index — confirmed
+// live: 4 docs before and after), not copied-and-dropped, so this rename
+// is just following where the data already lives, not migrating it.
+const COLLECTION = 'wishlist_POS';
 
 // Generous — this is a deliberate, one-at-a-time customer action, not an
 // automatic tracker, so it doesn't need recentlyViewed's tight MAX_ITEMS=20

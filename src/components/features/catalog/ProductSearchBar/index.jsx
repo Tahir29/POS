@@ -34,7 +34,18 @@ export default function ProductSearchBar({
   recentSearches = [],
   onRecentSelect,
 }) {
-  const [inputVal,      setInputVal]      = useState(value ?? '');
+  const normalizedValue = value ?? '';
+  const [inputVal,      setInputVal]      = useState(normalizedValue);
+  // Tracks the last `value` prop this component has synced FROM — lets a
+  // render-time comparison detect "value changed externally" (e.g.
+  // clearFilters resetting the URL query) without an effect. Calling
+  // setState here, mid-render (see below), is React's own documented
+  // pattern for adjusting state when a prop changes: React discards this
+  // render and immediately re-renders with the corrected state before
+  // anything is painted, unlike the same call inside a useEffect (the old
+  // shape here), which paints the stale value first and only corrects it a
+  // frame later — and trips react-hooks/set-state-in-effect besides.
+  const [lastSyncedValue, setLastSyncedValue] = useState(normalizedValue);
   const [cameraOpen,    setCameraOpen]    = useState(false);
   const debounceRef    = useRef(null);
   const lastKeyTimeRef = useRef(null);
@@ -49,10 +60,12 @@ export default function ProductSearchBar({
   // single physical scan. Mirrors BarcodeScannerModal's own lastScannedRef.
   const lastScanRef    = useRef(null);
 
-  // Sync when URL is cleared externally (e.g. clearFilters)
-  useEffect(() => {
-    setInputVal(value ?? '');
-  }, [value]);
+  // Sync when URL is cleared externally (e.g. clearFilters) — during
+  // render, not in an effect; see the comment on lastSyncedValue above.
+  if (normalizedValue !== lastSyncedValue) {
+    setLastSyncedValue(normalizedValue);
+    setInputVal(normalizedValue);
+  }
 
   const fireSearch = useCallback((q) => {
     clearTimeout(debounceRef.current);
@@ -182,7 +195,13 @@ export default function ProductSearchBar({
           <div
             role="list"
             aria-label="Recent searches"
-            className="flex-wrap items-center gap-2 hidden"
+            // FIXED: this row is fully wired end-to-end (catalog/page.jsx
+            // tracks recentSearches, dedupes/caps it, passes onRecentSelect)
+            // but was permanently invisible — `flex` had been dropped and
+            // `hidden` added (no explanation in that commit), so the whole
+            // "Recent:" chip row never painted despite showRecents being
+            // true and its content genuinely rendering underneath.
+            className="flex flex-wrap items-center gap-2"
           >
             <span className="text-xs text-muted-foreground font-medium shrink-0">Recent:</span>
             {recentSearches.map((q) => (

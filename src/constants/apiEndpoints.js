@@ -177,6 +177,12 @@ const API = {
   //          is_tax_applicable: false }
   HELPERS: {
     GET_RATE:           'Services/Helpers/GetRate',
+    // GET_METAL_RATE — distinct from GET_RATE above (that one 500s on a bare
+    // { item_id }, still unwired). Confirmed live 2026-08-27 by capturing
+    // lucira.uat.ornaverse.in/pos's own dashboard — this is what actually
+    // powers the highlighted rate strip under their header, called once per
+    // configured karat_id. See useMetalRates.js for the full contract.
+    GET_METAL_RATE:     'Services/Helpers/GetMetalRate',
     SET_SALES_ITEMS:    'Services/Helpers/SetSalesItems',
     SET_RETURN_ITEMS:   'Services/Helpers/SetReturnItems',
     SET_BUYBACK_ITEMS:  'Services/Helpers/SetBuyBackItems',
@@ -215,15 +221,13 @@ const API = {
     LOOKUP: 'Services/POS/WalkIn/Lookup',
   },
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // PARTY ADDRESS
-  // Customer address book CRUD
-  // ─────────────────────────────────────────────────────────────────────────
-  PARTY_ADDRESS: {
-    LIST:   'Services/Master/PartyAddress/List',
-    CREATE: 'Services/Master/PartyAddress/Create',
-    UPDATE: 'Services/Master/PartyAddress/Update',
-  },
+  // PARTY_ADDRESS (Customer address book CRUD) removed 2026-08-27 — dead:
+  // no partyAddressService.js ever existed, no file under src/ called any
+  // of its three endpoints. Unlike other unused endpoints kept elsewhere in
+  // this file, nothing here carried a "confirmed unused, kept for X"
+  // comment — this was unfinished scaffolding, not deliberate reserved
+  // infrastructure. If this feature is picked back up, the endpoints were
+  // 'Services/Master/PartyAddress/{List,Create,Update}'.
 
   // ─────────────────────────────────────────────────────────────────────────
   // PARTY (Customer 360)

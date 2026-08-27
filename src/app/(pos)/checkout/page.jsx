@@ -50,7 +50,7 @@ import { ShieldCheck } from 'lucide-react';
 import ConfirmDialog    from '@/components/shared/ConfirmDialog';
 import CheckoutCustomerSummary  from '@/components/features/checkout/CheckoutCustomerSummary';
 import CheckoutPanCapture       from '@/components/features/checkout/CheckoutPanCapture';
-import CheckoutDiscountSection  from '@/components/features/checkout/CheckoutDiscountSection';
+import DiscountSection          from '@/components/features/checkout/DiscountSection';
 import CheckoutPaymentSection   from '@/components/features/checkout/CheckoutPaymentSection';
 import CheckoutTrustStrip       from '@/components/features/checkout/CheckoutTrustStrip';
 import SalesPersonSelect        from '@/components/features/checkout/SalesPersonSelect';
@@ -102,7 +102,6 @@ function CheckoutScreen() {
     totals: pricedTotals,
     promotionDetails,
     isStockBacked,
-    documentId,
     amountDue,
     isLoading: isPricing,
     error: pricingError,
@@ -287,13 +286,11 @@ function CheckoutScreen() {
           </section>
 
           {/* Promo code / discount — the saving shown per promo is the
-              server's own promotion_amount, not a local estimate. */}
-          <CheckoutDiscountSection
-            promotionDetails={promotionDetails}
-            isPricing={isPricing}
-            pricedLineItems={pricedLineItems}
-            documentId={documentId}
-          />
+              server's own promotion_amount, not a local estimate.
+              Self-contained (2026-08-26) — fetches its own pricing via
+              useCheckoutPricing rather than taking it as props, since it's
+              no longer checkout-exclusive (see DiscountSection's header). */}
+          <DiscountSection />
         </div>
         <div className="flex flex-col gap-5 w-full">
           {/* Order items — same CartItemRow used on the Cart page, read-only
@@ -318,6 +315,9 @@ function CheckoutScreen() {
                   // bills a physical piece whose actual weight sets the
                   // price. See CartItemRow for the worked example.
                   priced={pricedByCartIndex.get(index) ?? null}
+                  // Full price breakup requested on checkout's Order Items
+                  // too (2026-08-26) — mini cart drawer deliberately excluded.
+                  showPriceBreakdown
                 />
               ))}
             </div>

@@ -17,14 +17,14 @@
 // schemes-enroll) wraps its whole body in a react-hook-form <form>, and
 // CustomerSessionSheet's search step (CustomerLookupInput) renders its own
 // <form> — nested inline, that's invalid HTML and React 19 logs a hydration
-// error. `mounted` starts false so the portal branch renders nothing on the
-// server/first client pass (matching SSR output) and only reaches for
-// document after the post-hydration effect runs — the same guard shape as
-// ProductImageZoomModal's portal.
+// error. `mounted` (useHasMounted) is false on the server/first client pass
+// — matching SSR output, since document.body doesn't exist server-side to
+// portal into anyway — and true on every render after hydration.
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import CustomerSessionSheet from '@/components/features/customers/CustomerSessionSheet';
+import { useHasMounted } from '@/hooks/ui/useHasMounted';
 
 export default function CustomerAttachedBanner({
   customerId,
@@ -33,9 +33,7 @@ export default function CustomerAttachedBanner({
   emptyMessage = 'Attach a customer from the header before submitting.',
 }) {
   const [isSheetOpen, setIsSheetOpen] = useState(false);
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => setMounted(true), []);
+  const mounted = useHasMounted();
 
   return (
     <>

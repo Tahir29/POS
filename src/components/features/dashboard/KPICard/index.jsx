@@ -13,6 +13,52 @@ import { Skeleton } from '@/components/ui/skeleton';
 // redesign reference). Purely visual reinforcement of what the metric
 // already says in words; omit it and the card still reads fine, so it's
 // not load-bearing for any screen reader/data purpose.
+//
+// `sparkline` — FIXED 2026-08-27: dashboard/page.jsx already computed and
+// passed this (revenueSparkline, per-day revenue buckets from
+// useDashboardSummary) but this component destructured it and never once
+// read it — the trend line it was clearly built to show never reached the
+// screen. Rendered below as a plain inline SVG polyline, auto-scaled to the
+// series' own min/max — no charting library, this is the smallest possible
+// shape that's still a real trend line, not just a decorative squiggle.
+// Purely decorative like `icon` (the trend arrow/text above it already say
+// the same thing in words), so it's aria-hidden and silently omits itself
+// under two points (nothing to draw a trend between).
+function Sparkline({ data }) {
+  if (!data || data.length < 2) return null;
+
+  const width = 100;
+  const height = 28;
+  const min = Math.min(...data);
+  const max = Math.max(...data);
+  const range = max - min || 1; // flat series (all-equal) — avoid /0, draw a flat line instead
+
+  const points = data
+    .map((v, i) => {
+      const x = (i / (data.length - 1)) * width;
+      const y = height - ((v - min) / range) * height;
+      return `${x},${y}`;
+    })
+    .join(' ');
+
+  return (
+    <svg
+      viewBox={`0 0 ${width} ${height}`}
+      preserveAspectRatio="none"
+      className="mt-2 h-7 w-full text-accent/60"
+      aria-hidden="true"
+    >
+      <polyline
+        points={points}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
 
 /**
  * @param {{
@@ -55,7 +101,7 @@ export default function KPICard({ label, value, trend, sparkline, icon: Icon, is
         accent ? 'border-accent/30 bg-accent/5' : 'border-border'
       )}
     >
-      <div className="min-w-0">
+      <div className="min-w-0 flex flex-col justify-between h-full">
         <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
           {label}
         </p>
@@ -75,6 +121,8 @@ export default function KPICard({ label, value, trend, sparkline, icon: Icon, is
             {trend.text}
           </p>
         )}
+
+        <Sparkline data={sparkline} />
       </div>
 
       {Icon && (

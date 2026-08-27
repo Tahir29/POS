@@ -34,6 +34,7 @@ export function normalizeRepairRecord(entity) {
     customerName:  get(entity, 'party_name'),
     amount:        get(entity, 'net_amount'),
     balanceAmount: get(entity, 'balance_amount'),
+    companyId:     get(entity, 'company_id'),
     lineItems:     Array.isArray(entity.line_items) ? entity.line_items : [],
     raw: entity,
   };
@@ -49,8 +50,23 @@ function makeRepairListHook({ queryKeyFn, fetchFn }) {
       queryFn:  async () => {
         const data     = await fetchFn({ company_id: storeId, take, skip });
         const entities = data?.Entities ?? [];
+        // Client-side backstop (2026-08-27) — confirmed live that
+        // RepairOut/List silently ignores its own company_id filter (RepairIn
+        // and RepairInvoice DO filter correctly server-side; applied to all
+        // three uniformly anyway — a no-op where the server already scoped
+        // it, and fail-closed where it didn't, same reasoning as
+        // useDailyClosing.js for the identical gap on DailyClosing/List).
+        const items = entities
+          .map(normalizeRepairRecord)
+          .filter(Boolean)
+          .filter((r) => r.companyId === storeId);
         return {
-          items:      entities.map(normalizeRepairRecord).filter(Boolean),
+          items,
+          // TotalCount comes straight from the unfiltered server response,
+          // so it can overstate the count when the backstop above actually
+          // had something to filter out — acceptable here since the repair
+          // list pages already treat this as an approximate page-count
+          // hint, not a displayed "N results" figure.
           totalCount: data?.TotalCount ?? entities.length,
         };
       },

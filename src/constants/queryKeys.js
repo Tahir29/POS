@@ -28,6 +28,9 @@ export const QUERY_KEYS = {
     BANK_POS_ACCOUNTS:    () => ['settings', 'bank-pos-accounts'],
     TAXES:                (companyId) => ['settings', 'taxes', companyId],
     METAL_RATE_TODAY:     () => ['settings', 'metal-rate-today'],
+    // dateKey (a plain YYYY-MM-DD string, not a Date) so the key itself
+    // rolls over at midnight without a timer — see useMetalRates.js.
+    METAL_RATE:           (karatId, companyId, dateKey) => ['settings', 'metal-rate', karatId, companyId, dateKey],
     REASON_CODES:         () => ['settings', 'reason-codes'],
   },
 
@@ -120,13 +123,12 @@ export const QUERY_KEYS = {
     WISHLIST: (partyId) => ['customers', 'wishlist', partyId],
   },
 
-  PARTY_ADDRESS: {
-    LIST: (partyId) => ['party-address', 'list', partyId],
-  },
+  // PARTY_ADDRESS removed 2026-08-27 — matches apiEndpoints.js's
+  // PARTY_ADDRESS removal (dead: no service or hook ever used this key).
 
   ORDERS: {
     LIST:            (params)     => ['orders', 'list', params],
-    CUSTOMER_ORDERS: (customerId) => ['orders', 'customer', customerId],
+    CUSTOMER_ORDERS: (customerId, storeId) => ['orders', 'customer', customerId, storeId],
     DETAIL:          (orderId)    => ['orders', 'detail', orderId],
   },
 
@@ -232,7 +234,7 @@ export const QUERY_KEYS = {
   },
 
   CUSTOMER_360: {
-    ALL: (customerId) => ['customer-360', 'all', customerId],
+    ALL: (customerId, storeId) => ['customer-360', 'all', customerId, storeId],
   },
 
   REWARDS: {
@@ -244,7 +246,7 @@ export const QUERY_KEYS = {
     LIST:                ()               => ['schemes', 'list'],
     ENROLLMENTS:         (params)         => ['schemes', 'enrollments', params],
     ENROLLMENT_DETAIL:   (enrollmentId)   => ['schemes', 'enrollment-detail', enrollmentId],
-    CUSTOMER_ENROLLMENTS:(customerId)     => ['schemes', 'enrollments', 'customer', customerId],
+    CUSTOMER_ENROLLMENTS:(customerId, storeId) => ['schemes', 'enrollments', 'customer', customerId, storeId],
     RECEIPT_LIST:        (enrollmentId)   => ['schemes', 'receipts', enrollmentId],
     MONTHLY_DETAILS:     (enrollmentId)   => ['schemes', 'monthly-details', enrollmentId],
     MATURITY:            (enrollmentId)   => ['schemes', 'maturity',     enrollmentId],

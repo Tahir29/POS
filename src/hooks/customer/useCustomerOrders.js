@@ -12,7 +12,9 @@
 //   balance_amount > 0 && receipt_amount == 0   → "due"
 
 import { useQuery } from '@tanstack/react-query';
+import { useSelector } from 'react-redux';
 import { getOrders, getInvoiceList } from '@/services/orderService';
+import { selectActiveStoreId } from '@/store/slices/storeSlice';
 import { QUERY_KEYS } from '@/constants/queryKeys';
 import APP_CONFIG from '@/constants/appConfig';
 
@@ -50,6 +52,7 @@ export function normalizeCustomerOrder(entity, documentType = 'order') {
     balanceAmount,
     receiptAmount,
     status,
+    companyId:     get('company_id'),
     companyName:   get('company_name'),
     lineItems:     Array.isArray(entity.line_items) ? entity.line_items : [],
     documentType,
@@ -58,14 +61,23 @@ export function normalizeCustomerOrder(entity, documentType = 'order') {
 }
 
 export function useCustomerOrders({ customerId, enabled = true } = {}) {
+  // FIXED 2026-08-27: company_id was never sent to either endpoint (despite
+  // both supporting it — see orderService.js), so this pulled every store's
+  // orders/invoices for a customer, not just the active store's. Confirmed
+  // live that POS/Order/List itself ALSO silently ignores its own
+  // company_id filter (ProductCatalog-style endpoints do; this one doesn't)
+  // — see the client-side companyId filter below, same defense-in-depth
+  // pattern useDailyClosing.js already uses for the identical server gap.
+  const activeStoreId = useSelector(selectActiveStoreId);
+
   const query = useQuery({
-    queryKey: QUERY_KEYS.ORDERS.CUSTOMER_ORDERS(customerId ?? 'none'),
+    queryKey: QUERY_KEYS.ORDERS.CUSTOMER_ORDERS(customerId ?? 'none', activeStoreId),
     queryFn:  async () => {
       // getOrders/getInvoiceList both return response.data (unwrapped by
       // service).
       const [ordersData, invoicesData] = await Promise.all([
-        getOrders({ take: 0 }),
-        getInvoiceList({ take: 0 }),
+        getOrders({ take: 0, company_id: activeStoreId }),
+        getInvoiceList({ take: 0, company_id: activeStoreId }),
       ]);
       const orderEntities   = ordersData?.Entities ?? [];
       const invoiceEntities = invoicesData?.Entities ?? [];
@@ -77,14 +89,17 @@ export function useCustomerOrders({ customerId, enabled = true } = {}) {
         (a, b) => new Date(b.orderDate ?? 0) - new Date(a.orderDate ?? 0)
       );
     },
-    enabled:   enabled && !!customerId,
+    enabled:   enabled && !!customerId && !!activeStoreId,
     staleTime: APP_CONFIG.STALE_TIME.ORDERS,
   });
 
   const allOrders = query.data ?? [];
-  const orders = customerId
-    ? allOrders.filter((o) => o.customerId != null && String(o.customerId) === String(customerId))
-    : allOrders;
+  const orders = allOrders
+    .filter((o) => o.customerId == null || !customerId || String(o.customerId) === String(customerId))
+    // Client-side backstop for Order/List's broken company_id filter — see
+    // header comment. A row with no companyId at all is excluded too
+    // (fail-closed, not fail-open, on financial data).
+    .filter((o) => o.companyId === activeStoreId);
 
   return {
     orders,

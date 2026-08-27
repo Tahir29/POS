@@ -70,10 +70,12 @@ function FetchingSpinner() {
  *   onClearFilters:  () => void,
  * }} props
  *   storeCode (2026-08-24) — fixes every card's "In Stock" badge to THIS
- *   store's code instead of the page's own active store. Used by
- *   OtherStoreSection, whose grid shows a different store's stock than the
- *   one the operator is browsing/signed into; omitted for the primary
- *   catalog grid, where each card falls back to the active store as before.
+ *   store's code instead of ProductCard's own default (activeStoreCode, the
+ *   signed-in store). Used by OtherStoreSection (a different store's stock
+ *   than the one the operator is browsing/signed into) AND, since
+ *   2026-08-26, the primary catalog page too — its own store filter
+ *   (catalogStoreId) can point at a store other than the signed-in one, and
+ *   the badge must follow whichever store's catalog is actually on screen.
  */
 export default function ProductGrid({
   products       = [],

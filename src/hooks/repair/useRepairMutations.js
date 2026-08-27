@@ -18,12 +18,17 @@ import TOAST from '@/constants/toastMessages';
 import tracker from '@/lib/analytics/tracker';
 import EVENTS from '@/lib/analytics/events';
 
-function getErrorMessage(error) {
+// FIXED 2026-08-27: `fallback` is new — same fix as useTransactionMutations.js's
+// identical helper. Every call site below now passes the matching
+// TOAST.REPAIR.*_FAILED constant instead of every stage of every repair
+// document collapsing onto the same generic 'Something went wrong.' the
+// moment the server didn't send back a usable reason.
+function getErrorMessage(error, fallback = 'Something went wrong.') {
   return (
     error?.response?.data?.Message ??
     error?.response?.data?.message ??
     error?.message ??
-    'Something went wrong.'
+    fallback
   );
 }
 
@@ -43,8 +48,9 @@ export function useCreateRepairOrder({ onSuccess } = {}) {
       onSuccess?.(data);
     },
     onError: (error) => {
-      toast.error(getErrorMessage(error));
-      tracker.track(EVENTS.REPAIR_IN_FAILED, { stage: 'create', error: getErrorMessage(error) });
+      const message = getErrorMessage(error, TOAST.REPAIR.INTAKE_FAILED);
+      toast.error(message);
+      tracker.track(EVENTS.REPAIR_IN_FAILED, { stage: 'create', error: message });
     },
   });
 }
@@ -59,8 +65,9 @@ export function usePostRepairOrder({ onSuccess } = {}) {
       onSuccess?.(data);
     },
     onError: (error) => {
-      toast.error(getErrorMessage(error));
-      tracker.track(EVENTS.REPAIR_IN_FAILED, { stage: 'post', error: getErrorMessage(error) });
+      const message = getErrorMessage(error, TOAST.REPAIR.INTAKE_POST_FAILED);
+      toast.error(message);
+      tracker.track(EVENTS.REPAIR_IN_FAILED, { stage: 'post', error: message });
     },
   });
 }
@@ -76,8 +83,9 @@ export function useCreateRepairIn({ onSuccess } = {}) {
       onSuccess?.(data);
     },
     onError: (error) => {
-      toast.error(getErrorMessage(error));
-      tracker.track(EVENTS.REPAIR_IN_FAILED, { stage: 'create', error: getErrorMessage(error) });
+      const message = getErrorMessage(error, TOAST.REPAIR.INTAKE_FAILED);
+      toast.error(message);
+      tracker.track(EVENTS.REPAIR_IN_FAILED, { stage: 'create', error: message });
     },
   });
 }
@@ -93,8 +101,9 @@ export function usePostRepairIn({ onSuccess } = {}) {
       onSuccess?.(data);
     },
     onError: (error, transactionId) => {
-      toast.error(getErrorMessage(error));
-      tracker.track(EVENTS.REPAIR_IN_FAILED, { stage: 'post', transactionId, error: getErrorMessage(error) });
+      const message = getErrorMessage(error, TOAST.REPAIR.INTAKE_POST_FAILED);
+      toast.error(message);
+      tracker.track(EVENTS.REPAIR_IN_FAILED, { stage: 'post', transactionId, error: message });
     },
   });
 }
@@ -109,8 +118,12 @@ export function useCancelRepairIn({ onSuccess } = {}) {
       onSuccess?.(data);
     },
     onError: (error, transactionId) => {
-      toast.error(getErrorMessage(error));
-      tracker.track(EVENTS.REPAIR_IN_FAILED, { stage: 'cancel', transactionId, error: getErrorMessage(error) });
+      // No REPAIR.*_CANCEL_FAILED constant exists for repair-in — the
+      // generic default fallback stays here rather than inventing a
+      // message toastMessages.js doesn't actually define.
+      const message = getErrorMessage(error);
+      toast.error(message);
+      tracker.track(EVENTS.REPAIR_IN_FAILED, { stage: 'cancel', transactionId, error: message });
     },
   });
 }
@@ -126,8 +139,9 @@ export function useCreateRepairOut({ onSuccess } = {}) {
       onSuccess?.(data);
     },
     onError: (error) => {
-      toast.error(getErrorMessage(error));
-      tracker.track(EVENTS.REPAIR_OUT_FAILED, { stage: 'create', error: getErrorMessage(error) });
+      const message = getErrorMessage(error, TOAST.REPAIR.OUT_FAILED);
+      toast.error(message);
+      tracker.track(EVENTS.REPAIR_OUT_FAILED, { stage: 'create', error: message });
     },
   });
 }
@@ -143,8 +157,9 @@ export function usePostRepairOut({ onSuccess } = {}) {
       onSuccess?.(data);
     },
     onError: (error, transactionId) => {
-      toast.error(getErrorMessage(error));
-      tracker.track(EVENTS.REPAIR_OUT_FAILED, { stage: 'post', transactionId, error: getErrorMessage(error) });
+      const message = getErrorMessage(error, TOAST.REPAIR.OUT_POST_FAILED);
+      toast.error(message);
+      tracker.track(EVENTS.REPAIR_OUT_FAILED, { stage: 'post', transactionId, error: message });
     },
   });
 }
@@ -160,8 +175,9 @@ export function useCreateRepairInvoice({ onSuccess } = {}) {
       onSuccess?.(data);
     },
     onError: (error) => {
-      toast.error(getErrorMessage(error));
-      tracker.track(EVENTS.REPAIR_INVOICE_FAILED, { stage: 'create', error: getErrorMessage(error) });
+      const message = getErrorMessage(error, TOAST.REPAIR.INVOICE_FAILED);
+      toast.error(message);
+      tracker.track(EVENTS.REPAIR_INVOICE_FAILED, { stage: 'create', error: message });
     },
   });
 }
@@ -177,8 +193,9 @@ export function usePostRepairInvoice({ onSuccess } = {}) {
       onSuccess?.(data);
     },
     onError: (error, transactionId) => {
-      toast.error(getErrorMessage(error));
-      tracker.track(EVENTS.REPAIR_INVOICE_FAILED, { stage: 'post', transactionId, error: getErrorMessage(error) });
+      const message = getErrorMessage(error, TOAST.REPAIR.INVOICE_POST_FAILED);
+      toast.error(message);
+      tracker.track(EVENTS.REPAIR_INVOICE_FAILED, { stage: 'post', transactionId, error: message });
     },
   });
 }
@@ -194,8 +211,9 @@ export function useCreateRepairInvoiceReceipt({ onSuccess } = {}) {
       onSuccess?.(data);
     },
     onError: (error) => {
-      toast.error(getErrorMessage(error));
-      tracker.track(EVENTS.REPAIR_RECEIPT_FAILED, { error: getErrorMessage(error) });
+      const message = getErrorMessage(error, TOAST.REPAIR.RECEIPT_FAILED);
+      toast.error(message);
+      tracker.track(EVENTS.REPAIR_RECEIPT_FAILED, { error: message });
     },
   });
 }

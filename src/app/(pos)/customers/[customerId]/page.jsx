@@ -9,7 +9,7 @@
 // Uses useRetrieveCustomer(partyId) — direct fetch by party_id.
 // No longer relies on useAllCustomers directory lookup (fragile, stale).
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowLeft, Phone, Mail, MapPin, CreditCard,
@@ -36,6 +36,7 @@ import { useCustomerLoyalty }     from '@/hooks/customer/useCustomerLoyalty';
 import { useCustomer360 }         from '@/hooks/customer/useCustomer360';
 import { useCustomerWishlist }    from '@/hooks/customer/useCustomerWishlist';
 import { useLiveCatalogPrices }   from '@/hooks/catalog/useLiveCatalogPrices';
+import { useCrossStoreStockCodes } from '@/hooks/catalog/useCrossStoreStockCodes';
 import { useCountries, useStates, useCities } from '@/hooks/settings/useLocation';
 import ProductCard from '@/components/features/catalog/ProductCard';
 import APP_CONFIG from '@/constants/appConfig';
@@ -513,6 +514,13 @@ function WishlistTab({ customerId }) {
   // treatment (see useLiveCatalogPrices' own header for why).
   const { priceById, settledIds } = useLiveCatalogPrices(items);
 
+  // Real cross-store stock — nothing in the wishlist write path ever sets
+  // has_stock (see lib/mongo/wishlist.js), so there was never a real verdict
+  // here at all, only whatever the badge defaulted to. See
+  // useCrossStoreStockCodes' own header for the full story.
+  const itemIds = useMemo(() => items.map((i) => i.item_id), [items]);
+  const { stockByItemId, isLoading: stockLoading } = useCrossStoreStockCodes(itemIds);
+
   if (isLoading) return <TabLoading label="Loading wishlist…" />;
   if (isError)   return <TabError label="Failed to load wishlist." />;
   if (items.length === 0) return <TabEmpty icon={Heart} label="No wishlisted products yet." />;
@@ -530,7 +538,8 @@ function WishlistTab({ customerId }) {
           <ProductCard
             key={`${item.item_id}-${item.item_size_id ?? 'base'}`}
             product={{ ...item, price, is_pricing: isPricing }}
-            showStockBadge
+            showStockBadge={!stockLoading}
+            realStock={stockByItemId.get(item.item_id) ?? null}
           />
         );
       })}

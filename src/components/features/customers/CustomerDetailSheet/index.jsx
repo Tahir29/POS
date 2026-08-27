@@ -330,11 +330,19 @@ function EditTab({ customer }) {
 
 export default function CustomerDetailSheet({ customer, isOpen, onClose, onAttach, isAttached }) {
   const [activeTab, setActiveTab] = useState('profile');
+  // Tracks the (isOpen, customerId) signature activeTab was last reset
+  // for — null while closed. Lets a render-time comparison detect "the
+  // sheet just opened, or opened for a different customer" without an
+  // effect; see ProductSearchBar's identical pattern/comment for why.
+  const [lastOpenKey, setLastOpenKey] = useState(null);
 
-  // Reset to profile tab each time sheet opens for a (potentially different) customer
-  useEffect(() => {
+  // Reset to profile tab each time sheet opens for a (potentially
+  // different) customer — during render, not in an effect.
+  const openKey = isOpen ? (customer?.customerId ?? 'guest') : null;
+  if (openKey !== lastOpenKey) {
+    setLastOpenKey(openKey);
     if (isOpen) setActiveTab('profile');
-  }, [isOpen, customer?.customerId]);
+  }
 
   if (!customer) return null;
 

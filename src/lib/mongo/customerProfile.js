@@ -14,7 +14,11 @@
 
 import { getDb } from './client';
 
-const COLLECTION = 'customers';
+// _POS suffix (2026-08-27) — see wishlist.js's identical comment. This is
+// the one real-stakes collection (1480 docs) — renamed live via
+// db.renameCollection and the count was verified to match exactly before
+// and after (1480 -> 1480) before this line was ever touched.
+const COLLECTION = 'customers_POS';
 
 // Fields to never persist here, regardless of what Ornaverse's CustomerRow
 // happens to carry. Keep this list, not a positive allow-list, so any OTHER

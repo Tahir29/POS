@@ -86,7 +86,6 @@ export const recentlyViewedMiddleware = (store) => (next) => (action) => {
       const state = store.getState();
       const { customerId, customerName, customerMobile } = state.cart;
       const token = state.auth?.accessToken;
-      console.log('[recentlyViewedMiddleware] recording view', { customerId, token: !!token, item: action.payload });
       if (!customerId || !token) break; // shouldn't happen — the hook that dispatches this already checks isAttached
 
       recordView(customerId, customerName, customerMobile, action.payload, token);

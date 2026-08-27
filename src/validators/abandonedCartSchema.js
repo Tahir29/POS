@@ -29,4 +29,10 @@ export const upsertAbandonedCartSchema = z.object({
   subtotal:       z.number().nullable().optional(),
   taxAmount:      z.number().nullable().optional(),
   total:          z.number().nullable().optional(),
+  // The store active when this snapshot was taken (2026-08-27) — carried
+  // through so an abandoned cart isn't just "whose" but also "at which
+  // store", same activeStoreId already used everywhere else for scoping.
+  // Purely additive: reads/deletes stay keyed on party_id alone, this is
+  // just tagged onto the record so the data isn't lost.
+  company_id:     z.number().int().positive().nullable().optional(),
 });

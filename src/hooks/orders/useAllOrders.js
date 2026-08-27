@@ -51,9 +51,19 @@ export function useAllOrders({ enabled = true } = {}) {
 
       // Newest first — the two sources are fetched independently so their
       // rows arrive unordered relative to each other.
-      return [...orders, ...invoices].sort(
+      const merged = [...orders, ...invoices].sort(
         (a, b) => new Date(b.orderDate ?? 0) - new Date(a.orderDate ?? 0)
       );
+
+      // Client-side backstop (2026-08-27) — confirmed live that
+      // POS/Order/List silently ignores its own company_id filter (same
+      // gap useDailyClosing.js already works around for DailyClosing/List):
+      // switching the store dropdown to Pune and re-querying still returned
+      // every HO order unchanged. Invoice/List DOES filter correctly
+      // server-side, so this is a no-op for that half — filtering both
+      // uniformly here is simpler and fail-closed either way, matching
+      // useDailyClosing's own reasoning for financial data.
+      return merged.filter((o) => o.companyId === activeStoreId);
     },
     enabled: enabled && !!activeStoreId,
     staleTime: APP_CONFIG.STALE_TIME.ORDERS,

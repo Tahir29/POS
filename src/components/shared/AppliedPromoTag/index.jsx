@@ -17,17 +17,18 @@ import { cn } from '@/lib/utils';
  *   onRemove: () => void,
  *   className?: string,
  * }} props
- *   hasEffect (2026-08-24, default true) — the code was applied, but on
- *   checkout it can still turn out to give NOTHING for what's in the basket
- *   (most promos here are scoped to the diamond/making-charge component —
- *   see checkoutPricingService.js and CheckoutDiscountSection's own "no
- *   discount given" caption right under this tag). This always rendered the
- *   same green "success" styling regardless, so a promo that gave ₹0 still
- *   LOOKED like it worked, directly contradicting the caption underneath it.
- *   Pass hasEffect={false} for that case to switch to a neutral/muted look
+ *   hasEffect (2026-08-24, default true) — the code was applied, but it can
+ *   still turn out to give NOTHING for what's in the basket (most promos
+ *   here are scoped to the diamond/making-charge component — see
+ *   checkoutPricingService.js and DiscountSection's own "no discount given"
+ *   caption right under this tag). This always rendered the same green
+ *   "success" styling regardless, so a promo that gave ₹0 still LOOKED like
+ *   it worked, directly contradicting the caption underneath it. Pass
+ *   hasEffect={false} for that case to switch to a neutral/muted look
  *   instead — still shown as applied (removable), just not celebrated as a
- *   win. The cart page/drawer never know the outcome yet (no live pricing
- *   there), so they never pass this and keep the original styling.
+ *   win. Every caller of this component goes through DiscountSection now
+ *   (2026-08-26 — product page, mini cart, cart page, checkout all share
+ *   it), so every one of them knows the real outcome and can pass this.
  */
 export default function AppliedPromoTag({ promoCode, discountAmount, hasEffect = true, onRemove, className }) {
   if (!promoCode) return null;
