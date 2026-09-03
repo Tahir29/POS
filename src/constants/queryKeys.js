@@ -60,6 +60,7 @@ export const QUERY_KEYS = {
   ITEMS: {
     LIST:            (params)  => ['items', 'list', params],
     DETAIL:          (itemId)  => ['items', 'detail', itemId],
+    CUSTOM_ESTIMATE_LIST:  ()  => ['items', 'custom-estimate-list'],
     ATTRIBUTES:      (typeId)  => ['items', 'attributes', typeId],
     DESIGN_VARIANTS: (styleId) => ['items', 'design-variants', styleId],
     MASTER_SEARCH:   (query)   => ['items', 'master-search', query],

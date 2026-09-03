@@ -66,12 +66,44 @@ export default function CheckoutPanCapture({ totalAmount, onPanResolved }) {
   const [fileError, setFileError] = useState(null);
   const [attachedFile, setAttachedFile] = useState(null); // { name } — local-only, never sent
   const fileInputRef = useRef(null);
+  // Set the instant a Save succeeds THIS session — see the fix note below
+  // on why this can't just wait for the refetch to confirm it.
+  const [justSavedPan, setJustSavedPan] = useState(null);
 
-  const panOnFile = customer?.customerPan ?? null;
+  // FIXED 2026-08-31 — confirmed live against UAT: OrnaVerse's own
+  // Party/Retrieve masks a previously-saved PAN on read ("**********",
+  // ten asterisks, not the real number — this is OrnaVerse's own response,
+  // not something our normalizer does; normalizeCustomer passes pan_no
+  // through verbatim). A masked value is truthy, so the OLD `!!panOnFile`
+  // check here treated any RETURNING customer's PAN as satisfied — but it
+  // fails PAN_REGEX, so checkoutSchema's superRefine kept rejecting it, and
+  // Place Order stayed silently disabled on every above-threshold sale for
+  // a customer whose PAN was saved in an earlier visit (this component's
+  // own UI showed a reassuring green "PAN on file ✓" the whole time, with
+  // no visible reason the button wouldn't enable — a repeat of the exact
+  // silent-Zod-failure class this file's header comment already documents
+  // once). Gating on PAN_REGEX instead of truthiness means a masked value
+  // is treated the same as "nothing on file": the entry form shows so
+  // staff can actually enter (or re-confirm) a real, checkable PAN.
+  const rawPanOnFile = customer?.customerPan ?? null;
+  const fetchedPanOnFile = rawPanOnFile && PAN_REGEX.test(rawPanOnFile) ? rawPanOnFile : null;
+
+  // FIXED 2026-08-31, second half — confirmed live: OrnaVerse's own
+  // Party/Retrieve masks pan_no UNCONDITIONALLY, including immediately
+  // after successfully saving one this same session (toast confirms the
+  // Update call genuinely succeeded server-side; the very next Retrieve
+  // still comes back "**********"). Waiting on the refetch to confirm a
+  // just-saved PAN therefore never resolves — that refetch can NEVER pass
+  // PAN_REGEX, masked on principle, not staleness. justSavedPan is the
+  // value handleSave already confirmed valid (Save is only enabled once
+  // PAN_REGEX.test(value) passes) and just had the server accept — no
+  // round trip needed to know it's good for THIS transaction.
+  const panOnFile = fetchedPanOnFile ?? justSavedPan;
 
   // Resolved on the NUMBER alone — see header note on why the document
   // can't be part of this gate today. onPanResolved still only ever
-  // reports a SAVED value, never the locally-typed one.
+  // reports a SAVED value (fetched or just-saved-this-session), never the
+  // still-being-typed one.
   useEffect(() => {
     onPanResolved(panRequired ? panOnFile : null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -102,10 +134,15 @@ export default function CheckoutPanCapture({ totalAmount, onPanResolved }) {
 
   const handleSave = () => {
     if (!isValid || !customer?.raw) return;
+    const savedValue = value;
     updateCustomer.mutate({
       partyId: customerId,
       originalRaw: customer.raw,
-      formChanges: { pan_no: value, party_name: customer.customerName },
+      formChanges: { pan_no: savedValue, party_name: customer.customerName },
+    }, {
+      // Confirms THIS transaction's PAN immediately — see panOnFile's
+      // comment above on why the refetch alone can never do this.
+      onSuccess: () => setJustSavedPan(savedValue),
     });
   };
 

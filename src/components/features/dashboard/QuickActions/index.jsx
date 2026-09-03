@@ -86,14 +86,14 @@ const QUICK_ACTIONS = [
     href:        '/schemes',
     accent:      'bg-card text-foreground border border-border shadow-sm hover:shadow-md hover:border-accent/40 hover:text-accent',
   },
-  {
-    id:          'day-close',
-    label:       'Day Close',
-    description: 'Close today',
-    icon:        ClipboardCheck,
-    href:        '/daily-closing',
-    accent:      'bg-card text-foreground border border-border shadow-sm hover:shadow-md hover:border-accent/40 hover:text-accent',
-  },
+  // {
+  //   id:          'day-close',
+  //   label:       'Day Close',
+  //   description: 'Close today',
+  //   icon:        ClipboardCheck,
+  //   href:        '/daily-closing',
+  //   accent:      'bg-card text-foreground border border-border shadow-sm hover:shadow-md hover:border-accent/40 hover:text-accent',
+  // },
 ];
 
 function QuickActionButton({ action, onClick }) {
