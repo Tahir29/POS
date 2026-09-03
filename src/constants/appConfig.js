@@ -250,17 +250,26 @@ const APP_CONFIG = {
     },
   },
 
-  // ── ORDER STATUS (derived, not returned by API) ───────────────────────────
-  // Status is computed client-side from balance_amount + receipt_amount.
-  // Never sent to the API — only used for display and filtering.
+  // ── ORDER STATUS ───────────────────────────────────────────────────────────
+  // CANCELLED/DRAFT come straight from the API's own document_status (2/0) —
+  // confirmed live 2026-09-03 against a real UAT invoice (HO-LJ-0726-009,
+  // document_status: 2, balance_amount: 0) that was displaying as "Paid"
+  // because document_status was never looked at. PAID/PARTIAL/DUE remain
+  // derived client-side from balance_amount + receipt_amount, but only for
+  // a Posted (1) document — see deriveDocumentStatus() in useCustomerOrders.js,
+  // the one place this precedence is actually applied.
   //
-  // balance_amount <= 0                        → PAID
-  // balance_amount > 0 && receipt_amount > 0   → PARTIAL
-  // balance_amount > 0 && receipt_amount == 0  → DUE
+  // document_status: 2 (Cancelled)              → CANCELLED
+  // document_status: 0 (Draft)                  → DRAFT
+  // document_status: 1 (Posted), balance <= 0                        → PAID
+  // document_status: 1 (Posted), balance > 0 && receipt_amount > 0   → PARTIAL
+  // document_status: 1 (Posted), balance > 0 && receipt_amount == 0  → DUE
   ORDER_STATUS: {
-    PAID:    'paid',
-    PARTIAL: 'partial',
-    DUE:     'due',
+    PAID:      'paid',
+    PARTIAL:   'partial',
+    DUE:       'due',
+    CANCELLED: 'cancelled',
+    DRAFT:     'draft',
   },
 
 };

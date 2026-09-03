@@ -21,13 +21,19 @@ import API from '@/constants/apiEndpoints';
  *   { transaction_id, document_id, document_no, document_date, document_name,
  *     amount, ledger_id, document_ledger_id, mode_id, mode_code, mode_type }
  *
- * @param {{ partyId: number }} params
+ * BUG FIX 2026-09-03: companyId was never sent, even though this endpoint
+ * genuinely honours it — confirmed live against UAT (party_id 2221):
+ * unscoped/company_id:1 both returned 9→7 HO-only credits vs company_id:4
+ * returning exactly the other 2. Without it, the Refund picker showed a
+ * customer's credit from EVERY store regardless of which one was active.
+ * @param {{ partyId: number, companyId?: number }} params
  * @returns {Promise<object[]>}
  */
-export async function getCustomerCredits({ partyId }) {
+export async function getCustomerCredits({ partyId, companyId }) {
   if (!partyId) return [];
   const response = await axiosInstance.post(API.REFUNDS.CUSTOMER_CREDITS, {
-    party_id: partyId,
+    party_id:   partyId,
+    company_id: companyId,
   });
   return response.data?.Entities ?? [];
 }

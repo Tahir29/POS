@@ -6,10 +6,16 @@
 // a customer's history isn't missing whichever type a given sale happened
 // to raise.
 //
-// STATUS derived from balance_amount + receipt_amount (no status field in API):
-//   balance_amount <= 0                         → "paid"
-//   balance_amount > 0 && receipt_amount > 0    → "partial"
-//   balance_amount > 0 && receipt_amount == 0   → "due"
+// STATUS: document_status (0 Draft / 1 Posted / 2 Cancelled) takes
+// precedence — confirmed live 2026-09-03, a real Cancelled invoice
+// (HO-LJ-0726-009, balance_amount: 0) was displaying as "Paid" because
+// document_status was never looked at, only balance/receipt. Only a
+// POSTED document's status is actually about payment progress:
+//   document_status 2 (Cancelled)                              → "cancelled"
+//   document_status 0 (Draft)                                  → "draft"
+//   document_status 1 (Posted), balance_amount <= 0             → "paid"
+//   document_status 1 (Posted), balance > 0 && receipt_amount>0 → "partial"
+//   document_status 1 (Posted), balance > 0 && receipt_amount==0 → "due"
 
 import { useQuery } from '@tanstack/react-query';
 import { useSelector } from 'react-redux';
@@ -20,6 +26,28 @@ import APP_CONFIG from '@/constants/appConfig';
 
 function isEmptyValue(v) {
   return v === null || v === undefined || v === 'NA' || v === '';
+}
+
+/**
+ * Shared by normalizeCustomerOrder (below) and useInvoiceList.js's
+ * normalizeInvoice — one place for the document_status precedence so the
+ * customer profile Orders tab, /orders, and /invoices can't drift apart
+ * on what "Cancelled" means again.
+ * @param {number|null|undefined} documentStatus — 0 Draft / 1 Posted / 2 Cancelled
+ * @param {number|null} balanceAmount
+ * @param {number|null} receiptAmount
+ * @returns {string} one of APP_CONFIG.ORDER_STATUS
+ */
+export function deriveDocumentStatus(documentStatus, balanceAmount, receiptAmount) {
+  if (documentStatus === 2) return APP_CONFIG.ORDER_STATUS.CANCELLED;
+  if (documentStatus === 0) return APP_CONFIG.ORDER_STATUS.DRAFT;
+
+  if (balanceAmount != null && balanceAmount > 0) {
+    return receiptAmount != null && receiptAmount > 0
+      ? APP_CONFIG.ORDER_STATUS.PARTIAL
+      : APP_CONFIG.ORDER_STATUS.DUE;
+  }
+  return APP_CONFIG.ORDER_STATUS.PAID;
 }
 
 /**
@@ -34,13 +62,7 @@ export function normalizeCustomerOrder(entity, documentType = 'order') {
 
   const balanceAmount = get('balance_amount');
   const receiptAmount = get('receipt_amount');
-
-  let status = APP_CONFIG.ORDER_STATUS.PAID;
-  if (balanceAmount != null && balanceAmount > 0) {
-    status = receiptAmount != null && receiptAmount > 0
-      ? APP_CONFIG.ORDER_STATUS.PARTIAL
-      : APP_CONFIG.ORDER_STATUS.DUE;
-  }
+  const status = deriveDocumentStatus(entity.document_status, balanceAmount, receiptAmount);
 
   return {
     orderId:       get('transaction_id'),
