@@ -683,6 +683,16 @@ const API = {
     ADD_METAL_RATE: 'Services/Costing/MetalRates/Create',
   },
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // CUSTOM
+  // ─────────────────────────────────────────────────────────────────────────
+  CUSTOM: {
+    ATTRIBUTES_DEFINITION_LIST: 'Services/Master/CustomAttributesDefinition/List',
+    ATTRIBUTES_OPTIONS_LIST: 'Services/Master/CustomAttributesOptions/List',
+    ATTRIBUTES_VALUES_LIST: 'Services/Master/CustomAttributesValues/List',
+    ITEMS_LIST: 'Services/Master/Items/List',
+  },
+
 
 };
 

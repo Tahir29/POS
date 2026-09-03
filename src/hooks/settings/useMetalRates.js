@@ -33,6 +33,7 @@ import { getMetalRate } from '@/services/settingsService';
 import { selectActiveStoreId } from '@/store/slices/storeSlice';
 import { QUERY_KEYS } from '@/constants/queryKeys';
 import APP_CONFIG from '@/constants/appConfig';
+import { todayDateString } from '@/lib/dateUtils';
 
 // karat_id -> raw code, in on-screen order, captured live 2026-08-27.
 const KARAT_RATES = [
@@ -60,7 +61,14 @@ const KARAT_RATES = [
  */
 export function useMetalRates() {
   const companyId = useSelector(selectActiveStoreId);
-  const dateKey = new Date().toISOString().slice(0, 10); // rolls the cache key at midnight, no timer needed
+  // BUG FIX: was `new Date().toISOString().slice(0, 10)` — toISOString()
+  // converts to UTC first, so for any IST (UTC+5:30) user before ~5:30am
+  // local time this key stayed on "yesterday" instead of rolling over at
+  // local midnight (same failure mode todayDateString()'s header comment
+  // warns about, and the same bug getMetalRate() itself had — see
+  // settingsService.js). todayDateString() is already the local-calendar-day
+  // source of truth used for from_date across this module.
+  const dateKey = todayDateString(); // rolls the cache key at local midnight, no timer needed
 
   const results = useQueries({
     queries: KARAT_RATES.map(({ karatId }) => ({
@@ -79,9 +87,20 @@ export function useMetalRates() {
     isError:   results[i].isError,
   }));
 
+  const hasAny = rates.some((r) => r.rate != null);
+
   return {
     rates,
-    isLoading: results.every((r) => r.isLoading),
-    hasAny:    rates.some((r) => r.rate != null),
+    // BUG FIX: was `results.every((r) => r.isLoading)`, which reads as "true
+    // until the FIRST rate resolves" but `.isLoading` also flips to false on
+    // ERROR, not just success. If the fastest of the 11 parallel calls
+    // errored before any of the others succeeded, `isLoading` went false
+    // while `hasAny` was still false, and MetalRatesTicker's
+    // `!isLoading && !hasAny` guard hid the whole strip — even though the
+    // remaining calls were still in flight and could still succeed a moment
+    // later. Stay "loading" until either something actually resolves
+    // (hasAny) or every call has settled with nothing to show.
+    isLoading: !hasAny && results.some((r) => r.isLoading),
+    hasAny,
   };
 }

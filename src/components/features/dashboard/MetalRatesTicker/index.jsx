@@ -32,7 +32,7 @@ export default function MetalRatesTicker() {
 
   return (
     <div className="w-full border-b border-status-made-order/25 bg-status-made-order/10">
-      <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-5 gap-y-1.5 px-4 py-2.5 md:px-6">
+      <div className="mx-auto flex flex-wrap items-center justify-center gap-x-5 gap-y-1.5 px-4 py-2.5 md:px-6">
         <span className="flex shrink-0 items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-status-made-order">
           <Coins size={13} aria-hidden="true" />
           Today&rsquo;s Rates

@@ -7,6 +7,7 @@
 import axiosInstance from '@/lib/axios/axiosInstance';
 import API from '@/constants/apiEndpoints';
 import APP_CONFIG from '@/constants/appConfig';
+import { todayDateString } from '@/lib/dateUtils';
 
 /**
  * All payment receipt modes available for a sale (Cash, Card, UPI, etc.).
@@ -106,7 +107,14 @@ export async function addMetalRate(payload) {
  *   `is_cutomer_item` is OrnaVerse's own field name (their typo, not ours).
  */
 export async function getMetalRate({ karatId, companyId }) {
-  const today = new Date().toUTCString();
+  // BUG FIX: was `new Date().toUTCString()` — converts to UTC first, which
+  // rolls back to "yesterday" for any IST (UTC+5:30) user before ~5:30am
+  // local time (the exact failure mode todayDateString()'s own header
+  // comment warns about). That sent from_date/to_date a day behind local
+  // "today" during early-morning hours, so a rate entered for today could
+  // come back missing or stale. Use the same local-calendar-day helper the
+  // Metal Rate form already uses for from_date.
+  const today = todayDateString();
   const response = await axiosInstance.post(API.HELPERS.GET_METAL_RATE, {
     item_group_id:   APP_CONFIG.METAL_TYPES.GOLD, // 106 — confirmed constant across EVERY karat_id captured, gold or otherwise; see useMetalRates.js
     karat_id:         karatId,
