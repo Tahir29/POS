@@ -19,6 +19,7 @@ import { selectIsAuthenticated } from '@/store/slices/authSlice';
 import { selectActiveStoreId } from '@/store/slices/storeSlice';
 import { QUERY_KEYS } from '@/constants/queryKeys';
 import APP_CONFIG from '@/constants/appConfig';
+import { deriveDocumentStatus } from '@/hooks/customer/useCustomerOrders';
 
 function isEmptyValue(v) {
   return v === null || v === undefined || v === 'NA' || v === '';
@@ -31,13 +32,10 @@ export function normalizeInvoice(entity) {
   const balanceAmount = get('balance_amount');
   const receiptAmount = get('receipt_amount');
 
-  // Derive status — no status field on InvoiceRow
-  let status = APP_CONFIG.ORDER_STATUS.PAID;
-  if (balanceAmount != null && balanceAmount > 0) {
-    status = receiptAmount != null && receiptAmount > 0
-      ? APP_CONFIG.ORDER_STATUS.PARTIAL
-      : APP_CONFIG.ORDER_STATUS.DUE;
-  }
+  // BUG FIX 2026-09-03: this comment used to say "no status field on
+  // InvoiceRow" — confirmed live that's wrong, document_status is present
+  // on every row. See deriveDocumentStatus in useCustomerOrders.js.
+  const status = deriveDocumentStatus(entity.document_status, balanceAmount, receiptAmount);
 
   return {
     invoiceId:      get('transaction_id'),

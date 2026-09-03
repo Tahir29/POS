@@ -12,15 +12,19 @@
 import { Badge } from '@/components/ui/badge';
 
 const CONFIG = {
-  settled: { label: 'Paid',    classes: 'bg-status-in-stock/10 text-status-in-stock ring-1 ring-status-in-stock/20' },
-  partial: { label: 'Partial', classes: 'bg-status-made-order/10 text-status-made-order ring-1 ring-status-made-order/20' },
-  overdue: { label: 'Due',     classes: 'bg-status-error/10 text-status-error ring-1 ring-status-error/20' },
-  pending: { label: 'Pending', classes: 'bg-muted text-muted-foreground ring-1 ring-border' },
+  settled:   { label: 'Paid',      classes: 'bg-status-in-stock/10 text-status-in-stock ring-1 ring-status-in-stock/20' },
+  partial:   { label: 'Partial',   classes: 'bg-status-made-order/10 text-status-made-order ring-1 ring-status-made-order/20' },
+  overdue:   { label: 'Due',       classes: 'bg-status-error/10 text-status-error ring-1 ring-status-error/20' },
+  pending:   { label: 'Pending',   classes: 'bg-muted text-muted-foreground ring-1 ring-border' },
+  // ADDED 2026-09-03 — document_status (Cancelled/Draft) now reaches this
+  // badge for the first time; see deriveDocumentStatus in useCustomerOrders.js.
+  cancelled: { label: 'Cancelled', classes: 'bg-muted text-muted-foreground ring-1 ring-border' },
+  draft:     { label: 'Draft',     classes: 'bg-muted text-muted-foreground ring-1 ring-border' },
 };
 
-// Callers speak slightly different raw vocabularies for the same 4 states.
+// Callers speak slightly different raw vocabularies for the same states.
 export function mapOrderStatus(raw) {
-  return { paid: 'settled', partial: 'partial', due: 'overdue' }[raw] ?? 'pending';
+  return { paid: 'settled', partial: 'partial', due: 'overdue', cancelled: 'cancelled', draft: 'draft' }[raw] ?? 'pending';
 }
 export function mapScheduleStatus(raw) {
   return { paid: 'settled', overdue: 'overdue', upcoming: 'pending' }[raw] ?? 'pending';

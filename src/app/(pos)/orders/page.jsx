@@ -29,10 +29,16 @@ import { useAllOrders } from '@/hooks/orders/useAllOrders';
 import APP_CONFIG from '@/constants/appConfig';
 import { todayDateString } from '@/lib/dateUtils';
 
+// ADDED 2026-09-03: cancelled/draft — document_status now feeds order.status
+// (see deriveDocumentStatus in useCustomerOrders.js). Before this, a
+// Cancelled order had no way to be filtered to at all; it silently sorted
+// under whichever of paid/partial/due its balance/receipt happened to match.
 const STATUS_OPTIONS = [
-  { value: 'paid',    label: 'Paid' },
-  { value: 'partial', label: 'Partial' },
-  { value: 'due',     label: 'Due' },
+  { value: 'paid',      label: 'Paid' },
+  { value: 'partial',   label: 'Partial' },
+  { value: 'due',       label: 'Due' },
+  { value: 'cancelled', label: 'Cancelled' },
+  { value: 'draft',     label: 'Draft' },
 ];
 
 export default function OrdersPage() {
@@ -43,7 +49,7 @@ export default function OrdersPage() {
   const [searchQuery, setSearchQuery] = useState(''); // debounced
   const [fromDate, setFromDate]     = useState('');
   const [toDate, setToDate]         = useState('');
-  const [statusFilter, setStatusFilter] = useState(''); // 'paid' | 'partial' | 'due' | ''
+  const [statusFilter, setStatusFilter] = useState(''); // 'paid' | 'partial' | 'due' | 'cancelled' | 'draft' | ''
 
   const debounceRef = useRef(null);
 

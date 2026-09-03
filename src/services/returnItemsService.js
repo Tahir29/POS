@@ -22,22 +22,38 @@ import API from '@/constants/apiEndpoints';
  * invoice — that linkage is what ties the return to the sale, so never
  * strip it before handing the row to calculateReturnItems().
  *
- * @param {{ partyId: number, take?: number }} params
- * @returns {Promise<object[]>} sold-item rows
+ * BUG FIX 2026-09-03: neither companyId nor a backstop filter was applied —
+ * confirmed live this endpoint IGNORES company_id entirely (party_id 2221:
+ * identical 10 rows across companies [1,4], with no company_id, company_id:1,
+ * and company_id:4 all sent). Without the client-side filter below, the
+ * Returns item picker could offer — and let staff attempt to return — an
+ * item the customer bought at a DIFFERENT store than the one currently
+ * active. company_id is still sent in case OrnaVerse fixes this server-side
+ * later.
+ * CAVEAT: `take` caps how many rows are fetched before filtering, so if a
+ * customer has more than `take` sold items spread across stores, some of
+ * the active store's own returnable items could fall outside the fetched
+ * page and never reach the filter at all. Raising `take` (or paginating)
+ * would close that gap; not done here since it's outside what this fix
+ * confirmed live.
+ * @param {{ partyId: number, companyId?: number, take?: number }} params
+ * @returns {Promise<object[]>} sold-item rows, scoped to companyId
  */
-export async function getSoldItems({ partyId, take = 25 }) {
+export async function getSoldItems({ partyId, companyId, take = 25 }) {
   if (!partyId) return [];
   const response = await axiosInstance.post(API.RETURNS.SOLD_ITEMS, {
     Take:             take,
     party_id:         partyId,
     transaction_type: 1,      // 1 = sold items
     get_child:        true,   // essential — brings item_components[] etc.
+    company_id:       companyId,
     IncludeColumns: [
       'item_code', 'item_line_no', 'pieces', 'weight',
       'net_weight', 'sku', 'document_no',
     ],
   });
-  return response.data?.Entities ?? [];
+  const rows = response.data?.Entities ?? [];
+  return companyId != null ? rows.filter((r) => r.company_id === companyId) : rows;
 }
 
 /**

@@ -145,17 +145,32 @@ function EditTab({ customer }) {
     formState: { errors, isDirty },
   } = useForm({
     resolver: zodResolver(updateCustomerSchema),
+    // BUG FIX 2026-09-03: country_id/state_id/city_id (and address/
+    // address_1/pin_code) used to default from `customer.customerAddress`
+    // — a DISPLAY-only value picked from this customer's party_address[]
+    // book (whichever entry is is_default, or just the first one) — while
+    // the "only reset state/city when the user actually changes country"
+    // guard below (initialCountryId/initialStateId) and the reset() effect
+    // once the full record loads both correctly read the ROOT profile
+    // fields instead. Editing Country/State/City here edits the ROOT
+    // fields (that's what Update actually writes — there's no code path
+    // that touches party_address[]), so seeding from a *different* source
+    // than the one being compared/submitted was the bug. Confirmed live
+    // against a real customer (Suryansh Gupta, party_id 1564): his root
+    // profile is Djibouti/Ali Sabieh Region, but his one saved address is
+    // India/Maharashtra — the mismatch meant State/City were wiped to null
+    // the instant this tab opened, before the operator touched anything.
     defaultValues: {
       party_name: customer.customerName ?? '',
       mobile: maskedMobile ? '' : customer.customerMobile ?? '',
       email: maskedEmail ? '' : customer.customerEmail ?? '',
       pan_no: customer.customerPan ?? '',
-      address: maskedAddress ? '' : customer.customerAddress?.address ?? '',
-      address_1: customer.customerAddress?.address1 ?? '',
-      country_id: customer.customerAddress?.country_id ?? null,
-      state_id: customer.customerAddress?.state_id ?? null,
-      city_id: customer.customerAddress?.city_id ?? null,
-      pin_code: customer.customerAddress?.zip ?? '',
+      address: maskedAddress ? '' : customer.raw?.address ?? '',
+      address_1: customer.raw?.address_1 ?? '',
+      country_id: customer.raw?.country_id ?? null,
+      state_id: customer.raw?.state_id ?? null,
+      city_id: customer.raw?.city_id ?? null,
+      pin_code: customer.raw?.pin_code ? String(customer.raw.pin_code) : '',
     },
   });
 

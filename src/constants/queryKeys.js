@@ -165,13 +165,13 @@ export const QUERY_KEYS = {
   RETURNS: {
     LIST:       (params)        => ['returns', 'list', params],
     DETAIL:     (transactionId) => ['returns', 'detail', transactionId],
-    SOLD_ITEMS: (partyId)       => ['returns', 'sold-items', partyId],
+    SOLD_ITEMS: (partyId, companyId) => ['returns', 'sold-items', partyId, companyId],
   },
 
   REFUNDS: {
     LIST:             (params)   => ['refunds', 'list', params],
     DETAIL:           (refundId) => ['refunds', 'detail', refundId],
-    CUSTOMER_CREDITS: (partyId)  => ['refunds', 'customer-credits', partyId],
+    CUSTOMER_CREDITS: (partyId, companyId)  => ['refunds', 'customer-credits', partyId, companyId],
   },
 
   CREDIT_NOTES: {
@@ -228,7 +228,7 @@ export const QUERY_KEYS = {
   },
 
   CUSTOMER_HISTORY: {
-    TRANSACTIONS:      (customerId) => ['customer-history', 'transactions',      customerId],
+    TRANSACTIONS:      (customerId, companyId) => ['customer-history', 'transactions', customerId, companyId],
     ITEM_TRANSACTIONS: (customerId) => ['customer-history', 'item-transactions',  customerId],
     TOTAL_RECEIPTS:    (customerId) => ['customer-history', 'total-receipts',     customerId],
     TOTAL_PROMOTIONS:  (customerId) => ['customer-history', 'total-promotions',   customerId],
