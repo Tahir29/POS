@@ -201,11 +201,10 @@ export default function CheckoutPanCapture({ totalAmount, onPanResolved }) {
         <h2 className="text-sm font-bold text-foreground mb-2">
           PAN Details <span className="text-destructive">*</span>
         </h2>
-        <p className="flex items-center gap-1.5 text-sm text-status-in-stock mb-3">
+        <p className="flex items-center gap-1.5 text-sm text-status-in-stock mb-0">
           <CheckCircle2 size={15} className="shrink-0" aria-hidden="true" />
           PAN on file: <span className="font-mono font-semibold">{panOnFile}</span>
         </p>
-        {documentBlock}
       </section>
     );
   }
@@ -245,8 +244,6 @@ export default function CheckoutPanCapture({ totalAmount, onPanResolved }) {
             {updateCustomer.isPending ? 'Saving…' : 'Save'}
           </Button>
         </div>
-
-        {documentBlock}
       </div>
     </section>
   );
