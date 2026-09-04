@@ -52,17 +52,34 @@ export function useAddInvoiceReceipt() {
       });
     },
 
-    onSuccess: (_data, { transactionId }) => {
+    // ENRICHED 2026-09-04 — both events used to carry only transactionId.
+    // customer_id/store_id here come from the invoice being paid (partyId/
+    // companyId, part of the mutate variables) rather than
+    // useSessionTrackingContext's currently-attached session — this invoice
+    // may belong to a different customer than whoever is attached right
+    // now (an operator can record a receipt against any invoice from the
+    // /invoices list, not just the attached customer's own), so the
+    // payload's own identity is the correct, authoritative one here.
+    onSuccess: (_data, { transactionId, partyId, companyId, amount, mode }) => {
       toast.success(TOAST.INVOICES.RECEIPT_ADDED);
-      tracker.track(EVENTS.INVOICE_RECEIPT_ADDED, { transactionId });
+      tracker.track(EVENTS.INVOICE_RECEIPT_ADDED, {
+        transactionId,
+        customer_id: partyId ?? 'guest',
+        store_id:    companyId,
+        amount,
+        modeCode:    mode?.modeCode,
+      });
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
     },
 
-    onError: (error, { transactionId }) => {
+    onError: (error, { transactionId, partyId, companyId, amount }) => {
       toast.error(TOAST.INVOICES.RECEIPT_FAILED);
       tracker.track(EVENTS.INVOICE_RECEIPT_FAILED, {
         transactionId,
         error: error?.message ?? 'unknown',
+        customer_id: partyId ?? 'guest',
+        store_id:    companyId,
+        amount,
       });
     },
   });

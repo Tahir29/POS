@@ -26,6 +26,8 @@ import {
   setAvailableStores,
   setActiveStore,
   clearStore,
+  selectActiveStoreId,
+  selectActiveStoreName,
 } from '@/store/slices/storeSlice';
 
 import { clearCart } from '@/store/slices/cartSlice';
@@ -46,6 +48,8 @@ export function useAuth() {
   const isAuthenticated = useSelector(selectIsAuthenticated);
   const user            = useSelector(selectAuthUser);
   const accessToken     = useSelector(selectAccessToken);
+  const activeStoreId   = useSelector(selectActiveStoreId);
+  const activeStoreName = useSelector(selectActiveStoreName);
 
   const login = useCallback(async (username, password) => {
     const tokenData = await generateToken(username, password);
@@ -134,8 +138,15 @@ export function useAuth() {
       tracker.endSession('agent_logout');
     }
 
+    // ENRICHED 2026-09-04 — this fired with no store context at all, unlike
+    // AGENT_LOGIN right above it in login() — trackAgent() (unlike track())
+    // has no session to auto-derive fields from, so a caller has to pass
+    // its own. Captured from the selectors above, BEFORE the
+    // dispatch(clearStore()) a few lines down wipes it.
     tracker.trackAgent(EVENTS.AGENT_LOGOUT, {
       timestamp: new Date().toISOString(),
+      storeId:   activeStoreId,
+      storeName: activeStoreName,
     });
 
     dispatch(clearAuth());
@@ -207,7 +218,7 @@ export function useAuth() {
     queryClient.clear();
     toast.info(TOAST.AUTH.LOGOUT_SUCCESS);
     router.replace('/login');
-  }, [dispatch, router]);
+  }, [dispatch, router, activeStoreId, activeStoreName]);
 
   return {
     isAuthenticated,

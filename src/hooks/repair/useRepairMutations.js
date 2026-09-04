@@ -2,9 +2,15 @@
 // Mirrors useTransactionMutations.js — same Create → Post pattern, except
 // RepairInvoice also gets a receipt step (like Invoice/InvoiceReceipt).
 //
-// ANALYTICS: every mutation fires a tracker.track() — success events carry
-// data.EntityId (transaction_id), failure events carry the normalised
-// error message. See events.js.
+// ANALYTICS: every mutation fires a tracker.track(). ENRICHED 2026-09-04 —
+// same fix as useTransactionMutations.js: every event used to carry only
+// data.EntityId (success) or a bare error string (failure), nothing that
+// identified who/where/how much. Every event now also carries
+// customer_id/store_id (useSessionTrackingContext — session-derived, since
+// Post/Cancel only ever receive a bare transactionId with nothing else to
+// draw on), and every CREATE additionally carries party_id/net_amount/
+// pieces/weight/line_item_count straight off the same payload just posted
+// to OrnaVerse (createDetails()) — see events.js.
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-toastify';
@@ -14,6 +20,7 @@ import {
   createRepairOut,     postRepairOut,
   createRepairInvoice, postRepairInvoice, createRepairInvoiceReceipt,
 } from '@/services/repairService';
+import { useSessionTrackingContext } from '@/hooks/analytics/useSessionTrackingContext';
 import TOAST from '@/constants/toastMessages';
 import tracker from '@/lib/analytics/tracker';
 import EVENTS from '@/lib/analytics/events';
@@ -32,6 +39,19 @@ function getErrorMessage(error, fallback = 'Something went wrong.') {
   );
 }
 
+// See this file's header — `payload` here is the raw entity object each
+// createX() call posts straight through to OrnaVerse, unmodified.
+function creationDetails(payload) {
+  return {
+    party_id:        payload?.party_id,
+    net_amount:      payload?.net_amount,
+    pieces:          payload?.pieces,
+    weight:          payload?.weight,
+    line_item_count: Array.isArray(payload?.line_items) ? payload.line_items.length : undefined,
+    document_date:   payload?.document_date,
+  };
+}
+
 // ─── REPAIR ORDER (what the counter actually raises) ──────────────────────────
 // OrnaVerse's own POS Repair tab creates a Repair Order (document 75) — its
 // button reads "Save Repair Order". Repair In/Out are workshop-side documents
@@ -39,82 +59,95 @@ function getErrorMessage(error, fallback = 'Something went wrong.') {
 
 export function useCreateRepairOrder({ onSuccess } = {}) {
   const queryClient = useQueryClient();
+  const sessionCtx = useSessionTrackingContext();
   return useMutation({
     mutationFn: (payload) => createRepairOrder(payload),
-    onSuccess: (data) => {
+    onSuccess: (data, payload) => {
       queryClient.invalidateQueries({ queryKey: ['repair', 'orders'] });
       toast.success(TOAST.REPAIR.INTAKE_CREATED);
-      tracker.track(EVENTS.REPAIR_IN_CREATED, { transactionId: data?.EntityId });
+      tracker.track(EVENTS.REPAIR_IN_CREATED, {
+        transactionId: data?.EntityId, ...sessionCtx, ...creationDetails(payload),
+      });
       onSuccess?.(data);
     },
-    onError: (error) => {
+    onError: (error, payload) => {
       const message = getErrorMessage(error, TOAST.REPAIR.INTAKE_FAILED);
       toast.error(message);
-      tracker.track(EVENTS.REPAIR_IN_FAILED, { stage: 'create', error: message });
+      tracker.track(EVENTS.REPAIR_IN_FAILED, {
+        stage: 'create', error: message, ...sessionCtx, ...creationDetails(payload),
+      });
     },
   });
 }
 
 export function usePostRepairOrder({ onSuccess } = {}) {
   const queryClient = useQueryClient();
+  const sessionCtx = useSessionTrackingContext();
   return useMutation({
     mutationFn: (transactionId) => postRepairOrder(transactionId),
     onSuccess: (data, transactionId) => {
       queryClient.invalidateQueries({ queryKey: ['repair', 'orders'] });
-      tracker.track(EVENTS.REPAIR_IN_POSTED, { transactionId });
+      tracker.track(EVENTS.REPAIR_IN_POSTED, { transactionId, ...sessionCtx });
       onSuccess?.(data);
     },
-    onError: (error) => {
+    onError: (error, transactionId) => {
       const message = getErrorMessage(error, TOAST.REPAIR.INTAKE_POST_FAILED);
       toast.error(message);
-      tracker.track(EVENTS.REPAIR_IN_FAILED, { stage: 'post', error: message });
+      tracker.track(EVENTS.REPAIR_IN_FAILED, { stage: 'post', transactionId, error: message, ...sessionCtx });
     },
   });
 }
 
 export function useCreateRepairIn({ onSuccess } = {}) {
   const queryClient = useQueryClient();
+  const sessionCtx = useSessionTrackingContext();
   return useMutation({
     mutationFn: (payload) => createRepairIn(payload),
-    onSuccess: (data) => {
+    onSuccess: (data, payload) => {
       queryClient.invalidateQueries({ queryKey: ['repair', 'repair-ins'] });
       toast.success(TOAST.REPAIR.INTAKE_CREATED);
-      tracker.track(EVENTS.REPAIR_IN_CREATED, { transactionId: data?.EntityId });
+      tracker.track(EVENTS.REPAIR_IN_CREATED, {
+        transactionId: data?.EntityId, ...sessionCtx, ...creationDetails(payload),
+      });
       onSuccess?.(data);
     },
-    onError: (error) => {
+    onError: (error, payload) => {
       const message = getErrorMessage(error, TOAST.REPAIR.INTAKE_FAILED);
       toast.error(message);
-      tracker.track(EVENTS.REPAIR_IN_FAILED, { stage: 'create', error: message });
+      tracker.track(EVENTS.REPAIR_IN_FAILED, {
+        stage: 'create', error: message, ...sessionCtx, ...creationDetails(payload),
+      });
     },
   });
 }
 
 export function usePostRepairIn({ onSuccess } = {}) {
   const queryClient = useQueryClient();
+  const sessionCtx = useSessionTrackingContext();
   return useMutation({
     mutationFn: (transactionId) => postRepairIn(transactionId),
     onSuccess: (data, transactionId) => {
       queryClient.invalidateQueries({ queryKey: ['repair', 'repair-ins'] });
       toast.success(TOAST.REPAIR.INTAKE_POSTED);
-      tracker.track(EVENTS.REPAIR_IN_POSTED, { transactionId });
+      tracker.track(EVENTS.REPAIR_IN_POSTED, { transactionId, ...sessionCtx });
       onSuccess?.(data);
     },
     onError: (error, transactionId) => {
       const message = getErrorMessage(error, TOAST.REPAIR.INTAKE_POST_FAILED);
       toast.error(message);
-      tracker.track(EVENTS.REPAIR_IN_FAILED, { stage: 'post', transactionId, error: message });
+      tracker.track(EVENTS.REPAIR_IN_FAILED, { stage: 'post', transactionId, error: message, ...sessionCtx });
     },
   });
 }
 
 export function useCancelRepairIn({ onSuccess } = {}) {
   const queryClient = useQueryClient();
+  const sessionCtx = useSessionTrackingContext();
   return useMutation({
     mutationFn: (transactionId) => cancelRepairIn(transactionId),
     onSuccess: (data, transactionId) => {
       queryClient.invalidateQueries({ queryKey: ['repair', 'repair-ins'] });
-      tracker.track(EVENTS.REPAIR_IN_CANCELLED, { transactionId });
+      tracker.track(EVENTS.REPAIR_IN_CANCELLED, { transactionId, ...sessionCtx });
       onSuccess?.(data);
     },
     onError: (error, transactionId) => {
@@ -123,97 +156,112 @@ export function useCancelRepairIn({ onSuccess } = {}) {
       // message toastMessages.js doesn't actually define.
       const message = getErrorMessage(error);
       toast.error(message);
-      tracker.track(EVENTS.REPAIR_IN_FAILED, { stage: 'cancel', transactionId, error: message });
+      tracker.track(EVENTS.REPAIR_IN_FAILED, { stage: 'cancel', transactionId, error: message, ...sessionCtx });
     },
   });
 }
 
 export function useCreateRepairOut({ onSuccess } = {}) {
   const queryClient = useQueryClient();
+  const sessionCtx = useSessionTrackingContext();
   return useMutation({
     mutationFn: (payload) => createRepairOut(payload),
-    onSuccess: (data) => {
+    onSuccess: (data, payload) => {
       queryClient.invalidateQueries({ queryKey: ['repair', 'repair-outs'] });
       toast.success(TOAST.REPAIR.OUT_CREATED);
-      tracker.track(EVENTS.REPAIR_OUT_CREATED, { transactionId: data?.EntityId });
+      tracker.track(EVENTS.REPAIR_OUT_CREATED, {
+        transactionId: data?.EntityId, ...sessionCtx, ...creationDetails(payload),
+      });
       onSuccess?.(data);
     },
-    onError: (error) => {
+    onError: (error, payload) => {
       const message = getErrorMessage(error, TOAST.REPAIR.OUT_FAILED);
       toast.error(message);
-      tracker.track(EVENTS.REPAIR_OUT_FAILED, { stage: 'create', error: message });
+      tracker.track(EVENTS.REPAIR_OUT_FAILED, {
+        stage: 'create', error: message, ...sessionCtx, ...creationDetails(payload),
+      });
     },
   });
 }
 
 export function usePostRepairOut({ onSuccess } = {}) {
   const queryClient = useQueryClient();
+  const sessionCtx = useSessionTrackingContext();
   return useMutation({
     mutationFn: (transactionId) => postRepairOut(transactionId),
     onSuccess: (data, transactionId) => {
       queryClient.invalidateQueries({ queryKey: ['repair', 'repair-outs'] });
       toast.success(TOAST.REPAIR.OUT_POSTED);
-      tracker.track(EVENTS.REPAIR_OUT_POSTED, { transactionId });
+      tracker.track(EVENTS.REPAIR_OUT_POSTED, { transactionId, ...sessionCtx });
       onSuccess?.(data);
     },
     onError: (error, transactionId) => {
       const message = getErrorMessage(error, TOAST.REPAIR.OUT_POST_FAILED);
       toast.error(message);
-      tracker.track(EVENTS.REPAIR_OUT_FAILED, { stage: 'post', transactionId, error: message });
+      tracker.track(EVENTS.REPAIR_OUT_FAILED, { stage: 'post', transactionId, error: message, ...sessionCtx });
     },
   });
 }
 
 export function useCreateRepairInvoice({ onSuccess } = {}) {
   const queryClient = useQueryClient();
+  const sessionCtx = useSessionTrackingContext();
   return useMutation({
     mutationFn: (payload) => createRepairInvoice(payload),
-    onSuccess: (data) => {
+    onSuccess: (data, payload) => {
       queryClient.invalidateQueries({ queryKey: ['repair', 'repair-invoices'] });
       toast.success(TOAST.REPAIR.INVOICE_CREATED);
-      tracker.track(EVENTS.REPAIR_INVOICE_CREATED, { transactionId: data?.EntityId });
+      tracker.track(EVENTS.REPAIR_INVOICE_CREATED, {
+        transactionId: data?.EntityId, ...sessionCtx, ...creationDetails(payload),
+      });
       onSuccess?.(data);
     },
-    onError: (error) => {
+    onError: (error, payload) => {
       const message = getErrorMessage(error, TOAST.REPAIR.INVOICE_FAILED);
       toast.error(message);
-      tracker.track(EVENTS.REPAIR_INVOICE_FAILED, { stage: 'create', error: message });
+      tracker.track(EVENTS.REPAIR_INVOICE_FAILED, {
+        stage: 'create', error: message, ...sessionCtx, ...creationDetails(payload),
+      });
     },
   });
 }
 
 export function usePostRepairInvoice({ onSuccess } = {}) {
   const queryClient = useQueryClient();
+  const sessionCtx = useSessionTrackingContext();
   return useMutation({
     mutationFn: (transactionId) => postRepairInvoice(transactionId),
     onSuccess: (data, transactionId) => {
       queryClient.invalidateQueries({ queryKey: ['repair', 'repair-invoices'] });
       toast.success(TOAST.REPAIR.INVOICE_POSTED);
-      tracker.track(EVENTS.REPAIR_INVOICE_POSTED, { transactionId });
+      tracker.track(EVENTS.REPAIR_INVOICE_POSTED, { transactionId, ...sessionCtx });
       onSuccess?.(data);
     },
     onError: (error, transactionId) => {
       const message = getErrorMessage(error, TOAST.REPAIR.INVOICE_POST_FAILED);
       toast.error(message);
-      tracker.track(EVENTS.REPAIR_INVOICE_FAILED, { stage: 'post', transactionId, error: message });
+      tracker.track(EVENTS.REPAIR_INVOICE_FAILED, { stage: 'post', transactionId, error: message, ...sessionCtx });
     },
   });
 }
 
 export function useCreateRepairInvoiceReceipt({ onSuccess } = {}) {
   const queryClient = useQueryClient();
+  const sessionCtx = useSessionTrackingContext();
   return useMutation({
     mutationFn: (payload) => createRepairInvoiceReceipt(payload),
     onSuccess: (data, payload) => {
       queryClient.invalidateQueries({ queryKey: ['repair', 'repair-invoices'] });
       toast.success(TOAST.REPAIR.RECEIPT_CREATED);
-      tracker.track(EVENTS.REPAIR_RECEIPT_CREATED, { amount: payload?.amount });
+      tracker.track(EVENTS.REPAIR_RECEIPT_CREATED, {
+        amount: payload?.amount, ...sessionCtx, transactionId: payload?.transaction_id ?? payload?.transactionId,
+      });
       onSuccess?.(data);
     },
-    onError: (error) => {
+    onError: (error, payload) => {
       const message = getErrorMessage(error, TOAST.REPAIR.RECEIPT_FAILED);
       toast.error(message);
-      tracker.track(EVENTS.REPAIR_RECEIPT_FAILED, { error: message });
+      tracker.track(EVENTS.REPAIR_RECEIPT_FAILED, { error: message, ...sessionCtx, amount: payload?.amount });
     },
   });
 }

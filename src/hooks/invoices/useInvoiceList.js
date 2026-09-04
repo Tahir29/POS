@@ -14,7 +14,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { useSelector } from 'react-redux';
-import { getInvoiceList } from '@/services/orderService';
+import { fetchStoreScopedDocuments } from '@/services/crossStoreDocuments';
 import { selectIsAuthenticated } from '@/store/slices/authSlice';
 import { selectActiveStoreId } from '@/store/slices/storeSlice';
 import { QUERY_KEYS } from '@/constants/queryKeys';
@@ -62,11 +62,22 @@ export function useInvoiceList({ skip = 0 } = {}) {
     // Fixed: was QUERY_KEYS.ORDERS.INVOICE_LIST — moved to INVOICES.LIST
     queryKey: QUERY_KEYS.INVOICES.LIST({ skip, take, companyId: activeStoreId }),
     queryFn: async () => {
-      const data     = await getInvoiceList({ take, skip, company_id: activeStoreId });
-      const entities = data?.Entities ?? [];
+      // FIXED 2026-09-03: was calling getInvoiceList directly — confirmed
+      // live that Invoice/List silently restricts some identities (e.g. the
+      // multi-store "admin" account) to their own home company regardless
+      // of company_id, returning zero rows for any other store. See
+      // crossStoreDocuments.js for the full write-up. Its fallback path
+      // pages the real, complete document index (not a capped recent-only
+      // subset), so `take`/`skip` behave the same here whether or not the
+      // fallback is active — page 2 genuinely returns the next page, not a
+      // repeat of page 1. `viaFallback` is still surfaced in case a caller
+      // wants to indicate "this store's data came via a slower path."
+      const result   = await fetchStoreScopedDocuments({ kind: 'invoice', companyId: activeStoreId, take, skip });
+      const entities = result.entities;
       return {
         invoices:   entities.map(normalizeInvoice).filter(Boolean),
-        totalCount: data?.TotalCount ?? entities.length,
+        totalCount: result.totalCount,
+        viaFallback: result.viaFallback,
       };
     },
     enabled:   isAuthenticated && !!activeStoreId,
@@ -74,8 +85,9 @@ export function useInvoiceList({ skip = 0 } = {}) {
   });
 
   return {
-    invoices:   query.data?.invoices   ?? [],
-    totalCount: query.data?.totalCount ?? 0,
+    invoices:    query.data?.invoices   ?? [],
+    totalCount:  query.data?.totalCount ?? 0,
+    viaFallback: query.data?.viaFallback ?? false,
     take,
     isLoading:  query.isLoading,
     isFetching: query.isFetching,

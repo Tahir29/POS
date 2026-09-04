@@ -14,29 +14,33 @@
 //        a. The live cart is EMPTY (the common case) and they have a saved
 //           one → restore it straight into the cart (cartSlice.restoreCart)
 //           and toast the operator so it's not a silent surprise.
-//        b. The live cart is NOT empty (items carried over from a customer
-//           switch — see CustomerSessionSheet's "Keep Cart" option) → that
-//           cart now belongs to the newly-attached customer, so save it
-//           under THEIR party_id right away rather than waiting for the
-//           next add/remove to trigger a save.
+//        b. The live cart is NOT empty — this is now only the
+//           re-attaching-the-same-already-attached-customer case (removed
+//           2026-09-03: CustomerSessionSheet/customers page used to offer a
+//           "Keep Cart" choice that carried a DIFFERENT customer's items
+//           into this one; both now always detach — see #3 — before
+//           attaching, so a switch never reaches this branch with someone
+//           else's items) → save the cart under THEIR party_id right away
+//           rather than waiting for the next add/remove to trigger a save.
 //
 //   2. Any cart-mutating action (add/remove/qty/promo/gift card/voucher/
 //      fulfillment-hydrate) while a customer is attached → debounced save
 //      of the current cart snapshot to Mongo. Debounced so tapping +/- on
 //      quantity five times doesn't fire five network calls.
 //
-//   3. cart/detachCustomer — if "Keep Cart" was chosen (items remain in a
-//      now-customerless cart), snapshot them under the OUTGOING customer
-//      before that history has any chance of being silently overwritten by
-//      whatever uses this cart next (a new guest sale, a different
-//      customer). Reads the PRE-action state, not post — by the time this
-//      case runs, the reducer has already nulled cart.customerId.
+//   3. cart/detachCustomer — always fires on a customer switch now (see #1),
+//      not just an explicit "Remove" tap. Snapshot the outgoing customer's
+//      items under THEIR OWN party_id before that history has any chance of
+//      being silently overwritten by whatever uses this cart next (the
+//      incoming customer's attach, a new guest sale). Reads the PRE-action
+//      state, not post — by the time this case runs, the reducer has
+//      already nulled cart.customerId.
 //
-//   4. cart/clearCart — fires on BOTH a completed sale and a manual
-//      "Clear Cart" (see checkout/page.jsx and CustomerSessionSheet). Either
-//      way the cart is no longer pending, so delete whatever was saved —
-//      there's nothing left to call abandoned. Also reads pre-action state
-//      for the same reason as #3.
+//   4. cart/clearCart — fires on BOTH a completed sale and an explicit
+//      "Clear Cart" (see checkout/page.jsx). Either way the cart is no
+//      longer pending, so delete whatever was saved — there's nothing left
+//      to call abandoned. Also reads pre-action state for the same reason
+//      as #3.
 
 import { toast } from 'react-toastify';
 import { setAbandonedCart, clearAbandonedCartState } from './slices/abandonedCartSlice';
@@ -126,8 +130,10 @@ export const abandonedCartMiddleware = (store) => (next) => (action) => {
         if (freshCart.customerId !== customerId) return;
 
         if (freshCart.items.length > 0) {
-          // Items already in the cart at attach time — carried over from a
-          // "Keep Cart" switch. They belong to this customer now.
+          // Items already in the cart at attach time — this customer was
+          // already attached and had items (re-attach, not a switch: a
+          // switch always detaches first — see 'cart/detachCustomer' —
+          // so the cart is empty by the time a DIFFERENT customer attaches).
           saveAbandonedCart(customerId, freshCart, token, store.getState().store?.activeStoreId);
         } else if (hasSaved) {
           store.dispatch(restoreCart({ items: record.items }));

@@ -271,7 +271,20 @@ function CheckoutScreen() {
               Judged on the PRICED payable — against the cart's catalog
               estimate a sale worth well over the threshold could read as
               under it, and the PAN would never be asked for. */}
-          <CheckoutPanCapture totalAmount={payableTotal} onPanResolved={setPanNumber} />
+          {/* key={customerId} (SEC fix 2026-09-04): CheckoutPanCapture keeps
+              its own local state (value being typed, justSavedPan, the
+              attached file) — none of that is customer-scoped by anything
+              other than this key. Without it, switching customers mid-
+              checkout (CustomerSessionSheet's header control works from any
+              page, checkout included, and no longer prompts before
+              switching — see that component's own header comment) left the
+              OUTGOING customer's just-saved PAN sitting in state, and the
+              component showed it as "PAN on file" for the newly-attached
+              customer — a real cross-customer PAN leak on a compliance-
+              mandated field, confirmed in an earlier security review. A key
+              change forces React to unmount/remount with fresh state
+              instead of reusing the instance across customers. */}
+          <CheckoutPanCapture key={customerId} totalAmount={payableTotal} onPanResolved={setPanNumber} />
 
           {/* Sales person — required, mirrors the vendor's own POS Sale screen */}
           <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
@@ -330,8 +343,21 @@ function CheckoutScreen() {
             <CartSummary totals={pricedTotals} isPricing={isPricing} />
           </section>
 
-          {/* Payment modes + invoice helper balances */}
+          {/* Payment modes + invoice helper balances.
+              key={customerId} (SEC fix 2026-09-04, same class as
+              CheckoutPanCapture above): `payments` here can include applied
+              invoice-helper balances (Scheme, Exchange Credit, Old Gold,
+              Advances) sourced from useInvoiceHelpers({ partyId: customerId
+              }) — each row carries a creditRef back to that SPECIFIC
+              customer's balance. Without a remount, switching customers
+              mid-checkout left a previously-applied balance sitting in
+              state and still counted toward the total for the NEWLY
+              attached customer — misapplying one customer's credit/exchange
+              balance to another's invoice. The key forces a fresh mount
+              (empty payments, re-synced to the parent via this component's
+              own onChange effect) for every customer. */}
           <CheckoutPaymentSection
+            key={customerId}
             onChange={setPayments}
             amountDue={amountDue}
             allowPartial

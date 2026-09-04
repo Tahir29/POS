@@ -23,7 +23,7 @@ import OutOfStockToggle      from '@/components/features/catalog/OutOfStockToggl
 import CatalogSkeleton       from '@/components/features/catalog/CatalogSkeleton';
 import OtherStoreSection     from '@/components/features/catalog/OtherStoreSection';
 
-import { sortProducts } from '@/lib/catalogSort';
+import { stableSortProducts } from '@/lib/catalogSort';
 import APP_CONFIG from '@/constants/appConfig';
 import tracker from '@/lib/analytics/tracker';
 import EVENTS from '@/lib/analytics/events';
@@ -83,7 +83,7 @@ function getMatchingTypeIds(q, categories) {
  * price_asc/price_desc here was comparing null against null for every pair —
  * a no-op that silently preserved server order and read as "sort doesn't
  * apply." Sorting now happens once, in the page component, AFTER live
- * prices are merged — see sortProducts below and its call site.
+ * prices are merged — see stableSortProducts below and its call site.
  */
 function applySearchFilterOnly(allProducts, {
   searchQuery,
@@ -330,14 +330,46 @@ function CatalogScreen() {
   // compareProducts' price branch always sorts a still-pricing item (price
   // null) after every priced one regardless of direction, so a card doesn't
   // jump to the top while it still reads "Pricing…" — it settles into place
-  // once its real price lands. Re-runs as prices arrive progressively (each
-  // settled item changes pricedDisplayProducts), so the list keeps
-  // correcting itself instead of freezing at whatever order the first
-  // batch of live prices happened to produce.
-  const sortedDisplayProducts = useMemo(
-    () => sortProducts(pricedDisplayProducts, sortBy),
-    [pricedDisplayProducts, sortBy],
-  );
+  // once its real price lands.
+  //
+  // FIXED 2026-09-04 — "infinite scroll jump": this used to be a plain
+  // sortProducts() re-run over the FULL accumulated list on every change,
+  // including every new page fetchNextPage() pulled in. A freshly-fetched
+  // page's rows are not alphabetically/weight-adjacent to whatever's
+  // already on screen (the server returns pages in its own order, not
+  // pre-sorted), so re-sorting the combined list INTERLEAVED the new page's
+  // rows in among ones the operator was already scrolling past, snapping
+  // every card below the insertion point to a new position. stableSortProducts
+  // (catalogSort.js) keeps already-rendered cards frozen in place and only
+  // sorts/appends genuinely new rows after them — see its own header for
+  // the full reasoning, including why price sort is still allowed to
+  // resettle a just-priced card (that movement is real and wanted, not
+  // pagination noise).
+  //
+  // sortResetKey: the sort is carried forward (stable) across renders EXCEPT
+  // when one of these legitimately changes the SET of items being shown for
+  // a reason other than pagination/pricing — a different sort order, a
+  // different filter, or a different store/mode entirely. Any of those
+  // deserve a genuine fresh sort from scratch, not a frozen-prefix carry.
+  //
+  // stableSort holds the last computed order plus what it was computed
+  // FROM (`source`/`key`), so this can tell "pricedDisplayProducts grew by
+  // one page" apart from "the whole input set changed" without a ref —
+  // refs can't be read/written during render in this codebase (React
+  // Compiler requirement), so this uses the same "adjusting state during
+  // render" idiom already used above for hasSearched/prevIsSearchMode:
+  // setState called conditionally, directly in the render body, guarded by
+  // an actual input-identity check so it only ever fires once per real
+  // change, never loops.
+  const sortResetKey = `${sortBy}|${activeCategoryId ?? ''}|${showOutOfStock}|${effectiveStoreId ?? ''}|${isSearchMode}`;
+  const [stableSort, setStableSort] = useState({ key: sortResetKey, source: null, order: [] });
+
+  let sortedDisplayProducts = stableSort.order;
+  if (stableSort.source !== pricedDisplayProducts || stableSort.key !== sortResetKey) {
+    const baseOrder = stableSort.key !== sortResetKey ? [] : stableSort.order;
+    sortedDisplayProducts = stableSortProducts(baseOrder, pricedDisplayProducts, sortBy);
+    setStableSort({ key: sortResetKey, source: pricedDisplayProducts, order: sortedDisplayProducts });
+  }
 
   // ── Barcode handler ───────────────────────────────────────────────────────
   // ONLY calls the sku lookup below — no fallback to item_code matching or

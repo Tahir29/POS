@@ -19,7 +19,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { useSelector } from 'react-redux';
-import { getOrders, getInvoiceList } from '@/services/orderService';
+import { fetchStoreScopedDocuments } from '@/services/crossStoreDocuments';
 import { selectActiveStoreId } from '@/store/slices/storeSlice';
 import { QUERY_KEYS } from '@/constants/queryKeys';
 import APP_CONFIG from '@/constants/appConfig';
@@ -83,26 +83,27 @@ export function normalizeCustomerOrder(entity, documentType = 'order') {
 }
 
 export function useCustomerOrders({ customerId, enabled = true } = {}) {
-  // FIXED 2026-08-27: company_id was never sent to either endpoint (despite
-  // both supporting it — see orderService.js), so this pulled every store's
-  // orders/invoices for a customer, not just the active store's. Confirmed
-  // live that POS/Order/List itself ALSO silently ignores its own
-  // company_id filter (ProductCatalog-style endpoints do; this one doesn't)
-  // — see the client-side companyId filter below, same defense-in-depth
-  // pattern useDailyClosing.js already uses for the identical server gap.
+  // FIXED 2026-08-27, UPDATED 2026-09-03: company_id was never sent to
+  // either endpoint, so this pulled every store's orders/invoices for a
+  // customer. A client-side backstop filter (below) fixed the over-broad
+  // case — but confirmed live that at least one identity (the multi-store
+  // "admin" account) gets Order/List and Invoice/List silently restricted
+  // to its OWN home company regardless of company_id, so the backstop alone
+  // just turned "shows every store's data" into "shows nothing for any
+  // store but home." fetchStoreScopedDocuments (crossStoreDocuments.js)
+  // tries the same cheap List call first and only pays for a
+  // Retrieve-based fallback when List proves unreliable for this company.
   const activeStoreId = useSelector(selectActiveStoreId);
 
   const query = useQuery({
     queryKey: QUERY_KEYS.ORDERS.CUSTOMER_ORDERS(customerId ?? 'none', activeStoreId),
     queryFn:  async () => {
-      // getOrders/getInvoiceList both return response.data (unwrapped by
-      // service).
-      const [ordersData, invoicesData] = await Promise.all([
-        getOrders({ take: 0, company_id: activeStoreId }),
-        getInvoiceList({ take: 0, company_id: activeStoreId }),
+      const [ordersRes, invoicesRes] = await Promise.all([
+        fetchStoreScopedDocuments({ kind: 'order',   companyId: activeStoreId }),
+        fetchStoreScopedDocuments({ kind: 'invoice', companyId: activeStoreId }),
       ]);
-      const orderEntities   = ordersData?.Entities ?? [];
-      const invoiceEntities = invoicesData?.Entities ?? [];
+      const orderEntities   = ordersRes.entities;
+      const invoiceEntities = invoicesRes.entities;
 
       const orders   = orderEntities.map((e) => normalizeCustomerOrder(e, 'order')).filter(Boolean);
       const invoices = invoiceEntities.map((e) => normalizeCustomerOrder(e, 'invoice')).filter(Boolean);

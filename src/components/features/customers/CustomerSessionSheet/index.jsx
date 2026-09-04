@@ -6,19 +6,28 @@
 // or "not found" -> NewCustomerForm.
 //
 // Trust/session-hygiene: if the cart already has items when attaching a
-// different customer (or a guest cart when attaching anyone), the associate
-// is prompted to clear the cart so items never silently carry over between
-// customers. Detaching no longer prompts (2026-08-24) — cartSlice's
-// detachCustomer reducer now always saves-then-clears unconditionally (see
-// its own comment), so there's nothing left here for the associate to
-// decide.
+// different customer (or a guest cart when attaching anyone), the outgoing
+// cart is now ALWAYS detached (saved under its own owner, then cleared)
+// before the new customer attaches — no more "Keep Cart" choice.
+//
+// REMOVED 2026-09-03 — "Keep Cart" used to leave the outgoing customer's
+// items sitting in the cart, which abandonedCartMiddleware's own
+// 'cart/attachCustomer' case then saved under the NEWLY-attached customer
+// (wrong owner) rather than the one who actually added them. Now that every
+// customer's cart is persisted server-side and restored automatically the
+// next time THEY are attached (same middleware), there's no reason to ever
+// carry items into a different customer's session — detaching first (not a
+// bare clearCart(), which means "this cart is resolved" and DELETES the
+// saved record) is what actually preserves the outgoing customer's cart for
+// them to pick back up later. Detaching no longer prompts either
+// (2026-08-24) — cartSlice's detachCustomer reducer always saves-then-clears
+// unconditionally — so switching customers is now fully automatic.
 
 import { useEffect, useState } from 'react';
 import { toast } from 'react-toastify';
 import Link from 'next/link';
 import { ChevronLeft, Loader2, UserCircle } from 'lucide-react';
 import BottomSheet from '@/components/shared/BottomSheet';
-import ConfirmDialog from '@/components/shared/ConfirmDialog';
 import CustomerLookupInput from '../CustomerLookupInput';
 import CustomerDisplayCard from '../CustomerDisplayCard';
 import CustomerListItem from '../CustomerListItem';
@@ -42,10 +51,9 @@ const MOBILE_REGEX = /^\d{10}$/;
 export default function CustomerSessionSheet({ isOpen, onClose }) {
   const [searchQuery, setSearchQuery] = useState(null);
   const [nameResultSelection, setNameResultSelection] = useState(null);
-  const [pendingAction, setPendingAction] = useState(null); // { type: 'attach' | 'detach', payload? }
 
   const session = useCustomerSession();
-  const { items, isEmpty, clearCart } = useCart();
+  const { isEmpty } = useCart();
 
   const trimmed = (searchQuery ?? '').trim();
   const isMobileSearch = MOBILE_REGEX.test(trimmed);
@@ -106,16 +114,19 @@ export default function CustomerSessionSheet({ isOpen, onClose }) {
     return session.customerId !== incomingCustomerId;
   };
 
+  // Detaches the outgoing customer first (saving their cart under their own
+  // id — see abandonedCartMiddleware's 'cart/detachCustomer' case) whenever
+  // attaching would otherwise carry someone else's items over, then attaches
+  // the new customer. No prompt, no choice — see this file's header comment.
   const performAttach = (customerToAttach, options) => {
+    if (wouldSwitchCustomer(customerToAttach.customerId)) {
+      session.detach();
+    }
     session.attach(customerToAttach, options);
     handleClose();
   };
 
   const handleAttachFound = () => {
-    if (wouldSwitchCustomer(customer.customerId)) {
-      setPendingAction({ type: 'attach', payload: customer, options: undefined });
-      return;
-    }
     performAttach(customer);
   };
 
@@ -140,10 +151,6 @@ export default function CustomerSessionSheet({ isOpen, onClose }) {
   };
 
   const handleNewCustomerCreated = (newCustomer) => {
-    if (wouldSwitchCustomer(newCustomer.customerId)) {
-      setPendingAction({ type: 'attach', payload: newCustomer, options: { silent: true } });
-      return;
-    }
     performAttach(newCustomer, { silent: true });
   };
 
@@ -155,31 +162,7 @@ export default function CustomerSessionSheet({ isOpen, onClose }) {
     handleClose();
   };
 
-  // Optional chaining here isn't defensive style — it's required. Next's
-  // React Compiler auto-memoizes this closure and evaluates
-  // pendingAction.payload/.options EAGERLY on every render as memoization
-  // dependencies (not lazily when the closure actually runs) — confirmed
-  // live 2026-08-24 by reading the compiled output. pendingAction is null
-  // on every ordinary render (only set right before this dialog opens), so
-  // a bare `pendingAction.options` crashed the whole component on mount,
-  // every time, everywhere it's rendered — not just when this dialog is open.
-  const handleConfirmClear = () => {
-    clearCart();
-    performAttach(pendingAction?.payload, pendingAction?.options);
-    setPendingAction(null);
-  };
-
-  const handleKeepCart = () => {
-    performAttach(pendingAction?.payload, pendingAction?.options);
-    setPendingAction(null);
-  };
-
-  const confirmTitle = 'Switch customer?';
-  const confirmDescription =
-    `The cart has ${items.length} item${items.length === 1 ? '' : 's'} from the current session. Clear the cart before switching to this customer?`;
-
   return (
-    <>
       <BottomSheet
         isOpen={isOpen}
         onClose={handleClose}
@@ -325,18 +308,5 @@ export default function CustomerSessionSheet({ isOpen, onClose }) {
           )}
         </div>
       </BottomSheet>
-
-      <ConfirmDialog
-        isOpen={!!pendingAction}
-        onOpenChange={(open) => !open && setPendingAction(null)}
-        title={confirmTitle}
-        description={confirmDescription}
-        confirmLabel="Clear Cart"
-        cancelLabel="Keep Cart"
-        confirmVariant="destructive"
-        onConfirm={handleConfirmClear}
-        onCancel={handleKeepCart}
-      />
-    </>
   );
 }
