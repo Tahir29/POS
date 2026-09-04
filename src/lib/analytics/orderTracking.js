@@ -109,7 +109,10 @@ export function trackDocumentPlaced({
   }, {
     // WebEngage-only — real customer identity + free text. Same PII rule as
     // everywhere else (see tracker.js's jsdoc); GA4 never receives these.
-    customer_id:      customerId,
+    // customer_id defaults to 'guest' (2026-09-04, same fix as tracker.js's
+    // own GUEST_ID) — a walk-in cash sale with no registered customer used
+    // to omit this field entirely rather than say so explicitly.
+    customer_id:      customerId ?? 'guest',
     customer_name:    customerName,
     customer_mobile:  customerMobile,
     customer_city:    customerAddress?.city,

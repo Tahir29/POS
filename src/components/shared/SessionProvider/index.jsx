@@ -20,6 +20,7 @@ import { toast } from 'react-toastify';
 
 import { selectCartCustomerId }  from '@/store/slices/cartSlice';
 import { selectIsAuthenticated } from '@/store/slices/authSlice';
+import { selectActiveStoreId, selectActiveStoreName } from '@/store/slices/storeSlice';
 import { detachCustomer, clearCart } from '@/store/slices/cartSlice';
 import { useAuth } from '@/hooks/auth/useAuth';
 
@@ -40,6 +41,8 @@ export default function SessionProvider({ children }) {
 
   const isAuthenticated = useSelector(selectIsAuthenticated);
   const customerId      = useSelector(selectCartCustomerId);
+  const activeStoreId   = useSelector(selectActiveStoreId);
+  const activeStoreName = useSelector(selectActiveStoreName);
   const isCustomerActive = isAuthenticated && !!customerId;
 
   const idleTimerRef      = useRef(null);
@@ -122,12 +125,20 @@ export default function SessionProvider({ children }) {
     staffIdleTimerRef.current = setTimeout(() => {
       toast.dismiss('staff-idle-warning');
       toast.info('Logged out due to inactivity.', { toastId: 'staff-idle-expired' });
+      // ENRICHED 2026-09-04 — same gap as AGENT_LOGOUT in useAuth.js:
+      // trackAgent() has no session to auto-derive store context from, so a
+      // caller has to pass its own or lose it. logout() right below this
+      // ALSO now fires its own AGENT_LOGOUT with the same store fields —
+      // that's not a duplicate, this is a distinct event recording WHY
+      // (idle timeout) the logout that follows is about to happen.
       tracker.trackAgent(EVENTS.AGENT_IDLE_LOGOUT, {
         timeoutMs: APP_CONFIG.SESSION.STAFF_IDLE_TIMEOUT_MS,
+        storeId:   activeStoreId,
+        storeName: activeStoreName,
       });
       logout();
     }, APP_CONFIG.SESSION.STAFF_IDLE_TIMEOUT_MS);
-  }, [isAuthenticated, clearStaffIdleTimers, logout]);
+  }, [isAuthenticated, clearStaffIdleTimers, logout, activeStoreId, activeStoreName]);
 
   // Start/stop staff idle timer based on auth state
   useEffect(() => {

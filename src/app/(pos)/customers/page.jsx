@@ -22,7 +22,6 @@ import { Search, X, UserPlus, ChevronLeft, ChevronRight, Loader2 } from 'lucide-
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import BottomSheet from '@/components/shared/BottomSheet';
-import ConfirmDialog from '@/components/shared/ConfirmDialog';
 import { StaggerList } from '@/components/shared/StaggerList';
 import CustomerListItem from '@/components/features/customers/CustomerListItem';
 import CustomerDetailSheet from '@/components/features/customers/CustomerDetailSheet';
@@ -41,7 +40,6 @@ export default function CustomersPage() {
   const [skip, setSkip] = useState(0);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [isNewCustomerOpen, setIsNewCustomerOpen] = useState(false);
-  const [pendingAttach, setPendingAttach] = useState(null); // customer awaiting confirm
 
   const debounceRef = useRef(null);
 
@@ -101,29 +99,19 @@ export default function CustomersPage() {
     return cart.customerId !== incomingId;
   };
 
+  // Detaches the outgoing customer first (saving their cart under their own
+  // id — see abandonedCartMiddleware's 'cart/detachCustomer' case) whenever
+  // attaching would otherwise carry someone else's items over, then attaches
+  // the new customer. No prompt, no choice — removed 2026-09-03. "Keep cart
+  // & attach" used to misattribute the outgoing customer's items to whoever
+  // was attaching next; now that every customer's cart is persisted
+  // server-side and restored automatically next time THEY are attached
+  // (same middleware), there's no reason to ever carry items across.
   const handleAttach = (customer) => {
     if (wouldSwitchCustomer(customer.customerId)) {
-      setPendingAttach(customer);
-      return;
+      cart.detachCustomer();
     }
     cart.attachCustomer(customer);
-    setSelectedCustomer(null);
-  };
-
-  const handleConfirmClear = () => {
-    cart.clearCart();
-    if (pendingAttach) {
-      cart.attachCustomer(pendingAttach);
-    }
-    setPendingAttach(null);
-    setSelectedCustomer(null);
-  };
-
-  const handleKeepCart = () => {
-    if (pendingAttach) {
-      cart.attachCustomer(pendingAttach);
-    }
-    setPendingAttach(null);
     setSelectedCustomer(null);
   };
 
@@ -245,18 +233,6 @@ export default function CustomersPage() {
           }}
         />
       </BottomSheet>
-
-      <ConfirmDialog
-        isOpen={!!pendingAttach}
-        onOpenChange={(open) => !open && setPendingAttach(null)}
-        title="Switch customer?"
-        description="The cart has items from a different customer session. Clear the cart before attaching this customer, or keep the cart and attach anyway."
-        confirmLabel="Clear cart & attach"
-        cancelLabel="Keep cart & attach"
-        confirmVariant="destructive"
-        onConfirm={handleConfirmClear}
-        onCancel={handleKeepCart}
-      />
     </div>
   );
 }

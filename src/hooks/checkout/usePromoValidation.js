@@ -32,6 +32,7 @@ import { toast } from 'react-toastify';
 import { listPromotions } from '@/services/promotionService';
 import { applyPromotionsToLines } from '@/services/checkoutPricingService';
 import { useCart } from '@/hooks/cart/useCart';
+import { useSessionTrackingContext } from '@/hooks/analytics/useSessionTrackingContext';
 import {
   isPromotionActive,
   getPromotionDiscountType,
@@ -50,6 +51,7 @@ import TOAST from '@/constants/toastMessages';
  */
 export function usePromoValidation(pricedLineItems, documentId) {
   const { applyPromo, appliedPromos } = useCart();
+  const sessionCtx = useSessionTrackingContext();
 
   const mutation = useMutation({
     mutationFn: async (promoCode) => {
@@ -91,10 +93,19 @@ export function usePromoValidation(pricedLineItems, documentId) {
       return { status: 'eligible', promotion };
     },
 
+    // ENRICHED 2026-09-04 — confirmed live: FOUR of these five outcomes
+    // ('invalid', 'not_ready', 'ineligible', and the mutation's own
+    // onError below) never fired ANY analytics event at all — not a
+    // missing-attribute gap, a genuinely silent one. EVENTS.PROMO_APPLIED
+    // and EVENTS.PROMO_FAILED existed in events.js already but had no
+    // caller anywhere in the app. Every outcome now tracks, with a
+    // `reason` distinguishing which one so PROMO_FAILED isn't a single
+    // undifferentiated bucket.
     onSuccess: (result, promoCode) => {
       switch (result.status) {
         case 'invalid':
           toast.error(TOAST.CART.PROMO_INVALID(promoCode));
+          tracker.track(EVENTS.PROMO_FAILED, { reason: 'invalid', promoCode, ...sessionCtx });
           return;
 
         case 'similar':
@@ -102,15 +113,22 @@ export function usePromoValidation(pricedLineItems, documentId) {
           tracker.track(EVENTS.PROMO_SIMILAR_BLOCKED, {
             promoCode:    result.promotion.promotion_code,
             discountType: getPromotionDiscountType(result.promotion),
+            ...sessionCtx,
           });
           return;
 
         case 'not_ready':
           toast.error(TOAST.CART.PROMO_NOT_READY);
+          tracker.track(EVENTS.PROMO_FAILED, {
+            reason: 'not_ready', promoCode, promotionCode: result.promotion?.promotion_code, ...sessionCtx,
+          });
           return;
 
         case 'ineligible':
           toast.error(TOAST.CART.PROMO_NOT_APPLICABLE(result.promotion.promotion_code));
+          tracker.track(EVENTS.PROMO_FAILED, {
+            reason: 'ineligible', promoCode: result.promotion.promotion_code, ...sessionCtx,
+          });
           return;
 
         case 'eligible':
@@ -118,6 +136,16 @@ export function usePromoValidation(pricedLineItems, documentId) {
           // PromotionRow, which is what Helper/ApplyPromotions needs as
           // input; the rupee value comes back from checkout's own pricing
           // pass. See cartSlice.recalculateTotals.
+          //
+          // NOT tracked here directly — dispatching cart/applyPromo below
+          // is ALREADY caught by analyticsMiddleware.js's own
+          // 'cart/applyPromo' case, which fires EVENTS.PROMO_APPLIED once
+          // per dispatch regardless of which hook triggered it (same
+          // one-source-of-truth reasoning as attachCustomer/detachCustomer
+          // in that same file). A second tracker.track() call here used to
+          // double-fire this event on every successful promo apply —
+          // confirmed by tracing both call paths, not caught until reading
+          // analyticsMiddleware.js's own header comment.
           applyPromo({
             promoCode:    result.promotion.promotion_code,
             promoDetails: result.promotion,
@@ -129,8 +157,11 @@ export function usePromoValidation(pricedLineItems, documentId) {
       }
     },
 
-    onError: () => {
+    onError: (error, promoCode) => {
       toast.error(TOAST.CART.PROMO_FAILED);
+      tracker.track(EVENTS.PROMO_FAILED, {
+        reason: 'error', promoCode, error: error?.message ?? 'unknown', ...sessionCtx,
+      });
     },
   });
 

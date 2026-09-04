@@ -24,7 +24,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { useSelector } from 'react-redux';
-import { getOrders, getInvoiceList } from '@/services/orderService';
+import { fetchStoreScopedDocuments } from '@/services/crossStoreDocuments';
 import { normalizeCustomerOrder } from '@/hooks/customer/useCustomerOrders';
 import { selectActiveStoreId } from '@/store/slices/storeSlice';
 import { QUERY_KEYS } from '@/constants/queryKeys';
@@ -39,12 +39,21 @@ export function useAllOrders({ enabled = true } = {}) {
   const query = useQuery({
     queryKey: QUERY_KEYS.ORDERS.LIST({ skip: 0, take: 0, companyId: activeStoreId }),
     queryFn: async () => {
+      // FIXED 2026-09-03: was calling getOrders/getInvoiceList directly —
+      // confirmed live that Order/List and Invoice/List silently restrict
+      // some identities (e.g. the multi-store "admin" account) to their own
+      // home company regardless of the company_id sent, so switching the
+      // active store showed either merged-together or empty results
+      // depending on whether a filter was applied. fetchStoreScopedDocuments
+      // tries the same cheap List call first and only pays for the
+      // Retrieve-based fallback when List proves unreliable for this
+      // company — see crossStoreDocuments.js for the full write-up.
       const [ordersRes, invoicesRes] = await Promise.all([
-        getOrders({ take: 0, skip: 0, company_id: activeStoreId }),
-        getInvoiceList({ take: 0, skip: 0, company_id: activeStoreId }),
+        fetchStoreScopedDocuments({ kind: 'order',   companyId: activeStoreId }),
+        fetchStoreScopedDocuments({ kind: 'invoice', companyId: activeStoreId }),
       ]);
-      const orderEntities   = ordersRes?.Entities ?? ordersRes?.data ?? ordersRes?.result ?? [];
-      const invoiceEntities = invoicesRes?.Entities ?? [];
+      const orderEntities   = ordersRes.entities;
+      const invoiceEntities = invoicesRes.entities;
 
       const orders   = orderEntities.map((e) => normalizeCustomerOrder(e, 'order')).filter(Boolean);
       const invoices = invoiceEntities.map((e) => normalizeCustomerOrder(e, 'invoice')).filter(Boolean);

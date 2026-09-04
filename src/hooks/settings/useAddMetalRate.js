@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-toastify';
 import { addMetalRate } from '@/services/settingsService';
+import { useSessionTrackingContext } from '@/hooks/analytics/useSessionTrackingContext';
 import TOAST from '@/constants/toastMessages';
 import tracker from '@/lib/analytics/tracker';
 import EVENTS from '@/lib/analytics/events';
@@ -27,8 +28,13 @@ function getErrorMessage(error, fallback = TOAST.METAL_RATES.ADD_FAILED) {
  * Mutation hook for creating a metal rate entry.
  * Maps to: POST Services/Costing/MetalRates/Create
  */
+// ENRICHED 2026-09-04 — store_id (which store's rate this is for) was
+// entirely absent from both events; no customer is ever attached while
+// setting a metal rate, so useSessionTrackingContext's customer_id will
+// correctly read 'guest' here, same reasoning as useCreateDailyClosing.js.
 export function useAddMetalRate({ onSuccess } = {}) {
   const queryClient = useQueryClient();
+  const sessionCtx = useSessionTrackingContext();
 
   return useMutation({
     mutationFn: (payload) => addMetalRate(payload),
@@ -55,13 +61,16 @@ export function useAddMetalRate({ onSuccess } = {}) {
         metalTypeId:  variables?.metal_type_id,
         purchaseRate: variables?.purchase_rate,
         salesRate:    variables?.sales_rate,
+        ...sessionCtx,
       });
       onSuccess?.();
     },
-    onError: (error) => {
+    onError: (error, variables) => {
       const message = getErrorMessage(error);
       toast.error(message);
-      tracker.track(EVENTS.METAL_RATE_ADD_FAILED, { error: message });
+      tracker.track(EVENTS.METAL_RATE_ADD_FAILED, {
+        error: message, metalTypeId: variables?.metal_type_id, ...sessionCtx,
+      });
     },
   });
 }

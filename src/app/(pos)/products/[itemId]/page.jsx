@@ -349,10 +349,16 @@ function ProductDetailScreen() {
       price_tax_amount:         livePricing?.tax_amount,
       price_net_amount:         livePricing?.net_amount,
       // Attached-customer data — "entirely" whatever the cart session
-      // already has (there's no fuller profile loaded on this page); an
-      // unattached browse (no customer yet) simply omits these, via
-      // omitNullish() in tracker.js.
-      customer_id:              cartCustomerId,
+      // already has (there's no fuller profile loaded on this page).
+      // FIXED 2026-09-04: an unattached browse used to OMIT customer_id
+      // entirely here (via omitNullish() in tracker.js) rather than say
+      // "guest" — so a product view with no customer attached was
+      // indistinguishable, in WebEngage, from one where the id simply
+      // failed to reach this call. customer_id now always resolves to a
+      // real POS customer id or the literal string "guest"; the rest
+      // (name/mobile/address) still correctly have nothing to report for a
+      // guest and stay omitted.
+      customer_id:              cartCustomerId ?? 'guest',
       customer_name:            cartCustomerName,
       customer_mobile:          cartCustomerMobile,
       customer_city:            cartCustomerAddress?.city,

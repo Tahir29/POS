@@ -73,6 +73,18 @@ import EVENTS from './events';
 // this app, so the tag would be pure noise.
 const SOURCE_PROPS = { utm_source: 'pos' };
 
+// FIXED 2026-09-04 — confirmed: every event fired before a customer is
+// attached (product_viewed while browsing the catalog chief among them, but
+// this is every single track()/trackEcommerce() call, not just that one)
+// used to send customer_id as omitUndefined()-stripped — i.e. the attribute
+// was simply ABSENT from the GA4/WebEngage payload, not "false" or "0" or
+// any other queryable value. That made "views with no customer attached" and
+// "a customer attached whose id genuinely failed to reach this call" look
+// identical in both tools — neither can distinguish "guest" from "broken" on
+// a missing key. GUEST_ID is sent explicitly instead, so segmenting by
+// customer_id (a real POS-internal id, or this literal string) always works.
+const GUEST_ID = 'guest';
+
 // Session-derived fields (session_id/customer_id/customer_mobile) are
 // legitimately absent before a customer is attached — browsing the
 // catalog fires real events with no session yet. `session?.sessionId ??
@@ -239,8 +251,18 @@ const tracker = {
     sendToGA(eventName, omitUndefined({
       timestamp,
       session_id:            session?.sessionId,
-      customer_id:            session?.customerId,
+      customer_id:            session?.customerId ?? GUEST_ID,
       customer_mobile_masked: maskMobile(session?.customerMobile),
+      // FIXED 2026-09-04 — store_id has been captured in the session object
+      // since startSession() (session.storeId) but was never actually
+      // forwarded to either destination here, unlike customer_id/mobile
+      // right above it — every event was missing which STORE it happened
+      // at unless the caller happened to pass its own store_id in
+      // `properties` (most didn't). `...properties` still wins below when a
+      // caller does pass its own (e.g. a cross-store lookup reporting on a
+      // DIFFERENT store than the active one), same override rule as
+      // customer_id.
+      store_id:               session?.storeId,
       ...SOURCE_PROPS,
       ...properties,
     }));
@@ -255,8 +277,10 @@ const tracker = {
     sendToWebEngage(eventName, omitUndefined({
       timestamp,
       session_id:      session?.sessionId,
-      customer_id:     session?.customerId,
+      customer_id:     session?.customerId ?? GUEST_ID,
       customer_mobile: session?.customerMobile,
+      // See the matching sendToGA() call above for why this is here now.
+      store_id:        session?.storeId,
       ...SOURCE_PROPS,
       ...properties,
       // Extra, WebEngage-only detail — see this method's jsdoc. Spread last
@@ -312,8 +336,19 @@ const tracker = {
     // destination that treats that exact string specially.
     this.track(posEventName, params, webengageExtra);
     logEvent(gaEventName, params);     // also log the GA-reserved-name fire
+    // FIXED 2026-09-04 — this call used to carry no customer identity at
+    // all: unlike track() above, this is a raw sendToGA() with no
+    // session-derived defaults of its own, so view_item/add_to_cart/
+    // purchase/... (the GA4-RESERVED names, which is what GA4's own
+    // Monetization/Ecommerce reports actually read) reached GA4 with no
+    // customer_id, guest or otherwise. Mirrors track()'s own
+    // session-or-guest logic so the reserved-name event and its
+    // POS_-prefixed twin always agree on who viewed/bought.
+    const session = this.getSession();
     sendToGA(gaEventName, omitUndefined({
       timestamp: new Date().toISOString(),
+      customer_id: session?.customerId ?? GUEST_ID,
+      store_id: session?.storeId,
       ...SOURCE_PROPS,
       ...params,
     }));

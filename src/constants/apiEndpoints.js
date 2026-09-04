@@ -255,6 +255,13 @@ const API = {
     POST:           'Services/POS/Order/Post',
     CANCEL:         'Services/POS/Order/Cancel',
     RETRIEVE:       'Services/POS/Order/Retrieve',
+    // ADDED 2026-09-03 — see src/services/crossStoreDocuments.js. Confirmed
+    // live: Order/List silently restricts a multi-store identity (e.g. the
+    // "admin" account) to its own home company no matter what company_id is
+    // requested, but OrderReceipt/List genuinely honours it. Receipt rows
+    // are per-payment, not per-document — used only to discover which
+    // transaction_ids belong to a store, never displayed directly.
+    RECEIPT_LIST:   'Services/POS/OrderReceipt/List',
     LIST:           'Services/POS/Order/List',
     APPLY_DISCOUNT: 'Services/POS/Order/ApplyAdditionalDiscount',
   },

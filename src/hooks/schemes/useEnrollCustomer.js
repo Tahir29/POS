@@ -3,13 +3,18 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-toastify';
 import { createSchemeEnrollment } from '@/services/schemeService';
+import { useSessionTrackingContext } from '@/hooks/analytics/useSessionTrackingContext';
 import { QUERY_KEYS } from '@/constants/queryKeys';
 import TOAST from '@/constants/toastMessages';
 import tracker from '@/lib/analytics/tracker';
 import EVENTS from '@/lib/analytics/events';
 
+// ENRICHED 2026-09-04 — customer_id/store_id absent from both events (same
+// fix as useTransactionMutations.js); SCHEME_ENROLL_FAILED additionally
+// carried no scheme/amount context at all, only the raw error.
 export function useEnrollCustomer() {
   const queryClient = useQueryClient();
+  const sessionCtx = useSessionTrackingContext();
 
   return useMutation({
     mutationFn: (payload) => createSchemeEnrollment(payload),
@@ -21,14 +26,21 @@ export function useEnrollCustomer() {
         schemeId:      variables?.scheme_id,
         amount:        variables?.scheme_amount,
         tenure:        variables?.tenure,
+        ...sessionCtx,
       });
       // Bust all enrollment caches — storeId-scoped and customer-scoped
       queryClient.invalidateQueries({ queryKey: ['schemes'] });
     },
 
-    onError: (error) => {
+    onError: (error, variables) => {
       toast.error(TOAST.SCHEMES.ENROLL_FAILED);
-      tracker.track(EVENTS.SCHEME_ENROLL_FAILED, { error: error?.message ?? 'unknown' });
+      tracker.track(EVENTS.SCHEME_ENROLL_FAILED, {
+        error:    error?.message ?? 'unknown',
+        schemeId: variables?.scheme_id,
+        amount:   variables?.scheme_amount,
+        tenure:   variables?.tenure,
+        ...sessionCtx,
+      });
     },
   });
 }
