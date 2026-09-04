@@ -352,23 +352,33 @@ function CatalogScreen() {
   // different filter, or a different store/mode entirely. Any of those
   // deserve a genuine fresh sort from scratch, not a frozen-prefix carry.
   //
-  // stableSort holds the last computed order plus what it was computed
-  // FROM (`source`/`key`), so this can tell "pricedDisplayProducts grew by
-  // one page" apart from "the whole input set changed" without a ref —
-  // refs can't be read/written during render in this codebase (React
-  // Compiler requirement), so this uses the same "adjusting state during
-  // render" idiom already used above for hasSearched/prevIsSearchMode:
-  // setState called conditionally, directly in the render body, guarded by
-  // an actual input-identity check so it only ever fires once per real
-  // change, never loops.
+  // BUG FIX 2026-09-04 (confirmed live: switching the store from the header
+  // and opening /catalog crashed with no data rendered at all — React's
+  // "Maximum update depth exceeded"). The first version of this compared
+  // `pricedDisplayProducts` by REFERENCE to decide whether to update state.
+  // That array is rebuilt by a `.map()` a few lines above on every render
+  // where useCatalogProducts' `select()` hands back a new `products`
+  // array — which, in exactly the conditions right after a store switch
+  // (the infinite query transitioning through fetching/refetching states),
+  // it does on every single render, not just when a page/price genuinely
+  // changed. Comparing by reference meant setState fired on EVERY render
+  // instead of only on real changes — an unconditional render-loop, not a
+  // one-time correction. `useLiveCatalogPrices` (a few lines up) already
+  // hit this exact class of bug ("useQueries hands back a fresh array
+  // every render") and fixed it the same way: a cheap CONTENT signature,
+  // compared by value, not by reference.
   const sortResetKey = `${sortBy}|${activeCategoryId ?? ''}|${showOutOfStock}|${effectiveStoreId ?? ''}|${isSearchMode}`;
-  const [stableSort, setStableSort] = useState({ key: sortResetKey, source: null, order: [] });
+  const pricedSignature = pricedDisplayProducts
+    .map((p) => `${p.item_id}:${p.price ?? ''}`)
+    .join('|');
+
+  const [stableSort, setStableSort] = useState({ key: sortResetKey, signature: null, order: [] });
 
   let sortedDisplayProducts = stableSort.order;
-  if (stableSort.source !== pricedDisplayProducts || stableSort.key !== sortResetKey) {
+  if (stableSort.signature !== pricedSignature || stableSort.key !== sortResetKey) {
     const baseOrder = stableSort.key !== sortResetKey ? [] : stableSort.order;
     sortedDisplayProducts = stableSortProducts(baseOrder, pricedDisplayProducts, sortBy);
-    setStableSort({ key: sortResetKey, source: pricedDisplayProducts, order: sortedDisplayProducts });
+    setStableSort({ key: sortResetKey, signature: pricedSignature, order: sortedDisplayProducts });
   }
 
   // ── Barcode handler ───────────────────────────────────────────────────────
