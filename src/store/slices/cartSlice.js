@@ -22,6 +22,16 @@ const initialState = {
   appliedGiftCard:     null,
   appliedGiftVoucher:  null,
   discountAmount:      0,     // derived from appliedPromos against the current subtotal
+  // ADDED 2026-09-08 — "Lucira Coins" (Nector's loyalty program) redemption,
+  // mutually exclusive with appliedPromos: a sale can be discounted by a
+  // promo code OR by coins, never both (product decision). Holds the
+  // customer's REQUESTED redemption amount, in rupees (1 Coin = 1 Rupee) —
+  // NOT pre-clamped to the order total, since the order total moves as
+  // pricing/promos resolve. Consumers (CartSummary, checkout) always derive
+  // the actually-applicable amount as min(redeemedCoins, payableTotal) at
+  // render/submit time, same reasoning as appliedPromos.discountAmount
+  // staying a derived, never-trusted-stale figure below.
+  redeemedCoins:       0,
   subtotal:            0,
   taxAmount:           0,     // 3% GST on the taxable value (subtotal - discount)
   total:               0,
@@ -92,6 +102,18 @@ const cartSlice = createSlice({
           sizeName:   incoming.sizeName ?? null,
           attributes: incoming.attributes ?? {},
           image:      incoming.image    ?? incoming.imageUrl ?? null,
+          // ADDED 2026-09-08 — for analytics/communication (WebEngage
+          // retargeting, abandoned-cart reminders): a stable link back to
+          // this exact item, derived here so EVERY add-to-cart path gets
+          // one for free rather than requiring each caller to pass it.
+          // Points at this app's own product page — there is no Shopify
+          // storefront product HANDLE resolved anywhere in this codebase
+          // (only the numeric external_product_id, which isn't a valid
+          // public product path on its own), so this is the staff-facing
+          // POS route, not a public customer-facing storefront link. See
+          // AddToCartButton.jsx's own tracker call for where this
+          // travels into analytics.
+          productUrl: incoming.productUrl ?? (incoming.itemId != null ? `/products/${incoming.itemId}` : null),
           // Whether THIS product is normally shelf stock or made-to-order
           // (2026-08-24) — same has_stock signal ProductCard/the product
           // detail page already show, carried onto the cart line so the
@@ -177,6 +199,22 @@ const cartSlice = createSlice({
       recalculateTotals(state);
     },
 
+    // Mutual exclusivity with appliedPromos is enforced by the CALLER
+    // (useCart.js's handleApplyLoyaltyCoins checks appliedPromos.length,
+    // usePromoValidation's mutationFn checks redeemedCoins) — same
+    // validate-before-dispatch split already used for the promo "similar
+    // type" conflict (see usePromoValidation's own header). The reducer
+    // itself just sets the requested amount; it doesn't re-derive anything
+    // else, since nothing else in cart state depends on it (unlike a promo,
+    // which recalculateTotals folds appliedPromos through).
+    applyLoyaltyCoins: (state, action) => {
+      state.redeemedCoins = action.payload;
+    },
+
+    removeLoyaltyCoins: (state) => {
+      state.redeemedCoins = 0;
+    },
+
     applyGiftCard: (state, action) => {
       state.appliedGiftCard = action.payload;
     },
@@ -188,6 +226,24 @@ const cartSlice = createSlice({
     // Clear the entire cart — called after successful order creation
     clearCart: (state) => {
       return initialState;
+    },
+
+    // ADDED 2026-09-07 — same "clear the sale, not the session" idea as
+    // checkout/page.jsx's own comment on why it calls THIS instead of plain
+    // clearCart() once an order/invoice is placed. Explicit product
+    // decision: completing a sale must not silently detach the customer —
+    // only a manual "Remove" (detachCustomer) or the agent's own logout
+    // should end that. Resets everything a plain clearCart() does EXCEPT
+    // the four customer fields, which are copied forward from the current
+    // state instead of coming from initialState.
+    clearCartKeepCustomer: (state) => {
+      return {
+        ...initialState,
+        customerId:      state.customerId,
+        customerName:    state.customerName,
+        customerMobile:  state.customerMobile,
+        customerAddress: state.customerAddress,
+      };
     },
 
     // Restores a previously-abandoned cart (see store/abandonedCartMiddleware.js)
@@ -282,9 +338,12 @@ export const {
   detachCustomer,
   applyPromo,
   removePromo,
+  applyLoyaltyCoins,
+  removeLoyaltyCoins,
   applyGiftCard,
   applyGiftVoucher,
   clearCart,
+  clearCartKeepCustomer,
   restoreCart,
   hydrateFromOrder,
 } = cartSlice.actions;
@@ -300,6 +359,7 @@ export const selectCartCustomerName   = (state) => state.cart.customerName;
 export const selectCartCustomerMobile = (state) => state.cart.customerMobile;
 export const selectCartCustomerAddress = (state) => state.cart.customerAddress;
 export const selectAppliedPromos      = (state) => state.cart.appliedPromos;
+export const selectRedeemedCoins      = (state) => state.cart.redeemedCoins;
 export const selectIsCartEmpty        = (state) => state.cart.items.length === 0;
 export const selectFulfillmentOrderId = (state) => state.cart.fulfillmentOrderId;
 export const selectFulfillmentOrderNo = (state) => state.cart.fulfillmentOrderNo;

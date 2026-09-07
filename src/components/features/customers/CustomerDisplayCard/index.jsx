@@ -1,10 +1,18 @@
 'use client';
 
-// ADDED: masked PAN row (raw.pan_no — confirmed POS.CustomerRow field,
-// see project memory) and an initials avatar, matching the same visual
-// pattern already used in the Header customer pill for consistency.
+// ADDED: PAN row (raw.pan_no — confirmed POS.CustomerRow field, see
+// project memory) and an initials avatar, matching the same visual pattern
+// already used in the Header customer pill for consistency.
 // "Verified Customer" badge from the design is intentionally NOT included
 // — no confirmed field backs it.
+//
+// REMOVED 2026-09-08 — this used to show PAN masked ("••••1234") on the
+// assumption OrnaVerse itself masks it. Confirmed live against LIVE
+// (Customer/Retrieve on several unrelated party_ids) that it does NOT —
+// full, real PAN comes back same as mobile/email. Staff viewing this card
+// already have full Retrieve access to the same data; masking it again
+// client-side just hid real data behind a fake asterisk string for no
+// actual privacy benefit. Shown in full now, same as mobile/email above.
 
 import { User, Mail, Phone, MapPin, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -15,11 +23,6 @@ function getInitials(name) {
   const first = parts[0]?.[0] ?? '';
   const last  = parts.length > 1 ? parts[parts.length - 1][0] : '';
   return (first + last).toUpperCase();
-}
-
-function maskPan(panNo) {
-  if (!panNo || panNo === 'NA' || panNo.length < 4) return null;
-  return `••••${panNo.slice(-4)}`;
 }
 
 /**
@@ -40,7 +43,7 @@ export default function CustomerDisplayCard({ customer, onDetach, detachLabel = 
   const { customerName, customerMobile, raw } = customer;
   const email = raw?.email && raw.email !== 'NA' ? raw.email : null;
   const address = raw?.party_address?.[0] ?? null;
-  const maskedPan = maskPan(raw?.pan_no);
+  const panNo = raw?.pan_no && raw.pan_no !== 'NA' ? raw.pan_no : null;
 
   return (
     <div className="rounded-lg border border-border bg-card p-4">
@@ -68,10 +71,10 @@ export default function CustomerDisplayCard({ customer, onDetach, detachLabel = 
                   </span>
                 </>
               )}
-              {maskedPan && (
+              {panNo && (
                 <>
                   <span aria-hidden="true">·</span>
-                  <span>PAN {maskedPan}</span>
+                  <span>PAN {panNo}</span>
                 </>
               )}
             </p>

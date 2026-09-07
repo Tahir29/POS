@@ -39,9 +39,12 @@
 // which this app can only resolve via style_id → Style/Retrieve →
 // external_product_id; plain (non-variant) items have no such link and a
 // 100-item sample showed 0/100 carry a style_id at all, so most cards will
-// never show a rating row — that's expected, not a bug. See
+// never show a rating badge at all — that's expected, not a bug. See
 // useStyleExternalProductId.js for why this doesn't add a second network
 // call when the product detail page has already resolved the same style.
+// MOVED 2026-09-07 — floats bottom-right over the image now (was inline in
+// the specs row, sharing space with the karat/weight/size line and
+// truncating it early) — see the rating badge's own comment further down.
 
 import { useState }        from 'react';
 import Image               from 'next/image';
@@ -80,13 +83,21 @@ function formatWeight(grams) {
   return `${n.toFixed(3)} g`;
 }
 
-// Whole rupees, matching lib/priceUtils.formatPrice on the product page.
-// Live prices carry fractional paise (sub_total 226444.105), and
-// toLocaleString's default shows up to 3 decimals — "₹2,26,444.105" on a
-// price tag reads like a bug.
+// FIXED 2026-09-08 — was maximumFractionDigits: 0 ("matching
+// lib/priceUtils.formatPrice on the product page"), but that page's own
+// formatPrice/formatINR were themselves rounding to a whole rupee while
+// PriceBreakdown right below them showed the exact API figure for the
+// SAME field — confirmed as one price disagreeing with itself, not two
+// different prices (see that fix's own header). Fixed there to 2 decimals;
+// fixed here to match, rather than continuing to mirror the rounding this
+// card's own comment was matching. Still capped at 2 (not left at
+// toLocaleString's up-to-3-decimal default) — live prices carry fractional
+// paise (sub_total 226444.105), and "₹2,26,444.105" on a price tag still
+// reads like a bug; ₹2,26,444.11 is the real API figure, correctly rounded
+// to the currency's own smallest unit, not a display shortcut.
 function formatINR(value) {
   if (value == null) return null;
-  return `₹${Number(value).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
+  return `₹${Number(value).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
 }
 
 // On-brand instead of a generic "broken image" glyph — a jewellery app's
@@ -304,27 +315,38 @@ export default function ProductCard({ product, showStockBadge = false, storeCode
         )}
 
         <WishlistButton product={product} reduceMotion={reduceMotion} />
+
+        {/* Rating badge — MOVED here 2026-09-07 from the specs row below.
+            Sharing that row with the karat/weight/size line meant a long
+            spec line (the common case) got truncated early to make room
+            for the rating rather than the other way around — confirmed
+            from a real card ("14 Karat Rose G…" ellipsing while "★★★★★
+            (2)" sat fully visible next to it). Floated over the image
+            instead, bottom-right, mirroring WishlistButton's own top-right
+            placement (same bg-card/90 + shadow-sm + backdrop-blur-sm
+            treatment) — the specs row below now gets the card's full
+            width to itself. `compact` (StarRating) forces the single-star
+            + value + count form regardless of viewport — a small
+            fixed-width corner badge over a photo never has room for 5
+            full stars, unlike the row this replaced. */}
+        {ratingCount > 0 && (
+          <div className="absolute bottom-2 right-2 z-10 rounded-full bg-card/90 px-2 py-1 shadow-sm backdrop-blur-sm">
+            <StarRating rating={ratingAverage} count={ratingCount} compact />
+          </div>
+        )}
       </div>
 
       {/* Divider between the photo and details — a deliberate seam rather
           than the two areas just running together. */}
       <div className="flex flex-1 flex-col gap-1.5 border-t border-border p-3.5">
 
-        {/* Karat · Weight (left) — rating + review count (right), sharing
-            one row instead of the rating stranding itself on its own line. */}
-        {(infoLine || ratingCount > 0) && (
-          <div className="flex items-center gap-2">
-            {infoLine && (
-              <span className="truncate text-xs text-muted-foreground">
-                {infoLine}
-              </span>
-            )}
-            {ratingCount > 0 && (
-              <span className="ml-auto shrink-0">
-                <StarRating rating={ratingAverage} count={ratingCount} size="sm" />
-              </span>
-            )}
-          </div>
+        {/* Karat · Weight — now the row's only occupant (see the rating
+            badge moved onto the image above), so this has the card's full
+            width before truncating instead of sharing it. */}
+        {infoLine && (
+          <span className="truncate text-xs text-muted-foreground">
+            {infoLine}
+          </span>
         )}
 
         {/* Price. Live-priced, so it arrives a moment after the card — say

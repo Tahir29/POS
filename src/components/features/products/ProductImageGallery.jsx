@@ -30,40 +30,10 @@ import Image from 'next/image';
 import { ChevronLeft, ChevronRight, ZoomIn, Play } from 'lucide-react';
 import ProductImageZoomModal from '@/components/features/products/ProductImageZoomModal';
 import { resolveImageSrc } from '@/lib/resolveImageSrc';
+import { filterShopifyImagesByColor } from '@/lib/productImages';
 import { Skeleton } from '@/components/ui/skeleton';
 import StockStatusBadge from '@/components/shared/StockStatusBadge';
 import Logo from '@/components/shared/Logo';
-
-// Known colour keywords used in Shopify image `alt` text. Anything whose alt
-// doesn't match one of these (e.g. "Cert") is treated as colour-agnostic and
-// always shown alongside whichever colour is active.
-const COLOR_KEYWORDS = ['yellow', 'rose', 'white'];
-
-function altMatchesColor(alt, colorNameLower) {
-  if (!alt) return false;
-  const altLower = alt.toLowerCase();
-  return colorNameLower.includes(altLower) || altLower.includes(colorNameLower);
-}
-
-function isColorAgnostic(alt) {
-  if (!alt) return true;
-  const altLower = alt.toLowerCase();
-  return !COLOR_KEYWORDS.some((kw) => altLower.includes(kw));
-}
-
-function filterShopifyImagesByColor(shopifyImages, activeColorName) {
-  if (!activeColorName || shopifyImages.length === 0) return shopifyImages;
-
-  const colorNameLower = activeColorName.toLowerCase();
-  const matched = shopifyImages.filter(
-    (img) => altMatchesColor(img.alt, colorNameLower) || isColorAgnostic(img.alt)
-  );
-
-  // Defensive fallback — if the active colour name doesn't match anything
-  // (e.g. an unexpected colour name we haven't seen), show everything
-  // rather than an empty gallery.
-  return matched.length > 0 ? matched : shopifyImages;
-}
 
 
 

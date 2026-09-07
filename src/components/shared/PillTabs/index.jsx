@@ -81,12 +81,34 @@ const VARIANT_LIST = {
 
 // 'pill' spans the full width offered by its container (2026-08-24) instead
 // of sizing to its own content — matches the site's own toggle, which reads
-// as a section-width control, not a small content-hugging chip row. 'chip'
-// keeps hugging its content: it's a scrollable nav strip that should never
-// stretch to fill a whole row.
+// as a section-width control, not a small content-hugging chip row.
+//
+// 'chip' FIXED 2026-09-07 — was 'w-fit', which is exactly backwards for a
+// row that's supposed to SCROLL instead of overflow the page. shadcn's own
+// base TabsList is `inline-flex w-fit` (ui/tabs.jsx), sized to hug however
+// wide ALL its children need — with `flex-nowrap` (see `scrollable` below)
+// and enough tabs to not fit a viewport (confirmed live: 6 tabs on the
+// customer profile page — Profile/Edit/Schemes/Points/360/Wishlist —
+// wider than the screen), that box just grows past the viewport instead of
+// clipping, and since nothing ever gets narrower than its own content,
+// `overflow-x-auto` right next to it never actually triggers — there's
+// nothing to scroll from the box's OWN point of view, so the PAGE scrolls
+// horizontally instead. `w-full` makes the list actually respect its
+// container's width (so `overflow-x-auto` has something to clip against
+// once children exceed it) — `min-w-0` on top of that because `<Tabs>`
+// itself (ui/tabs.jsx) is a flex column and TabsList, as a flex item
+// inside it, defaults to `min-width: auto` (effectively "never narrower
+// than my content") unless told otherwise; without overriding that, the
+// `w-full` above still can't shrink the box below its content's intrinsic
+// width, and the scroll containment silently doesn't work — the single
+// most common gotcha behind "overflow-x-auto isn't scrolling, it's just
+// overflowing" in a flex layout. Applies at every screen size, not just
+// mobile — a desktop viewport narrower than the tab row's full content
+// width (more tabs added later, a narrower column layout, ...) hits the
+// exact same failure mode without this.
 const VARIANT_LIST_WIDTH = {
   pill: 'w-full',
-  chip: 'w-fit',
+  chip: 'w-full min-w-0',
 };
 
 export default function PillTabs({

@@ -15,7 +15,7 @@ import CartItemRow from '@/components/features/cart/CartItemRow';
 import CartEmptyState from '@/components/features/cart/CartEmptyState';
 import CartSummary from '@/components/features/cart/CartSummary';
 import CartCustomerTag from '@/components/features/cart/CartCustomerTag';
-import DiscountSection from '@/components/features/checkout/DiscountSection';
+import DiscountOrCoinsSection from '@/components/features/checkout/DiscountOrCoinsSection';
 import ProceedToCheckoutButton from '@/components/features/cart/ProceedToCheckoutButton';
 import { useCart } from '@/hooks/cart/useCart';
 import { useCheckoutPricing } from '@/hooks/checkout/useCheckoutPricing';
@@ -29,6 +29,7 @@ export default function CartPage() {
     items,
     customerName,
     customerMobile,
+    redeemedCoins,
     isEmpty,
     removeItem,
     updateQuantity,
@@ -45,6 +46,13 @@ export default function CartPage() {
     () => mapPricedLinesToCart(items, pricedLineItems),
     [items, pricedLineItems]
   );
+
+  // Clamped the same way LucraCoinsSection caps what can be APPLIED in the
+  // first place — re-derived here (not trusted from redeemedCoins as-is)
+  // in case the cart changed after coins were applied (see cartSlice's own
+  // comment on redeemedCoins never being pre-clamped).
+  const payableTotal = pricedTotals ? Math.round(pricedTotals.netAmount) : 0;
+  const coinsRedeemed = Math.max(0, Math.min(redeemedCoins, payableTotal));
 
   return (
     <div className="flex flex-col gap-6 max-w-5xl mx-auto w-full pb-28 p-4 md:p-6">
@@ -64,7 +72,7 @@ export default function CartPage() {
             customerMobile={customerMobile}
             onDetach={detachCustomer}
           />
-          <DiscountSection />
+          <DiscountOrCoinsSection payableTotal={payableTotal} isPricing={isPricing} />
 
           <div className="rounded-xl border border-border bg-card px-4">
             {items.map((item, index) => (
@@ -88,7 +96,7 @@ export default function CartPage() {
           </div>
 
           <div className="rounded-xl border border-border bg-card p-4">
-            <CartSummary totals={pricedTotals} isPricing={isPricing} />
+            <CartSummary totals={pricedTotals} isPricing={isPricing} coinsRedeemed={coinsRedeemed} />
           </div>
 
           <div className="fixed bottom-0 left-0 right-0 border-t border-border bg-card p-4 sm:static sm:border-0 sm:bg-transparent sm:p-0">

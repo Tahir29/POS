@@ -39,10 +39,13 @@ function fmtDate(iso) {
  *   transactionId: number,   — EntityId returned from createInvoice/createOrder
  *   invoiceNo?:    string,   — document_no if already known (optional)
  *   documentType?: 'invoice'|'order',
+ *   coinsRedeemed?: number,  — Lucira Coins applied on this sale (2026-09-08,
+ *     see this component's own doc comments below for why it's a prop, not
+ *     read off the document).
  * }} props
  */
 export default function OrderConfirmationScreen({
-  transactionId, invoiceNo, documentType = 'invoice',
+  transactionId, invoiceNo, documentType = 'invoice', coinsRedeemed = 0,
 }) {
   const router = useRouter();
   const isOrder = documentType === 'order';
@@ -70,12 +73,50 @@ export default function OrderConfirmationScreen({
   const totalAmount = invoice?.net_amount   ?? null;     // net_amount, NOT total_amount
   const invoiceDate = invoice?.document_date ?? null;
   const receiptAmt  = invoice?.receipt_amount ?? null;
-  const balanceAmt  = invoice?.balance_amount ?? null;
+  // FIXED 2026-09-08 — OrnaVerse's own balance_amount has no idea Lucira
+  // Coins covered part of net_amount: the document's receipt_details only
+  // ever carry the REAL payment modes collected (see checkout/page.jsx's
+  // finalPayableTotal — that's the amount actually asked for on the
+  // terminal), so a sale genuinely paid in full (coins + cash together)
+  // still comes back from OrnaVerse showing balance_amount === the coins
+  // portion, as if it were still owed. Subtracting coinsRedeemed here is
+  // what actually reconciles "fully paid" back to reading as fully paid,
+  // rather than a real invoice/order showing a phantom balance due for
+  // money that WAS accounted for, just not through OrnaVerse's own ledger.
+  const balanceAmt  = invoice?.balance_amount != null
+    ? Math.max(0, invoice.balance_amount - coinsRedeemed)
+    : null;
+  // ADDED 2026-09-08 — discount was never shown on this screen at all,
+  // even when a promo genuinely reduced the sale. Read straight off the
+  // retrieved document (same `discount` field buildOrderEntity/
+  // buildInvoiceEntity submit at Create — see transactionHeaderService.js),
+  // not re-derived from the promo state client-side, so this always
+  // reflects what the server actually applied, matching every other figure
+  // on this screen.
+  //
+  // Merged with coinsRedeemed for display (2026-09-08, same product
+  // decision as CartSummary's own "Discount" line) — a promo and Lucira
+  // Coins are mutually exclusive (see cartSlice's appliedPromos/
+  // redeemedCoins), so only one of these two is ever really non-zero.
+  // discountAmt itself IS an OrnaVerse-recognized reduction (net_amount
+  // above already reflects it); coinsRedeemed is NOT (coins aren't an
+  // OrnaVerse concept at all — see redeemLoyaltyCoins's own header) — see
+  // realBalanceAmt below for why that distinction still matters even
+  // though the two look identical in this one combined line.
+  const discountAmt = (invoice?.discount ?? 0) + coinsRedeemed || null;
   // Server-computed GST — see useCreateInvoice.js header (not calculated
   // client-side; read back whatever the server computed per line item).
   // Bifurcated into CGST+SGST for display — see lib/gst.js.
   const taxAmount   = invoice?.tax_amount ?? null;
   const gst         = splitGst(taxAmount);
+  // ADDED 2026-09-08 — same round_off field useCreateInvoice.js/
+  // useCreateOrder.js already submit at Create (roundedNet - netAmount),
+  // read back off the real document here rather than recomputed — this
+  // screen never showed it, so Discount + CGST + SGST could look like it
+  // didn't quite add up to Total by a few paise (the same mismatch fixed
+  // on CartSummary's breakdown, for the same reason: net_amount is the
+  // WHOLE-rupee figure actually billed, everything above it is exact).
+  const roundOffAmt = invoice?.round_off ?? null;
 
   const handleNewSale = () => {
     router.push('/catalog');
@@ -120,6 +161,12 @@ export default function OrderConfirmationScreen({
                 <span className="font-medium text-foreground">{customerName}</span>
               </div>
             )}
+            {discountAmt != null && discountAmt > 0 && (
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Discount</span>
+                <span className="text-status-in-stock font-medium">-{fmt(discountAmt)}</span>
+              </div>
+            )}
             {gst && (
               <>
                 <div className="flex justify-between">
@@ -131,6 +178,14 @@ export default function OrderConfirmationScreen({
                   <span className="text-foreground/80">{fmt(gst.sgst)}</span>
                 </div>
               </>
+            )}
+            {roundOffAmt != null && roundOffAmt !== 0 && (
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Round Off</span>
+                <span className="text-foreground/80">
+                  {roundOffAmt > 0 ? '+' : '−'}{fmt(Math.abs(roundOffAmt))}
+                </span>
+              </div>
             )}
             {totalAmount != null && (
               <div className="flex justify-between border-t border-border pt-2 mt-1">

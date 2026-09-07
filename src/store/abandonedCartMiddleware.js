@@ -36,11 +36,21 @@
 //      state, not post — by the time this case runs, the reducer has
 //      already nulled cart.customerId.
 //
-//   4. cart/clearCart — fires on BOTH a completed sale and an explicit
-//      "Clear Cart" (see checkout/page.jsx). Either way the cart is no
-//      longer pending, so delete whatever was saved — there's nothing left
-//      to call abandoned. Also reads pre-action state for the same reason
-//      as #3.
+//   4. cart/clearCart — the explicit "Clear Cart" button (see
+//      CustomerSessionSheet), or useAuth.js's logout() (reason:
+//      'session_reset', handled differently — see that case's own
+//      comment). Either way the cart is no longer pending, so (outside the
+//      logout case) delete whatever was saved — there's nothing left to
+//      call abandoned. Also reads pre-action state for the same reason as
+//      #3.
+//
+//   5. cart/clearCartKeepCustomer (added 2026-09-07) — fires after a
+//      COMPLETED SALE (see checkout/page.jsx) instead of cart/clearCart,
+//      specifically so cartSlice's own reducer keeps the customer attached
+//      post-sale. Same "delete the saved record, the cart is resolved"
+//      handling as cart/clearCart's default branch — this is a
+//      customer-attachment distinction only, not a different cart-resolved
+//      outcome.
 
 import { toast } from 'react-toastify';
 import { setAbandonedCart, clearAbandonedCartState } from './slices/abandonedCartSlice';
@@ -161,10 +171,11 @@ export const abandonedCartMiddleware = (store) => (next) => (action) => {
       // a customer had an unpaid cart would delete that customer's saved
       // cart outright — exactly backwards, since an unresolved cart at
       // logout is precisely what "abandoned" means and should be
-      // preserved, not discarded. Every other clearCart() caller (a
-      // completed sale in checkout/page.jsx, or the explicit "Clear Cart"
-      // button in CustomerSessionSheet) means the cart really is resolved,
-      // so the default (no reason) behavior stays "delete".
+      // preserved, not discarded. Every other clearCart() caller (the
+      // explicit "Clear Cart" button in CustomerSessionSheet) means the
+      // cart really is resolved, so the default (no reason) behavior stays
+      // "delete". (A completed sale in checkout/page.jsx dispatches
+      // 'cart/clearCartKeepCustomer' instead, below — not this action.)
       if (preCart.customerId && token) {
         if (action.payload?.reason === 'session_reset') {
           if (preCart.items.length > 0) saveAbandonedCart(preCart.customerId, preCart, token, companyId);
@@ -172,6 +183,22 @@ export const abandonedCartMiddleware = (store) => (next) => (action) => {
           deleteAbandonedCart(preCart.customerId, token);
         }
       }
+      store.dispatch(clearAbandonedCartState());
+      break;
+    }
+
+    // ADDED 2026-09-07, alongside cartSlice's own clearCartKeepCustomer —
+    // checkout/page.jsx now dispatches THIS (not cart/clearCart) after a
+    // completed sale, specifically so the reducer keeps the customer
+    // attached. That's a cart-state distinction only — it doesn't change
+    // whether the cart itself was resolved: a completed sale always means
+    // "delete the saved abandoned-cart record," same as cart/clearCart's
+    // own default (no-reason) branch above, never a "session_reset"-style
+    // save. If this customer adds new items afterward (same attach,
+    // now-empty cart), the debounced save in the default case below starts
+    // a fresh record for them, same as any other cart activity.
+    case 'cart/clearCartKeepCustomer': {
+      if (preCart.customerId && token) deleteAbandonedCart(preCart.customerId, token);
       store.dispatch(clearAbandonedCartState());
       break;
     }

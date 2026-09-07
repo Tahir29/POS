@@ -10,7 +10,7 @@ import CartItemRow from '@/components/features/cart/CartItemRow';
 import CartEmptyState from '@/components/features/cart/CartEmptyState';
 import CartSummary from '@/components/features/cart/CartSummary';
 import CartCustomerTag from '@/components/features/cart/CartCustomerTag';
-import DiscountSection from '@/components/features/checkout/DiscountSection';
+import DiscountOrCoinsSection from '@/components/features/checkout/DiscountOrCoinsSection';
 import ProceedToCheckoutButton from '@/components/features/cart/ProceedToCheckoutButton';
 import { useCart } from '@/hooks/cart/useCart';
 import { useCheckoutPricing } from '@/hooks/checkout/useCheckoutPricing';
@@ -27,6 +27,7 @@ export default function CartDrawer({ isOpen, onClose }) {
     items,
     customerName,
     customerMobile,
+    redeemedCoins,
     isEmpty,
     removeItem,
     updateQuantity,
@@ -42,6 +43,11 @@ export default function CartDrawer({ isOpen, onClose }) {
     [items, pricedLineItems]
   );
 
+  // See cart/page.jsx's identical comment — re-derived here, not trusted
+  // from redeemedCoins as-is.
+  const payableTotal = pricedTotals ? Math.round(pricedTotals.netAmount) : 0;
+  const coinsRedeemed = Math.max(0, Math.min(redeemedCoins, payableTotal));
+
   return (
     <BottomSheet
       isOpen={isOpen}
@@ -50,7 +56,7 @@ export default function CartDrawer({ isOpen, onClose }) {
       footer={
         !isEmpty && (
           <div className="flex flex-col gap-3">
-            <CartSummary totals={pricedTotals} isPricing={isPricing} />
+            <CartSummary totals={pricedTotals} isPricing={isPricing} coinsRedeemed={coinsRedeemed} />
             <ProceedToCheckoutButton onNavigate={onClose} />
           </div>
         )
@@ -66,7 +72,7 @@ export default function CartDrawer({ isOpen, onClose }) {
               customerMobile={customerMobile}
               onDetach={detachCustomer}
             />
-            <DiscountSection />
+            <DiscountOrCoinsSection payableTotal={payableTotal} isPricing={isPricing} />
           </div>
 
           <div className="flex flex-col">

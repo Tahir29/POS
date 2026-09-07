@@ -32,7 +32,7 @@ import { updateCustomerSchema }   from '@/validators/customerSchema';
 import { useRetrieveCustomer }    from '@/hooks/customer/useRetrieveCustomer';
 import { useUpdateCustomer }      from '@/hooks/customer/useUpdateCustomer';
 import { useCustomerEnrollments } from '@/hooks/customer/useCustomerEnrollments';
-import { useCustomerLoyalty }     from '@/hooks/customer/useCustomerLoyalty';
+import { useNectorLoyaltyPoints } from '@/hooks/customer/useNectorLoyaltyPoints';
 import { useCustomer360 }         from '@/hooks/customer/useCustomer360';
 import { useCustomerWishlist }    from '@/hooks/customer/useCustomerWishlist';
 import { useLiveCatalogPrices }   from '@/hooks/catalog/useLiveCatalogPrices';
@@ -54,10 +54,12 @@ function fmtDate(iso) {
   return isNaN(d.getTime()) ? iso : d.toLocaleDateString('en-IN');
 }
 
-function maskPan(pan) {
-  if (!pan || pan.length <= 4) return pan;
-  return `${'*'.repeat(pan.length - 4)}${pan.slice(-4)}`;
-}
+// REMOVED 2026-09-08 — a maskPan() used to live here, showing PAN as
+// "****1234" on the assumption OrnaVerse itself masks it on read.
+// Confirmed live against LIVE (Customer/Retrieve on several unrelated
+// party_ids) that it does NOT — full PAN comes back same as mobile/email.
+// customerPan is now shown as-is (see ProfileTab below) rather than
+// re-masked client-side for no real privacy benefit.
 
 // ── Tab config ────────────────────────────────────────────────────────────────
 // '360' added 2026-08-12 — see useCustomer360.js. 'orders' and 'history' were
@@ -126,7 +128,6 @@ function ProfileTab({ customer }) {
   const partyCode  = raw?.party_code && raw.party_code !== 'NA' ? raw.party_code : null;
   const birthDate  = raw?.birth_date  ? fmtDate(raw.birth_date)  : null;
   const anniversary= raw?.anniversary ? fmtDate(raw.anniversary) : null;
-  const maskedPan  = maskPan(customerPan);
 
   return (
     <div className="flex flex-col gap-3 text-sm">
@@ -151,10 +152,10 @@ function ProfileTab({ customer }) {
           </span>
         </div>
       )}
-      {maskedPan && (
+      {customerPan && (
         <div className="flex items-center gap-2 text-muted-foreground">
           <CreditCard size={15} className="shrink-0 text-muted-foreground/70" />
-          PAN: {maskedPan}
+          PAN: {customerPan}
         </div>
       )}
       {partyCode && (
@@ -469,32 +470,81 @@ function Customer360Tab({ customerId }) {
 }
 
 // ── Points Tab ────────────────────────────────────────────────────────────────
-function PointsTab({ customerId }) {
-  const { availablePoints, loyaltyHistory, isLoading, isError, refetch } = useCustomerLoyalty(customerId);
-
-  if (isLoading) return <TabLoading label="Loading points…" />;
-  if (isError)   return <TabError label="Failed to load loyalty points." onRetry={refetch} />;
+// ADDED 2026-09-08 — "Lucira Coins" (Nector's loyalty program, tied to the
+// Shopify storefront) shown ABOVE OrnaVerse's own native rewards points
+// below — two entirely separate programs, kept visually distinct rather
+// than merged into one number.
+//
+// FIXED 2026-09-08 — this used to require the profile being viewed to also
+// be the currently-ATTACHED session customer (gating the Nector lookup on
+// `session.customerId === customerId`), on the assumption that
+// Customer/Retrieve masks mobile and the session's own customerMobile
+// (captured from whatever staff typed into the mobile-search box) was the
+// only real number available. Re-checked live against LIVE 2026-09-08:
+// Customer/Retrieve does NOT mask mobile there (confirmed against several
+// unrelated party_ids, full 10-digit numbers came back, no asterisks) — the
+// masking CustomerSessionSheet's own "KNOWN LIMITATION" comment documents
+// is real, but was observed on a different environment/auth scope than
+// this LIVE service-account token uses. Now uses `customer.customerMobile`
+// — this exact profile's own retrieved mobile — directly, no masked-string
+// guard: OrnaVerse isn't masking, so there's nothing to defend against.
+//
+// FIXED AGAIN 2026-09-08 — even after the above, the card still never
+// rendered: PointsTab (below) returned early whenever useCustomerLoyalty
+// (OrnaVerse's OWN native CRM/CustomerRewards endpoint — a completely
+// different system from Nector) was still loading or had errored, and
+// LucraCoinsCard was mounted AFTER that early return. So any customer
+// where the native-rewards call was slow, or errored (not everyone is
+// enrolled in that separate program), never got a chance to show Lucira
+// Coins either, regardless of Nector having a real balance for them.
+// LucraCoinsCard has always had its own independent loading state (see
+// useNectorLoyaltyPoints) — it doesn't need to wait on a different
+// endpoint's outcome. Moved above PointsTab's own loading/error gate so it
+// always mounts and fetches on its own.
+function LucraCoinsCard({ customerMobile }) {
+  const { points, isFound, isLoading } = useNectorLoyaltyPoints(customerMobile, {
+    enabled: !!customerMobile,
+  });
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="rounded-xl border border-border bg-muted p-4 text-center">
-        <p className="text-xs text-muted-foreground/70 uppercase tracking-wide">Available Points</p>
-        <p className="text-3xl font-bold text-primary mt-1">{availablePoints.toLocaleString('en-IN')}</p>
-      </div>
-      {loyaltyHistory.length > 0 && (
-        <div className="flex flex-col gap-1.5">
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">History</p>
-          {loyaltyHistory.slice(0, 20).map((h, idx) => (
-            <div key={idx} className="flex justify-between items-center text-sm rounded-lg border border-border px-3 py-2">
-              <span className="text-muted-foreground text-xs">{fmtDate(h.document_date)}</span>
-              <div className="text-right">
-                {h.points_earned > 0 && <span className="text-status-in-stock font-medium">+{h.points_earned}</span>}
-                {h.points_redeemed > 0 && <span className="text-status-error font-medium ml-2">-{h.points_redeemed}</span>}
-              </div>
-            </div>
-          ))}
+    <div className="rounded-xl border border-border bg-gradient-to-br from-amber-50 to-card p-4 flex flex-col gap-3">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-foreground">Lucira Coins Balance</p>
+          <p className="text-xs text-muted-foreground mt-0.5">1 Coin = 1 Rupee</p>
         </div>
+        <div className="flex items-center gap-1.5 rounded-full bg-card border border-border px-3 py-1.5 shrink-0">
+          <Coins size={16} className="text-amber-500" aria-hidden="true" />
+          <span className="text-base font-bold text-foreground tabular-nums">
+            {!customerMobile || isLoading ? '—' : points.toLocaleString('en-IN')}
+          </span>
+        </div>
+      </div>
+      {!customerMobile && (
+        <p className="text-xs text-muted-foreground">No mobile number on file for this customer.</p>
       )}
+      {customerMobile && !isLoading && !isFound && (
+        <p className="text-xs text-muted-foreground">Not enrolled in Lucira Coins yet.</p>
+      )}
+    </div>
+  );
+}
+
+// REMOVED 2026-09-08 — this tab used to also show OrnaVerse's own native
+// CRM/CustomerRewards points ("Available Points" + a redemption/earn
+// History list) below the Lucira Coins card, via useCustomerLoyalty()
+// (Services/CRM/CustomerRewards/GetCustomerPoints + LoyaltyHistories). Per
+// product decision, this tab is Lucira Coins (Nector) only now — that
+// OrnaVerse call is dropped from here entirely. The endpoint constants
+// themselves (API.REWARDS.GET_POINTS / LOYALTY_HISTORY in apiEndpoints.js)
+// and the useCustomerLoyalty hook are deliberately left in place, unused,
+// rather than deleted — same pattern already used elsewhere in this file
+// for hooks no longer wired to a tab (see the 'orders'/'history' removal
+// note near TABS above).
+function PointsTab({ customerMobile }) {
+  return (
+    <div className="flex flex-col gap-3">
+      <LucraCoinsCard customerMobile={customerMobile} />
     </div>
   );
 }
@@ -553,6 +603,14 @@ export default function CustomerDetailPage() {
   const router       = useRouter();
   const searchParams = useSearchParams();
   const partyId      = Number(params?.customerId);
+  // ROLLED BACK 2026-09-08 — the name-first URL (/customers/tahir-kutty-12345)
+  // was reverted (see git history for the removed slug/canonicalisation
+  // code): the profile stopped loading for the operator entirely. Reverted
+  // straight back to the bare-id route this file always had. The customer's
+  // NAME is still passed through, just via ?name= instead of the URL path
+  // — see fallbackCustomerName below — so the header/loading state can
+  // still show it immediately without needing the URL itself to carry it.
+  const fallbackCustomerName = searchParams.get('name');
 
   // Default to Edit tab so staff can immediately update details — unless
   // arrived via a deep link (e.g. CustomerDetailSheet's "Customer 360"
@@ -591,11 +649,22 @@ export default function CustomerDetailPage() {
         </h1>
       </div> */}
 
-      {isLoading && <InlineLoader className="py-16" label="Loading customer…" />}
+      {/* fallbackCustomerName (2026-09-08) — passed via ?name= by whichever
+          link brought the operator here (see CustomerDetailSheet/
+          CustomerSessionSheet), so the loading state can show WHO instead
+          of a bare spinner while useRetrieveCustomer is still in flight. */}
+      {isLoading && (
+        <InlineLoader
+          className="py-16"
+          label={fallbackCustomerName ? `Loading ${fallbackCustomerName}'s profile…` : 'Loading customer…'}
+        />
+      )}
 
       {isError && !isLoading && (
         <div className="flex flex-col items-center gap-3 py-16 text-center">
-          <p className="text-sm text-destructive">Failed to load customer.</p>
+          <p className="text-sm text-destructive">
+            {fallbackCustomerName ? `Failed to load ${fallbackCustomerName}'s profile.` : 'Failed to load customer.'}
+          </p>
           <Button type="button" variant="outline" onClick={refetch}>Retry</Button>
           <Button type="button" variant="ghost" size="sm" onClick={() => router.push('/customers')}>
             Back to Customers
@@ -617,7 +686,7 @@ export default function CustomerDetailPage() {
               <ArrowLeft size={18} aria-hidden="true" />
             </Button>
             <div>
-              <h2 className="text-base font-bold text-foreground">{customer.customerName}</h2>
+              <h2 className="text-base font-bold text-foreground">{customer.customerName ?? fallbackCustomerName}</h2>
               {customer.raw?.party_code && customer.raw.party_code !== 'NA' && (
                 <p className="text-xs text-muted-foreground/70 mt-0.5">Code: {customer.raw.party_code}</p>
               )}
@@ -651,7 +720,7 @@ export default function CustomerDetailPage() {
             {activeTab === 'profile' && <ProfileTab customer={customer} />}
             {activeTab === 'edit'    && <EditTab customer={customer} onSaved={handleSaved} />}
             {activeTab === 'schemes' && <SchemesTab customerId={customer.customerId} />}
-            {activeTab === 'points'  && <PointsTab customerId={customer.customerId} />}
+            {activeTab === 'points'  && <PointsTab customerMobile={customer.customerMobile} />}
             {activeTab === '360'     && <Customer360Tab customerId={customer.customerId} />}
             {activeTab === 'wishlist' && <WishlistTab customerId={customer.customerId} />}
           </div>

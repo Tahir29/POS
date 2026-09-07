@@ -1,11 +1,11 @@
-// Client-side service for Nector product reviews.
+// Client-side service for Nector product reviews + loyalty points.
 // Calls our own /api/nector proxy — never Nector directly — so the API key
 // never reaches the browser. See src/app/api/nector/[...path]/route.js for
 // the confirmed response shapes (Nector's own docs don't specify them).
 //
-// Both functions are fail-safe: they never throw, returning safe empty
-// defaults on any error so a reviews outage never breaks the catalog or
-// product page around it.
+// Every function here is fail-safe: none of them throw, all return safe
+// empty defaults on any error, so a Nector outage never breaks whatever
+// screen is asking for reviews or points around it.
 
 const SOURCE = 'shopify';
 
@@ -69,5 +69,127 @@ export async function getReviews({ shopifyProductId, page = 1, limit = 10 }) {
   } catch (err) {
     console.warn('[nectorService] getReviews failed:', err);
     return { items: [], count: 0, hasNext: false };
+  }
+}
+
+/**
+ * A customer's Nector loyalty points balance, looked up by mobile number —
+ * Nector's own term for a customer record is a "lead".
+ *
+ * CONFIRMED LIVE 2026-09-08 (real account, real customer — Tahir Kutty,
+ * mobile 8149639991 → 500 available points; see route.js's own header for
+ * the full endpoint writeup and the Nector docs this was cross-checked
+ * against, nector.readme.io's get_leads-id):
+ *   200 → { data: { item: { available: "500" (string!), tier, name,
+ *     wallet: { available, ... }, ... } } } — a real Nector lead exists.
+ *   422 → { data: { message: "Lead does not exists" } } — NOT an error to
+ *     report; a customer who's simply never interacted with the Shopify
+ *     storefront (never earned a Nector lead record) is the normal case
+ *     for most in-store-only customers, same as most catalog products
+ *     having no style_id → no reviews (see getReviewSummary's own
+ *     reasoning). `found: false` lets a caller show "not enrolled" instead
+ *     of a scary error state.
+ *
+ * @param {string|number} mobile — real, UNMASKED mobile number (the same
+ *   one this app already has via useCustomerSession().customerMobile —
+ *   see that hook; no new plumbing needed to get one)
+ * @returns {Promise<{ found: boolean, points: number, tier: string|null, name: string|null }>}
+ */
+export async function getCustomerLoyalty(mobile) {
+  const empty = { found: false, points: 0, tier: null, name: null };
+  if (!mobile) return empty;
+
+  try {
+    const params = new URLSearchParams({ mobile: String(mobile) });
+    const res = await fetch(`/api/nector/leads?${params}`);
+    if (!res.ok) return empty; // 422 "Lead does not exists", or any other failure
+
+    const json = await res.json();
+    const item = json?.data?.item;
+    if (!item) return empty;
+
+    return {
+      found:  true,
+      // "available" comes back as a numeric STRING ("500"), not a number —
+      // confirmed live, not a typo to "fix" here.
+      points: Number(item.available) || 0,
+      tier:   item.tier ?? null,
+      name:   item.name ?? null,
+    };
+  } catch (err) {
+    console.warn('[nectorService] getCustomerLoyalty failed:', err);
+    return empty;
+  }
+}
+
+/**
+ * Debits (redeems) Lucira Coins from a customer's Nector wallet. Fires
+ * AFTER a real POS sale has already completed — see checkout/page.jsx's
+ * own comment for exactly when, and why a failure here never blocks or
+ * reverses that sale (the sale itself has nothing to do with whether
+ * Nector's own wallet ever reflects it).
+ *
+ * BEST-EFFORT, NOT CONFIRMED WORKING (2026-09-08) — see this service's own
+ * getCustomerLoyalty header and the proxy route's "WALLET TRANSACTIONS"
+ * comment for the full story: Nector's debit endpoint needs a lead's own
+ * `_id` (or a merchant-assigned `customer_id`, which this app has never
+ * set — these leads were created by Nector's own Shopify storefront app,
+ * not by us). The mobile-based lookup this function re-runs to find the
+ * lead doesn't return either field in its response body (confirmed live —
+ * full raw JSON inspected). Sends `mid` as `lead_id` on the working theory
+ * that it's the closest available candidate (a per-lead value, unlike
+ * entity_id which is shared across different leads — proven not a
+ * per-lead id) — this is a genuine guess, expected to fail until Nector
+ * support clarifies how to get a lead's real `_id` from a mobile lookup.
+ *
+ * @param {{ mobile: string, amount: number, title: string, description?: string }} params
+ * @returns {Promise<{ ok: boolean, reason?: string }>} — never throws;
+ *   caller decides what (if anything) to do with a failure (checkout logs
+ *   it and moves on, it does not surface as an error to the operator).
+ */
+export async function redeemLoyaltyCoins({ mobile, amount, title, description }) {
+  if (!mobile || !(amount > 0)) return { ok: false, reason: 'invalid_params' };
+
+  try {
+    // Re-look-up the lead for its `mid` — see this function's own header
+    // for why that's the best candidate identifier available, not a
+    // confirmed-correct one.
+    const lookupParams = new URLSearchParams({ mobile: String(mobile) });
+    const lookupRes = await fetch(`/api/nector/leads?${lookupParams}`);
+    if (!lookupRes.ok) return { ok: false, reason: 'lead_not_found' };
+
+    const lookupJson = await lookupRes.json();
+    const mid = lookupJson?.data?.item?.mid;
+    if (!mid) return { ok: false, reason: 'no_lead_id' };
+
+    // Same lazy require('@/store') pattern useCustomerLookup.js's own
+    // syncCustomerProfile already uses — this route requires a bearer
+    // token (see its own WRITE_PATHS check), and reading the token lazily
+    // here avoids turning this plain service module into a hook-shaped
+    // dependency just for one fire-and-forget call.
+    const { store } = require('@/store');
+    const accessToken = store.getState().auth?.accessToken;
+    if (!accessToken) return { ok: false, reason: 'not_authenticated' };
+
+    const res = await fetch('/api/nector/wallettransactions', {
+      method: 'POST',
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({
+        lead_id:     mid,
+        amount,
+        operation:   'dr',
+        title:       title || 'POS Redemption',
+        description: description ?? undefined,
+      }),
+    });
+
+    if (!res.ok) return { ok: false, reason: `http_${res.status}` };
+    return { ok: true };
+  } catch (err) {
+    console.warn('[nectorService] redeemLoyaltyCoins failed:', err);
+    return { ok: false, reason: 'network_error' };
   }
 }

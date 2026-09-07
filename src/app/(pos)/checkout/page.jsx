@@ -35,8 +35,23 @@
 //   2. Basket priced live — the ONLY source of any figure shown, collected,
 //      or submitted, including the promo discount
 //   3. Payment collected: anything from nothing up to the total
-//   4. place*({ paymentModes, pricedLineItems, promotionDetails })
-//   5. On success → OrderConfirmationScreen for whichever document was raised
+//   4. PAYMENT CONFIRMATION GATE (2026-09-07, see handlePlaceOrderClick
+//      below) — "Place Order"/"Complete Sale" no longer submits directly.
+//      The payment modes selected here (Cash/Card/UPI/...) are collected on
+//      a PHYSICAL terminal the agent operates separately — this app has no
+//      way to know whether that machine actually approved the charge, so it
+//      must not assume success just because a mode/amount was typed in.
+//      Clicking Place Order instead opens a Yes/No confirmation ("has the
+//      payment actually gone through on the terminal?"):
+//        Yes → place*({ paymentModes, pricedLineItems, promotionDetails })
+//              actually runs now, for the first time in this flow.
+//        No  → nothing is ever submitted — no draft, no partial document —
+//              straight to /order-failed?reason=declined.
+//   5. On success → cart is cleared and the operator is sent to
+//      /order-success?transactionId=&documentType= (a real route now, not
+//      an inline swap — see that page's own header for why).
+//      On a genuine save failure after Yes (network/server error, payment
+//      already taken) → /order-failed?reason=error&message=... instead.
 //
 // NAVIGATION GUARD:
 //   - Redirects to /cart if cart is empty and no sale placed
@@ -46,18 +61,18 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSelector } from 'react-redux';
+import { useQueryClient } from '@tanstack/react-query';
 import { ShieldCheck } from 'lucide-react';
 import ConfirmDialog    from '@/components/shared/ConfirmDialog';
 import CheckoutCustomerSummary  from '@/components/features/checkout/CheckoutCustomerSummary';
 import CheckoutPanCapture       from '@/components/features/checkout/CheckoutPanCapture';
-import DiscountSection          from '@/components/features/checkout/DiscountSection';
+import DiscountOrCoinsSection   from '@/components/features/checkout/DiscountOrCoinsSection';
 import CheckoutPaymentSection   from '@/components/features/checkout/CheckoutPaymentSection';
 import CheckoutTrustStrip       from '@/components/features/checkout/CheckoutTrustStrip';
 import SalesPersonSelect        from '@/components/features/checkout/SalesPersonSelect';
 import CartItemRow              from '@/components/features/cart/CartItemRow';
 import CartSummary              from '@/components/features/cart/CartSummary';
 import PlaceOrderButton         from '@/components/features/checkout/PlaceOrderButton';
-import OrderConfirmationScreen  from '@/components/features/checkout/OrderConfirmationScreen';
 import { useCart }                    from '@/hooks/cart/useCart';
 import { useCartTotals }              from '@/hooks/cart/useCartTotals';
 import { useCustomerSession }         from '@/hooks/customer/useCustomerSession';
@@ -72,12 +87,19 @@ import { checkoutSchema }             from '@/validators/checkoutSchema';
 import { selectActiveStoreId } from '@/store/slices/storeSlice';
 import tracker from '@/lib/analytics/tracker';
 import EVENTS, { GA_ECOMMERCE_EVENTS } from '@/lib/analytics/events';
+import { redeemLoyaltyCoins } from '@/services/nectorService';
+import { QUERY_KEYS } from '@/constants/queryKeys';
+
+// Same formatting convention as PlaceOrderButton's own local `money()` —
+// used here for the payment-confirmation dialog's description.
+const money = (n) => `₹${Number(n ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
 
 function CheckoutScreen() {
   const router  = useRouter();
-  const { items, isEmpty, clearCart, removeItem } = useCart();
+  const queryClient = useQueryClient();
+  const { items, isEmpty, clearCartKeepCustomer, removeItem, redeemedCoins } = useCart();
   const { total }          = useCartTotals();
-  const { customerId }     = useCustomerSession();
+  const { customerId, customerMobile } = useCustomerSession();
   const activeStoreId      = useSelector(selectActiveStoreId);
   const { goBack, clearGuard } = useSmartBack();
 
@@ -111,10 +133,33 @@ function CheckoutScreen() {
   // against, so fall back to the cart estimate only for display.
   const payableTotal = amountDue ?? total;
 
+  // Lucira Coins (2026-09-08) — re-derived here, not trusted from
+  // redeemedCoins as-is, same reasoning as cart/page.jsx and CartDrawer's
+  // identical clamp.
+  const coinsRedeemed = Math.max(0, Math.min(redeemedCoins, payableTotal));
+  const hasCoinsApplied = coinsRedeemed > 0;
+
+  // FIXED 2026-09-08 (product decision) — coins used to sit entirely
+  // outside checkout: `isValid` was hard-blocked whenever any were applied,
+  // because the real Nector debit (see nectorService.js's
+  // redeemLoyaltyCoins) can't be confirmed to actually work — its
+  // lead-identifier gap is still unresolved. Now folded in the same way a
+  // promo discount already is: `finalPayableTotal` is what CheckoutPaymentSection/
+  // PlaceOrderButton/isPaidInFull collect against, same as `amountDue`
+  // always was for a promo. The debit itself stays a best-effort call
+  // AFTER the sale (see handlePaymentConfirmed) — a failure there no
+  // longer blocks completing the sale, it just means the coins may not
+  // actually be deducted from the customer's real Nector wallet this time.
+  // That trade-off was an explicit product decision, not something this
+  // code silently assumes.
+  const finalPayableTotal = Math.max(0, payableTotal - coinsRedeemed);
+
   const [payments, setPayments]     = useState([]);
   const [salesPersonId, setSalesPersonId] = useState(null);
   const [panNumber, setPanNumber]   = useState(null);
   const [isBackConfirmOpen, setIsBackConfirmOpen] = useState(false);
+  // Payment-confirmation gate (2026-09-07) — see this file's header comment.
+  const [isPaymentConfirmOpen, setIsPaymentConfirmOpen] = useState(false);
 
   const pricedByCartIndex = useMemo(
     () => mapPricedLinesToCart(items, pricedLineItems),
@@ -128,8 +173,20 @@ function CheckoutScreen() {
   // Settled in full against goods the shelf can actually supply → invoice;
   // anything else (part-paid, unpaid, or made-to-order) → order, with the
   // remainder carried as balance_amount.
+  //
+  // Compared against finalPayableTotal, not payableTotal (2026-09-08) —
+  // judged against what the customer actually still owes after coins,
+  // same as it already was for a promo discount (amountDue was always
+  // post-promo). The `payableTotal > 0` guard itself is UNCHANGED and
+  // still reads the pre-coins figure on purpose: it means "pricing has
+  // actually resolved to a real number" (payableTotal is 0/undefined
+  // before that), not "there's something left to pay" — coins can now
+  // legitimately zero out finalPayableTotal (covering the ENTIRE amount),
+  // and that's still a fully-paid sale (amountCollected is legitimately 0
+  // too in that case) — checking `finalPayableTotal > 0` instead would
+  // have wrongly failed exactly that case.
   const isPaidInFull = payableTotal > 0
-    && Math.abs(amountCollected - payableTotal) < 0.01;
+    && Math.abs(amountCollected - finalPayableTotal) < 0.01;
   const isOrderMode  = !isStockBacked || !isPaidInFull;
   const documentType = isOrderMode ? 'order' : 'invoice';
 
@@ -169,16 +226,47 @@ function CheckoutScreen() {
     }
   }, [isEmpty, isConfirmed, router]);
 
-  // Clear the basket only once the sale is confirmed and this screen has
-  // committed to showing the confirmation. Doing it inside the mutation's
-  // onSuccess (where it used to live) dropped the customer one render too
-  // early and the navigation guards above bounced the operator to /cart
-  // before the invoice number was ever displayed.
+  // Clear the basket and hand off to /order-success once the sale is
+  // confirmed. This used to be an inline component swap on this same page
+  // (OrderConfirmationScreen) — moved to a real route (2026-09-07, see that
+  // page's own header for why) — so this effect now does both jobs that
+  // used to be split across two places: clearing the cart (still gated on
+  // isConfirmed, not done inside the mutation's own onSuccess — doing it
+  // there dropped the customer one render too early and the guards above
+  // bounced the operator to /cart before the redirect below ever fired),
+  // and actually leaving this page.
+  //
+  // clearCartKeepCustomer, NOT clearCart (2026-09-07) — plain clearCart()
+  // resets cart/slice's customerId/customerName/customerMobile/
+  // customerAddress back to null along with the items, since those fields
+  // live in the SAME slice and clearCart returns initialState wholesale.
+  // That meant completing a sale silently detached the customer too — the
+  // header showed nobody attached the moment the operator landed on
+  // /order-success, indistinguishable from tapping "Remove". Explicit
+  // product decision: a completed sale must not end the customer's
+  // session — only a manual detach or the agent's own logout should.
+  // clearCartKeepCustomer resets everything else (items, promos, gift
+  // card/voucher, fulfillment refs) but carries the four customer fields
+  // forward unchanged.
   useEffect(() => {
-    if (isConfirmed && !isEmpty) {
-      clearCart();
+    if (isConfirmed && result) {
+      if (!isEmpty) clearCartKeepCustomer();
+      // coinsRedeemed carried forward via the URL (2026-09-08) — see
+      // order-success/page.jsx's own header for why: not an OrnaVerse
+      // document field, so there's nowhere else for that screen to read it
+      // back from. Deliberately NOT in this effect's deps below —
+      // clearCartKeepCustomer() resets Redux's own redeemedCoins to 0
+      // synchronously, and adding it as a dep would re-fire this exact
+      // effect on that change (isConfirmed/result are still true) with
+      // coinsRedeemed now 0, overwriting the correct URL just pushed a
+      // moment earlier with a wrong one. Reads the value already captured
+      // in this render's closure instead, which is correct.
+      router.replace(
+        `/order-success?transactionId=${result.transactionId}&documentType=${confirmedType}&coinsRedeemed=${coinsRedeemed}`
+      );
     }
-  }, [isConfirmed, isEmpty, clearCart]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isConfirmed, result, confirmedType, isEmpty, clearCartKeepCustomer, router]);
 
   // Fire begin_checkout once per visit to this screen with items in cart
   useEffect(() => {
@@ -210,13 +298,15 @@ function CheckoutScreen() {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [items.length, isConfirmed]);
 
-  // Validate checkout state before allowing submission
+  // Validate checkout state before allowing submission — finalPayableTotal
+  // (post-coins), not payableTotal, is what's actually being collected
+  // against (2026-09-08, same reasoning as isPaidInFull above).
   const validation = checkoutSchema.safeParse({
     customerId,
     salesPersonId,
     paymentModes: payments,
-    totalAmount:  payableTotal,
-    cartTotal:    payableTotal,
+    totalAmount:  finalPayableTotal,
+    cartTotal:    finalPayableTotal,
     panNumber,
     // Any amount from nothing up to the total is acceptable — how much is
     // collected is what decides which document gets raised, so there is no
@@ -225,16 +315,34 @@ function CheckoutScreen() {
   });
   // Never allow a sale to be submitted against the provisional cart figure —
   // it can differ from the document by the value of the stones.
+  //
+  // No longer gated on !hasCoinsApplied (2026-09-08, reversed product
+  // decision) — a sale used to be blocked outright while coins were
+  // applied, since the real Nector debit call still has an unresolved
+  // identifier gap (see nectorService.js's redeemLoyaltyCoins). Per
+  // explicit product decision, that's now accepted as a known trade-off
+  // rather than a hard block: the sale completes with coins folded into
+  // the payable total (see finalPayableTotal above) exactly like a promo
+  // discount, and the debit is attempted best-effort AFTER the sale (see
+  // handlePaymentConfirmed) — if it fails, the sale still stands.
   const isValid = validation.success && !!pricedLineItems && !isPricing && !pricingError;
 
-  const handlePlaceOrder = async () => {
+  // "Place Order"/"Complete Sale" no longer submits anything by itself — it
+  // only opens the payment-confirmation gate. See this file's header
+  // comment for why: the payment itself is taken on a physical terminal
+  // this app cannot see the result of.
+  const handlePlaceOrderClick = () => {
     if (!isValid || isSubmitting) return;
+    setIsPaymentConfirmOpen(true);
+  };
 
-    // The lines already carry the promotion (applied and re-taxed by
-    // Helper/ApplyPromotions inside useCheckoutPricing), and promotionDetails
-    // is the server's own row for the document. Both go in exactly as
-    // received — the same resolution that quoted the figure the operator just
-    // collected against.
+  // "Yes, payment received" — only now does the actual create/post call
+  // run. The lines already carry the promotion (applied and re-taxed by
+  // Helper/ApplyPromotions inside useCheckoutPricing), and promotionDetails
+  // is the server's own row for the document. Both go in exactly as
+  // received — the same resolution that quoted the figure the operator just
+  // collected against.
+  const handlePaymentConfirmed = async () => {
     const submission = {
       paymentModes: payments,
       salesPersonId,
@@ -242,19 +350,79 @@ function CheckoutScreen() {
       promotionDetails,
     };
 
-    if (isOrderMode) await placeOrder(submission);
-    else             await placeInvoice(submission);
+    try {
+      if (isOrderMode) await placeOrder(submission);
+      else             await placeInvoice(submission);
+      // Success is handled by the isConfirmed effect above (clears cart,
+      // redirects to /order-success) once orderResult/invoiceResult lands —
+      // nothing further to do here.
+
+      // Lucira Coins — best-effort debit, AFTER the sale (2026-09-08,
+      // product decision). Deliberately NOT awaited into the try/catch
+      // flow above and never re-thrown: this is a real POS sale that has
+      // ALREADY completed by this point (placeOrder/placeInvoice already
+      // succeeded) — a failure to debit Nector must never look like the
+      // SALE failed, send the operator to /order-failed, or otherwise
+      // touch what just happened. See redeemLoyaltyCoins's own header for
+      // exactly why this is expected to fail until the lead-identifier gap
+      // is resolved; failures are only logged, never surfaced to the
+      // operator or the customer.
+      if (hasCoinsApplied && customerMobile) {
+        redeemLoyaltyCoins({
+          mobile:      customerMobile,
+          amount:      coinsRedeemed,
+          title:       'POS Redemption',
+          description: `Redeemed at checkout — ${documentType} for ${customerId ?? 'customer'}`,
+        }).then((result) => {
+          if (result.ok) {
+            // Invalidate the cached balance (2026-09-08) — everywhere this
+            // customer's Lucira Coins balance is shown (the customer
+            // profile's Points tab, this same cart/checkout flow if
+            // revisited) reads it via useNectorLoyaltyPoints, keyed on
+            // mobile (QUERY_KEYS.NECTOR.LOYALTY). Without this, a real,
+            // successful debit would still show the STALE pre-redemption
+            // balance until that query's own staleTime happened to expire.
+            queryClient.invalidateQueries({ queryKey: QUERY_KEYS.NECTOR.LOYALTY(customerMobile) });
+          } else {
+            console.warn('[LucraCoins] best-effort debit did not succeed:', result.reason);
+          }
+        });
+      }
+    } catch (error) {
+      // placeOrder/placeInvoice's own onError already toasted OrnaVerse's
+      // specific reason and left the operator's cart/payment entries
+      // exactly as they were (see useCreateOrder.js/useCreateInvoice.js) —
+      // this is a DIFFERENT, more urgent case than a simple decline: the
+      // terminal already took the money (the operator just confirmed
+      // "Yes") but OUR OWN save then failed, so it gets its own dedicated
+      // page rather than leaving the operator to notice/re-read the toast.
+      const message = error?.serverMessage ?? error?.message ?? null;
+      const query = message ? `&message=${encodeURIComponent(message)}` : '';
+      router.push(`/order-failed?reason=error${query}`);
+    }
   };
 
-  // ── Confirmation screen ────────────────────────────────────────────────────
-  if (isConfirmed && result) {
+  // "No, payment declined" — nothing is ever submitted. No draft document
+  // exists to cancel/roll back; the cart and any typed payment rows are
+  // left exactly as they are so "Try Again" on the failed page can just
+  // return to a fresh checkout attempt with the same basket.
+  const handlePaymentDeclined = () => {
+    tracker.track(EVENTS.PAYMENT_DECLINED, {
+      documentType,
+      value: isOrderMode ? amountCollected : finalPayableTotal,
+    });
+    router.push('/order-failed?reason=declined');
+  };
+
+  // While isConfirmed is true, the effect above is already clearing the
+  // cart and navigating to /order-success — this brief loading state is
+  // only what's on screen for the one render in between, never a
+  // destination of its own.
+  if (isConfirmed) {
     return (
-      <OrderConfirmationScreen
-        transactionId={result.transactionId}
-        documentType={confirmedType}
-        // document_no is loaded by the screen's own Retrieve; the EntityId is
-        // passed so it can fetch immediately.
-      />
+      <div className="flex items-center justify-center py-24">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" aria-hidden="true" />
+      </div>
     );
   }
 
@@ -298,12 +466,14 @@ function CheckoutScreen() {
             />
           </section>
 
-          {/* Promo code / discount — the saving shown per promo is the
-              server's own promotion_amount, not a local estimate.
-              Self-contained (2026-08-26) — fetches its own pricing via
-              useCheckoutPricing rather than taking it as props, since it's
-              no longer checkout-exclusive (see DiscountSection's header). */}
-          <DiscountSection />
+          {/* Promo code / discount OR Lucira Coins — tabbed (2026-09-08),
+              never both stacked (see DiscountOrCoinsSection's own header):
+              the two are mutually exclusive, so showing both at once was
+              redundant. DiscountSection is self-contained (2026-08-26) —
+              fetches its own pricing via useCheckoutPricing rather than
+              taking it as props, since it's no longer checkout-exclusive
+              (see that component's header). */}
+          <DiscountOrCoinsSection payableTotal={payableTotal} isPricing={isPricing} />
         </div>
         <div className="flex flex-col gap-5 w-full">
           {/* Order items — same CartItemRow used on the Cart page, read-only
@@ -340,7 +510,7 @@ function CheckoutScreen() {
             <h2 className="text-sm font-bold text-foreground mb-1">Order Summary</h2>
             {/* Driven by the priced stock pieces, so this reads the same
                 figure as the Place Order button and the amount collected. */}
-            <CartSummary totals={pricedTotals} isPricing={isPricing} />
+            <CartSummary totals={pricedTotals} isPricing={isPricing} coinsRedeemed={coinsRedeemed} />
           </section>
 
           {/* Payment modes + invoice helper balances.
@@ -356,10 +526,13 @@ function CheckoutScreen() {
               balance to another's invoice. The key forces a fresh mount
               (empty payments, re-synced to the parent via this component's
               own onChange effect) for every customer. */}
+          {/* finalPayableTotal, not amountDue (2026-09-08) — the amount
+              actually collected here is post-coins, same as it was already
+              post-promo (amountDue itself is server-priced, post-promo). */}
           <CheckoutPaymentSection
             key={customerId}
             onChange={setPayments}
-            amountDue={amountDue}
+            amountDue={finalPayableTotal}
             allowPartial
           />
 
@@ -397,8 +570,8 @@ function CheckoutScreen() {
           <PlaceOrderButton
             isValid={isValid}
             isPlacingOrder={isSubmitting}
-            onPlaceOrder={handlePlaceOrder}
-            amountDue={amountDue}
+            onPlaceOrder={handlePlaceOrderClick}
+            amountDue={finalPayableTotal}
             amountCollected={amountCollected}
             isPricing={isPricing}
             documentType={documentType}
@@ -420,6 +593,27 @@ function CheckoutScreen() {
         cancelLabel="Stay"
         confirmVariant="destructive"
         onConfirm={handleConfirmLeave}
+      />
+
+      {/* Payment-confirmation gate (2026-09-07) — see this file's header
+          comment. Only "Yes" actually calls placeOrder/placeInvoice;
+          dismissing via backdrop/Escape just closes this and leaves the
+          operator back on the form (ConfirmDialog only fires onCancel for
+          an explicit "No" click, never for a plain dismiss). */}
+      <ConfirmDialog
+        isOpen={isPaymentConfirmOpen}
+        onOpenChange={setIsPaymentConfirmOpen}
+        title="Confirm payment on terminal"
+        description={
+          isOrderMode
+            ? `Has the advance of ${money(amountCollected)} been completed on the payment terminal? Confirming will place the order — declining will not save anything.`
+            : `Has the payment of ${money(finalPayableTotal)} been completed on the payment terminal? Confirming will generate the invoice — declining will not save anything.`
+        }
+        confirmLabel="Yes, Payment Received"
+        cancelLabel="No, Declined"
+        confirmVariant="default"
+        onConfirm={handlePaymentConfirmed}
+        onCancel={handlePaymentDeclined}
       />
 
     </div>
