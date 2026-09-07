@@ -28,12 +28,13 @@ import SchemeCard  from '@/components/features/schemes/SchemeCard';
 import EnrollmentDetailSheet from '@/components/features/schemes/EnrollmentDetailSheet';
 import PageLoader  from '@/components/shared/PageLoader';
 import BottomSheet from '@/components/shared/BottomSheet';
+import ConfirmDialog from '@/components/shared/ConfirmDialog';
 import PaymentModeSelect from '@/components/shared/PaymentModeSelect';
 import PillTabs    from '@/components/shared/PillTabs';
 import { Button }  from '@/components/ui/button';
 import { Input }   from '@/components/ui/input';
 import { Label }   from '@/components/ui/label';
-import { formatCurrency, formatDate } from '@/lib/schemeFormat';
+import { formatCurrency, formatDate, MONTH_NAMES } from '@/lib/schemeFormat';
 
 // Enrollment lifecycle status (not a payment-settlement concept, so this
 // doesn't route through PaymentStatusBadge). completed/matured keep a raw
@@ -46,10 +47,10 @@ const STATUS_STYLES = {
   default:   'bg-muted  text-muted-foreground',
 };
 
-const MONTH_NAMES = [
-  '', 'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
-];
+// MONTH_NAMES moved to lib/schemeFormat.js (2026-09-08) so
+// EnrollmentDetailSheet's Schedule/Payments tabs can share the exact same
+// month-name mapping instead of a second hand-copied array drifting from
+// this one.
 
 const receiptSchema = z.object({
   amount:        z.coerce.number().min(1, 'Enter amount'),
@@ -107,14 +108,16 @@ function ReceiptSheet({ enrollment, isOpen, onClose }) {
     }
   }, [isOpen, enrollment, reset]);
 
-  const onSubmit = async (data) => {
-    const amount = Number(data.amount);
-    // ledger_id (per-detail-row) — confirmed 2026-07-16 via real
-    // SchemeReceipt/List data, sourced from the selected mode's own
-    // ledger_id (see usePaymentModes.js) — distinct from the HEADER
-    // ledger_id below (the document type's own control ledger).
-    const selectedMode = paymentModes.find((m) => m.modeId === Number(data.mode_id));
+  // Payment-confirmation gate (2026-09-07, same pattern as checkout/page.jsx
+  // and repair/page.jsx's RepairInvoiceNewForm — see checkout's header
+  // comment for the full rationale). Every scheme receipt is a real
+  // terminal payment (mode_id is mandatory on this form, unlike repair's
+  // invoice which can be fully covered by existing balances alone), so the
+  // gate always shows here — no "already covered" exception to check.
+  const [pendingReceiptData, setPendingReceiptData] = useState(null);
+  const [isPaymentConfirmOpen, setIsPaymentConfirmOpen] = useState(false);
 
+  const prepareSubmit = (data) => {
     // Was a silent no-op before this — a genuinely failed config lookup
     // (see useOrderHeaderConfig's isError) left the Pay button doing
     // nothing at all, with no toast and no way to tell "still loading"
@@ -130,6 +133,30 @@ function ReceiptSheet({ enrollment, isOpen, onClose }) {
       );
       return;
     }
+    setPendingReceiptData(data);
+    setIsPaymentConfirmOpen(true);
+  };
+
+  const handlePaymentConfirmed = () => {
+    if (pendingReceiptData) submitReceipt(pendingReceiptData);
+    setPendingReceiptData(null);
+  };
+
+  // Nothing was submitted — the sheet stays open with the same amount/
+  // months/mode filled in so the operator can pick a different mode and
+  // try again, instead of having to re-enter everything from scratch.
+  const handlePaymentDeclined = () => {
+    setPendingReceiptData(null);
+    toast.info('Payment declined — nothing was saved.');
+  };
+
+  const submitReceipt = async (data) => {
+    const amount = Number(data.amount);
+    // ledger_id (per-detail-row) — confirmed 2026-07-16 via real
+    // SchemeReceipt/List data, sourced from the selected mode's own
+    // ledger_id (see usePaymentModes.js) — distinct from the HEADER
+    // ledger_id below (the document type's own control ledger).
+    const selectedMode = paymentModes.find((m) => m.modeId === Number(data.mode_id));
 
     // NOT buildTransactionHeaderFields — that builds a SALES document header
     // (sub_total / taxable_amount / net_amount / receipt_amount / balance_amount
@@ -179,7 +206,7 @@ function ReceiptSheet({ enrollment, isOpen, onClose }) {
           </p>
         </div>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
+        <form onSubmit={handleSubmit(prepareSubmit)} className="flex flex-col gap-4">
 
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="rcpt_amount">
@@ -264,6 +291,19 @@ function ReceiptSheet({ enrollment, isOpen, onClose }) {
           </Button>
         </form>
       </div>
+
+      {/* Payment-confirmation gate — see prepareSubmit above. */}
+      <ConfirmDialog
+        isOpen={isPaymentConfirmOpen}
+        onOpenChange={setIsPaymentConfirmOpen}
+        title="Confirm payment on terminal"
+        description={`Has the payment of ${formatCurrency(pendingReceiptData?.amount)} been completed on the payment terminal? Confirming will record this instalment — declining will not save anything.`}
+        confirmLabel="Yes, Payment Received"
+        cancelLabel="No, Declined"
+        confirmVariant="default"
+        onConfirm={handlePaymentConfirmed}
+        onCancel={handlePaymentDeclined}
+      />
     </BottomSheet>
   );
 }

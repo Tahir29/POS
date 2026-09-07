@@ -183,9 +183,17 @@ export default function CustomerSessionSheet({ isOpen, onClose }) {
 
               {/* Redirect to full profile — only shown once a customer is
                   actually attached (2026-08-13); there's nothing to view a
-                  profile for before that. */}
+                  profile for before that.
+                  ROLLED BACK 2026-09-08 — used to build a name-first slug
+                  (/customers/tahir-kutty-12345); reverted to the plain id
+                  route after that broke loading the profile. Name still
+                  passed as ?name= so the destination can show it while
+                  loading — see that page's own fallbackCustomerName. */}
               <Button asChild type="button" variant="outline" className="h-11 w-full gap-2">
-                <Link href={`/customers/${session.customerId}`} onClick={handleClose}>
+                <Link
+                  href={`/customers/${session.customerId}${session.customerName ? `?name=${encodeURIComponent(session.customerName)}` : ''}`}
+                  onClick={handleClose}
+                >
                   <UserCircle size={16} />
                   View Full Profile
                 </Link>

@@ -10,8 +10,11 @@
 //     attached, and again right after attaching if items carried over
 //     from a customer switch ("Keep Cart" — see CustomerSessionSheet).
 //   - Deleted the moment the cart clears for ANY reason — a completed
-//     sale or a manual "Clear Cart" both fire the same cart/clearCart
-//     action, and either way there's nothing left to call abandoned.
+//     sale (cart/clearCartKeepCustomer, added 2026-09-07 so the customer
+//     stays attached post-sale — see checkout/page.jsx) and a manual
+//     "Clear Cart" (cart/clearCart) are two different actions now, but
+//     both delete the same way: either way there's nothing left to call
+//     abandoned.
 //   - Fetched on attach; if the customer has one AND the live cart is
 //     currently empty, it's restored straight into the cart.
 //

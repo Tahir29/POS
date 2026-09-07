@@ -1,8 +1,12 @@
 'use client';
 
 // Quick-access sheet from the customer directory.
-// TABS: Profile | Edit only.
-// Orders / Schemes / History / Points → full profile page (/customers/[id])
+// TABS: Profile always; Edit ONLY once this customer is attached to the
+// cart session (2026-09-07) — see the isAttached-gated `tabs` in the
+// component below. Editing a customer's personal details shouldn't be
+// something an associate can do to any record they merely browse; it
+// requires the customer to actually be the one being served right now.
+// Orders / Schemes / History / Points → full profile page (/customers/[customerId])
 //
 // Edit tab pre-fills from the customer prop (normalised shape from the list).
 // useRetrieveCustomer fetches the full record in the background so the
@@ -29,17 +33,25 @@ import { useRetrieveCustomer } from '@/hooks/customer/useRetrieveCustomer';
 import { useUpdateCustomer } from '@/hooks/customer/useUpdateCustomer';
 import { useCountries, useStates, useCities } from '@/hooks/settings/useLocation';
 
-const TABS = ['profile', 'edit'];
 const TAB_LABELS = { profile: 'Profile', edit: 'Edit' };
 
+// PAN shown in full (2026-09-08) — used to be masked here with a
+// client-side maskPan(), on the assumption OrnaVerse itself masks it.
+// Confirmed live against LIVE (Customer/Retrieve on several unrelated
+// party_ids) that it does not — full PAN comes back, same as mobile/email.
+// Masking it again client-side just hid real data staff already have full
+// Retrieve access to, for no actual privacy benefit.
 function ProfileTab({ customer, onAttach, isAttached, onClose }) {
   const { customerName, customerMobile, customerEmail, customerAddress, customerPan, raw } = customer;
   const partyCode = raw?.party_code && raw.party_code !== 'NA' ? raw.party_code : null;
-
-  function maskPan(pan) {
-    if (!pan || pan.length <= 4) return pan;
-    return `${'*'.repeat(pan.length - 4)}${pan.slice(-4)}`;
-  }
+  // ROLLED BACK 2026-09-08 — the full-profile links below used to build a
+  // name-first slug (/customers/tahir-kutty-12345); reverted to the plain
+  // id route (/customers/[customerId]) after that broke loading the
+  // profile entirely. The name is still passed through, just as a ?name=
+  // query param instead of the URL path, so the destination page can show
+  // it immediately (see that page's own fallbackCustomerName) without
+  // needing it encoded into the route segment.
+  const nameParam = customerName ? `name=${encodeURIComponent(customerName)}` : '';
 
   return (
     <div className="flex flex-col gap-4">
@@ -68,7 +80,7 @@ function ProfileTab({ customer, onAttach, isAttached, onClose }) {
         {customerPan && (
           <div className="flex items-center gap-2 text-muted-foreground">
             <CreditCard size={15} className="shrink-0 text-muted-foreground/70" />
-            PAN: {maskPan(customerPan)}
+            PAN: {customerPan}
           </div>
         )}
         {partyCode && (
@@ -92,7 +104,7 @@ function ProfileTab({ customer, onAttach, isAttached, onClose }) {
       {isAttached && (
         <>
           <Button asChild type="button" variant="outline" className="h-11 w-full gap-2">
-            <Link href={`/customers/${customer.customerId}`} onClick={onClose}>
+            <Link href={`/customers/${customer.customerId}${nameParam ? `?${nameParam}` : ''}`} onClick={onClose}>
               <UserCircle size={16} />
               View Full Profile
             </Link>
@@ -102,7 +114,7 @@ function ProfileTab({ customer, onAttach, isAttached, onClose }) {
               ?tab=360, read on mount by that page (see
               customers/[customerId]/page.jsx). */}
           <Button asChild type="button" variant="outline" className="h-11 w-full gap-2">
-            <Link href={`/customers/${customer.customerId}?tab=360`} onClick={onClose}>
+            <Link href={`/customers/${customer.customerId}?tab=360${nameParam ? `&${nameParam}` : ''}`} onClick={onClose}>
               <History size={16} />
               Customer 360
             </Link>
@@ -359,26 +371,56 @@ export default function CustomerDetailSheet({ customer, isOpen, onClose, onAttac
     if (isOpen) setActiveTab('profile');
   }
 
+  // FIXED 2026-09-07 — Edit is only offered once this customer is actually
+  // attached to the cart session, not for any record an associate merely
+  // looks up in the directory. Explicit product decision: editing a
+  // customer's personal details (mobile/email/address/PAN) should require
+  // them to be the one actually being served right now, not something an
+  // associate can do to an arbitrary browsed profile. `tabs` is derived
+  // fresh every render (not a module constant) since it now depends on the
+  // isAttached prop, which can change while this same sheet stays mounted
+  // (e.g. tapping "Attach to Cart" on the Profile tab without closing the
+  // sheet first).
+  const tabs = isAttached ? ['profile', 'edit'] : ['profile'];
+
+  // Defensive: if isAttached flips false while Edit is the active tab
+  // (attach state changing out from under an open sheet is an edge case,
+  // not the normal path, but the tab must not stay selected once it's no
+  // longer offered) — same "adjust during render" idiom as the reset above.
+  if (activeTab === 'edit' && !isAttached) {
+    setActiveTab('profile');
+  }
+
   if (!customer) return null;
 
   return (
     <BottomSheet isOpen={isOpen} onClose={onClose} title={customer.customerName || 'Customer'}>
 
-      {/* Tab bar — Profile + Edit only. pb-3 removed 2026-08-24: that padded
-          INSIDE the tab track's own bg-muted box (stretching its background
-          taller), which isn't the same as space AFTER it — the content
-          below still started right at the track's true bottom edge and
-          read as stuck to it. Spacing now lives on the content wrapper's
-          own margin-top instead, so it's real breathing room between the
-          track and the data below, not padding hidden inside the track. */}
-      <PillTabs
-        tabs={TABS}
-        value={activeTab}
-        onChange={setActiveTab}
-        getKey={(t) => t}
-        getLabel={(t) => TAB_LABELS[t]}
-        className="-mx-1 px-1"
-      />
+      {/* Tab bar — ADDED 2026-09-08: only shown once there's actually more
+          than one tab to switch between. Before Edit was gated on
+          isAttached (2026-09-07), Profile was always shown alongside it —
+          now an unattached lookup has exactly one tab ("Profile"), and a
+          tab control with a single, permanently-selected option switches
+          nothing; it just took up space above the same data it was
+          wrapping. Once attached, Edit reappears and the tab bar comes
+          back with it.
+          pb-3 removed 2026-08-24: that padded INSIDE the tab track's own
+          bg-muted box (stretching its background taller), which isn't the
+          same as space AFTER it — the content below still started right at
+          the track's true bottom edge and read as stuck to it. Spacing now
+          lives on the content wrapper's own margin-top instead, so it's
+          real breathing room between the track and the data below, not
+          padding hidden inside the track. */}
+      {tabs.length > 1 && (
+        <PillTabs
+          tabs={tabs}
+          value={activeTab}
+          onChange={setActiveTab}
+          getKey={(t) => t}
+          getLabel={(t) => TAB_LABELS[t]}
+          className="-mx-1 px-1"
+        />
+      )}
 
       <div className="mt-4">
         {activeTab === 'profile' && (
@@ -389,7 +431,7 @@ export default function CustomerDetailSheet({ customer, isOpen, onClose, onAttac
             onClose={onClose}
           />
         )}
-        {activeTab === 'edit' && (
+        {activeTab === 'edit' && isAttached && (
           <EditTab customer={customer} />
         )}
       </div>

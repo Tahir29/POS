@@ -15,7 +15,7 @@ import { useSchemeMonthlyDetails } from '@/hooks/schemes/useSchemeMonthlyDetails
 import { useSchemeReceiptHistory } from '@/hooks/schemes/useSchemeReceiptHistory';
 import { useSchemeBenefits } from '@/hooks/schemes/useSchemeBenefits';
 import { useCloseSchemeEnrollment } from '@/hooks/schemes/useCloseSchemeEnrollment';
-import { formatCurrency, formatDate } from '@/lib/schemeFormat';
+import { formatCurrency, formatDate, formatMonthName } from '@/lib/schemeFormat';
 
 const TABS = [
   { key: 'schedule', label: 'Schedule' },
@@ -134,7 +134,12 @@ function ScheduleTab({ enrollmentId }) {
             className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card px-3 py-2.5"
           >
             <div className="min-w-0">
-              <p className="text-sm font-medium text-foreground">Month {month.monthId}</p>
+              {/* FIXED 2026-09-08 — month_id is the calendar month (1-12,
+                  confirmed live — see useSchemeMonthlyDetails.js), not a
+                  sequential instalment count; showing the bare number read
+                  as "the 9th instalment" right next to a due date that's
+                  ALSO in month 9, which was the actual confusion. */}
+              <p className="text-sm font-medium text-foreground">{formatMonthName(month.monthId)}</p>
               <p className="text-xs text-muted-foreground">
                 Due {formatDate(month.dueDate)}
                 {month.isPaid && month.paidOnDate && ` · Paid ${formatDate(month.paidOnDate)}`}
@@ -156,32 +161,88 @@ function ScheduleTab({ enrollmentId }) {
   );
 }
 
-function PaymentsTab({ enrollmentId }) {
-  const { data: receipts = [], isLoading, isError } = useSchemeReceiptHistory(enrollmentId);
+// Same calendar day, ignoring time-of-day — a receipt's document_date
+// carries a real timestamp ("2026-09-07T11:19:12.885Z"), a schedule row's
+// paid_on_date is stamped at midnight ("2026-09-07T00:00:00.000"); the two
+// never match to the millisecond, only to the day.
+function isSameCalendarDay(a, b) {
+  if (!a || !b) return false;
+  const da = new Date(a), db = new Date(b);
+  return da.getFullYear() === db.getFullYear()
+    && da.getMonth() === db.getMonth()
+    && da.getDate() === db.getDate();
+}
 
-  if (isLoading) return <LoadingRow />;
-  if (isError)   return <ErrorRow label="Failed to load payment history." />;
+// Which schedule month(s) this receipt actually paid for.
+//
+// CONFIRMED LIVE 2026-09-08 against a real enrollment/receipt (id 158/437):
+// SchemeReceipt/List's own response carries NO month reference at all —
+// no month_id, no scheme_monthly_details_id, nothing — even though
+// SchemeReceipt/Create requires month_ids on the way in (see
+// schemeService.js's buildSchemeReceiptPayload header) and OrnaVerse's own
+// client refuses to save a receipt without it. It's write-only: accepted
+// on Create, never echoed back on List. So this can't be read directly off
+// the receipt — it has to be INFERRED by cross-referencing against the
+// Schedule (SchemeMonthlyDetails/List), matching each receipt to whichever
+// schedule row(s) share its paid_on_date (same calendar day — see
+// isSameCalendarDay). Confirmed live: enrollment 158's October instalment
+// (month_id 10) shows payment_made:true, paid_on_date "2026-09-07" —
+// this DOES NOT mean it was paid on time in September; the customer paid
+// the October instalment early, in September (a real, confirmed advance-
+// payment case, not a data error) — which is exactly why showing the
+// matched MONTH NAME here, not just the receipt's own date, is the
+// genuinely useful piece of information the receipt's own date can't
+// convey on its own.
+//
+// One receipt can cover more than one month (month_ids is an array on
+// Create), so this returns every match, not just the first — and returns
+// nothing rather than a guess when no schedule row shares that exact day
+// (e.g. the schedule hasn't loaded, or the two dates were recorded far
+// enough apart that this correlation genuinely can't tell).
+function matchedMonthNames(receipt, months) {
+  return months
+    .filter((m) => m.isPaid && isSameCalendarDay(m.paidOnDate, receipt.documentDate))
+    .map((m) => formatMonthName(m.monthId));
+}
+
+function PaymentsTab({ enrollmentId }) {
+  const { data: receipts = [], isLoading: receiptsLoading, isError: receiptsError } = useSchemeReceiptHistory(enrollmentId);
+  // Fetched here too (already used by ScheduleTab) purely to resolve which
+  // month each receipt actually paid for — see matchedMonthNames above for
+  // why this can't come from the receipt row alone.
+  const { data: months = [], isLoading: monthsLoading } = useSchemeMonthlyDetails(enrollmentId);
+
+  if (receiptsLoading) return <LoadingRow />;
+  if (receiptsError)   return <ErrorRow label="Failed to load payment history." />;
   if (!receipts.length) return <EmptyRow icon={Receipt} label="No payments recorded yet." />;
 
   return (
     <div className="flex flex-col gap-2">
-      {receipts.map((receipt) => (
-        <div
-          key={receipt.id}
-          className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card px-3 py-2.5"
-        >
-          <div className="min-w-0">
-            <p className="text-sm font-medium text-foreground">{receipt.documentNo ?? `Receipt #${receipt.id}`}</p>
-            <p className="text-xs text-muted-foreground">
-              {formatDate(receipt.documentDate)}
-              {receipt.modeName && ` · ${receipt.modeName}`}
-            </p>
+      {receipts.map((receipt) => {
+        const matchedMonths = monthsLoading ? [] : matchedMonthNames(receipt, months);
+        return (
+          <div
+            key={receipt.id}
+            className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card px-3 py-2.5"
+          >
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-foreground">{receipt.documentNo ?? `Receipt #${receipt.id}`}</p>
+              <p className="text-xs text-muted-foreground">
+                {formatDate(receipt.documentDate)}
+                {receipt.modeName && ` · ${receipt.modeName}`}
+              </p>
+              {matchedMonths.length > 0 && (
+                <p className="text-xs text-muted-foreground/80 mt-0.5">
+                  For: {matchedMonths.join(', ')}
+                </p>
+              )}
+            </div>
+            <span className="text-sm font-semibold text-foreground shrink-0">
+              {formatCurrency(receipt.amount)}
+            </span>
           </div>
-          <span className="text-sm font-semibold text-foreground shrink-0">
-            {formatCurrency(receipt.amount)}
-          </span>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

@@ -19,23 +19,31 @@
 // and requires item_id/item_code) — so there is currently NO call shape
 // that persists a PAN document to OrnaVerse. Same class of bug as
 // dailyClosingService.js's own 500; flag to OrnaVerse's team with the
-// repro above rather than re-guessing encodings here.
+// repro above rather than re-guessing encodings here. RE-CONFIRMED
+// 2026-09-07 against LIVE (party_id 1185, reverted after — nothing
+// changed, the 500 means nothing was ever saved): identical error on both
+// environments, so this is a genuine, permanent OrnaVerse gap, not a
+// UAT-only or temporary one.
 //
 // Given that, this component:
-//   - saves the PAN NUMBER for real (that part works and gates Place Order,
-//     same as before this fix — gating on the document too would make
-//     checkout above the threshold permanently impossible, which is worse
-//     than today's honest "may still be rejected at submit").
-//   - lets staff attach the file so they have it in hand at the counter,
-//     clearly labeled as NOT saved to OrnaVerse — a local-only aid, not a
-//     silent fake success.
+//   - saves the PAN NUMBER for real (that part works and gates Place Order
+//     — see checkoutSchema.js; the document attach below is NOT part of
+//     that gate and was never intended to be — gating on a field that
+//     can't be saved would make checkout above the threshold permanently
+//     impossible, which is worse than today's honest "may still be
+//     rejected at submit").
+//   - lets staff attach the file so they have it in hand at the counter —
+//     purely a local aid for the operator, still never sent anywhere (see
+//     handleSave below, which only ever submits pan_no). The on-screen
+//     warning that used to spell this out was removed 2026-09-08 per
+//     explicit product decision; the underlying behavior is unchanged.
 //
 // Reusing useRetrieveCustomer/useUpdateCustomer (the same pair the customer
 // Edit tab uses) means the "on file" state updates itself for free once the
 // number save succeeds and its query invalidation refetches the customer.
 
 import { useEffect, useRef, useState } from 'react';
-import { CheckCircle2, ShieldAlert, Paperclip, X, AlertTriangle } from 'lucide-react';
+import { CheckCircle2, ShieldAlert, Paperclip, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useCustomerSession } from '@/hooks/customer/useCustomerSession';
@@ -147,7 +155,23 @@ export default function CheckoutPanCapture({ totalAmount, onPanResolved }) {
   };
 
   // Document attach — same small block whether the number is already on
-  // file or still being entered, since OrnaVerse can't take it either way.
+  // file or still being entered, since OrnaVerse can't take it either way
+  // (see this file's header comment: no upload call shape exists at all).
+  // Purely local — handleSave above never sends this anywhere, and nothing
+  // in checkoutSchema/onPanResolved ever looks at it, so it was never part
+  // of the Place Order gate and still isn't; only the PAN NUMBER gates
+  // checkout. The warning label that used to sit under this (2026-09-08,
+  // removed per explicit product decision) is gone, but the underlying
+  // fact hasn't changed — a document attached here is for the operator's
+  // own reference only, this component still doesn't persist it anywhere.
+  //
+  // BUG FIX 2026-09-08 — this block was fully built (file input, attached-
+  // file chip, remove button, size/type error) but never actually rendered
+  // in either return branch below — a leftover from whenever this
+  // component was last restructured into the two panOnFile/entry-form
+  // branches. Now rendered in both, matching this comment's own stated
+  // intent above ("same small block whether... on file or still being
+  // entered").
   const documentBlock = (
     <div>
       <input
@@ -156,7 +180,7 @@ export default function CheckoutPanCapture({ totalAmount, onPanResolved }) {
         accept={ACCEPTED_TYPES.join(',')}
         onChange={handleFileChange}
         className="hidden"
-        aria-label="PAN card or document (kept for your reference only)"
+        aria-label="PAN card or document (for your reference only)"
       />
       {attachedFile ? (
         <div className="flex items-center justify-between gap-2 rounded-lg border border-border bg-secondary/40 px-3 py-2">
@@ -185,13 +209,6 @@ export default function CheckoutPanCapture({ totalAmount, onPanResolved }) {
         </Button>
       )}
       {fileError && <p className="mt-1 text-xs text-destructive">{fileError}</p>}
-      <p className="flex items-start gap-1.5 mt-2 text-xs text-muted-foreground">
-        <AlertTriangle size={13} className="shrink-0 mt-0.5 text-status-made-order" aria-hidden="true" />
-        Kept on this screen for your reference only — OrnaVerse&apos;s document
-        upload is down server-side right now, so this file is not saved to
-        the customer record. Follow your store&apos;s manual process for filing
-        it until that&apos;s fixed.
-      </p>
     </div>
   );
 
@@ -201,10 +218,11 @@ export default function CheckoutPanCapture({ totalAmount, onPanResolved }) {
         <h2 className="text-sm font-bold text-foreground mb-2">
           PAN Details <span className="text-destructive">*</span>
         </h2>
-        <p className="flex items-center gap-1.5 text-sm text-status-in-stock mb-0">
+        <p className="flex items-center gap-1.5 text-sm text-status-in-stock mb-3">
           <CheckCircle2 size={15} className="shrink-0" aria-hidden="true" />
           PAN on file: <span className="font-mono font-semibold">{panOnFile}</span>
         </p>
+        {documentBlock}
       </section>
     );
   }
@@ -244,6 +262,7 @@ export default function CheckoutPanCapture({ totalAmount, onPanResolved }) {
             {updateCustomer.isPending ? 'Saving…' : 'Save'}
           </Button>
         </div>
+        {documentBlock}
       </div>
     </section>
   );

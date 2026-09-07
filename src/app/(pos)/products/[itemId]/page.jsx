@@ -43,6 +43,8 @@ import RecentlyViewedCarousel from '@/components/features/products/RecentlyViewe
 import WishlistButton         from '@/components/features/products/WishlistButton';
 import { useRecordProductView } from '@/hooks/products/useRecentlyViewed';
 import { deriveKaratCode } from '@/lib/karat';
+import { resolveImageSrc } from '@/lib/resolveImageSrc';
+import { resolveActiveProductImage } from '@/lib/productImages';
 
 import TOAST      from '@/constants/toastMessages';
 import tracker from '@/lib/analytics/tracker';
@@ -144,7 +146,9 @@ function ProductDetailScreen() {
   } = useDesignVariants(product?.style_id ?? null, activeStoreId);
 
   // ── Shopify images ────────────────────────────────────────────────────────
-    const { images: shopifyImages, videos: shopifyVideos, primaryImage, isLoading: shopifyImagesLoading } = useShopifyProductImages(externalProductId);
+  // Raw `primaryImage` this hook returns (images[0]) is deliberately never
+  // used directly here — it's colour-agnostic; see activePrimaryImage below.
+  const { images: shopifyImages, videos: shopifyVideos, isLoading: shopifyImagesLoading } = useShopifyProductImages(externalProductId);
 
   // Gallery is genuinely "loading" while either: variants are still
   // resolving (which is what determines externalProductId in the first
@@ -181,6 +185,23 @@ function ProductDetailScreen() {
 
   // Active item = selected variant (if customized) else original product
   const activeItem = selectedVariant ?? product;
+
+  // FIXED 2026-09-08 — confirmed live: adding the same style to the mini
+  // cart in two different metal colours (Yellow Gold, then 18kt White
+  // Gold) showed the Yellow Gold photo on BOTH cart lines. `primaryImage`
+  // above (useShopifyProductImages' raw images[0]) is colour-BLIND —
+  // "whichever photo Shopify lists first for the whole product listing",
+  // regardless of which variant is actually selected. ProductImageGallery
+  // below already solves this correctly for its own on-screen display via
+  // colour-filtered images; resolveActiveProductImage is that exact same
+  // logic (moved to lib/productImages.js so both callers share it),
+  // applied here too so whatever gets attached to a cart line always
+  // matches the photo the customer was actually looking at — never a
+  // fixed, colour-agnostic pick.
+  const activePrimaryImage = useMemo(
+    () => resolveActiveProductImage(shopifyImages, activeItem?.metal_color_name ?? null, activeItem, resolveImageSrc),
+    [shopifyImages, activeItem]
+  );
 
   // A confirmed variant counts as Made to Order either because it's the
   // pseudo-fallback (_isMTO — no real SKU exists for that combo) or because
@@ -710,7 +731,7 @@ function ProductDetailScreen() {
         selectedSizeId={selectedVariant?.item_size_id ?? null}
         selectedSizeName={selectedVariant?.item_size_name ?? null}
         stockStatus={stockStatus}
-        primaryImage={primaryImage}
+        primaryImage={activePrimaryImage}
       />
 
       <CustomizeSheet

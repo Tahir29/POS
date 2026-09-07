@@ -86,6 +86,7 @@ import APP_CONFIG               from '@/constants/appConfig';
 import { todayDateString } from '@/lib/dateUtils';
 
 import PageLoader from '@/components/shared/PageLoader';
+import ConfirmDialog from '@/components/shared/ConfirmDialog';
 import { Button }  from '@/components/ui/button';
 import { Input }   from '@/components/ui/input';
 import { Label }   from '@/components/ui/label';
@@ -588,18 +589,28 @@ function RepairInvoiceNewForm({ onDone }) {
     });
   };
 
-  const onSubmit = async (data) => {
+  // Payment-confirmation gate (2026-09-07, same pattern as checkout/page.jsx
+  // — see its header comment for the full rationale). The remaining balance
+  // here is collected on a physical terminal too, so "Create Repair
+  // Invoice" no longer submits directly: prepareSubmit runs every check
+  // that DOESN'T touch the API (same checks this used to open with) and,
+  // only if a real terminal payment is actually needed (remainingDue > 0),
+  // opens a Yes/No gate before submitInvoice ever runs. A fully-covered
+  // invoice (existing balances alone meet the full amount) has no terminal
+  // step to confirm, so it still submits immediately, same as before.
+  const [pendingInvoiceData, setPendingInvoiceData] = useState(null);
+  const [isPaymentConfirmOpen, setIsPaymentConfirmOpen] = useState(false);
+
+  const prepareSubmit = (data) => {
     if (!selectedOut) return toast.error('Select the repair job this invoice is for.');
     const item = selectedOut.lineItems?.[0];
     if (!item) return toast.error('Selected job has no item on record.');
 
-    const itemRate = Number(data.item_rate);
     // A mode is only required for whatever isn't covered by applied
     // balances — a fully-covered invoice needs no new payment at all.
     if (remainingDue > 0 && !data.mode_id) {
       return toast.error('Select how the remaining balance is paid.');
     }
-    const selectedMode = data.mode_id ? paymentModes.find((m) => m.modeId === Number(data.mode_id)) : null;
     if (!headerConfig.isReady) {
       if (headerConfig.isError) headerConfig.refetch();
       return toast.error(
@@ -610,6 +621,32 @@ function RepairInvoiceNewForm({ onDone }) {
             : 'Store configuration is still loading — try again in a moment.'
       );
     }
+
+    if (remainingDue > 0) {
+      setPendingInvoiceData(data);
+      setIsPaymentConfirmOpen(true);
+    } else {
+      submitInvoice(data);
+    }
+  };
+
+  const handlePaymentConfirmed = () => {
+    if (pendingInvoiceData) submitInvoice(pendingInvoiceData);
+    setPendingInvoiceData(null);
+  };
+
+  // Nothing was submitted — no draft invoice exists to roll back. The form
+  // (job, labour charge, applied balances) stays exactly as filled in so
+  // the operator can just pick a different payment mode and try again.
+  const handlePaymentDeclined = () => {
+    setPendingInvoiceData(null);
+    toast.info('Payment declined — nothing was saved.');
+  };
+
+  const submitInvoice = async (data) => {
+    const item = selectedOut.lineItems?.[0];
+    const itemRate = Number(data.item_rate);
+    const selectedMode = data.mode_id ? paymentModes.find((m) => m.modeId === Number(data.mode_id)) : null;
 
     try {
       const pieces = item.pieces ?? 1;
@@ -684,7 +721,7 @@ function RepairInvoiceNewForm({ onDone }) {
   const isSubmitting = create.isPending || post.isPending || addReceipt.isPending;
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5">
+    <form onSubmit={handleSubmit(prepareSubmit)} className="flex flex-col gap-5">
       <FormField label="Repair Job" required>
         <RecordPicker
           records={repairOuts}
@@ -739,6 +776,19 @@ function RepairInvoiceNewForm({ onDone }) {
       <Button type="submit" disabled={isSubmitting || !selectedOut} className="h-12 mt-1">
         {isSubmitting ? 'Billing…' : 'Create Repair Invoice'}
       </Button>
+
+      {/* Payment-confirmation gate — see prepareSubmit above. */}
+      <ConfirmDialog
+        isOpen={isPaymentConfirmOpen}
+        onOpenChange={setIsPaymentConfirmOpen}
+        title="Confirm payment on terminal"
+        description={`Has the remaining ${formatINR(remainingDue)} been completed on the payment terminal? Confirming will create the repair invoice — declining will not save anything.`}
+        confirmLabel="Yes, Payment Received"
+        cancelLabel="No, Declined"
+        confirmVariant="default"
+        onConfirm={handlePaymentConfirmed}
+        onCancel={handlePaymentDeclined}
+      />
     </form>
   );
 }

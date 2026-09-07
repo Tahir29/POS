@@ -38,7 +38,7 @@ import TOAST from '@/constants/toastMessages';
 
 export default function DiscountSection() {
   const dispatch = useDispatch();
-  const { appliedPromos, removePromo, isEmpty } = useCart();
+  const { appliedPromos, removePromo, redeemedCoins, isEmpty } = useCart();
   const {
     lineItems: pricedLineItems,
     documentId,
@@ -53,7 +53,15 @@ export default function DiscountSection() {
   // pricing," and saying so on the product page (where the cart is often
   // genuinely empty) would just be wrong.
   const notReadyToCheck = !pricedLineItems?.length;
-  const disabledHint = isEmpty
+  // ADDED 2026-09-08 — mutual exclusivity with Lucira Coins (see
+  // cartSlice's redeemedCoins / LucraCoinsSection). Disabled here too, not
+  // left to fail with a toast after the click — usePromoValidation's own
+  // 'coins_active' guard is the real enforcement, this just avoids an
+  // avoidable round trip through it.
+  const hasCoinsApplied = redeemedCoins > 0;
+  const disabledHint = hasCoinsApplied
+    ? 'Remove the applied Lucira Coins before adding a promo code.'
+    : isEmpty
     ? 'Add items to your cart before applying a promo code.'
     : 'Still pricing your cart — promo codes can be applied once that’s done.';
 
@@ -111,10 +119,12 @@ export default function DiscountSection() {
       <PromoCodeInput
         onApply={validatePromo}
         isValidating={isValidating}
-        disabled={notReadyToCheck}
+        disabled={notReadyToCheck || hasCoinsApplied}
         disabledHint={disabledHint}
       />
-      <PromoCodeSheet onApply={validatePromo} isApplying={isValidating} appliedPromos={appliedPromos} />
+      {!hasCoinsApplied && (
+        <PromoCodeSheet onApply={validatePromo} isApplying={isValidating} appliedPromos={appliedPromos} />
+      )}
     </section>
   );
 }

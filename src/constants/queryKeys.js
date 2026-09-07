@@ -268,4 +268,15 @@ export const QUERY_KEYS = {
     LIST:    (shopifyProductId) => ['reviews', 'list', shopifyProductId],
   },
 
+  // NECTOR (loyalty points — added 2026-09-08). Keyed by MOBILE, not
+  // customerId — Nector's own lead lookup is mobile/email/customer_id
+  // based, not OrnaVerse's party_id, and this app only ever has a mobile
+  // number to search with (see nectorService.js's getCustomerLoyalty).
+  // Distinct from REWARDS above, which is OrnaVerse's own native CRM
+  // rewards system — two entirely separate loyalty programs this app
+  // happens to both read.
+  NECTOR: {
+    LOYALTY: (mobile) => ['nector', 'loyalty', mobile],
+  },
+
 };

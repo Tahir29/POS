@@ -86,6 +86,19 @@ function EnrollScreen() {
   const watchedDocumentDate = watch('document_date');
   const selectedScheme  = schemes.find((s) => s.scheme_id === Number(watchedSchemeId));
 
+  // ADDED 2026-09-08 — the amount field prefills from the scheme's own
+  // default (see the effect below) but was still fully freeform after
+  // that: nothing stopped staff from typing in a SMALLER monthly amount
+  // than the scheme actually defines. Enforced here, not in enrollSchema's
+  // static Zod shape — the minimum depends on selectedScheme, which is
+  // derived from the picked scheme_id, not something a static schema can
+  // reference; gating the submit button (below) plus this warning is a
+  // complete, simpler equivalent to a schema-level refinement here.
+  const isBelowMinimumAmount = !!selectedScheme
+    && selectedScheme.scheme_amount != null
+    && Number(watchedAmount) > 0
+    && Number(watchedAmount) < selectedScheme.scheme_amount;
+
   // Prefill amount/tenure from the scheme's own defaults — mirrors OrnaVerse's
   // own Scheme Enrollment screen, which loads these the moment a scheme is
   // picked instead of leaving staff to type in numbers the scheme already
@@ -110,6 +123,10 @@ function EnrollScreen() {
 
   const onSubmit = async (data) => {
     if (!customerId || !selectedScheme) return;
+    // Defensive — the submit button is already disabled in this state
+    // (isBelowMinimumAmount above); this just guards the same rule at the
+    // actual submit path too, in case the two ever fall out of sync.
+    if (isBelowMinimumAmount) return;
 
     const schemeAmount = Number(data.scheme_amount);
     const tenure        = Number(data.tenure);
@@ -244,6 +261,11 @@ function EnrollScreen() {
             />
           </div>
           {errors.scheme_amount && <p className="text-xs text-destructive">{errors.scheme_amount.message}</p>}
+          {isBelowMinimumAmount && (
+            <p className="text-xs text-destructive">
+              Scheme amount cannot be less than the original scheme amount.
+            </p>
+          )}
         </div>
 
         <div className="flex flex-col gap-1.5">
@@ -335,7 +357,7 @@ function EnrollScreen() {
 
         <Button
           type="submit"
-          disabled={enroll.isPending || !customerId}
+          disabled={enroll.isPending || !customerId || isBelowMinimumAmount}
           className="h-12 mt-1"
         >
           {enroll.isPending ? 'Enrolling…' : 'Confirm Enrollment'}

@@ -19,6 +19,23 @@ export const abandonedCartItemSchema = z.object({
   sizeId:     z.number().int().nullable().optional(),
   sizeName:   z.string().nullable().optional(),
   image:      z.string().nullable().optional(),
+  // ADDED 2026-09-08 — z.object() strips any key not listed here from
+  // .safeParse()'s output (no .passthrough(), no .strict() — just the
+  // default "silently drop unknown keys" behaviour), so `attributes` and
+  // `hasStock` were ALREADY being written by cartSlice.addItem and ALREADY
+  // silently discarded before ever reaching Mongo — this schema was out of
+  // sync with the real CartItem shape it claims to mirror. productUrl is
+  // new (see cartSlice's own comment: every add-to-cart path now derives
+  // one, for exactly this — restoring or communicating about an abandoned
+  // cart needs a link back to the product, and a photo/specs to recognise
+  // it by, not just a bare item_id). All three now actually persist.
+  productUrl: z.string().nullable().optional(),
+  hasStock:   z.boolean().nullable().optional(),
+  attributes: z.object({
+    karat:      z.string().nullable().optional(),
+    metalColor: z.string().nullable().optional(),
+    weight:     z.number().nullable().optional(),
+  }).nullable().optional(),
 });
 
 export const upsertAbandonedCartSchema = z.object({

@@ -62,11 +62,42 @@ export default function AddToCartButton({
   // ── Resolve image ─────────────────────────────────────────────────────────
   // Priority 1: Shopify image (src is already an absolute URL)
   // Priority 2: OrnaVerse image field (handles relative paths + "NA")
+  //
+  // `primaryImage` MUST already be colour-matched to `product` (the active
+  // variant) by the caller — see products/[itemId]/page.jsx's
+  // activePrimaryImage (lib/productImages.js's resolveActiveProductImage).
+  // FIXED 2026-09-08: this used to receive useShopifyProductImages' raw,
+  // colour-AGNOSTIC images[0] directly, so adding the same style in two
+  // different metal colours to the cart showed the same photo on both
+  // lines — whichever colour Shopify happened to list first for that
+  // product, regardless of what was actually selected. This component
+  // itself has no colour context of its own to re-derive the right image
+  // from, so it stays a dumb "trust whatever the caller resolved" — the
+  // fix lives entirely in what gets passed in.
   const resolvedImage =
     primaryImage?.src ??
     resolveImageSrc(product?.image_url ?? product?.image) ??
     null;
 
+
+  // Same product page every add-to-cart happens from today (AddToCartButton
+  // has exactly one caller — products/[itemId]/page.jsx, confirmed via
+  // grep) — so `productUrl` here is always this app's own staff-facing
+  // product route, not a public Shopify storefront link (see cartSlice's
+  // own comment on why: no product HANDLE is resolved anywhere in this
+  // codebase, only the numeric Shopify id, which isn't a usable path).
+  // ABSOLUTE, not the bare path — this is meant to travel into WebEngage/GA
+  // and, eventually, an actual communication (email/push), where a bare
+  // "/products/123" resolves against nothing. window.location.origin is
+  // this deployment's own real origin (UAT or LIVE, whichever is actually
+  // running) with no new env var needed; guarded for the (here, never
+  // actually hit) SSR case since this file has no server-render path of
+  // its own — it only ever runs from a real browser click.
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  const productUrl = product?.item_id != null ? `${origin}/products/${product.item_id}` : null;
+  const weightLabel = (product?.net_weight ?? product?.weight) != null
+    ? `${Number(product.net_weight ?? product.weight).toFixed(3)} g`
+    : null;
 
   const handleAddToCart = () => {
     if (isDisabled) return;
@@ -84,22 +115,55 @@ export default function AddToCartButton({
       image:      resolvedImage,
       hasStock:   stockStatus === 'in_stock' ? true : stockStatus === 'out_stock' ? false : null,
       styleId:    product.style_id         ?? null,
+      productUrl,
       attributes: {
         karat:      product.karat_name       ?? null,
         metalColor: product.metal_color_name ?? null,
+        weight:     product.net_weight ?? product.weight ?? null,
       },
     }));
 
+    // ENRICHED 2026-09-08 — this used to send only item_id/name/sku/price/
+    // quantity to GA4's shared ecommerce `items[]`, and NOTHING to
+    // WebEngage beyond that same bare set (no third argument at all). A
+    // retargeting message ("you left this in your cart") needs a photo and
+    // a link back to the exact product to be useful, and full specs so the
+    // customer recognises which piece it actually is — none of that
+    // reached either destination before. GA4's `items[]` stays close to
+    // its own reserved shape (a couple of extra non-PII keys is fine — GA4
+    // ignores unknown item keys); the full product detail (image, specs,
+    // product_url) goes in webengageExtra instead, same PII-safe split
+    // every other event in this app already follows (see tracker.js's own
+    // jsdoc) — none of this is customer PII, but keeping the split
+    // consistent means GA4's own ecommerce reports never silently pick up
+    // extra fields nobody asked for.
     tracker.trackEcommerce(GA_ECOMMERCE_EVENTS.ADD_TO_CART, EVENTS.CART_ITEM_ADDED, {
       currency: 'INR',
       value:    unitPrice * quantity,
       items: [{
-        item_id:   String(product.item_id),
-        item_name: product.item_name ?? 'Unknown Product',
-        item_sku:  product.item_code ?? '',
-        price:     unitPrice,
+        item_id:       String(product.item_id),
+        item_name:     product.item_name ?? 'Unknown Product',
+        item_sku:      product.item_code ?? '',
+        item_category: product.type_name ?? product.item_group_name ?? undefined,
+        item_brand:    product.brand_name ?? undefined,
+        item_variant:  [product.karat_name, product.metal_color_name].filter(Boolean).join(' ') || undefined,
+        price:         unitPrice,
         quantity,
       }],
+    }, {
+      product_item_id:      product.item_id,
+      product_item_code:    product.item_code,
+      product_item_name:    product.item_name,
+      product_url:          productUrl,
+      product_image_url:    resolvedImage,
+      product_karat:        product.karat_name ?? null,
+      product_metal:        product.metal_name ?? null,
+      product_metal_color:  product.metal_color_name ?? null,
+      product_weight:       weightLabel,
+      product_size:         selectedSizeName ?? product.item_size_name ?? null,
+      price_unit:           unitPrice,
+      price_total:          unitPrice * quantity,
+      quantity,
     });
 
     toast.success(TOAST.CART.ITEM_ADDED(product.item_name ?? 'Item'));

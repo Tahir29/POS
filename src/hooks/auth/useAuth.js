@@ -79,6 +79,43 @@ export function useAuth() {
     // from this login's GetUserStores response.
     dispatch(clearStore());
 
+    // FIXED 2026-09-07 — confirmed live: switching environment.js from UAT
+    // to LIVE and logging in fresh as admin showed a customer ALREADY
+    // attached in the header. Root cause is the exact same class of bug
+    // clearStore() above was already fixed for, just never applied to
+    // cart/recentlyViewed/wishlist — this file's logout() is thorough about
+    // clearing all of it on the way OUT, but nothing here ever did the same
+    // on the way IN. So any session that ends WITHOUT going through
+    // logout() (closing the tab, a crashed dev server, restarting the app
+    // after an env-file edit like this one, a token that simply expired
+    // with no API call ever firing to trigger the 401 auto-logout in
+    // interceptors.js) leaves cart.customerId — and, worse, whichever
+    // React Query cache entries happened to be warm — sitting in
+    // localStorage/memory, ready to silently reattach or serve stale data
+    // to whoever logs in next, regardless of which agent, which
+    // environment, or even which customer it actually belonged to.
+    // reason: 'session_reset' — same flag logout() uses (see below) and for
+    // the same reason: this is a defensive reset of whatever local state
+    // happened to survive, NOT a resolved sale. A bare clearCart() tells
+    // abandonedCartMiddleware the opposite — "sale resolved, DELETE
+    // whatever's saved for this customer" — which here would have deleted
+    // a real customer's genuinely-saved abandoned cart just because a
+    // stale local session happened to still be showing them attached.
+    // session_reset instead re-saves (never deletes) whatever the stale
+    // local cart held, under that customer's own id, exactly like logout's
+    // own comment describes. Also takes recentlyViewed/wishlist with it via
+    // their own middlewares' 'cart/clearCart' case. queryClient.clear() on
+    // top of that specifically matters for an environment switch like this
+    // one: without it, cached UAT responses (payment modes, sales persons,
+    // catalog prices, ...) under the same query keys would still be served
+    // straight from memory to this brand-new LIVE session until they
+    // happened to expire on their own.
+    dispatch(clearCart({ reason: 'session_reset' }));
+    dispatch(clearRecentlyViewed());
+    dispatch(clearWishlist());
+    tracker.clear();
+    queryClient.clear();
+
     const storesData = await getUserStores();
     const stores = Array.isArray(storesData)
       ? storesData

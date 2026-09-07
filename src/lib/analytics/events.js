@@ -61,9 +61,19 @@ const RAW_EVENTS = {
 
   CHECKOUT_STARTED:      'checkout_started',
   PAYMENT_SELECTED:      'payment_selected',
+  // ADDED 2026-09-07 — the payment-confirmation gate in checkout/page.jsx
+  // (see that file's header): fires when the agent answers "No" to "has
+  // the payment gone through on the terminal?" — no create/post call is
+  // ever attempted for this attempt, so ORDER_FAILED (a real API failure)
+  // would misrepresent it; this is its own distinct outcome.
+  PAYMENT_DECLINED:      'payment_declined',
   PROMO_APPLIED:         'promo_applied',
   PROMO_FAILED:          'promo_failed',
   PROMO_SIMILAR_BLOCKED: 'promo_similar_blocked',
+  // ADDED 2026-09-08 — Lucira Coins (Nector) redemption, mutually
+  // exclusive with promo codes. See cartSlice's redeemedCoins.
+  COINS_APPLIED:         'loyalty_coins_applied',
+  COINS_BLOCKED:         'loyalty_coins_blocked',
   ORDER_PLACED:          'order_placed',
   ORDER_FAILED:          'order_failed',
 

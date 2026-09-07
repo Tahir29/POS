@@ -97,6 +97,14 @@ export const analyticsMiddleware = (store) => (next) => (action) => {
       break;
     }
 
+    // ADDED 2026-09-08 — mirrors 'cart/applyPromo' above (no 'removeLoyaltyCoins'
+    // case, same as there being no 'removePromo' case — only application is
+    // tracked here).
+    case 'cart/applyLoyaltyCoins': {
+      tracker.track(EVENTS.COINS_APPLIED, { amount: action.payload });
+      break;
+    }
+
     default:
       break;
   }

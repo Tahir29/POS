@@ -3,15 +3,20 @@
 // Side sheet listing every currently-active promo code — tapping one
 // applies it immediately, same as typing it into PromoCodeInput.
 //
-// Redesigned 2026-07-28: each offer now reads as an actual ticket/coupon
-// (perforated seam + notch cutouts between a stub and the details) instead
-// of a plain bordered row — a well-worn convention for "this is redeemable"
-// that fits a promo list better than a generic list-item card. The stub
-// leads with the discount value in large type (the one number a staff
-// member actually scans for), everything else follows.
+// REDESIGNED 2026-09-08 — matches a reference "bank offer" card design: a
+// vertical tab label on the left edge, a bold discount headline + scope
+// subtitle, then a full-width action button. (A category/gem icon badge
+// top-right was part of the first pass at this but removed same day —
+// product decision, no icon.)
+// Kept as APPLY, not copy-to-clipboard (product decision) — this is a POS
+// screen an operator applies an offer FROM, not a storefront checkout box
+// they'd paste a copied code into, so tapping still calls onApply directly
+// exactly as the previous ticket design did; only the layout changed.
+// (Previous "torn ticket stub" design — perforated seam, discount value in
+// the stub — replaced outright, not kept as an alternate.)
 
 import { useState } from 'react';
-import { Percent, ChevronRight, Check, Ticket } from 'lucide-react';
+import { Percent, Check, Tag } from 'lucide-react';
 import {
   Sheet,
   SheetContent,
@@ -23,15 +28,15 @@ import { Button } from '@/components/ui/button';
 import EmptyState from '@/components/shared/EmptyState';
 import InlineLoader from '@/components/shared/InlineLoader';
 import { useActivePromotions } from '@/hooks/checkout/useActivePromotions';
+import { cn } from '@/lib/utils';
 
 function formatDate(value) {
   if (!value) return null;
   return new Date(value).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
 }
 
-// Split for the stub's large display — describePromotionDiscount's "20% off"
-// / "₹500 off" strings read fine inline but need the number isolated from
-// "off" to actually size up on the stub.
+// Headline number — "5%" / "₹500" — the discount's own value, isolated
+// from "off" so it can be composed into "Additional 5% Off" below.
 function getDiscountValue(promo) {
   const pct = Number(promo?.discount_percentage) || 0;
   const amt = Number(promo?.discount_amount) || 0;
@@ -40,8 +45,33 @@ function getDiscountValue(promo) {
   return null;
 }
 
+// Scope subtitle — "On Diamond Value" etc. `discount_calc_on` selects which
+// COMPONENT of the item a promotion's percentage applies to (confirmed live
+// against OrnaVerse 2026-08-05, see checkoutPricingService.js/
+// useCheckoutPricing.js's own header for the full story): 1 = whole value,
+// 3 = diamond, 6 = making charges. This is real data, not a guess at what
+// the reference design's "On Diamond Products" line should say for OUR
+// promotions — falls back to the promotion's own name for any value not in
+// this known set, rather than showing nothing.
+const DISCOUNT_SCOPE_LABEL = {
+  1: 'On Total Value',
+  3: 'On Diamond Value',
+  6: 'On Making Charges',
+};
+
+// ENTIRE-CARD BUTTON (2026-09-08) — used to be a static card with a
+// separate "Apply Offer" button nested inside it; now the whole card IS
+// the button (tap anywhere to apply), and the pill that used to be a real
+// nested <button> is now a plain styled <div> — a real button can't
+// contain another interactive button (invalid HTML, and two overlapping
+// tap targets doing the same thing besides). Once applied, that pill
+// simplifies to plain "Applied" text (no border/box) and the WHOLE card
+// gets a light green tint, so an applied offer reads at a glance without
+// hunting for a small badge — nothing left to tap, so nothing left that
+// needs to look tappable.
 function OfferTicket({ promo, isApplied, isApplying, onSelect }) {
   const discountValue = getDiscountValue(promo);
+  const scopeLabel = DISCOUNT_SCOPE_LABEL[promo?.discount_calc_on] ?? promo.promotion_name;
   const expiryLabel = promo.to_date ? `Valid till ${formatDate(promo.to_date)}` : null;
 
   return (
@@ -49,40 +79,43 @@ function OfferTicket({ promo, isApplied, isApplying, onSelect }) {
       type="button"
       disabled={isApplying || isApplied}
       onClick={() => onSelect(promo.promotion_code)}
-      className="
-        group relative flex w-full items-stretch overflow-hidden rounded-2xl border border-border
-        bg-card text-left shadow-sm transition-all duration-standard ease-premium
-        hover:-translate-y-0.5 hover:shadow-md hover:border-accent/40
-        disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:hover:shadow-sm
-      "
+      className={cn(
+        'relative flex w-full rounded-2xl border text-left shadow-sm transition-colors',
+        isApplied
+          ? 'border-status-in-stock/30 bg-status-in-stock/10'
+          : 'border-border bg-card hover:bg-muted/40 disabled:cursor-not-allowed disabled:opacity-60',
+      )}
     >
-      {/* Stub — discount headline, accent-tinted like a torn ticket half */}
-      <div className="relative flex w-24 shrink-0 flex-col items-center justify-center gap-1 bg-accent/10 px-2 py-4">
-        {discountValue ? (
-          <>
-            <span className="font-heading text-xl leading-none text-accent tabular-nums">
-              {discountValue}
-            </span>
-            <span className="text-[10px] font-semibold tracking-wider text-accent/80">OFF</span>
-          </>
-        ) : (
-          <Ticket size={22} className="text-accent" aria-hidden="true" />
-        )}
+      {/* Vertical tab label — reference's "BANK OFFER" strip. Kept generic
+          ("OFFER") since OrnaVerse's PromotionRow carries no bank/type
+          categorization to show something more specific here. */}
 
-        {/* Perforation notches — cut into the seam, matching the sheet's own
-            background so they read as actual punched holes, not decoration */}
-        <span className="absolute -top-2 right-0 h-4 w-4 -translate-x-1/2 rounded-full bg-popover" aria-hidden="true" />
-        <span className="absolute -bottom-2 right-0 h-4 w-4 -translate-x-1/2 rounded-full bg-popover" aria-hidden="true" />
-      </div>
+      {isApplied ? (
+        <div className="flex w-8 shrink-0 items-center justify-center bg-status-in-stock py-4">
+          <span
+            className="text-[10px] font-bold tracking-widest text-primary-foreground whitespace-nowrap [writing-mode:vertical-rl] rotate-180"
+          >
+            APPLIED
+          </span>
+        </div>
+      ) : (
+        <div className="flex w-8 shrink-0 items-center justify-center bg-primary py-4">
+          <span
+            className="text-[10px] font-bold tracking-widest text-primary-foreground whitespace-nowrap [writing-mode:vertical-rl] rotate-180"
+          >
+            APPLY
+          </span>
+        </div>
+      )}
+      
 
-      <div className="relative w-px shrink-0 border-l border-dashed border-border" aria-hidden="true" />
-
-      <div className="flex flex-1 items-center justify-between gap-3 px-3.5 py-3 min-w-0">
+      <div className="flex flex-1 flex-col gap-3 p-4 min-w-0">
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-foreground">
-            {promo.promotion_name}
+          <p className="text-base font-bold text-foreground">
+            {discountValue ? `Additional ${discountValue} Off` : promo.promotion_name}
           </p>
-          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+          <p className="text-sm text-muted-foreground mt-0.5">{scopeLabel}</p>
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
             <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs font-semibold tracking-wide text-foreground/80">
               {promo.promotion_code}
             </span>
@@ -91,19 +124,6 @@ function OfferTicket({ promo, isApplied, isApplying, onSelect }) {
             )}
           </div>
         </div>
-
-        {isApplied ? (
-          <span className="flex shrink-0 items-center gap-1 text-xs font-medium text-status-in-stock">
-            <Check size={14} aria-hidden="true" />
-            Applied
-          </span>
-        ) : (
-          <ChevronRight
-            size={16}
-            className="shrink-0 text-muted-foreground/50 transition-transform group-hover:translate-x-0.5"
-            aria-hidden="true"
-          />
-        )}
       </div>
     </button>
   );
@@ -146,7 +166,17 @@ export default function PromoCodeSheet({ onApply, isApplying, appliedPromos = []
           </SheetDescription>
         </SheetHeader>
 
-        <div className="flex flex-col gap-3 overflow-y-auto px-4 pb-4">
+        {/* flex-1 min-h-0 (2026-09-08 fix) — SheetContent is a plain
+            flex-col column with a fixed h-full, and this is the one child
+            meant to scroll internally. Without min-h-0, a flex item's
+            default min-height is its own content size ("auto"), so this
+            div never actually shrank to the space left under SheetHeader —
+            it just kept growing with the list and squeezed every
+            OfferTicket card down to fit inside the sheet's fixed height
+            instead of the list scrolling past it. flex-1 lets it claim the
+            remaining height; min-h-0 is what actually lets it shrink to
+            that instead of to its content. */}
+        <div className="flex flex-1 min-h-0 flex-col gap-3 overflow-y-auto px-4 pb-4">
           {isLoading && <InlineLoader label="Loading offers…" />}
 
           {!isLoading && promotions.length === 0 && (

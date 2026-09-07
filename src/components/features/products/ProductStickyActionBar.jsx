@@ -13,10 +13,20 @@ import AddToCartButton   from '@/components/features/products/AddToCartButton';
 // reasonable ceiling to stop the +/- control scrolling forever.
 const QUANTITY_CEILING = 99;
 
-// Whole rupees, matching the headline price on the page behind this bar.
+// FIXED 2026-09-08 — was maximumFractionDigits: 0 ("whole rupees, matching
+// the headline price on the page behind this bar"), but that headline
+// price (src/lib/priceUtils.js's formatPrice) was itself rounding the same
+// way — both disagreed with PriceBreakdown's exact-decimal Subtotal for
+// the identical underlying field (livePricing.sub_total), by design intent
+// ("matching") rather than by accident, but the thing they were matching
+// was also wrong. Now shows the same 2-decimal precision as the rest of
+// the app (CartSummary, PriceBreakdown, checkout) — no whole-rupee
+// round_off adjustment applies here the way it does on a real invoice
+// total (see CartSummary's own header for that distinction); this is
+// purely a display figure.
 function formatINR(value) {
   if (value == null) return null;
-  return `₹${Number(value).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
+  return `₹${Number(value).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
 }
 
 /**
