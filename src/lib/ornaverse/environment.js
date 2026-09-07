@@ -16,4 +16,4 @@
 // Change ACTIVE_ENV here to switch environments everywhere at once:
 //   - upstream.js       (server) → upstream URL + injected client secret
 //   - authConfig.js      (client-safe) → client_id / grant_type / scope
-export const ACTIVE_ENV = 'UAT'; // 'LIVE' | 'UAT'
+export const ACTIVE_ENV = 'LIVE'; // 'LIVE' | 'UAT'
