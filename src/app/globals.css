@@ -320,6 +320,13 @@
   html {
     @apply font-sans;
   }
+  /* The mini-cart/sheet layout-shift-on-open bug (BottomSheet locking
+     background scroll with no scrollbar-width compensation) was first
+     tried here as `scrollbar-gutter: stable`, but that has no effect
+     until body's own computed overflow is already non-'visible' — which
+     it only becomes once BottomSheet's own JS sets it, too late for this
+     static rule to matter. Fixed properly at the source instead — see
+     hooks/ui/useBodyScrollLock.js. */
 
   @keyframes scan-line {
     0%   { top: 0%; }

@@ -191,7 +191,11 @@ const APP_CONFIG = {
     IDLE_TIMEOUT_MS:       10 * 60 * 1000,
     STAFF_IDLE_TIMEOUT_MS: 20 * 60 * 1000,
     WARNING_BEFORE:        30 * 1000,
-    CLICK_DEBOUNCE:        300,
+    // CLICK_DEBOUNCE removed 2026-09-08 — SessionProvider's click tracker
+    // no longer debounces (see that file's own comment: the old single-
+    // timer debounce silently DROPPED any click that landed within 300ms
+    // of another, rather than delaying it — every click needed its own
+    // event, not a collapsed one).
   },
 
   SEARCH: {

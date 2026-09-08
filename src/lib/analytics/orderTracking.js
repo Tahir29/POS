@@ -74,16 +74,27 @@ function toOrderItems(lineItems = []) {
  * @param {{activeStoreId, activeStoreCode, activeStoreName}} store
  * @param {{modeCode?, modeName?, amount}[]} paymentModes
  * @param {number} salesPersonId
+ * @param {string} [salesPersonName] — resolved from the same Employee/List
+ *   SalesPersonSelect already reads (see checkout/page.jsx) — the id alone
+ *   used to be sent with no name to actually read in a GA4/WebEngage report.
  */
 export function trackDocumentPlaced({
   documentType, transactionId, entity, lineItems,
   customerId, customerName, customerMobile, customerAddress,
   activeStoreId, activeStoreCode, activeStoreName,
-  paymentModes, salesPersonId,
+  paymentModes, salesPersonId, salesPersonName,
 }) {
-  const paymentSummary = (paymentModes ?? [])
+  const modes = paymentModes ?? [];
+  const paymentSummary = modes
     .map((p) => `${p.modeCode ?? p.modeName ?? 'mode'}:${p.amount}`)
     .join(', ') || undefined;
+  // ADDED 2026-09-08 — a clean, single value for the (overwhelmingly
+  // common) case of exactly one payment mode, so a report doesn't have to
+  // parse payment_modes' joined summary string just to answer "how many
+  // sales were cash vs card vs UPI". Left null for a genuine split
+  // payment (two or more modes) — payment_modes above is what documents
+  // that case; there is no one "the" method to name for it.
+  const paymentMethod = modes.length === 1 ? (modes[0].modeCode ?? modes[0].modeName ?? null) : null;
 
   tracker.trackEcommerce(GA_ECOMMERCE_EVENTS.PURCHASE, EVENTS.ORDER_PLACED, {
     document_type:  documentType,
@@ -100,8 +111,11 @@ export function trackDocumentPlaced({
     pieces:         entity.pieces,
     weight:         entity.weight,
     net_weight:     entity.net_weight,
-    sales_person_id: salesPersonId,
+    sales_person_id:   salesPersonId,
+    sales_person_name: salesPersonName ?? null,
+    payment_method:  paymentMethod,
     payment_modes:   paymentSummary,
+    payment_mode_count: modes.length,
     store_id:        activeStoreId,
     store_code:      activeStoreCode,
     store_name:      activeStoreName,

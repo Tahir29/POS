@@ -18,6 +18,7 @@ import {
   Bookmark,
   Settings,
   Wrench,
+  Footprints,
 } from 'lucide-react';
 
 export const NAV_ITEMS = [
@@ -31,6 +32,9 @@ export const NAV_ITEMS = [
   { label: 'Estimation',   href: '/estimation',   icon: FileSpreadsheet },
   { label: 'Customers',    href: '/customers',    icon: Users           },
   { label: 'Schemes',      href: '/schemes',      icon: BookOpen        },
+  // ADDED 2026-09-08 — our own walk-in log (see lib/mongo/walkins.js's
+  // header for why this exists instead of an OrnaVerse endpoint).
+  { label: 'Walk-ins',     href: '/walkins',      icon: Footprints      },
 ];
 
 export const BOTTOM_ITEMS = [

@@ -13,6 +13,21 @@ import tracker from '@/lib/analytics/tracker';
 import EVENTS from '@/lib/analytics/events';
 import { getPromotionDiscountType } from '@/lib/normalizers/promotion';
 
+// Finds the full cart line a removeItem/updateQuantity action refers to,
+// in the PRE-dispatch cart (see preCart below — same reasoning as
+// 'cart/detachCustomer': the reducer has already applied the change by the
+// time this middleware runs, so anything about to be REMOVED/CHANGED has
+// to be read from state captured before next(action)). Returns the whole
+// line (including its full `attributes`, see AddToCartButton.jsx/
+// productAttributes.js) so CART_ITEM_REMOVED/CART_ITEM_QTY_CHANGED carry
+// the same product detail every other product event does, not just the
+// bare itemId/sizeId/styleId identifiers the action payload itself has.
+function findCartItem(preCart, { itemId, sizeId, styleId }) {
+  return preCart?.items?.find(
+    (i) => i.itemId === itemId && i.sizeId === sizeId && i.styleId === styleId
+  ) ?? null;
+}
+
 export const analyticsMiddleware = (store) => (next) => (action) => {
   // Captured BEFORE next(action) runs — needed for 'cart/detachCustomer'
   // below (see that case's own comment). detachCustomer's action carries no
@@ -54,13 +69,51 @@ export const analyticsMiddleware = (store) => (next) => (action) => {
       break;
     }
 
+    // ENRICHED 2026-09-08 — this used to send only the bare
+    // { itemId, sizeId, styleId } identifiers the action payload carries —
+    // no name, price, image, or any of the product detail every other
+    // product event now has (see productAttributes.js). The full line is
+    // looked up out of preCart (captured before the reducer removed it —
+    // same reasoning as 'cart/detachCustomer' above) rather than re-derived.
     case 'cart/removeItem': {
-      tracker.track(EVENTS.CART_ITEM_REMOVED, action.payload);
+      const item = findCartItem(preCart, action.payload);
+      tracker.track(EVENTS.CART_ITEM_REMOVED, {
+        ...action.payload,
+        item_name:  item?.itemName ?? null,
+        unit_price: item?.unitPrice ?? null,
+        quantity:   item?.quantity ?? null,
+        image:      item?.image ?? null,
+        ...item?.attributes,
+      });
       break;
     }
 
     case 'cart/updateQuantity': {
-      tracker.track(EVENTS.CART_ITEM_QTY_CHANGED, action.payload);
+      const item = findCartItem(preCart, action.payload);
+      // action.payload already carries the NEW quantity — nothing here
+      // overrides it (item.attributes has no quantity field of its own).
+      tracker.track(EVENTS.CART_ITEM_QTY_CHANGED, {
+        ...action.payload,
+        item_name:  item?.itemName ?? null,
+        unit_price: item?.unitPrice ?? null,
+        ...item?.attributes,
+      });
+      break;
+    }
+
+    // ADDED 2026-09-08 — EVENTS.CART_OPENED existed but had zero call
+    // sites (confirmed by audit): AddToCartButton.jsx and Header's cart
+    // badge both dispatch ui/openCart directly, never their own tracker
+    // call — caught here at the action level instead, same reasoning as
+    // every other case in this file, so it fires regardless of which of
+    // the two call sites triggered it.
+    case 'ui/openCart': {
+      const state = store.getState();
+      tracker.track(EVENTS.CART_OPENED, {
+        item_count: state.cart?.items?.length ?? 0,
+        value:      state.cart?.total ?? null,
+        store_id:   state.store?.activeStoreId ?? null,
+      });
       break;
     }
 

@@ -39,6 +39,7 @@ import PriceBreakdown        from '@/components/features/products/PriceBreakdown
 import ProductStickyActionBar from '@/components/features/products/ProductStickyActionBar';
 import ProductTrustSection   from '@/components/features/products/ProductTrustSection';
 import ProductReviewsList    from '@/components/features/products/ProductReviewsList';
+import ProductReviewSummaryLink from '@/components/features/products/ProductReviewSummaryLink';
 import RecentlyViewedCarousel from '@/components/features/products/RecentlyViewedCarousel';
 import WishlistButton         from '@/components/features/products/WishlistButton';
 import { useRecordProductView } from '@/hooks/products/useRecentlyViewed';
@@ -49,6 +50,7 @@ import { resolveActiveProductImage } from '@/lib/productImages';
 import TOAST      from '@/constants/toastMessages';
 import tracker from '@/lib/analytics/tracker';
 import EVENTS, { GA_ECOMMERCE_EVENTS } from '@/lib/analytics/events';
+import { buildProductAttributes } from '@/lib/analytics/productAttributes';
 import { formatPrice } from '@/lib/priceUtils';
 import { Settings2, CheckCircle2, Copy, Check } from 'lucide-react';
 
@@ -331,44 +333,35 @@ function ProductDetailScreen() {
         price:     numericUnitPrice,
       }],
     }, {
-      // Full product details — base identity + whichever variant is
-      // currently active (customized or not), same activeItem-then-product
-      // fallback the rest of this page already uses.
-      product_item_id:          activeItem?.item_id ?? product.item_id,
-      product_item_code:        activeItem?.item_code ?? product.item_code,
-      product_item_name:        activeItem?.item_name ?? product.item_name,
-      product_sku:              activeSku,
-      product_style_id:         product.style_id,
-      product_item_group:       product.item_group_name,
-      product_category:         product.type_name,
-      product_sub_category:     product.sub_type_name,
-      product_collection:       product.collection_name,
-      product_brand:            product.brand_name,
-      product_karat:            activeKarat,
-      product_metal:            activeItem?.metal_name ?? product.metal_name,
-      product_metal_color:      activeColor,
-      product_size:             activeSize,
-      product_net_weight:       activeItem?.net_weight ?? product.net_weight,
-      product_gross_weight:     activeItem?.weight ?? product.weight,
-      product_stone_weight:     product.stone_weight,
-      product_diamond_weight:   product.diamond_weight,
-      product_diamond_pieces:   product.diamond_pieces,
-      product_stone_pieces:     product.stone_pieces,
-      product_hsn:              product.hsn,
-      product_stock_status:     stockStatus,
-      // Price breakup — the exact row PriceBreakdown renders on this same
-      // page, not re-derived.
-      price_currency:           'INR',
-      price_metal_amount:       livePricing?.metal_amount,
-      price_diamond_amount:     livePricing?.diamond_amount,
-      price_stone_amount:       livePricing?.stone_amount,
-      price_color_stone_amount: livePricing?.color_stone_amount,
-      price_other_amount:       livePricing?.other_amount,
-      price_making_charges:     livePricing?.item_labour,
-      price_sub_total:          livePricing?.sub_total,
-      price_taxable_amount:     livePricing?.taxable_amount,
-      price_tax_amount:         livePricing?.tax_amount,
-      price_net_amount:         livePricing?.net_amount,
+      // REFACTORED 2026-09-08 to use the shared productAttributes.js
+      // builder (see that file's own header) — this used to hand-pick a
+      // ~20-field subset directly, which the audit that led to this file
+      // existing found was missing gemstone shape/color/size (only had
+      // weight/piece counts), dimensions, the product image, product_url,
+      // and item_size_id. All now included via the shared builder, same
+      // activeItem-then-product fallback and live-priced `livePricing`
+      // this page already used before.
+      ...buildProductAttributes({
+        product,
+        activeItem,
+        pricedItem: livePricing,
+        image: activePrimaryImage?.src ?? null,
+        productUrl: product?.item_id != null
+          ? `${typeof window !== 'undefined' ? window.location.origin : ''}/products/${product.item_id}`
+          : null,
+        selectedSizeId: activeItem?.item_size_id ?? null,
+        selectedSizeName: activeSize,
+        hasStock: stockStatus === 'in_stock' ? true : stockStatus === 'out_stock' ? false : null,
+      }),
+      // sku here stays activeSku specifically (the per-piece scannable
+      // code — see this page's own comment on why it's distinct from
+      // productAttributes.js's own `sku`, which reads the same
+      // livePricing.sku field but only once a size/variant is truly
+      // resolved); kept as its own key for continuity with existing
+      // WebEngage segments already built on `product_sku`.
+      product_sku: activeSku,
+      product_stock_status: stockStatus,
+      price_currency: 'INR',
       // Attached-customer data — "entirely" whatever the cart session
       // already has (there's no fuller profile loaded on this page).
       // FIXED 2026-09-04: an unattached browse used to OMIT customer_id
@@ -394,7 +387,7 @@ function ProductDetailScreen() {
     });
   }, [
     product, numericUnitPrice, activeItem, activeSku, activeKarat, activeColor, activeSize,
-    livePricing, stockStatus, cartCustomerId, cartCustomerName, cartCustomerMobile,
+    livePricing, activePrimaryImage, stockStatus, cartCustomerId, cartCustomerName, cartCustomerMobile,
     cartCustomerAddress, activeStoreId, activeStoreCode, activeStoreName,
   ]);
 
@@ -529,6 +522,13 @@ function ProductDetailScreen() {
                 <h1 className="font-heading text-xl text-foreground leading-snug md:text-3xl">
                   {product.item_name ?? 'Product'}
                 </h1>
+
+                {/* Below the images on mobile (this column stacks under
+                    the gallery there), under the title on every
+                    breakpoint — click smooth-scrolls to Customer Reviews
+                    at the bottom. Hidden entirely when there are none —
+                    see that component's own gate. */}
+                <ProductReviewSummaryLink shopifyProductId={externalProductId} />
               </div>
 
               {wishlistProduct && (
@@ -732,6 +732,13 @@ function ProductDetailScreen() {
         selectedSizeName={selectedVariant?.item_size_name ?? null}
         stockStatus={stockStatus}
         primaryImage={activePrimaryImage}
+        // ADDED 2026-09-08 — threaded through to AddToCartButton so its
+        // analytics event/cart-line attributes can carry the real price
+        // breakup (metal/diamond/stone amounts, per-piece sku), the same
+        // row PriceBreakdown/this page's own view_item event already use.
+        // See buildProductAttributes's own header for why this needs to
+        // be the LIVE-priced entity, never the item master's stale rate.
+        pricedItem={livePricing}
       />
 
       <CustomizeSheet

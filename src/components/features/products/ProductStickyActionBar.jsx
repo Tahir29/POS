@@ -41,6 +41,9 @@ function formatINR(value) {
  *   selectedSizeName?: string|null,
  *   stockStatus?: string|null,
  *   primaryImage?: object|null,
+ *   pricedItem?: object|null, — live-priced SetSalesItems row (see
+ *     productAttributes.js's own header) — forwarded straight through to
+ *     AddToCartButton for its analytics event's price breakup.
  * }} props
  */
 export default function ProductStickyActionBar({
@@ -54,6 +57,7 @@ export default function ProductStickyActionBar({
   selectedSizeName,
   stockStatus,
   primaryImage,
+  pricedItem = null,
 }) {
   const total = unitPrice != null ? unitPrice * quantity : null;
 
@@ -103,6 +107,7 @@ export default function ProductStickyActionBar({
               selectedSizeName={selectedSizeName}
               primaryImage={primaryImage}
               stockStatus={stockStatus}
+              pricedItem={pricedItem}
               disabled={unitPrice == null}
             />
           </div>

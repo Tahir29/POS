@@ -124,6 +124,13 @@ export const QUERY_KEYS = {
     WISHLIST: (partyId) => ['customers', 'wishlist', partyId],
   },
 
+  // ADDED 2026-09-08 — our own walk-in log (lib/mongo/walkins.js) — see
+  // that file's own header for why OrnaVerse's WalkIn/Lookup and /Register
+  // can't power this themselves (both single-customer, no listing mode).
+  WALKINS: {
+    LIST: (companyId, fromDate, toDate) => ['walkins', 'list', companyId, fromDate, toDate],
+  },
+
   // PARTY_ADDRESS removed 2026-08-27 — matches apiEndpoints.js's
   // PARTY_ADDRESS removal (dead: no service or hook ever used this key).
 

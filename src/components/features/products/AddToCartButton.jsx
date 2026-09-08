@@ -25,6 +25,7 @@ import { resolveImageSrc } from '@/lib/resolveImageSrc';
 import TOAST from '@/constants/toastMessages';
 import tracker from '@/lib/analytics/tracker';
 import EVENTS, { GA_ECOMMERCE_EVENTS } from '@/lib/analytics/events';
+import { buildProductAttributes } from '@/lib/analytics/productAttributes';
 
 /**
  * @param {{
@@ -35,6 +36,9 @@ import EVENTS, { GA_ECOMMERCE_EVENTS } from '@/lib/analytics/events';
  *   selectedSizeName: string | null,
  *   primaryImage:     { src: string, alt: string|null } | null,
  *   stockStatus?:     'in_stock' | 'out_stock' | 'error' | null,
+ *   pricedItem?:      object|null, — live-priced SetSalesItems row (see
+ *     productAttributes.js's own header) — the real price breakup, per-
+ *     piece sku, and component weights, none of which live on `product`.
  *   disabled?:        boolean,
  * }} props
  *   stockStatus — ProductStickyActionBar already computes and passes this
@@ -53,6 +57,7 @@ export default function AddToCartButton({
   selectedSizeName,
   primaryImage = null,
   stockStatus = null,
+  pricedItem = null,
   disabled = false,
 }) {
   const dispatch = useDispatch();
@@ -95,9 +100,26 @@ export default function AddToCartButton({
   // its own — it only ever runs from a real browser click.
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   const productUrl = product?.item_id != null ? `${origin}/products/${product.item_id}` : null;
-  const weightLabel = (product?.net_weight ?? product?.weight) != null
-    ? `${Number(product.net_weight ?? product.weight).toFixed(3)} g`
-    : null;
+
+  // ENRICHED 2026-09-08 — built ONCE via the shared productAttributes.js
+  // builder (see that file's own header for why: every product-related
+  // event used to independently hand-pick a different subset of fields).
+  // Used for BOTH the cart line's own `attributes` (replacing the old
+  // 3-field { karat, metalColor, weight } object) AND this event's
+  // webengageExtra below — so anything that later reads this cart line
+  // (remove-from-cart, quantity-changed, checkout-started — see
+  // analyticsMiddleware.js/checkout/page.jsx) already has the full detail
+  // on hand without re-fetching or re-deriving anything.
+  const hasStockBool = stockStatus === 'in_stock' ? true : stockStatus === 'out_stock' ? false : null;
+  const fullAttributes = buildProductAttributes({
+    product,
+    pricedItem: pricedItem,
+    image: resolvedImage,
+    productUrl,
+    selectedSizeId,
+    selectedSizeName,
+    hasStock: hasStockBool,
+  });
 
   const handleAddToCart = () => {
     if (isDisabled) return;
@@ -113,27 +135,23 @@ export default function AddToCartButton({
       sizeId:     selectedSizeId           ?? product.item_size_id   ?? null,
       sizeName:   selectedSizeName         ?? product.item_size_name ?? null,
       image:      resolvedImage,
-      hasStock:   stockStatus === 'in_stock' ? true : stockStatus === 'out_stock' ? false : null,
+      hasStock:   hasStockBool,
       styleId:    product.style_id         ?? null,
       productUrl,
-      attributes: {
-        karat:      product.karat_name       ?? null,
-        metalColor: product.metal_color_name ?? null,
-        weight:     product.net_weight ?? product.weight ?? null,
-      },
+      attributes: fullAttributes,
     }));
 
-    // ENRICHED 2026-09-08 — this used to send only item_id/name/sku/price/
-    // quantity to GA4's shared ecommerce `items[]`, and NOTHING to
-    // WebEngage beyond that same bare set (no third argument at all). A
-    // retargeting message ("you left this in your cart") needs a photo and
-    // a link back to the exact product to be useful, and full specs so the
-    // customer recognises which piece it actually is — none of that
-    // reached either destination before. GA4's `items[]` stays close to
-    // its own reserved shape (a couple of extra non-PII keys is fine — GA4
-    // ignores unknown item keys); the full product detail (image, specs,
-    // product_url) goes in webengageExtra instead, same PII-safe split
-    // every other event in this app already follows (see tracker.js's own
+    // This used to send only item_id/name/sku/price/quantity to GA4's
+    // shared ecommerce `items[]`, and NOTHING to WebEngage beyond that
+    // same bare set. A retargeting message ("you left this in your cart")
+    // needs a photo and a link back to the exact product to be useful,
+    // and full specs — including gemstone detail and the real price
+    // breakup, not just karat/colour — so the customer recognises which
+    // piece it actually is. GA4's `items[]` stays close to its own
+    // reserved shape (a couple of extra non-PII keys is fine — GA4 ignores
+    // unknown item keys); the full product detail goes in webengageExtra
+    // instead (fullAttributes, built above), same PII-safe split every
+    // other event in this app already follows (see tracker.js's own
     // jsdoc) — none of this is customer PII, but keeping the split
     // consistent means GA4's own ecommerce reports never silently pick up
     // extra fields nobody asked for.
@@ -151,18 +169,9 @@ export default function AddToCartButton({
         quantity,
       }],
     }, {
-      product_item_id:      product.item_id,
-      product_item_code:    product.item_code,
-      product_item_name:    product.item_name,
-      product_url:          productUrl,
-      product_image_url:    resolvedImage,
-      product_karat:        product.karat_name ?? null,
-      product_metal:        product.metal_name ?? null,
-      product_metal_color:  product.metal_color_name ?? null,
-      product_weight:       weightLabel,
-      product_size:         selectedSizeName ?? product.item_size_name ?? null,
-      price_unit:           unitPrice,
-      price_total:          unitPrice * quantity,
+      ...fullAttributes,
+      price_unit:  unitPrice,
+      price_total: unitPrice * quantity,
       quantity,
     });
 
