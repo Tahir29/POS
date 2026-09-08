@@ -77,26 +77,35 @@ export async function getInvoiceReceiptList({ take = 0, company_id } = {}) {
  * only to pick which transaction_ids to Retrieve, never shown to the user.
  */
 function groupReceiptsByTransaction(rows) {
+  // PERF (2026-09-08) — `documentDateMs` is computed ONCE per raw receipt
+  // row here, instead of re-parsing date strings into `Date` objects both
+  // inside this loop (every duplicate row for the same transaction_id) AND
+  // again on every comparator invocation during the final .sort() below
+  // (O(n log n) comparisons, 2 `new Date()` calls each). `rows` is this
+  // store's entire receipt history when this fallback path runs (see this
+  // file's header for when that is), so for a long-lived store this can be
+  // hundreds to low-thousands of rows.
   const byTx = new Map();
   for (const row of rows) {
     const key = row.transaction_id;
+    const rowDateMs = row.document_date ? new Date(row.document_date).getTime() : 0;
     const existing = byTx.get(key);
     if (existing) {
       existing.amount += row.amount ?? 0;
-      if (new Date(row.document_date) > new Date(existing.documentDate)) {
+      if (rowDateMs > existing.documentDateMs) {
         existing.documentDate = row.document_date;
+        existing.documentDateMs = rowDateMs;
       }
     } else {
       byTx.set(key, {
         transactionId: row.transaction_id,
         documentDate: row.document_date,
+        documentDateMs: rowDateMs,
         amount: row.amount ?? 0,
       });
     }
   }
-  return [...byTx.values()].sort(
-    (a, b) => new Date(b.documentDate) - new Date(a.documentDate)
-  );
+  return [...byTx.values()].sort((a, b) => b.documentDateMs - a.documentDateMs);
 }
 
 /**

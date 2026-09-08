@@ -79,7 +79,7 @@ function buildOrderEntity({
   customerId, customerName, customerMobile,
   activeStoreId, paymentModes, narration,
   salesPersonId, exchangeRate, headerConfig,
-  fulfillmentOrderId, fulfillmentOrderNo,
+  fulfillmentOrderNo,
 }) {
   const today = localDocumentDate();
   const {
@@ -97,6 +97,12 @@ function buildOrderEntity({
     paymentModes, customerId, activeStoreId, exchangeRate, headerConfig,
   });
   const receiptAmount = +receipt_details.reduce((s, r) => s + (r.amount ?? 0), 0).toFixed(2);
+
+  // "Fulfill from order" edge case — see useCreateInvoice.js's identical
+  // comment. CONFIRMED LIVE 2026-09-08: no dedicated header field exists;
+  // narration-only audit trail, same as the Invoice path.
+  const fulfillmentNote = fulfillmentOrderNo ? `Fulfilled from Order ${fulfillmentOrderNo}` : null;
+  const combinedNarration = [fulfillmentNote, narration].filter(Boolean).join(' — ') || undefined;
 
   return {
     party_id:      customerId,
@@ -123,7 +129,7 @@ function buildOrderEntity({
     // Positive on an order taken with an advance — that is the balance the
     // customer settles on collection, not an error.
     balance_amount: +(roundedNet - receiptAmount).toFixed(2),
-    narration:     narration ?? undefined,
+    narration:     combinedNarration,
     document_id:                 APP_CONFIG.DOCUMENT_TYPES.POS_ORDER,
     financial_year_id:           headerConfig.financialYearId,
     ledger_id:                   headerConfig.ledgerId,
@@ -138,23 +144,12 @@ function buildOrderEntity({
     // The invoice_promotions[] rows from Helper/ApplyPromotions, passed
     // through untouched — see useCreateInvoice.js.
     promotion_details: promotionDetails ?? [],
-    // Edge case, not the normal path: a fulfillment cart (see
-    // FulfillOrderAction / useCreateInvoice.js) should always claim stock
-    // and route to Invoice — this only fires if that claim fails at the
-    // last moment (another counter took the piece first, in the gap
-    // between the ready-check and submit). Same best-effort, unverified
-    // reference as useCreateInvoice.js — see its comment.
-    ...(fulfillmentOrderId != null ? {
-      is_fulfillment:       true,
-      fulfillment_order_id: fulfillmentOrderId,
-      fulfillment_order_no: fulfillmentOrderNo,
-    } : {}),
   };
 }
 
 export function useCreateOrder() {
   const queryClient = useQueryClient();
-  const { items, appliedPromos, fulfillmentOrderId, fulfillmentOrderNo } = useCart();
+  const { items, appliedPromos, fulfillmentOrderNo } = useCart();
   // Fallback for analytics only on a failed order — same reasoning as
   // useCreateInvoice.js's identical cartTotal.
   const { total: cartTotal } = useCartTotals();
@@ -219,7 +214,7 @@ export function useCreateOrder() {
         customerId, customerName, customerMobile,
         activeStoreId, paymentModes, narration,
         salesPersonId, exchangeRate, headerConfig,
-        fulfillmentOrderId, fulfillmentOrderNo,
+        fulfillmentOrderNo,
       });
 
       // Step 1: Create draft order. `stage` is stamped on the error so the

@@ -124,9 +124,10 @@ export function useCart() {
 
   // "Fulfill from order" — replaces the whole cart with an order's own
   // customer + selected ready-to-invoice line(s). See cartSlice's
-  // hydrateFromOrder and orderFulfillmentService.js for the full contract
-  // and what's confirmed vs. still unverified about this actually closing
-  // the source order out server-side.
+  // hydrateFromOrder and orderFulfillmentService.js for the full contract —
+  // CONFIRMED LIVE 2026-09-08 that this closes the source order out
+  // server-side, via checkoutPricingService.claimStockPieces claiming the
+  // exact reserved stock piece (fulfillmentItemLineNo), not a header field.
   //
   // @param {{ order: { partyId, partyName, mobile, transactionId, documentNo },
   //   lines: object[] }} params — lines are raw rows from

@@ -36,8 +36,7 @@
 // could. The nearby DiscountSection is what actually handles a promo.
 
 import { Receipt } from 'lucide-react';
-
-const money = (n) => `₹${Number(n).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
+import { formatAmount as money } from '@/lib/priceUtils';
 
 function Segment({ label, value, muted = false }) {
   return (

@@ -90,7 +90,8 @@ import ItemSearchPicker                    from '@/components/features/transacti
 import { selectActiveStoreId }            from '@/store/slices/storeSlice';
 import { selectCartCustomerId, selectCartCustomerName, selectCartCustomerMobile } from '@/store/slices/cartSlice';
 import APP_CONFIG                         from '@/constants/appConfig';
-import { todayDateString }                 from '@/lib/dateUtils';
+import { todayDateString, formatDatePadded } from '@/lib/dateUtils';
+import { formatAmountOrDash } from '@/lib/priceUtils';
 
 import PageLoader                          from '@/components/shared/PageLoader';
 import PaymentModeSelect                   from '@/components/shared/PaymentModeSelect';
@@ -102,17 +103,11 @@ import { Button }                          from '@/components/ui/button';
 import { Input }                           from '@/components/ui/input';
 import { Label }                           from '@/components/ui/label';
 
-function formatINR(amount) {
-  if (amount == null) return '—';
-  return `₹${Number(amount).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
-}
-
-function formatDate(iso) {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-}
+// De-duplicated 2026-09-08 — identical copies existed in estimation/page.jsx
+// and repair/page.jsx; see lib/priceUtils.js's formatAmountOrDash and
+// lib/dateUtils.js's formatDatePadded for the shared versions.
+const formatINR = formatAmountOrDash;
+const formatDate = formatDatePadded;
 
 function getErrorMessage(error) {
   return (

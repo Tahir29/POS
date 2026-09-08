@@ -315,16 +315,75 @@ function CatalogScreen() {
   // switching this filter re-fetched the product list from the new store,
   // but every price kept coming from the signed-in store's stock).
   const { priceById: livePriceById, settledIds } = useLiveCatalogPrices(displayProducts, effectiveStoreId);
-  const pricedDisplayProducts = useMemo(
-    () => displayProducts.map((p) => {
-      const price = p.price ?? livePriceById.get(p.item_id) ?? null;
-      // is_pricing distinguishes "the number is still coming" from "there
-      // will never be a number", so a card can say which instead of
-      // rendering an empty space where the price belongs.
-      return { ...p, price, is_pricing: price == null && !settledIds.has(p.item_id) };
-    }),
-    [displayProducts, livePriceById, settledIds],
-  );
+
+  // PERF (2026-09-08) — reuses the SAME merged object for any item whose
+  // price/is_pricing hasn't actually changed since the last tick, instead of
+  // spreading a brand new `{...p, price, is_pricing}` for every item on
+  // EVERY settle-tick (which used to happen ~every 200ms while pricing
+  // streams in, per useLiveCatalogPrices' own chunking). ProductCard is
+  // React.memo'd specifically so a card whose own price hasn't moved skips
+  // re-rendering — that only works if it also keeps getting the same
+  // `product` object reference; without this, every mounted card re-rendered
+  // on every chunk regardless of whether ITS price just arrived.
+  //
+  // "Adjust state during render" (a ref would be simpler, but this repo's
+  // lint config — react-hooks/refs — forbids reading/writing a ref during
+  // render, matching the React Compiler model this Next version assumes;
+  // see AGENTS.md's warning to check current behavior rather than assume
+  // prior API conventions). Same guarded-setState-during-render idiom
+  // stableSort below already uses, for the same reason: cheap to compute,
+  // and settles after one extra render rather than needing an effect (which
+  // would paint one un-memoized frame first).
+  const [mergeCache, setMergeCache] = useState(() => new Map());
+
+  const nextMergeCache = new Map();
+  const mergedEntries = displayProducts.map((p) => {
+    const price = p.price ?? livePriceById.get(p.item_id) ?? null;
+    // is_pricing distinguishes "the number is still coming" from "there
+    // will never be a number", so a card can say which instead of
+    // rendering an empty space where the price belongs.
+    const isPricing = price == null && !settledIds.has(p.item_id);
+
+    // CORRECTED 2026-09-08 — this used to also require `cached.raw === p`
+    // (the underlying, pre-merge product object's own reference). Dropped:
+    // the adjacent pricedSignature/stableSort code below this already
+    // documents a CONFIRMED LIVE bug ("Maximum update depth exceeded") from
+    // trusting reference identity on this exact data source — `products`
+    // from useCatalogProducts' select() can get a fresh reference on every
+    // render during the fetching/refetching transition right after a store
+    // switch, not just when content genuinely changed. A reference check
+    // here would re-trigger setMergeCache below on every one of those
+    // renders with no content-based floor to converge on, risking the same
+    // crash in a second place. Comparing on price/isPricing only (content,
+    // like pricedSignature does) guarantees this settles once pricing
+    // itself stops changing, regardless of upstream reference churn.
+    // Trade-off accepted: if `p`'s OTHER fields (name/image/etc.) somehow
+    // changed while price/isPricing coincidentally didn't, the reused entry
+    // would show the old ones — acceptable since those are catalog MASTER
+    // fields, effectively immutable per item_id within a session, unlike
+    // price (which is the one field this cache exists to track).
+    const cached = mergeCache.get(p.item_id);
+    const entry = (cached && cached.price === price && cached.isPricing === isPricing)
+      ? cached
+      : { raw: p, price, isPricing, merged: { ...p, price, is_pricing: isPricing } };
+
+    nextMergeCache.set(p.item_id, entry);
+    return entry;
+  });
+  const pricedDisplayProducts = mergedEntries.map((entry) => entry.merged);
+
+  // Compared AFTER building both maps, in a plain loop rather than a flag
+  // mutated inside the .map() callback above — this repo's lint
+  // (react-hooks/immutability) forbids reassigning a render-scoped variable
+  // from inside a nested callback, matching stableSort's own plain
+  // top-level conditional reassignment below.
+  let mergeCacheChanged = nextMergeCache.size !== mergeCache.size;
+  if (!mergeCacheChanged) {
+    for (const [id, entry] of nextMergeCache) {
+      if (mergeCache.get(id) !== entry) { mergeCacheChanged = true; break; }
+    }
+  }
+  if (mergeCacheChanged) setMergeCache(nextMergeCache);
 
   // THE sort step — deliberately after pricing is merged in, not before.
   // compareProducts' price branch always sorts a still-pricing item (price

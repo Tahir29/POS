@@ -37,6 +37,8 @@ import { usePaymentModes } from '@/hooks/checkout/usePaymentModes';
 import { useOrderHeaderConfig } from '@/hooks/checkout/useOrderHeaderConfig';
 import { selectActiveStoreId } from '@/store/slices/storeSlice';
 import APP_CONFIG from '@/constants/appConfig';
+import { formatAmountOrNull as formatCurrency } from '@/lib/priceUtils';
+import { formatDateNumeric } from '@/lib/dateUtils';
 
 function Row({ label, value, bold, border }) {
   if (value === null || value === undefined || value === '') return null;
@@ -50,10 +52,6 @@ function Row({ label, value, bold, border }) {
   );
 }
 
-function formatCurrency(amount) {
-  return amount != null ? `₹${Number(amount).toLocaleString('en-IN')}` : null;
-}
-
 function InvoiceContent({ raw }) {
   const lineItems = raw?.line_items ?? [];
   const payments  = raw?.receipt_details ?? [];
@@ -62,10 +60,7 @@ function InvoiceContent({ raw }) {
   return (
     <div className="flex flex-col gap-2 text-sm">
       <Row label="Invoice No." value={raw.document_no} />
-      <Row
-        label="Date"
-        value={raw.document_date ? new Date(raw.document_date).toLocaleDateString('en-IN') : null}
-      />
+      <Row label="Date" value={formatDateNumeric(raw.document_date)} />
       <Row label="Customer" value={raw.party_name} />
       <Row label="Mobile"   value={raw.mobile} />
       <Row label="Email"   value={raw.email} />

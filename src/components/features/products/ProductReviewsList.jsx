@@ -16,15 +16,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import BottomSheet from '@/components/shared/BottomSheet';
 import { useProductReviews } from '@/hooks/products/useProductReviews';
 import { useProductReviewSummary } from '@/hooks/products/useProductReviewSummary';
+import { formatDateShort as formatDate } from '@/lib/dateUtils';
 
 const PREVIEW_COUNT = 3;
-
-function formatDate(iso) {
-  if (!iso) return null;
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return null;
-  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
-}
 
 function ReviewCard({ review }) {
   return (

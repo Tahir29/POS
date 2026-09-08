@@ -19,8 +19,6 @@ const initialState = {
                                // blocked before dispatch, see usePromoValidation.
                                // discountAmount here is DERIVED (see recalculateTotals),
                                // display-only, and against the CART subtotal.
-  appliedGiftCard:     null,
-  appliedGiftVoucher:  null,
   discountAmount:      0,     // derived from appliedPromos against the current subtotal
   // ADDED 2026-09-08 — "Lucira Coins" (Nector's loyalty program) redemption,
   // mutually exclusive with appliedPromos: a sale can be discounted by a
@@ -215,13 +213,13 @@ const cartSlice = createSlice({
       state.redeemedCoins = 0;
     },
 
-    applyGiftCard: (state, action) => {
-      state.appliedGiftCard = action.payload;
-    },
-
-    applyGiftVoucher: (state, action) => {
-      state.appliedGiftVoucher = action.payload;
-    },
+    // REMOVED 2026-09-08 — applyGiftCard/applyGiftVoucher reducers (and the
+    // appliedGiftCard/appliedGiftVoucher state fields they set) had zero
+    // callers/readers anywhere (confirmed via a dead-code audit) — the gift
+    // card/voucher payment path was never wired up beyond these reducers
+    // themselves (see promotionService.js's own comment on the matching
+    // dead endpoints). API.CRM.GIFT_VOUCHER_* stay untouched in
+    // apiEndpoints.js in case this payment method gets built out later.
 
     // Clear the entire cart — called after successful order creation
     clearCart: (state) => {
@@ -340,8 +338,6 @@ export const {
   removePromo,
   applyLoyaltyCoins,
   removeLoyaltyCoins,
-  applyGiftCard,
-  applyGiftVoucher,
   clearCart,
   clearCartKeepCustomer,
   restoreCart,

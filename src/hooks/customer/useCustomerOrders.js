@@ -17,11 +17,6 @@
 //   document_status 1 (Posted), balance > 0 && receipt_amount>0 → "partial"
 //   document_status 1 (Posted), balance > 0 && receipt_amount==0 → "due"
 
-import { useQuery } from '@tanstack/react-query';
-import { useSelector } from 'react-redux';
-import { fetchStoreScopedDocuments } from '@/services/crossStoreDocuments';
-import { selectActiveStoreId } from '@/store/slices/storeSlice';
-import { QUERY_KEYS } from '@/constants/queryKeys';
 import APP_CONFIG from '@/constants/appConfig';
 
 function isEmptyValue(v) {
@@ -82,53 +77,13 @@ export function normalizeCustomerOrder(entity, documentType = 'order') {
   };
 }
 
-export function useCustomerOrders({ customerId, enabled = true } = {}) {
-  // FIXED 2026-08-27, UPDATED 2026-09-03: company_id was never sent to
-  // either endpoint, so this pulled every store's orders/invoices for a
-  // customer. A client-side backstop filter (below) fixed the over-broad
-  // case — but confirmed live that at least one identity (the multi-store
-  // "admin" account) gets Order/List and Invoice/List silently restricted
-  // to its OWN home company regardless of company_id, so the backstop alone
-  // just turned "shows every store's data" into "shows nothing for any
-  // store but home." fetchStoreScopedDocuments (crossStoreDocuments.js)
-  // tries the same cheap List call first and only pays for a
-  // Retrieve-based fallback when List proves unreliable for this company.
-  const activeStoreId = useSelector(selectActiveStoreId);
-
-  const query = useQuery({
-    queryKey: QUERY_KEYS.ORDERS.CUSTOMER_ORDERS(customerId ?? 'none', activeStoreId),
-    queryFn:  async () => {
-      const [ordersRes, invoicesRes] = await Promise.all([
-        fetchStoreScopedDocuments({ kind: 'order',   companyId: activeStoreId }),
-        fetchStoreScopedDocuments({ kind: 'invoice', companyId: activeStoreId }),
-      ]);
-      const orderEntities   = ordersRes.entities;
-      const invoiceEntities = invoicesRes.entities;
-
-      const orders   = orderEntities.map((e) => normalizeCustomerOrder(e, 'order')).filter(Boolean);
-      const invoices = invoiceEntities.map((e) => normalizeCustomerOrder(e, 'invoice')).filter(Boolean);
-
-      return [...orders, ...invoices].sort(
-        (a, b) => new Date(b.orderDate ?? 0) - new Date(a.orderDate ?? 0)
-      );
-    },
-    enabled:   enabled && !!customerId && !!activeStoreId,
-    staleTime: APP_CONFIG.STALE_TIME.ORDERS,
-  });
-
-  const allOrders = query.data ?? [];
-  const orders = allOrders
-    .filter((o) => o.customerId == null || !customerId || String(o.customerId) === String(customerId))
-    // Client-side backstop for Order/List's broken company_id filter — see
-    // header comment. A row with no companyId at all is excluded too
-    // (fail-closed, not fail-open, on financial data).
-    .filter((o) => o.companyId === activeStoreId);
-
-  return {
-    orders,
-    isLoading:  query.isLoading,
-    isFetching: query.isFetching,
-    isError:    query.isError,
-    refetch:    query.refetch,
-  };
-}
+// REMOVED 2026-09-08 — the useCustomerOrders() hook that used to live here
+// (a merged orders+invoices-by-customer fetch, using fetchStoreScopedDocuments)
+// had zero callers anywhere in the app (confirmed via a dead-code audit —
+// the customer profile page's own Orders/History tabs were fully subsumed
+// by Customer 360 back on 2026-08-12, per that page's own TABS comment).
+// deriveDocumentStatus/normalizeCustomerOrder above are NOT dead — they're
+// still imported directly by useInvoiceList.js and useAllOrders.js — so
+// only the unused hook itself was deleted, not this whole file. The
+// Services/POS/Order/List + Invoice/List endpoints this hook called are
+// untouched in apiEndpoints.js in case this needs rebuilding later.

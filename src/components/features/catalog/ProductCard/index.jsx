@@ -46,7 +46,7 @@
 // the specs row, sharing space with the karat/weight/size line and
 // truncating it early) — see the rating badge's own comment further down.
 
-import { useState }        from 'react';
+import { useState, memo }  from 'react';
 import Image               from 'next/image';
 import { useRouter }       from 'next/navigation';
 import { useSelector }     from 'react-redux';
@@ -62,6 +62,7 @@ import { useProductReviewSummary }   from '@/hooks/products/useProductReviewSumm
 import WishlistButton       from '@/components/features/products/WishlistButton';
 import { Badge } from '@/components/ui/badge';
 import { EASE_PREMIUM, DURATION } from '@/lib/motion';
+import { formatAmountOrNull as formatINR } from '@/lib/priceUtils';
 
 // Swatch colors are a presentation mapping (not fabricated data) — the
 // metal_id itself is real; this just gives each metal a recognizable dot.
@@ -90,15 +91,11 @@ function formatWeight(grams) {
 // SAME field — confirmed as one price disagreeing with itself, not two
 // different prices (see that fix's own header). Fixed there to 2 decimals;
 // fixed here to match, rather than continuing to mirror the rounding this
-// card's own comment was matching. Still capped at 2 (not left at
-// toLocaleString's up-to-3-decimal default) — live prices carry fractional
-// paise (sub_total 226444.105), and "₹2,26,444.105" on a price tag still
-// reads like a bug; ₹2,26,444.11 is the real API figure, correctly rounded
-// to the currency's own smallest unit, not a display shortcut.
-function formatINR(value) {
-  if (value == null) return null;
-  return `₹${Number(value).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
-}
+// card's own comment was matching.
+//
+// DE-DUPLICATED 2026-09-08 — was its own local function, now imported
+// (aliased) from lib/priceUtils.js's formatAmountOrNull, which is exactly
+// this same "2 decimals, not 3" fix already generalized.
 
 // On-brand instead of a generic "broken image" glyph — a jewellery app's
 // missing-photo state shouldn't look like an error, since it isn't one
@@ -176,7 +173,7 @@ function StockBadge({ inStock, storeCodes }) {
  *   to that grid's own store server-side (see catalogService.js's
  *   current_company_id) and re-fetching per card would be pure waste.
  */
-export default function ProductCard({ product, showStockBadge = false, storeCode: storeCodeOverride, realStock = null }) {
+function ProductCard({ product, showStockBadge = false, storeCode: storeCodeOverride, realStock = null }) {
   const router = useRouter();
   const [imgError, setImgError] = useState(false);
   const reduceMotion = useReducedMotion();
@@ -374,3 +371,13 @@ export default function ProductCard({ product, showStockBadge = false, storeCode
     </motion.div>
   );
 }
+
+// PERF (2026-09-08) — the catalog grid can hold 150+ mounted cards while
+// live pricing streams in via useLiveCatalogPrices (a chunk settling every
+// ~200ms). Without this, EVERY mounted card re-rendered on every chunk,
+// not just the 1-8 whose price just arrived. Only effective alongside
+// catalog/page.jsx's own fix: `product` must keep the SAME object reference
+// across renders when nothing about it actually changed, or this memo's
+// shallow prop comparison would still see a "new" object every time and
+// re-render anyway — see pricedDisplayProducts' merge cache there.
+export default memo(ProductCard);

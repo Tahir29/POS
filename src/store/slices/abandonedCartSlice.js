@@ -58,6 +58,8 @@ const abandonedCartSlice = createSlice({
 
 export const { setAbandonedCart, clearAbandonedCartState } = abandonedCartSlice.actions;
 
-export const selectAbandonedCart = (state) => state.abandonedCart;
+// REMOVED 2026-09-08 — selectAbandonedCart had zero callers anywhere
+// (confirmed via a dead-code audit); consumers read the specific fields
+// they need off state.abandonedCart directly rather than the whole slice.
 
 export default abandonedCartSlice.reducer;

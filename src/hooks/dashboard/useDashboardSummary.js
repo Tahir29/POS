@@ -28,6 +28,7 @@
 import { useMemo } from 'react';
 import { useAllOrders } from '@/hooks/orders/useAllOrders';
 import { useReturns, useExchanges, useBuybacks, useURDPurchases } from '@/hooks/transactions/useTransactionLists';
+import APP_CONFIG from '@/constants/appConfig';
 
 // ── Date helpers ──────────────────────────────────────────────
 // Mirrors the LOCAL-date comparison approach in useOrdersSummary so
@@ -75,7 +76,24 @@ function isPendingReturn(item) {
  * }}
  */
 export function useDashboardSummary() {
-  const { allOrders, isLoading: ordersLoading, isError: ordersError, refetch: refetchOrders } = useAllOrders();
+  // PERF (2026-09-08) — this page is very likely the single most-revisited
+  // screen in a shift, and useAllOrders' underlying fetch is this store's
+  // ENTIRE order+invoice history (see that hook's own header for why a full
+  // pull, not a date-ranged one, is the confirmed-safe choice here — a
+  // server-side date filter isn't trusted given the same company_id-filter
+  // bugs documented there). With the default 2-min staleTime + the app's
+  // global refetchOnWindowFocus, every window refocus past 2 minutes
+  // re-downloaded that whole history just to derive a few KPI numbers and 4
+  // "recent orders" rows. A KPI widget doesn't need that freshness — longer
+  // staleTime, and skip the focus-triggered refetch entirely (the query
+  // still refetches on its own once genuinely stale, e.g. navigating back
+  // after a while).
+  const {
+    allOrders, isLoading: ordersLoading, isError: ordersError, refetch: refetchOrders,
+  } = useAllOrders({
+    staleTime: APP_CONFIG.STALE_TIME.ANALYTICS,
+    refetchOnWindowFocus: false,
+  });
   const { items: returns,   isLoading: returnsLoading,   isError: returnsError,   refetch: refetchReturns }   = useReturns({ skip: 0 });
   const { items: exchanges, isLoading: exchangesLoading, isError: exchangesError, refetch: refetchExchanges } = useExchanges({ skip: 0 });
   const { items: buybacks,  isLoading: buybacksLoading,  isError: buybacksError,  refetch: refetchBuybacks }  = useBuybacks({ skip: 0 });

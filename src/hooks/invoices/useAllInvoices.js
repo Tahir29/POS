@@ -11,7 +11,11 @@ import { selectActiveStoreId } from '@/store/slices/storeSlice';
 import { QUERY_KEYS } from '@/constants/queryKeys';
 import APP_CONFIG from '@/constants/appConfig';
 
-export function useAllInvoices() {
+// PERF (2026-09-08) — `enabled` (default true, unchanged for any other
+// caller) lets /invoices gate this Take:0 full-dataset fetch on the operator
+// actually having touched a filter, instead of paying for it on every visit
+// including ones that only ever page through the browse list.
+export function useAllInvoices({ enabled = true } = {}) {
   const isAuthenticated = useSelector(selectIsAuthenticated);
   const activeStoreId   = useSelector(selectActiveStoreId);
 
@@ -23,7 +27,7 @@ export function useAllInvoices() {
       const entities = data?.Entities ?? [];
       return entities.map(normalizeInvoice).filter(Boolean);
     },
-    enabled:   isAuthenticated && !!activeStoreId,
+    enabled:   enabled && isAuthenticated && !!activeStoreId,
     staleTime: APP_CONFIG.STALE_TIME.ORDERS,
   });
 

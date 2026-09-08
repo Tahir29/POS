@@ -23,12 +23,13 @@
 //
 // Exactly one document per sale — raising both would book the same goods
 // twice. (Their ERP can later fulfil an order into an invoice via "Fulfill
-// from order" — wired 2026-08-19: OrderDetailSheet's FulfillOrderAction
-// hydrates the cart from a ready order line and lands here like any other
-// sale; useCreateInvoice threads fulfillmentOrderId/OrderNo through onto
-// the Invoice/Create payload. See the header comment on
-// API.ORDER_FULFILLMENT for what's confirmed vs. still unverified about
-// that reference actually closing the source order out server-side.)
+// from order" — wired 2026-08-19, CONFIRMED LIVE end-to-end 2026-09-08:
+// OrderDetailSheet's FulfillOrderAction hydrates the cart from a ready order
+// line and lands here like any other sale; claimStockPieces claims the
+// exact stock piece the order reserved (fulfillmentItemLineNo), which is
+// what makes the source order close out server-side — no special
+// Invoice/Create field involved. See the header comment on
+// API.ORDER_FULFILLMENT for the full evidence.)
 //
 // FLOW:
 //   1. Customer must be attached (checkoutSchema enforces this)
@@ -90,10 +91,7 @@ import tracker from '@/lib/analytics/tracker';
 import EVENTS, { GA_ECOMMERCE_EVENTS } from '@/lib/analytics/events';
 import { redeemLoyaltyCoins } from '@/services/nectorService';
 import { QUERY_KEYS } from '@/constants/queryKeys';
-
-// Same formatting convention as PlaceOrderButton's own local `money()` —
-// used here for the payment-confirmation dialog's description.
-const money = (n) => `₹${Number(n ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
+import { formatAmount } from '@/lib/priceUtils';
 
 function CheckoutScreen() {
   const router  = useRouter();
@@ -636,8 +634,8 @@ function CheckoutScreen() {
         title="Confirm payment on terminal"
         description={
           isOrderMode
-            ? `Has the advance of ${money(amountCollected)} been completed on the payment terminal? Confirming will place the order — declining will not save anything.`
-            : `Has the payment of ${money(finalPayableTotal)} been completed on the payment terminal? Confirming will generate the invoice — declining will not save anything.`
+            ? `Has the advance of ${formatAmount(amountCollected)} been completed on the payment terminal? Confirming will place the order — declining will not save anything.`
+            : `Has the payment of ${formatAmount(finalPayableTotal)} been completed on the payment terminal? Confirming will generate the invoice — declining will not save anything.`
         }
         confirmLabel="Yes, Payment Received"
         cancelLabel="No, Declined"

@@ -40,7 +40,8 @@ import { useDailyClosing }               from '@/hooks/dailyClosing/useDailyClos
 import { useCreateDailyClosing }         from '@/hooks/dailyClosing/useCreateDailyClosing';
 import { useDailyClosingReconciliation } from '@/hooks/dailyClosing/useDailyClosingReconciliation';
 import { selectActiveStoreId }   from '@/store/slices/storeSlice';
-import { todayDateString } from '@/lib/dateUtils';
+import { todayDateString, formatDateNumeric } from '@/lib/dateUtils';
+import { formatAmount as formatCurrency } from '@/lib/priceUtils';
 
 import { Button } from '@/components/ui/button';
 import PillTabs from '@/components/shared/PillTabs';
@@ -59,14 +60,13 @@ const closingSchema = z.object({
 });
 
 // ── Helpers ───────────────────────────────────────────────────
-function formatCurrency(n) {
-  return `₹${Number(n ?? 0).toLocaleString('en-IN')}`;
-}
-
-function formatDate(d) {
-  if (!d) return '—';
-  return new Date(d).toLocaleDateString('en-IN');
-}
+// De-duplicated 2026-09-08 — formatCurrency/formatDate here used to be
+// local reimplementations of the exact same logic ~15/~13 other files
+// each had their own copy of; see lib/priceUtils.js's formatAmount and
+// lib/dateUtils.js's formatDateNumeric for the shared versions. This page
+// wants '—' for a missing date (formatDateNumeric itself returns null for
+// that — see its own header), so that one small adapter stays local.
+const formatDate = (d) => formatDateNumeric(d) ?? '—';
 
 // ── History Tab ───────────────────────────────────────────────
 function HistoryTab() {
