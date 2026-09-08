@@ -55,6 +55,8 @@
 import { toast } from 'react-toastify';
 import { setAbandonedCart, clearAbandonedCartState } from './slices/abandonedCartSlice';
 import { restoreCart } from './slices/cartSlice';
+import tracker from '@/lib/analytics/tracker';
+import EVENTS from '@/lib/analytics/events';
 
 const SAVE_DEBOUNCE_MS = 1500;
 let saveTimer = null;
@@ -103,6 +105,36 @@ function saveAbandonedCart(partyId, cart, token, companyId) {
       company_id:     companyId ?? null,
     }),
   }).catch((err) => console.warn('[abandonedCartMiddleware] save failed', err));
+
+  // ADDED 2026-09-08 — GA4/WebEngage tracking for whatever just got saved
+  // to Mongo above, same call every "cart saved as abandoned" path already
+  // funnels through (see this file's own header's 4 responsibilities), so
+  // this fires exactly once per real save, not a separate guess at when a
+  // cart "counts" as abandoned. Items carry their full `attributes` (see
+  // AddToCartButton.jsx/productAttributes.js) — the same rich product
+  // detail every other cart/product event now has, not just item_id/name.
+  tracker.track(EVENTS.CART_ABANDONED, {
+    store_id:   companyId ?? null,
+    item_count: cart.items.length,
+    subtotal:   cart.subtotal ?? null,
+    tax_amount: cart.taxAmount ?? null,
+    total:      cart.total ?? null,
+    currency:   'INR',
+  }, {
+    customer_id:     partyId,
+    customer_name:   cart.customerName,
+    customer_mobile: cart.customerMobile,
+    items: cart.items.map((item) => ({
+      item_id:    item.itemId,
+      item_name:  item.itemName,
+      item_sku:   item.sku,
+      quantity:   item.quantity,
+      unit_price: item.unitPrice,
+      image:      item.image,
+      product_url: item.productUrl,
+      ...item.attributes,
+    })),
+  });
 }
 
 function deleteAbandonedCart(partyId, token) {

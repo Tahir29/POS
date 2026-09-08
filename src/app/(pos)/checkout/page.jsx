@@ -70,6 +70,7 @@ import DiscountOrCoinsSection   from '@/components/features/checkout/DiscountOrC
 import CheckoutPaymentSection   from '@/components/features/checkout/CheckoutPaymentSection';
 import CheckoutTrustStrip       from '@/components/features/checkout/CheckoutTrustStrip';
 import SalesPersonSelect        from '@/components/features/checkout/SalesPersonSelect';
+import { useSalesPersonOptions } from '@/hooks/schemes/useSalesPersonOptions';
 import CartItemRow              from '@/components/features/cart/CartItemRow';
 import CartSummary              from '@/components/features/cart/CartSummary';
 import PlaceOrderButton         from '@/components/features/checkout/PlaceOrderButton';
@@ -156,6 +157,13 @@ function CheckoutScreen() {
 
   const [payments, setPayments]     = useState([]);
   const [salesPersonId, setSalesPersonId] = useState(null);
+  // ADDED 2026-09-08 — resolves salesPersonId to a real name for
+  // ORDER_PLACED's analytics event (see orderTracking.js — used to send
+  // only the bare employee id). Same query SalesPersonSelect below already
+  // makes (QUERY_KEYS.HR.EMPLOYEES_BY_COMPANY(activeStoreId)) — React
+  // Query serves this from cache, not a second network call.
+  const { salesPersons } = useSalesPersonOptions(activeStoreId);
+  const salesPersonName = salesPersons.find((p) => p.employee_id === salesPersonId)?.employee_name ?? null;
   const [panNumber, setPanNumber]   = useState(null);
   const [isBackConfirmOpen, setIsBackConfirmOpen] = useState(false);
   // Payment-confirmation gate (2026-09-07) — see this file's header comment.
@@ -269,15 +277,36 @@ function CheckoutScreen() {
   }, [isConfirmed, result, confirmedType, isEmpty, clearCartKeepCustomer, router]);
 
   // Fire begin_checkout once per visit to this screen with items in cart
+  //
+  // ENRICHED 2026-09-08 — this used to send only item_id/name/sku/price/
+  // quantity, same bare shape as ORDER_PLACED used to before that event
+  // was enriched (see orderTracking.js's toOrderItems) — no karat/metal/
+  // colour/weight/gemstone at all, even though every cart line now carries
+  // that full detail in its own `attributes` (see AddToCartButton.jsx/
+  // productAttributes.js). Same field NAMES as toOrderItems uses (
+  // item_category/item_karat/item_metal/...) so a funnel comparing
+  // begin_checkout against purchase for the same product sees consistent
+  // keys, not two different schemas for the same underlying attribute.
   useEffect(() => {
     if (isEmpty) return;
     tracker.trackEcommerce(GA_ECOMMERCE_EVENTS.BEGIN_CHECKOUT, EVENTS.CHECKOUT_STARTED, {
       value:    total,
       currency: 'INR',
       items:    items.map((item) => ({
-        item_id:   String(item.itemId),
-        item_name: item.itemName,
-        item_sku:  item.sku,
+        item_id:           String(item.itemId),
+        item_name:         item.itemName,
+        item_sku:          item.sku,
+        item_category:     item.attributes?.category ?? null,
+        item_sub_category: item.attributes?.sub_category ?? null,
+        item_brand:        item.attributes?.brand ?? null,
+        item_collection:   item.attributes?.collection ?? null,
+        item_karat:        item.attributes?.karat ?? null,
+        item_metal:        item.attributes?.metal ?? null,
+        item_color:        item.attributes?.metal_color ?? null,
+        item_size:         item.sizeName ?? item.attributes?.size_name ?? null,
+        item_weight:       item.attributes?.net_weight ?? item.attributes?.gross_weight ?? null,
+        gemstone_type:     item.attributes?.gemstone_type ?? null,
+        gemstone_color:    item.attributes?.gemstone_color ?? null,
         price:     item.unitPrice,
         quantity:  item.quantity,
       })),
@@ -346,6 +375,7 @@ function CheckoutScreen() {
     const submission = {
       paymentModes: payments,
       salesPersonId,
+      salesPersonName,
       pricedLineItems,
       promotionDetails,
     };

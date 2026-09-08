@@ -12,6 +12,7 @@ import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import { X, ZoomIn, ZoomOut, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useBodyScrollLock } from '@/hooks/ui/useBodyScrollLock';
 
 /**
  * @param {{
@@ -29,12 +30,10 @@ export default function ProductImageZoomModal({
   currentIndex,
   onIndexChange,
 }) {
-  useEffect(() => {
-    if (!isOpen) return;
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = prevOverflow; };
-  }, [isOpen]);
+  // FIXED 2026-09-08 — see useBodyScrollLock's own header: the old version
+  // here had no scrollbar-width compensation, causing the same layout
+  // shift on open/close as BottomSheet's identical bug.
+  useBodyScrollLock(isOpen);
 
   useEffect(() => {
     if (!isOpen) return;

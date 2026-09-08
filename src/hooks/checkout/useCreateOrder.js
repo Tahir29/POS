@@ -274,8 +274,9 @@ export function useCreateOrder() {
         transactionId, entity, lineItems,
         customerId, customerName, customerMobile, customerAddress,
         activeStoreId, activeStoreCode, activeStoreName,
-        paymentModes:  variables?.paymentModes,
-        salesPersonId: variables?.salesPersonId,
+        paymentModes:    variables?.paymentModes,
+        salesPersonId:   variables?.salesPersonId,
+        salesPersonName: variables?.salesPersonName,
       });
 
       // NOT clearing the cart here — same reason as useCreateInvoice: clearing

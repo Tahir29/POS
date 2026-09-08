@@ -58,6 +58,14 @@ const RAW_EVENTS = {
   CART_ITEM_QTY_CHANGED: 'cart_item_qty_changed',
   CART_OPENED:           'cart_opened',
   CART_CLEARED:          'cart_cleared',
+  // ADDED 2026-09-08 — fires from abandonedCartMiddleware.js's own
+  // saveAbandonedCart(), the ONE function every "cart saved as abandoned"
+  // path already funnels through (attach-time re-save, detach, logout's
+  // session_reset, and the debounced default-mutation save) — so this
+  // fires exactly once per real save, matching what actually lands in
+  // Mongo (see lib/mongo/abandonedCart.js), not a separate guess at when
+  // a cart "counts" as abandoned.
+  CART_ABANDONED:        'cart_abandoned',
 
   CHECKOUT_STARTED:      'checkout_started',
   PAYMENT_SELECTED:      'payment_selected',
@@ -148,6 +156,11 @@ const RAW_EVENTS = {
   CUSTOMER_SELECTED:     'customer_selected',
   CUSTOMER_CREATED:      'customer_created',
   CUSTOMER_DETACHED:     'customer_detached',
+  // ADDED 2026-09-08 — fires from useWalkInLookup.js the moment OrnaVerse
+  // itself reports a real walk-in match (found: true) — see that hook's
+  // own header and lib/mongo/walkins.js for why this app logs walk-ins
+  // itself (OrnaVerse has no listing endpoint for this data at all).
+  WALKIN_RECORDED:       'walkin_recorded',
 
   CLICK:                 'click',
   CUSTOMIZE_OPENED:      'customize_opened',

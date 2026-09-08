@@ -92,7 +92,11 @@ export default function ProductReviewsList({ shopifyProductId }) {
   const hasMoreThanPreview = count > PREVIEW_COUNT;
 
   return (
-    <section className="flex flex-col gap-4">
+    // id="product-reviews" (2026-09-08) — ProductReviewSummaryLink, shown
+    // near the top of the product page, smooth-scrolls here on click.
+    // scroll-mt so the sticky page chrome above (header/breadcrumb) never
+    // covers the section title once scrolled into view.
+    <section id="product-reviews" className="flex flex-col gap-4 scroll-mt-20">
       <div className="flex items-center justify-between gap-2">
         <h2 className="font-heading text-lg text-foreground">Customer Reviews</h2>
         {count > 0 && <StarRating rating={average} count={count} size="md" showValue />}

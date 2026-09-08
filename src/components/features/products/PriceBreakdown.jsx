@@ -43,7 +43,7 @@ function Segment({ label, value, muted = false }) {
   return (
     <div
       className={[
-        'flex min-w-26 flex-1 basis-24 flex-col gap-1 rounded-xl px-3 py-2.5',
+        'flex min-w-26 flex-1 justify-between basis-24 flex-col gap-1 rounded-xl px-3 py-2.5',
         muted ? 'bg-muted/40' : 'bg-muted/70',
       ].join(' ')}
     >

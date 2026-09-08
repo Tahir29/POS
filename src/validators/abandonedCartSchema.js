@@ -31,10 +31,70 @@ export const abandonedCartItemSchema = z.object({
   // it by, not just a bare item_id). All three now actually persist.
   productUrl: z.string().nullable().optional(),
   hasStock:   z.boolean().nullable().optional(),
+  // EXPANDED 2026-09-08 — `attributes` used to be a 3-field
+  // { karat, metalColor, weight } object; AddToCartButton.jsx now stores
+  // the FULL shared productAttributes.js output here instead (see that
+  // file's own header) so an abandoned-cart retargeting message has the
+  // same full product detail — gemstone, price breakup, dimensions,
+  // per-piece sku — that every other product event already carries, not
+  // just three fields. Every key optional/nullable, same "consistent,
+  // predictable schema" reasoning productAttributes.js's own header gives
+  // for defaulting every field to null rather than omitting it.
   attributes: z.object({
-    karat:      z.string().nullable().optional(),
-    metalColor: z.string().nullable().optional(),
-    weight:     z.number().nullable().optional(),
+    item_id:     z.number().int().nullable().optional(),
+    item_code:   z.string().nullable().optional(),
+    item_name:   z.string().nullable().optional(),
+    sku:         z.string().nullable().optional(),
+    style_id:    z.number().int().nullable().optional(),
+    image:       z.string().nullable().optional(),
+    product_url: z.string().nullable().optional(),
+    has_stock:   z.boolean().nullable().optional(),
+
+    item_group_name: z.string().nullable().optional(),
+    category:        z.string().nullable().optional(),
+    sub_category:    z.string().nullable().optional(),
+    collection:      z.string().nullable().optional(),
+    brand:           z.string().nullable().optional(),
+    hsn:             z.string().nullable().optional(),
+
+    metal:       z.string().nullable().optional(),
+    karat:       z.string().nullable().optional(),
+    metal_color: z.string().nullable().optional(),
+
+    size_id:   z.number().int().nullable().optional(),
+    size_name: z.string().nullable().optional(),
+
+    gross_weight: z.number().nullable().optional(),
+    net_weight:   z.number().nullable().optional(),
+    stone_weight:       z.number().nullable().optional(),
+    diamond_weight:     z.number().nullable().optional(),
+    color_stone_weight: z.number().nullable().optional(),
+    other_weight:       z.number().nullable().optional(),
+    diamond_pieces:     z.number().nullable().optional(),
+    stone_pieces:       z.number().nullable().optional(),
+    color_stone_pieces: z.number().nullable().optional(),
+    other_pieces:       z.number().nullable().optional(),
+
+    height: z.number().nullable().optional(),
+    width:  z.number().nullable().optional(),
+    length: z.number().nullable().optional(),
+    depth:  z.number().nullable().optional(),
+
+    gemstone_type:  z.string().nullable().optional(),
+    gemstone_shape: z.string().nullable().optional(),
+    gemstone_color: z.string().nullable().optional(),
+    gemstone_size:  z.string().nullable().optional(),
+
+    price_metal_amount:       z.number().nullable().optional(),
+    price_diamond_amount:     z.number().nullable().optional(),
+    price_stone_amount:       z.number().nullable().optional(),
+    price_color_stone_amount: z.number().nullable().optional(),
+    price_other_amount:       z.number().nullable().optional(),
+    price_making_charges:     z.number().nullable().optional(),
+    price_sub_total:          z.number().nullable().optional(),
+    price_taxable_amount:     z.number().nullable().optional(),
+    price_tax_amount:         z.number().nullable().optional(),
+    price_net_amount:         z.number().nullable().optional(),
   }).nullable().optional(),
 });
 

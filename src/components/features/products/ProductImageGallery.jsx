@@ -301,12 +301,6 @@ export default function ProductImageGallery({
         </div>
       </div>
 
-      {showImage && (
-        <p className="text-center text-xs text-muted-foreground -mt-1">
-          Tap image to zoom
-        </p>
-      )}
-
       {/* Mobile + desktop thumbnail strip — replaces dot indicators; hidden
           on tablet, where the rail above (left of the image) is shown
           instead. Video thumbnails show their poster frame with a

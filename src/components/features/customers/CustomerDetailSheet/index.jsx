@@ -94,7 +94,12 @@ function ProfileTab({ customer, onAttach, isAttached, onClose }) {
         disabled={isAttached}
         className="h-11 w-full"
       >
-        {isAttached ? 'Already attached to cart' : 'Attach to Cart'}
+        {/* "Attach to Session" (2026-09-08) — matches CustomerSessionSheet's
+            own button wording. This assigns the customer to the whole POS
+            session, not just "the cart" specifically — the same customer
+            then carries through checkout, order history, everywhere else
+            the session is read, not something scoped to a cart alone. */}
+        {isAttached ? 'Already attached to session' : 'Attach to Session'}
       </Button>
 
       {/* Both links below only make sense once this customer is actually
@@ -379,8 +384,8 @@ export default function CustomerDetailSheet({ customer, isOpen, onClose, onAttac
   // associate can do to an arbitrary browsed profile. `tabs` is derived
   // fresh every render (not a module constant) since it now depends on the
   // isAttached prop, which can change while this same sheet stays mounted
-  // (e.g. tapping "Attach to Cart" on the Profile tab without closing the
-  // sheet first).
+  // (e.g. tapping "Attach to Session" on the Profile tab without closing
+  // the sheet first).
   const tabs = isAttached ? ['profile', 'edit'] : ['profile'];
 
   // Defensive: if isAttached flips false while Edit is the active tab

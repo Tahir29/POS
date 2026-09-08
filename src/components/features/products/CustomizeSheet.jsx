@@ -9,6 +9,9 @@ import BottomSheet from '@/components/shared/BottomSheet';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useVariantPricing } from '@/hooks/products/useVariantPricing';
 import { formatPrice } from '@/lib/priceUtils';
+import tracker from '@/lib/analytics/tracker';
+import EVENTS from '@/lib/analytics/events';
+import { buildProductAttributes } from '@/lib/analytics/productAttributes';
 
 const COLOR_GRADIENTS = {
   yellow: 'linear-gradient(147.45deg, #c59922 17.98%, #ead59e 48.14%, #c59922 83.84%)',
@@ -205,6 +208,14 @@ export default function CustomizeSheet({
       setSelectedMetalColorId(source?.metal_color_id ?? null);
       setSelectedKaratId(source?.karat_id             ?? null);
       setSelectedSizeId(source?.item_size_id          ?? null);
+
+      // ADDED 2026-09-08 — CUSTOMIZE_OPENED existed in events.js but had
+      // zero call sites anywhere (confirmed by audit) — opening this sheet
+      // went entirely untracked. Fired here, in the same render-time state
+      // adjustment already guarded against re-firing on every render (see
+      // this block's own comment above for why a useEffect isn't used).
+      // Base product only — no variant has been selected yet at this point.
+      tracker.track(EVENTS.CUSTOMIZE_OPENED, buildProductAttributes({ product }));
     }
   }
 
@@ -336,6 +347,22 @@ export default function CustomizeSheet({
   const sizeValue = sizes.find((s) => s.id === selectedSizeId)?.name ?? null;
 
   const handleConfirm = () => {
+    // ADDED 2026-09-08 — CUSTOMIZE_CONFIRMED existed in events.js but had
+    // zero call sites anywhere (confirmed by audit). needsLivePricing/
+    // livePricing here is the SAME gating this sheet's own price display
+    // above uses (a real exact-variant match only — the MTO fallback has
+    // no real item_components BOM for SetSalesItems to price), so this
+    // event's price breakup is only ever populated when it's genuinely
+    // available, same as everywhere else on this sheet.
+    tracker.track(EVENTS.CUSTOMIZE_CONFIRMED, buildProductAttributes({
+      product,
+      activeItem: matchedVariant,
+      pricedItem: needsLivePricing ? livePricing : null,
+      selectedSizeId,
+      selectedSizeName: sizeValue,
+      hasStock: matchedVariant ? matchedVariantInStockHere : null,
+    }));
+
     onConfirm(matchedVariant);
     onClose();
   };

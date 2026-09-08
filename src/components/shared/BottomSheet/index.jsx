@@ -29,6 +29,7 @@ import { useEffect, useRef } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { X } from 'lucide-react';
 import { useMediaQuery } from '@/hooks/ui/useMediaQuery';
+import { useBodyScrollLock } from '@/hooks/ui/useBodyScrollLock';
 import { EASE_PREMIUM, DURATION } from '@/lib/motion';
 
 export default function BottomSheet({
@@ -43,10 +44,10 @@ export default function BottomSheet({
   const isDesktop = useMediaQuery('(min-width: 768px)'); // matches the md: breakpoint below
   const reduceMotion = useReducedMotion();
 
-  useEffect(() => {
-    document.body.style.overflow = isOpen ? 'hidden' : '';
-    return () => { document.body.style.overflow = ''; };
-  }, [isOpen]);
+  // FIXED 2026-09-08 — see useBodyScrollLock's own header for why this
+  // used to cause a visible layout shift (the cart icon among other
+  // things) every time a sheet opened/closed.
+  useBodyScrollLock(isOpen);
 
   useEffect(() => {
     if (!isOpen) return;

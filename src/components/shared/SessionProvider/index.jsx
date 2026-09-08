@@ -49,7 +49,6 @@ export default function SessionProvider({ children }) {
   const warningTimerRef    = useRef(null);
   const staffIdleTimerRef  = useRef(null);
   const staffWarningTimerRef = useRef(null);
-  const clickDebounceRef  = useRef(null);
   const lastPathRef       = useRef(null);
 
   const clearIdleTimers = useCallback(() => {
@@ -186,32 +185,36 @@ export default function SessionProvider({ children }) {
     }
   }, [isAuthenticated]);
 
+  // FIXED 2026-09-08 — this used to debounce via a SINGLE shared timer:
+  // clearTimeout() on every click cancelled whatever the PREVIOUS click had
+  // queued, so two clicks within CLICK_DEBOUNCE (300ms) of each other only
+  // ever tracked the second one — the first was silently dropped, not
+  // delayed. That's the wrong tool here: a debounce is right when only the
+  // FINAL value in a burst matters (a search box's last keystroke); a click
+  // is not that — a rapid double-tap on a quantity stepper, or clicking two
+  // different buttons in quick succession, are each a real, distinct event
+  // that needs its own row, not a value to collapse down to one. Tracks
+  // every click immediately now, no timer at all.
   useEffect(() => {
     if (!isAuthenticated) return;
 
     const handleClick = (e) => {
-      clearTimeout(clickDebounceRef.current);
-      clickDebounceRef.current = setTimeout(() => {
-        const target = e.target?.closest(
-          'button, a, [role="button"], [role="menuitem"], [role="option"], [role="tab"]'
-        );
-        if (!target) return;
+      const target = e.target?.closest(
+        'button, a, [role="button"], [role="menuitem"], [role="option"], [role="tab"]'
+      );
+      if (!target) return;
 
-        tracker.track(EVENTS.CLICK, {
-          tag:       target.tagName,
-          text:      (target.textContent ?? '').trim().slice(0, 50),
-          ariaLabel: target.getAttribute('aria-label') ?? null,
-          path:      pathname,
-          id:        target.id || null,
-        });
-      }, APP_CONFIG.SESSION.CLICK_DEBOUNCE);
+      tracker.track(EVENTS.CLICK, {
+        tag:       target.tagName,
+        text:      (target.textContent ?? '').trim().slice(0, 50),
+        ariaLabel: target.getAttribute('aria-label') ?? null,
+        path:      pathname,
+        id:        target.id || null,
+      });
     };
 
     document.addEventListener('click', handleClick, { passive: true, capture: true });
-    return () => {
-      clearTimeout(clickDebounceRef.current);
-      document.removeEventListener('click', handleClick, { capture: true });
-    };
+    return () => document.removeEventListener('click', handleClick, { capture: true });
   }, [isAuthenticated, pathname]);
 
   return children;
