@@ -17,7 +17,7 @@
 // API_MAPPING.md (Customer/Generate is create-only) — flagged as a
 // blocker. The detail sheet is read-only with an Attach action.
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Search, X, UserPlus, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -55,13 +55,29 @@ export default function CustomersPage() {
     { enabled: isMobileSearch }
   );
 
-  // Background fetch of the full directory — always enabled so it's
-  // ready (cached) by the time the user types a name search.
-  const { allCustomers, isFetching: isAllFetching } = useAllCustomers();
+  // Background fetch of the full directory (up to 5000 rows) — PERF
+  // (2026-09-08): was `enabled: true` unconditionally, so this fired on
+  // EVERY visit to this page, even for an operator who only ever pages
+  // through the browse list below and never searches by name. Gated on the
+  // RAW (un-debounced) input instead of isNameSearch/searchQuery, so it
+  // still starts the instant the first keystroke lands — well before the
+  // debounce lets a real name search go active — keeping the original "already
+  // cached by the time a search resolves" benefit without paying for it on
+  // every visit that never touches search at all.
+  const { allCustomers, isFetching: isAllFetching } = useAllCustomers({
+    enabled: inputVal.trim().length > 0,
+  });
 
-  const nameResults = isNameSearch
-    ? allCustomers.filter((c) => c.customerName?.toLowerCase().includes(trimmed.toLowerCase()))
-    : [];
+  // Memoized (2026-09-08) — was a plain .filter() over up to 5000 rows
+  // re-run on every render of this page (e.g. opening/closing the detail
+  // sheet or the New Customer form), not just when the search term or the
+  // directory itself changed.
+  const nameResults = useMemo(
+    () => (isNameSearch
+      ? allCustomers.filter((c) => c.customerName?.toLowerCase().includes(trimmed.toLowerCase()))
+      : []),
+    [isNameSearch, allCustomers, trimmed],
+  );
   const isNameSearching = isNameSearch && isAllFetching && allCustomers.length === 0;
 
   // ── Debounced search input ──────────────────────────────

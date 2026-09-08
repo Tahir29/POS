@@ -16,7 +16,7 @@
 // Only one guard can be active at a time — the most recently mounted page
 // "owns" back-button behavior, which matches normal page-stack semantics.
 
-import { createContext, useContext, useRef, useCallback, useEffect } from 'react';
+import { createContext, useContext, useRef, useCallback, useEffect, useMemo } from 'react';
 
 const NavigationGuardContext = createContext(null);
 
@@ -33,8 +33,20 @@ export function NavigationGuardProvider({ children }) {
     return guardRef.current();
   }, []);
 
+  // PERF (2026-09-08) — was a fresh object literal every render (even though
+  // setGuard/clearGuard/runGuard are themselves stable via useCallback([])).
+  // No cost today (this provider only re-renders on route changes, and its
+  // only consumers are lightweight), but a plain object literal here would
+  // re-render every consumer on every provider render regardless of what
+  // actually changed — memoized so that stays true if a heavier consumer is
+  // ever added deeper in the tree.
+  const value = useMemo(
+    () => ({ setGuard, clearGuard, runGuard }),
+    [setGuard, clearGuard, runGuard],
+  );
+
   return (
-    <NavigationGuardContext.Provider value={{ setGuard, clearGuard, runGuard }}>
+    <NavigationGuardContext.Provider value={value}>
       {children}
     </NavigationGuardContext.Provider>
   );

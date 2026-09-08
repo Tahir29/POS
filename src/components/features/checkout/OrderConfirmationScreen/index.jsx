@@ -22,17 +22,8 @@ import { useInvoiceDetail } from '@/hooks/checkout/useInvoiceDetail';
 import { useOrderDetail } from '@/hooks/checkout/useOrderDetail';
 import { splitGst } from '@/lib/gst';
 import APP_CONFIG from '@/constants/appConfig';
-
-function fmt(amount) {
-  if (amount == null) return '—';
-  return `${APP_CONFIG.CURRENCY.INR_SYMBOL}${Number(amount).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
-}
-
-function fmtDate(iso) {
-  if (!iso) return null;
-  const d = new Date(iso);
-  return isNaN(d.getTime()) ? iso : d.toLocaleDateString('en-IN');
-}
+import { formatAmountOrDash as fmt } from '@/lib/priceUtils';
+import { formatDateNumeric as fmtDate } from '@/lib/dateUtils';
 
 /**
  * @param {{

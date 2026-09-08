@@ -39,20 +39,15 @@ import { useLiveCatalogPrices }   from '@/hooks/catalog/useLiveCatalogPrices';
 import { useCrossStoreStockCodes } from '@/hooks/catalog/useCrossStoreStockCodes';
 import { useCountries, useStates, useCities } from '@/hooks/settings/useLocation';
 import ProductCard from '@/components/features/catalog/ProductCard';
-import APP_CONFIG from '@/constants/appConfig';
+import { formatAmountOrDash } from '@/lib/priceUtils';
+import { formatDateNumeric } from '@/lib/dateUtils';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function fmt(amount) {
-  if (amount == null) return '—';
-  return `${APP_CONFIG.CURRENCY.INR_SYMBOL}${Number(amount).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
-}
-
-function fmtDate(iso) {
-  if (!iso) return null;
-  const d = new Date(iso);
-  return isNaN(d.getTime()) ? iso : d.toLocaleDateString('en-IN');
-}
+// De-duplicated 2026-09-08 — fmt/fmtDate here were the same shape as
+// several other files' own copies; see lib/priceUtils.js's
+// formatAmountOrDash and lib/dateUtils.js's formatDateNumeric.
+const fmt = formatAmountOrDash;
+const fmtDate = formatDateNumeric;
 
 // REMOVED 2026-09-08 — a maskPan() used to live here, showing PAN as
 // "****1234" on the assumption OrnaVerse itself masks it on read.

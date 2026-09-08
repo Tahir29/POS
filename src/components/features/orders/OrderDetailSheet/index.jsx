@@ -10,6 +10,8 @@ import FulfillOrderAction from '@/components/features/orders/FulfillOrderAction'
 import { Button } from '@/components/ui/button';
 import { useCancelOrder } from '@/hooks/orders/useCancelOrder';
 import APP_CONFIG from '@/constants/appConfig';
+import { formatAmountOrNull as formatCurrency } from '@/lib/priceUtils';
+import { formatDateNumeric } from '@/lib/dateUtils';
 
 function Row({ label, value, bold, border }) {
   if (value === null || value === undefined || value === '') return null;
@@ -21,10 +23,6 @@ function Row({ label, value, bold, border }) {
       </span>
     </div>
   );
-}
-
-function formatCurrency(amount) {
-  return amount != null ? `₹${Number(amount).toLocaleString('en-IN')}` : null;
 }
 
 const STATUS_LABELS = {
@@ -43,12 +41,7 @@ function OrderContent({ raw, status }) {
   return (
     <div className="flex flex-col gap-2 text-sm">
       <Row label="Order No." value={raw.document_no} />
-      <Row
-        label="Date"
-        value={raw.document_date
-          ? new Date(raw.document_date).toLocaleDateString('en-IN')
-          : null}
-      />
+      <Row label="Date" value={formatDateNumeric(raw.document_date)} />
       <Row label="Customer" value={raw.party_name} />
       <Row label="Mobile"   value={raw.mobile} />
       <Row label="Email"    value={raw.email} />

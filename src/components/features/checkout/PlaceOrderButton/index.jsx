@@ -12,8 +12,7 @@
 import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useCartTotals } from '@/hooks/cart/useCartTotals';
-
-const money = (n) => `₹${Number(n).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
+import { formatAmount as money } from '@/lib/priceUtils';
 
 /**
  * @param {{

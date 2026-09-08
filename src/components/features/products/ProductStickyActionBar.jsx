@@ -8,6 +8,7 @@
 import { PackagePlus } from 'lucide-react';
 import QuantitySelector  from '@/components/features/products/QuantitySelector';
 import AddToCartButton   from '@/components/features/products/AddToCartButton';
+import { formatAmountOrNull as formatINR } from '@/lib/priceUtils';
 
 // Sane upper bound for the stepper itself — not a stock cap, just a
 // reasonable ceiling to stop the +/- control scrolling forever.
@@ -24,10 +25,9 @@ const QUANTITY_CEILING = 99;
 // round_off adjustment applies here the way it does on a real invoice
 // total (see CartSummary's own header for that distinction); this is
 // purely a display figure.
-function formatINR(value) {
-  if (value == null) return null;
-  return `₹${Number(value).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
-}
+//
+// DE-DUPLICATED 2026-09-08 — was its own local function identical to
+// lib/priceUtils.js's formatAmountOrNull; imported (aliased) instead.
 
 /**
  * @param {{

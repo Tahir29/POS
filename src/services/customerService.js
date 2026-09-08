@@ -6,7 +6,12 @@
 //   getCustomerList()  → response.data     (useCustomerList/useAllCustomers read .Entities)
 //   createCustomer()   → raw AxiosResponse (useCreateCustomer reads .data.EntityId)
 //   updateCustomer()   → raw AxiosResponse
-//   retrieveParty()    → raw AxiosResponse (useCustomer360 reads .data.Entity)
+//
+// REMOVED 2026-09-08 — retrieveParty() (a thin PARTY.RETRIEVE wrapper) had
+// zero callers anywhere (useCustomer360.js calls API.PARTY.RETRIEVE
+// directly rather than through this wrapper — confirmed via a dead-code
+// audit). API.PARTY.RETRIEVE itself is untouched in apiEndpoints.js in
+// case a wrapper like this is worth rebuilding later.
 
 import axiosInstance from '@/lib/axios/axiosInstance';
 import API from '@/constants/apiEndpoints';
@@ -17,14 +22,6 @@ export function getCustomer(mobile) {
 
 export function retrieveCustomer(partyId) {
   return axiosInstance.post(API.CUSTOMERS.RETRIEVE, { EntityId: partyId });
-}
-
-// Richer master-record read, used by the Customer 360 view (ledger ids,
-// party_display_name, party_location, full party_address[] — see
-// apiEndpoints.js PARTY.RETRIEVE). Same EntityId-in/Entity-out shape as
-// retrieveCustomer() above; raw AxiosResponse, caller reads .data.Entity.
-export function retrieveParty(partyId) {
-  return axiosInstance.post(API.PARTY.RETRIEVE, { EntityId: partyId });
 }
 
 // NOT a pure read — every call also records a customer_visits row against the

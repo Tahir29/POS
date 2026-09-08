@@ -9,10 +9,24 @@
 //   The page handles the redirect to /products/[item_id].
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import dynamic from 'next/dynamic';
 import { Search, X, ScanBarcode } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import APP_CONFIG from '@/constants/appConfig';
-import BarcodeScannerModal from '@/components/features/catalog/BarcodeScannerModal';
+
+// PERF (2026-09-08) — @zxing/browser (the barcode decoder this modal uses)
+// is ~500KB, confirmed via a real build to be ~21% of the Catalog route's
+// initial JS — and it shipped on EVERY catalog visit, whether or not the
+// operator ever tapped "scan," since it was a plain static import. `ssr:
+// false` is safe (and correct) here: the modal is 100% camera/getUserMedia,
+// nothing it renders can exist on the server. Only fetches the chunk once
+// the JSX below actually mounts it (see the conditional render), not on
+// import — a dynamic() wrapper present in the tree unconditionally would
+// still trigger the fetch immediately regardless of props.
+const BarcodeScannerModal = dynamic(
+  () => import('@/components/features/catalog/BarcodeScannerModal'),
+  { ssr: false },
+);
 
 const { SEARCH } = APP_CONFIG;
 
@@ -219,11 +233,18 @@ export default function ProductSearchBar({
           </div>
         )}
       </div>
-      <BarcodeScannerModal
-        isOpen={cameraOpen}
-        onDetected={handleCameraDetected}
-        onClose={() => setCameraOpen(false)}
-      />
+      {/* Mounted only once actually opened (2026-09-08) — not just
+          rendering null while closed, but absent from the tree entirely,
+          so the dynamic import above isn't triggered until the operator
+          taps "scan" at least once. Cheap on every reopen after the
+          first — dynamic() caches the loaded module. */}
+      {cameraOpen && (
+        <BarcodeScannerModal
+          isOpen={cameraOpen}
+          onDetected={handleCameraDetected}
+          onClose={() => setCameraOpen(false)}
+        />
+      )}
     </>
   );
 }

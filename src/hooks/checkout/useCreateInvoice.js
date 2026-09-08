@@ -118,6 +118,7 @@ import { trackDocumentPlaced, trackDocumentFailed } from '@/lib/analytics/orderT
  *   salesPersonId:  number,
  *   exchangeRate:   number,
  *   headerConfig:   ReturnType<typeof useOrderHeaderConfig>,
+ *   fulfillmentOrderNo?: string, // "Fulfill from order" — narration only, see below
  * }} params
  */
 function buildInvoiceEntity({
@@ -127,7 +128,7 @@ function buildInvoiceEntity({
   paymentModes, narration,
   salesPersonId, exchangeRate,
   headerConfig,
-  fulfillmentOrderId, fulfillmentOrderNo,
+  fulfillmentOrderNo,
 }) {
   const today = localDocumentDate();
   const {
@@ -146,6 +147,17 @@ function buildInvoiceEntity({
     paymentModes, customerId, activeStoreId, exchangeRate, headerConfig,
   });
   const receiptAmount = +receipt_details.reduce((s, r) => s + (r.amount ?? 0), 0).toFixed(2);
+
+  // "Fulfill from order" — CONFIRMED LIVE 2026-09-08 (see the header comment
+  // on API.ORDER_FULFILLMENT) there is no dedicated header field for this at
+  // all; the source order closes out automatically, server-side, once
+  // claimStockPieces has claimed the exact piece it reserved (see
+  // checkoutPricingService.js). All that's worth doing here is a readable
+  // audit trail in narration — free text, confirmed to NOT 500 unlike the
+  // is_fulfillment/fulfillment_order_id/fulfillment_order_no fields this
+  // used to send (those genuinely broke Create; removed).
+  const fulfillmentNote = fulfillmentOrderNo ? `Fulfilled from Order ${fulfillmentOrderNo}` : null;
+  const combinedNarration = [fulfillmentNote, narration].filter(Boolean).join(' — ') || undefined;
 
   return {
     party_id:      customerId,
@@ -183,7 +195,7 @@ function buildInvoiceEntity({
     round_off,
     receipt_amount: receiptAmount,
     balance_amount: +(roundedNet - receiptAmount).toFixed(2),
-    narration:     narration ?? undefined,
+    narration:     combinedNarration,
     document_id:                 APP_CONFIG.DOCUMENT_TYPES.POS_INVOICE,
     financial_year_id:           headerConfig.financialYearId,
     ledger_id:                   headerConfig.ledgerId,
@@ -202,25 +214,12 @@ function buildInvoiceEntity({
     // to go out empty because the row's shape could not be guessed; it no
     // longer has to be, because the server hands it to us fully formed.
     promotion_details: promotionDetails ?? [],
-    // "Fulfill from order" — best-effort reference back to the source Order,
-    // mirroring the shape OrnaVerse's own client builds client-side
-    // (hydrateInvoiceCartFromOrder: fulfillment_order_id/fulfillment_order_no)
-    // — see the header comment on API.ORDER_FULFILLMENT. UNVERIFIED whether
-    // the server actually uses these to close the source order out; sending
-    // them is cheap insurance (harmless if unrecognized), not confirmed to
-    // be load-bearing. Omitted entirely for a normal (non-fulfillment) sale,
-    // matching how bank_pos is omitted for Cash elsewhere in this file.
-    ...(fulfillmentOrderId != null ? {
-      is_fulfillment:       true,
-      fulfillment_order_id: fulfillmentOrderId,
-      fulfillment_order_no: fulfillmentOrderNo,
-    } : {}),
   };
 }
 
 export function useCreateInvoice() {
   const queryClient = useQueryClient();
-  const { items, appliedPromos, fulfillmentOrderId, fulfillmentOrderNo } = useCart();
+  const { items, appliedPromos, fulfillmentOrderNo } = useCart();
   // Cart total is a FALLBACK for analytics only. Every money figure on the
   // document now comes from the priced, promotion-applied line items.
   const { total: cartTotal } = useCartTotals();
@@ -290,7 +289,7 @@ export function useCreateInvoice() {
         paymentModes, narration,
         salesPersonId, exchangeRate,
         headerConfig,
-        fulfillmentOrderId, fulfillmentOrderNo,
+        fulfillmentOrderNo,
       });
 
       // Step 1: Create draft invoice.
@@ -360,7 +359,16 @@ export function useCreateInvoice() {
       // they never saw the confirmation screen or the invoice number.
       // The screen clears the cart itself once confirmation is on screen.
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
-      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      // PERF (2026-09-08) — was invalidating ['orders'] unconditionally on
+      // EVERY invoice, even a normal direct sale that never touched an
+      // order at all. Only a "Fulfill from order" sale (fulfillmentOrderNo
+      // set — see checkoutPricingService.claimStockPieces and the header
+      // comment on API.ORDER_FULFILLMENT) actually changes an order's
+      // state (closes the source order out server-side), so that's the
+      // only case genuinely worth marking the Orders list stale for.
+      if (fulfillmentOrderNo) {
+        queryClient.invalidateQueries({ queryKey: ['orders'] });
+      }
     },
 
     onError: (error, variables) => {

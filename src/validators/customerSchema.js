@@ -83,12 +83,15 @@ export const customerSchema = z.object({
 // All fields optional — only changed fields need to be present in the form
 // But buildCustomerUpdatePayload() merges with original raw before sending
 //
-// mobile is blank-able here (unlike create): OrnaVerse returns mobile
-// pre-masked (e.g. "******3030") on List/Retrieve, so the edit form leaves
-// it blank rather than pre-filling a value staff can't actually verify or
-// safely re-submit. Blank means "no change" — see EditTab's onSubmit, which
-// substitutes the original raw (masked) value back in before sending, same
-// as if the field were never touched.
+// mobile is blank-able here (unlike create) — CustomerDetailSheet's
+// EditTab always pre-fills it with the real value now (confirmed live
+// 2026-09-08: OrnaVerse does NOT mask mobile/email/address on LIVE — see
+// that component's own header for the full finding and the masking-based
+// blanking logic this replaced), so blank here means the operator
+// genuinely cleared the field, not "couldn't be shown." EditTab's
+// onSubmit still falls back to the original raw value in that case —
+// Update requires the full record, and there's no UI affordance here for
+// actually removing a required field.
 export const updateCustomerSchema = z.object({
   party_name: z
     .string()

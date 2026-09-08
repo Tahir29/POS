@@ -1,14 +1,17 @@
 // "Fulfill from order" — an Order (53) raised earlier, converted into an
 // Invoice (54) once the piece is ready to bill.
 //
-// CONFIRMED 2026-08-19 by driving OrnaVerse's own "Fulfill from order"
-// dialog live on UAT and capturing the network calls — see the header
-// comment on API.ORDER_FULFILLMENT (apiEndpoints.js) for the full contract,
-// what "Ready To Invoice" actually depends on (a separate ERP-side
-// warehouse pipeline, not anything the counter POS can trigger), and what
-// remains unverified (the actual Invoice/Create payload for a genuine
-// fulfillment case — every live candidate found on UAT hit the same
-// inconsistency their own system has between the two list endpoints).
+// CONFIRMED 2026-08-19, then the actual Create round trip CONFIRMED WORKING
+// 2026-09-08 — see the header comment on API.ORDER_FULFILLMENT
+// (apiEndpoints.js) for the full contract: what "Ready To Invoice" depends
+// on (a separate ERP-side warehouse pipeline), and — the important part —
+// that there is no dedicated fulfillment field on InvoiceRow at all. The
+// source order closes out automatically, server-side, the moment the SAME
+// physical stock piece it reserved gets invoiced through the normal
+// checkout pipeline. That's why mapFulfillmentLineToCartItem below carries
+// the piece's own item_line_no through as `fulfillmentItemLineNo` — it's
+// what lets checkoutPricingService.claimStockPieces claim that exact piece
+// instead of an arbitrary one of the same item_id.
 
 import axiosInstance from '@/lib/axios/axiosInstance';
 import API from '@/constants/apiEndpoints';
@@ -71,7 +74,9 @@ export async function getAllOpenOrderLines({ partyId }) {
  *
  * unitPrice here is a display estimate only (net_amount / pieces) —
  * buildPricedLineItems re-prices against today's rates and re-claims a
- * physical stock piece at submission, same as any other cart item.
+ * physical stock piece at submission, same as any other cart item — except
+ * this one is steered (via fulfillmentItemLineNo below) to re-claim the
+ * SAME piece the order already reserved, not just any piece of this item_id.
  *
  * @param {object} line — a row from getReadyToInvoiceLines/getAllOpenOrderLines
  * @returns {object} CartItem
@@ -91,5 +96,13 @@ export function mapFulfillmentLineToCartItem(line) {
     sizeName:   line.size_name ?? null,
     attributes: {},
     image:      line.image ?? null,
+    // CONFIRMED LIVE 2026-09-08 (see API.ORDER_FULFILLMENT's header comment)
+    // — the specific stock piece this order reserved, shared between this
+    // row and its Inventory/StockJournal/List row via item_line_no. Tells
+    // claimStockPieces to claim exactly this piece rather than an arbitrary
+    // one of the same item_id — required for the source order to actually
+    // close out, and to avoid two open orders on the same style claiming
+    // each other's reserved piece.
+    fulfillmentItemLineNo: line.item_line_no ?? null,
   };
 }

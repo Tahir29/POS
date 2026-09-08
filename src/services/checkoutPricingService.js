@@ -145,7 +145,66 @@ export async function applyPromotionsToLines({
 }
 
 /**
- * Claims the physical pieces a cart line will consume.
+ * Fetches every stock candidate for ALL distinct item_ids in the cart in ONE
+ * batched call, instead of claimStockPieces hitting the network once per
+ * cart line.
+ *
+ * CONFIRMED 2026-09-08 this is safe: the only thing that genuinely needs
+ * per-item SEQUENCING is the `claimed` Set (stopping two lines claiming the
+ * same physical piece) — and that can only happen between lines sharing an
+ * item_id, since getStockPieces' rows are already scoped by item_id
+ * server-side. The FETCH itself never needed to be per-item; it was just
+ * never batched. getStockPieces' `itemIds` (plural) filter is already
+ * proven live for exactly this shape of batching — see catalogService.js's
+ * own use of it to price a whole catalog PAGE in one call instead of one
+ * per card. A 5-distinct-item cart used to make 5 sequential
+ * StockJournal/List round trips before pricing could even start (the
+ * customer-facing "how much do I owe" screen); this makes exactly 1,
+ * regardless of cart size.
+ *
+ * `take` sums the same per-item allowance the old N-calls-of-50 approach
+ * guaranteed, but — CORRECTED 2026-09-08 — that's a shared ceiling across
+ * every distinct item_id in ONE flat, Take-capped result set, not a
+ * guaranteed per-item page the way N separate calls were. Nothing in this
+ * codebase's own confirmed-live evidence for getStockPieces' `itemIds`
+ * filter (see its header) says the server balances rows fairly across
+ * requested ids when the cap binds — only that the plural filter itself is
+ * honoured. A high-volume item (hundreds of stock rows) could in principle
+ * fill the whole shared cap and crowd a genuinely-in-stock low-volume item
+ * out of this batch entirely. claimStockPieces below re-fetches (scoped to
+ * just the short item, same as the old per-item call) whenever this batch
+ * looks insufficient for a specific item, so that scenario still resolves
+ * correctly — it just costs one extra call in that specific, uncommon case
+ * instead of silently misclassifying the whole cart as made-to-order.
+ *
+ * @param {{itemId:number}[]} items
+ * @param {number} activeStoreId
+ * @returns {Promise<Map<number, object[]>>} item_id → its stock rows
+ */
+async function fetchStockCandidatesByItemId({ items, activeStoreId }) {
+  const distinctItemIds = [...new Set(items.map((item) => item.itemId))];
+  if (distinctItemIds.length === 0) return new Map();
+
+  const response = await getStockPieces({
+    itemIds:   distinctItemIds,
+    companyId: activeStoreId,
+    take:      distinctItemIds.length * 50,
+  });
+  const rows = response?.data?.Entities ?? [];
+
+  const byItemId = new Map();
+  for (const row of rows) {
+    const bucket = byItemId.get(row.item_id);
+    if (bucket) bucket.push(row);
+    else byItemId.set(row.item_id, [row]);
+  }
+  return byItemId;
+}
+
+/**
+ * Claims the physical pieces a cart line will consume, from candidates
+ * already fetched by fetchStockCandidatesByItemId — purely in-memory, no
+ * network call of its own.
  *
  * One stock row IS one piece, so a cart line for 3 needs 3 distinct rows.
  * Claimed rows are tracked by stock_journal_id across the whole cart so the
@@ -164,18 +223,53 @@ export async function applyPromotionsToLines({
  * — this is the actual mechanism that decides whether a cart becomes an
  * Invoice (stock-backed) or an Order (made-to-order), so getting this
  * filter right IS "how the made to order and in stock order is placed".
- * @param {{ item: object, activeStoreId: number, claimed: Set<number> }} params
+ * `item.fulfillmentItemLineNo` (set by orderFulfillmentService's
+ * mapFulfillmentLineToCartItem — see the header comment on
+ * API.ORDER_FULFILLMENT for the confirmed-live evidence) steers this to
+ * claim the SAME physical piece a source order already reserved, instead of
+ * an arbitrary one of the same item_id. That's not an optimization — it's
+ * what makes the source order actually close out server-side, and what
+ * stops two open orders on the same style from claiming each other's piece.
+ *
+ * @param {{ item: object, activeStoreId: number, claimed: Set<number>, candidatesByItemId: Map<number, object[]> }} params
  * @returns {Promise<object[]>} exactly `item.quantity` stock rows
- * @throws when the store cannot supply that many pieces
+ * @throws when the store cannot supply that many pieces, or (fulfillment
+ *   only) when the specific reserved piece is no longer available
  */
-async function claimStockPieces({ item, activeStoreId, claimed }) {
-  const response = await getStockPieces({
-    itemId:    item.itemId,
-    companyId: activeStoreId,
-  });
-  const rows = response?.data?.Entities ?? [];
+async function claimStockPieces({ item, activeStoreId, claimed, candidatesByItemId }) {
+  let rows = candidatesByItemId.get(item.itemId) ?? [];
+  let available = rows.filter((r) => !r.is_allocated && !claimed.has(r.stock_journal_id));
 
-  const available = rows.filter((r) => !r.is_allocated && !claimed.has(r.stock_journal_id));
+  // SAFETY NET (2026-09-08) — see fetchStockCandidatesByItemId's header for
+  // why the shared batch can legitimately come up short for one item even
+  // though that item genuinely has stock. Only re-fetches (scoped to just
+  // THIS item_id, exactly the old one-call-per-item shape) when the batch
+  // looks insufficient for what THIS item needs — the common case (every
+  // item's fair share was already in the batch) never pays this extra call.
+  const neededForThisItem = item.fulfillmentItemLineNo != null ? 1 : (item.quantity ?? 1);
+  if (available.length < neededForThisItem) {
+    const response = await getStockPieces({ itemId: item.itemId, companyId: activeStoreId });
+    rows = response?.data?.Entities ?? [];
+    available = rows.filter((r) => !r.is_allocated && !claimed.has(r.stock_journal_id));
+  }
+
+  if (item.fulfillmentItemLineNo != null) {
+    // Fulfilling a specific order line — only the one piece it reserved will
+    // do. Falling back to a different piece of the same item_id would still
+    // complete A sale, but silently stop being "fulfillment" (the source
+    // order would never close out, since OrnaVerse's own correlation is keyed
+    // off this exact item_line_no) — surfacing that as a clear error beats
+    // an operator believing they fulfilled an order they didn't.
+    const row = available.find((r) => r.item_line_no === item.fulfillmentItemLineNo);
+    if (!row) {
+      throw new Error(
+        `"${item.itemName}" is no longer available to fulfill — the reserved piece may have just been claimed by another sale. Refresh "Fulfill from Order" and try again.`
+      );
+    }
+    claimed.add(row.stock_journal_id);
+    return [row];
+  }
+
   const wanted = item.quantity ?? 1;
 
   // Short stock is NOT an error here any more. The counter no longer asks the
@@ -218,16 +312,36 @@ async function resolveFullItem({ itemId, styleId }) {
  * @returns {Promise<object[]>} one priced line per piece
  */
 async function buildOrderLineItems({ items, documentId }) {
+  // Unlike claimStockPieces, resolveFullItem has no shared mutable state
+  // across items (no `claimed`-style bookkeeping) — nothing here needs
+  // sequencing, so this runs concurrently instead of one distinct item at a
+  // time (was N sequential round trips for N distinct items in a
+  // made-to-order cart).
+  //
+  // allSettled, not Promise.all — CORRECTED 2026-09-08: Promise.all rejects
+  // on whichever promise fails FIRST CHRONOLOGICALLY, not first by cart
+  // order, so if two items' lookups both fail (a real possibility — a
+  // network blip affects concurrent requests together), the error could
+  // name whichever one happened to reject faster instead of the first item
+  // in the cart. allSettled always resolves, so the check below walks
+  // `items` in cart order itself and reports the first genuine failure —
+  // same deterministic behavior the old sequential loop had.
+  const settled = await Promise.allSettled(
+    items.map((item) => resolveFullItem({ itemId: item.itemId, styleId: item.styleId }))
+  );
+
   const masters = [];
-  for (const item of items) {
-    const master = await resolveFullItem({ itemId: item.itemId, styleId: item.styleId });
+  items.forEach((item, i) => {
+    const result = settled[i];
+    if (result.status === 'rejected') throw result.reason;
+    const master = result.value;
     if (!master) {
       throw new Error(`"${item.itemName}" could not be priced — its product record was not found.`);
     }
     // One line per piece, matching how the invoice path models a sale and
     // how the header's `pieces` aggregate is summed.
-    for (let i = 0; i < (item.quantity ?? 1); i += 1) masters.push(master);
-  }
+    for (let p = 0; p < (item.quantity ?? 1); p += 1) masters.push(master);
+  });
 
   const priced = await calculateItemRates(masters, documentId);
   if (priced.length !== masters.length) {
@@ -269,12 +383,20 @@ async function buildOrderLineItems({ items, documentId }) {
 export async function buildPricedLineItems({ items, activeStoreId, salesPersonId }) {
   const claimed = new Set();
 
-  // Sequential, not Promise.all — `claimed` is what stops two cart lines
-  // claiming the same piece, and it only works if the claims don't race.
+  // ONE network round trip for every distinct item_id in the cart (was N
+  // sequential ones) — see fetchStockCandidatesByItemId's header comment.
+  const candidatesByItemId = await fetchStockCandidatesByItemId({ items, activeStoreId });
+
+  // The CLAIMING itself stays sequential, in cart order — `claimed` is what
+  // stops two cart lines claiming the same piece, and it only works if the
+  // claims don't race. Usually pure in-memory bookkeeping (no network wait);
+  // still `await`ed because claimStockPieces can fall back to a scoped
+  // per-item re-fetch when the shared batch came up short for one item (see
+  // its own header comment) — a rare path, not the common case.
   const stockRows = [];
   let isStockBacked = true;
   for (const item of items) {
-    const taken = await claimStockPieces({ item, activeStoreId, claimed });
+    const taken = await claimStockPieces({ item, activeStoreId, claimed, candidatesByItemId });
     if (!taken) { isStockBacked = false; break; }
     stockRows.push(...taken);
   }
@@ -330,14 +452,41 @@ export function mapPricedLinesToCart(items, lineItems) {
   const expected = items.reduce((sum, item) => sum + (item.quantity ?? 1), 0);
   if (expected !== lineItems.length) return byCartIndex;
 
+  // ONE traversal of `rows` accumulating every field this line needs — was
+  // 11 separate .reduce() passes over the same rows (one per sumField call).
+  // This runs on every cart/checkout render, for every cart line, so the
+  // saved passes are real, not just tidiness.
+  const emptyTotals = () => ({
+    sub_total: 0, discount: 0, metal_amount: 0, diamond_amount: 0,
+    stone_amount: 0, color_stone_amount: 0, other_amount: 0,
+    item_labour: 0, taxable_amount: 0, tax_amount: 0, net_amount: 0,
+    skus: [],
+  });
+  const round2 = (n) => +n.toFixed(2);
+
   let cursor = 0;
   items.forEach((item, index) => {
     const quantity = item.quantity ?? 1;
     const rows = lineItems.slice(cursor, cursor + quantity);
     cursor += quantity;
 
-    const sumField = (field) => +rows.reduce((sum, r) => sum + (r[field] ?? 0), 0).toFixed(2);
-    const lineTotal = sumField('sub_total');
+    const totals = rows.reduce((acc, r) => {
+      acc.sub_total          += r.sub_total ?? 0;
+      acc.discount           += r.discount ?? 0;
+      acc.metal_amount       += r.metal_amount ?? 0;
+      acc.diamond_amount     += r.diamond_amount ?? 0;
+      acc.stone_amount       += r.stone_amount ?? 0;
+      acc.color_stone_amount += r.color_stone_amount ?? 0;
+      acc.other_amount       += r.other_amount ?? 0;
+      acc.item_labour        += r.item_labour ?? 0;
+      acc.taxable_amount     += r.taxable_amount ?? 0;
+      acc.tax_amount         += r.tax_amount ?? 0;
+      acc.net_amount         += r.net_amount ?? 0;
+      if (r.sku) acc.skus.push(r.sku);
+      return acc;
+    }, emptyTotals());
+
+    const lineTotal = round2(totals.sub_total);
     byCartIndex.set(index, {
       lineTotal,
       unitPrice: +(lineTotal / quantity).toFixed(2),
@@ -345,9 +494,9 @@ export function mapPricedLinesToCart(items, lineItems) {
       // cart-wide discount landed on THIS line specifically. A component-
       // scoped promo ("20% Off Diamond") can give ₹0 here on a line with no
       // diamond even while it discounts others, which is correct, not a bug.
-      discount: sumField('discount'),
+      discount: round2(totals.discount),
       // Only invoices claim stock rows, so this is empty for an order.
-      skus: rows.map((r) => r.sku).filter(Boolean),
+      skus: totals.skus,
       // Full per-product cost breakdown (2026-08-26) — same fields, same
       // shape components/products/PriceBreakdown already renders on the
       // product detail page (metal/diamond/stone/colour-stone/other +
@@ -359,16 +508,16 @@ export function mapPricedLinesToCart(items, lineItems) {
       // truth for what "the breakup" looks like, whether it's shown on the
       // product page, the cart, or checkout.
       breakdown: {
-        metal_amount:       sumField('metal_amount'),
-        diamond_amount:     sumField('diamond_amount'),
-        stone_amount:       sumField('stone_amount'),
-        color_stone_amount: sumField('color_stone_amount'),
-        other_amount:       sumField('other_amount'),
-        item_labour:        sumField('item_labour'),
+        metal_amount:       round2(totals.metal_amount),
+        diamond_amount:     round2(totals.diamond_amount),
+        stone_amount:       round2(totals.stone_amount),
+        color_stone_amount: round2(totals.color_stone_amount),
+        other_amount:       round2(totals.other_amount),
+        item_labour:        round2(totals.item_labour),
         sub_total:          lineTotal,
-        taxable_amount:     sumField('taxable_amount'),
-        tax_amount:         sumField('tax_amount'),
-        net_amount:         sumField('net_amount'),
+        taxable_amount:     round2(totals.taxable_amount),
+        tax_amount:         round2(totals.tax_amount),
+        net_amount:         round2(totals.net_amount),
       },
     });
   });
@@ -385,21 +534,39 @@ export function mapPricedLinesToCart(items, lineItems) {
  * @param {object[]} lineItems — output of buildPricedLineItems
  */
 export function summarizeLineItems(lineItems) {
-  const sum = (field) => +lineItems.reduce((s, li) => s + (li[field] ?? 0), 0).toFixed(2);
+  // ONE traversal of `lineItems` (one row per physical piece in the whole
+  // order) accumulating every header field, instead of 8 separate .reduce()
+  // passes over the same array (one per sum() call).
+  const totals = lineItems.reduce((acc, li) => {
+    acc.sub_total      += li.sub_total ?? 0;
+    acc.discount        += li.discount ?? 0;
+    acc.taxable_amount  += li.taxable_amount ?? 0;
+    acc.tax_amount      += li.tax_amount ?? 0;
+    acc.net_amount      += li.net_amount ?? 0;
+    acc.pieces          += li.pieces ?? 0;
+    acc.weight          += li.weight ?? 0;
+    acc.net_weight      += li.net_weight ?? 0;
+    return acc;
+  }, {
+    sub_total: 0, discount: 0, taxable_amount: 0, tax_amount: 0,
+    net_amount: 0, pieces: 0, weight: 0, net_weight: 0,
+  });
+
+  const round2 = (n) => +n.toFixed(2);
   return {
-    subTotal:      sum('sub_total'),
+    subTotal:      round2(totals.sub_total),
     // Post-promotion figures when ApplyPromotions has run: it writes the
     // discount onto each line and recomputes taxable_amount/tax_amount/
     // net_amount around it, leaving base_* holding the pre-discount values.
     // Summing what the lines actually carry is therefore correct either way,
     // and is what their own header does — confirmed field for field against a
     // real Order/Create (discount 12177.6, taxable 92521.44, tax 2775.64).
-    discount:      sum('discount'),
-    taxableAmount: sum('taxable_amount'),
-    taxAmount:     sum('tax_amount'),
-    netAmount:     sum('net_amount'),
-    pieces:        sum('pieces'),
-    weight:        sum('weight'),
-    netWeight:     sum('net_weight'),
+    discount:      round2(totals.discount),
+    taxableAmount: round2(totals.taxable_amount),
+    taxAmount:     round2(totals.tax_amount),
+    netAmount:     round2(totals.net_amount),
+    pieces:        round2(totals.pieces),
+    weight:        round2(totals.weight),
+    netWeight:     round2(totals.net_weight),
   };
 }

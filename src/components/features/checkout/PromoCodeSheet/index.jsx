@@ -29,11 +29,7 @@ import EmptyState from '@/components/shared/EmptyState';
 import InlineLoader from '@/components/shared/InlineLoader';
 import { useActivePromotions } from '@/hooks/checkout/useActivePromotions';
 import { cn } from '@/lib/utils';
-
-function formatDate(value) {
-  if (!value) return null;
-  return new Date(value).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
-}
+import { formatDateCompact as formatDate } from '@/lib/dateUtils';
 
 // Headline number — "5%" / "₹500" — the discount's own value, isolated
 // from "off" so it can be composed into "Additional 5% Off" below.

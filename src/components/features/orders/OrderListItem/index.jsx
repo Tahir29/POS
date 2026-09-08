@@ -3,6 +3,7 @@
 import { User, Calendar, Store } from 'lucide-react';
 import ListItemCard from '@/components/shared/ListItemCard';
 import PaymentStatusBadge, { mapOrderStatus } from '@/components/shared/PaymentStatusBadge';
+import { formatDateSlashed } from '@/lib/dateUtils';
 
 /**
  * @param {{
@@ -38,11 +39,7 @@ export default function OrderListItem({ order, onSelect }) {
         {orderDate && (
           <span className="flex items-center gap-1.5 text-[13px] text-muted-foreground shrink-0">
             <Calendar size={13} className="text-muted-foreground/70" aria-hidden="true" />
-            {new Date(orderDate).toLocaleDateString('en-IN', {
-              day: '2-digit',
-              month: '2-digit',
-              year: 'numeric',
-            })}
+            {formatDateSlashed(orderDate)}
           </span>
         )}
       </div>

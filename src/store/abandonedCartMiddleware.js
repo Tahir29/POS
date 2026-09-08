@@ -67,8 +67,6 @@ const MUTATING_TYPES = new Set([
   'cart/updateQuantity',
   'cart/applyPromo',
   'cart/removePromo',
-  'cart/applyGiftCard',
-  'cart/applyGiftVoucher',
   'cart/hydrateFromOrder',
 ]);
 

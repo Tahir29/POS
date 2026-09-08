@@ -297,16 +297,47 @@ const API = {
   // counter's job is only to check readiness and load a ready line, never to
   // move it there itself.
   //
-  // STILL UNVERIFIED: the actual Invoice/Create payload for a genuine
-  // fulfillment case. Every real "Ready To Invoice" candidate found on UAT
-  // (via the ERP's own status counts) either turned out to be a different
-  // order channel (EORD, not RPO/POS) or showed the SAME inconsistency their
-  // own live system has — "All open" reports the line as Ready To Invoice
-  // while READY_TO_INVOICE's own query still returns it empty. That
-  // inconsistency is on OrnaVerse's side, not this integration — but it
-  // means the fulfillment cart→Invoice/Create round trip has never been
-  // observed succeeding live. See useOrderFulfillment.js and
-  // useCreateInvoice.js for what's built on evidence vs. best-effort.
+  // CONFIRMED LIVE 2026-09-08 — the round trip DOES work, but not the way
+  // this integration originally guessed. Reproduced end to end on UAT: order
+  // 268 (HO-RPO-08-26-00007, party 2482) had a line genuinely sitting
+  // "Ready to Invoice" (status_id 14) — the SAME "All open" vs
+  // READY_TO_INVOICE inconsistency documented above was present (the line
+  // showed twice in ALL_OPEN, once "New" once "Ready to Invoice", while
+  // READY_TO_INVOICE returned it once, correctly formed) but didn't block
+  // anything.
+  //
+  //   1. There is NO dedicated fulfillment field on InvoiceRow. Sending
+  //      is_fulfillment/fulfillment_order_id/fulfillment_order_no (this
+  //      integration's previous best-effort guess, mirroring the shape its
+  //      own client-side hydrateInvoiceCartFromOrder used) makes Invoice/Create
+  //      500 — {"Error":{"Code":"Exception","Message":"An error occurred
+  //      while processing your request."}} — EVERY time, confirmed by
+  //      isolating it: the exact same request with just those three keys
+  //      removed returns 200. These are NOT harmless-if-unrecognized; they
+  //      actively break the request. Do not send them.
+  //
+  //   2. The correlation is done SERVER-SIDE, keyed off the physical stock
+  //      piece, not a header field. READY_TO_INVOICE's row and the matching
+  //      Inventory/StockJournal/List row for that item share the same
+  //      `item_line_no` (confirmed: 19714 on both, for the same order). Simply
+  //      invoicing THAT stock piece through the normal
+  //      StockJournal/List → Helpers/SetSalesItems(document_id: 54) →
+  //      Invoice/Create pipeline (checkoutPricingService.buildPricedLineItems)
+  //      — with NO special fields at all — was enough: the source order's
+  //      line automatically flipped from status_id 14 "Ready to Invoice" to
+  //      status_id 6 "Shipped", with `current_document_no` pointing at the
+  //      new invoice. Cancelling that invoice (POS/Invoice/Cancel) reverted
+  //      it cleanly back to "Ready to Invoice" and the stock piece became
+  //      available again — a fully reversible, confirmed round trip.
+  //
+  //   3. WHAT THIS MEANS FOR WIRING IT UP: claimStockPieces (normally "any
+  //      available piece of this item_id") must be told to claim the SAME
+  //      specific piece the order reserved, not an arbitrary one of the same
+  //      item_id/style — two open orders on the same style would otherwise
+  //      risk claiming each other's piece. mapFulfillmentLineToCartItem
+  //      carries the fulfillment line's own item_line_no through as
+  //      `fulfillmentItemLineNo` on the CartItem for exactly this reason —
+  //      see checkoutPricingService.claimStockPieces.
   // ─────────────────────────────────────────────────────────────────────────
   ORDER_FULFILLMENT: {
     READY_TO_INVOICE: 'Services/POS/OrderItems/List',

@@ -31,9 +31,16 @@ import { QUERY_KEYS } from '@/constants/queryKeys';
 import APP_CONFIG from '@/constants/appConfig';
 
 /**
- * @param {{ enabled?: boolean }} [options]
+ * @param {{ enabled?: boolean, staleTime?: number, refetchOnWindowFocus?: boolean }} [options]
+ *   staleTime/refetchOnWindowFocus (2026-09-08) — each useQuery call is its
+ *   own observer and decides FOR ITSELF when to consider this shared cache
+ *   entry stale, independent of any other component also calling this hook
+ *   (see useDashboardSummary.js, whose KPI-widget needs are far less fresh
+ *   than /orders page's own search-while-typing use of this same data) —
+ *   overriding these here changes nothing about how often /orders itself
+ *   refetches.
  */
-export function useAllOrders({ enabled = true } = {}) {
+export function useAllOrders({ enabled = true, staleTime, refetchOnWindowFocus } = {}) {
   const activeStoreId = useSelector(selectActiveStoreId);
 
   const query = useQuery({
@@ -75,7 +82,8 @@ export function useAllOrders({ enabled = true } = {}) {
       return merged.filter((o) => o.companyId === activeStoreId);
     },
     enabled: enabled && !!activeStoreId,
-    staleTime: APP_CONFIG.STALE_TIME.ORDERS,
+    staleTime: staleTime ?? APP_CONFIG.STALE_TIME.ORDERS,
+    ...(refetchOnWindowFocus != null ? { refetchOnWindowFocus } : {}),
   });
 
   return {

@@ -134,14 +134,16 @@ export default function CustomerSessionSheet({ isOpen, onClose }) {
   // (mirrors handleSearch's mobile-search path), so the "Visit recorded"
   // note is visible before the staff commits to attaching.
   //
-  // KNOWN LIMITATION (confirmed live 2026-07-21): Customer/List and
-  // Customer/Retrieve both pre-mask mobile ("******9991") — the real digits
-  // only ever exist in what staff type into the mobile-search box. So
-  // selected.customerMobile here is masked, WALKIN.LOOKUP can never match
-  // it, and this will silently no-op (WalkInRecorded stays false, "Visit
-  // recorded" never shows) for every name-search attach. Left in place
-  // intentionally per product decision — not a bug to "fix" without a
-  // read/unmasked-mobile API change from OrnaVerse.
+  // RESOLVED 2026-09-08 — this used to be a documented, accepted
+  // limitation: Customer/List and Customer/Retrieve were confirmed live
+  // 2026-07-21 to both pre-mask mobile ("******9991"), which would make
+  // this WALKIN.LOOKUP call always miss. Re-confirmed live against LIVE
+  // (both Customer/List and Customer/Retrieve, several unrelated real
+  // customers each) that this tenant does NOT mask mobile/email — full
+  // digits come back from a name search exactly as they would from typing
+  // the number directly. selected.customerMobile here is real, so this
+  // now works correctly for a name-search attach too, no fix needed beyond
+  // this comment no longer describing a limitation that isn't there.
   const handleSelectNameResult = (selected) => {
     setNameResultSelection(selected);
     walkIn.reset();

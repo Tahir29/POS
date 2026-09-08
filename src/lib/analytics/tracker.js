@@ -125,7 +125,41 @@ function omitNullish(obj) {
 
 const SESSION_KEY = 'lucira_session';
 const EVENTS_KEY  = 'lucira_events';
+const AGENT_KEY   = 'lucira_agent_events';
 const MAX_EVENTS  = 500;
+
+// PERF (2026-09-08) — in-memory mirror of each sessionStorage event buffer.
+// Before this, track()/trackAgent() called safeGet() (a full JSON.parse) on
+// EVERY single event to read the buffer before appending to it. Once a
+// shift's log fills to its MAX_EVENTS cap — the steady state for most of a
+// shift — every subsequent add-to-cart/search/view paid a full parse of
+// ~500 entries just to push one more. Lazily hydrated from sessionStorage
+// on first access per key, then read/mutated directly in memory; every push
+// still calls safeSet() to persist (so a reload or the console-based
+// getEvents()/getAgentEvents() QA tools still see the latest buffer) — only
+// the redundant re-PARSE is gone, not the write.
+//
+// Every place that RESETS a buffer (flush(), clear(), a fresh
+// startSession()) must go through setEventCache() below, never a bare
+// safeSet() — otherwise the in-memory cache and sessionStorage would
+// silently disagree (the cache still pointing at the old, non-empty array)
+// and the next track() call would keep appending to stale, already-cleared
+// data instead of noticing the reset.
+const eventCaches = new Map(); // key -> array
+
+function getEventCache(key) {
+  let cache = eventCaches.get(key);
+  if (!cache) {
+    cache = safeGet(key) ?? [];
+    eventCaches.set(key, cache);
+  }
+  return cache;
+}
+
+function setEventCache(key, events) {
+  eventCaches.set(key, events);
+  safeSet(key, events);
+}
 
 function safeGet(key) {
   try {
@@ -191,7 +225,7 @@ const tracker = {
     };
 
     safeSet(SESSION_KEY, session);
-    safeSet(EVENTS_KEY, []);
+    setEventCache(EVENTS_KEY, []);
 
     // Identify the customer to WebEngage BEFORE the SESSION_START event
     // fires, so that event (and everything after it) is already attached
@@ -239,7 +273,7 @@ const tracker = {
       properties,
     };
 
-    const events = safeGet(EVENTS_KEY) ?? [];
+    const events = getEventCache(EVENTS_KEY);
     if (events.length >= MAX_EVENTS) {
       events.splice(0, events.length - MAX_EVENTS + 1);
     }
@@ -297,14 +331,13 @@ const tracker = {
    */
   trackAgent(eventName, properties = {}) {
     if (typeof window === 'undefined') return;
-    const AGENT_KEY = 'lucira_agent_events';
     const timestamp = new Date().toISOString();
     const event = {
       event:     eventName,
       timestamp,
       properties,
     };
-    const events = safeGet(AGENT_KEY) ?? [];
+    const events = getEventCache(AGENT_KEY);
     if (events.length >= MAX_EVENTS) events.splice(0, 1);
     events.push(event);
     safeSet(AGENT_KEY, events);
@@ -364,11 +397,11 @@ const tracker = {
   },
 
   getEvents() {
-    return safeGet(EVENTS_KEY) ?? [];
+    return getEventCache(EVENTS_KEY);
   },
 
   getAgentEvents() {
-    return safeGet('lucira_agent_events') ?? [];
+    return getEventCache(AGENT_KEY);
   },
 
   /**
@@ -411,7 +444,7 @@ const tracker = {
    */
   flush() {
     const events = this.getEvents();
-    safeSet(EVENTS_KEY, []);
+    setEventCache(EVENTS_KEY, []);
     return events;
   },
 
@@ -420,6 +453,12 @@ const tracker = {
       sessionStorage.removeItem(SESSION_KEY);
       sessionStorage.removeItem(EVENTS_KEY);
     } catch {}
+    // Keep the in-memory mirror consistent with the storage clear above —
+    // otherwise the next track() call would find a stale, non-empty cache
+    // entry and keep appending to buffer contents this just erased from
+    // sessionStorage. Only EVENTS_KEY: clear() never touched AGENT_KEY
+    // either, before or after this change.
+    eventCaches.delete(EVENTS_KEY);
   },
 };
 

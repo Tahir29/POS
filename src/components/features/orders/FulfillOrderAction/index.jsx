@@ -5,11 +5,10 @@
 // stock-allocation check, and if so, loads them into a fresh Invoice cart.
 //
 // See the header comment on API.ORDER_FULFILLMENT (apiEndpoints.js) and
-// orderFulfillmentService.js for the full contract: what's confirmed live,
-// and what remains unverified (the actual Invoice/Create round trip for a
-// genuine fulfillment case — every real candidate found on UAT hit the same
-// "Ready To Invoice" inconsistency their own system has between its two
-// list endpoints).
+// orderFulfillmentService.js for the full contract — CONFIRMED LIVE
+// end-to-end 2026-09-08, including the actual Invoice/Create round trip:
+// the source order closes out automatically once checkout claims the exact
+// stock piece it reserved (no dedicated header field involved at all).
 //
 // "Not ready yet" is the NORMAL case, not an error — moving a line from
 // New to Ready happens entirely in OrnaVerse's ERP admin (Inventory →

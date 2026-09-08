@@ -5,6 +5,7 @@
 
 import { User, Calendar, Store, Phone, Mail } from 'lucide-react';
 import ListItemCard from '@/components/shared/ListItemCard';
+import { formatDateSlashed } from '@/lib/dateUtils';
 
 /**
  * @param {{
@@ -47,11 +48,7 @@ export default function InvoiceListItem({ invoice, onSelect }) {
         {invoiceDate && (
           <span className="flex items-center gap-1.5 text-[13px] text-muted-foreground shrink-0">
             <Calendar size={13} className="text-muted-foreground/70" aria-hidden="true" />
-            {new Date(invoiceDate).toLocaleDateString('en-IN', {
-              day: '2-digit',
-              month: '2-digit',
-              year: 'numeric',
-            })}
+            {formatDateSlashed(invoiceDate)}
           </span>
         )}
       </div>

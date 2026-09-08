@@ -47,11 +47,15 @@ export default function InvoicesPage() {
   } = useInvoiceList({ skip });
 
   // ── Full dataset for filtering ───────────────────────────
+  // PERF (2026-09-08) — gated on the operator having touched a filter at
+  // all (raw input, or either date field), instead of firing this Take:0
+  // full-dataset fetch unconditionally on every visit — most visits to this
+  // page just page through pagedInvoices below and never search/filter.
   const {
     allInvoices,
     isLoading: isAllLoading,
     isFetching: isAllFetching,
-  } = useAllInvoices();
+  } = useAllInvoices({ enabled: !!inputVal || !!fromDate || !!toDate });
 
   // ── Debounced search ─────────────────────────────────────
   const handleSearchChange = (e) => {
