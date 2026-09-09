@@ -102,6 +102,7 @@ import ListRowsSkeleton                    from '@/components/shared/ListRowsSke
 import { Button }                          from '@/components/ui/button';
 import { Input }                           from '@/components/ui/input';
 import { Label }                           from '@/components/ui/label';
+import { Switch }                          from '@/components/ui/switch';
 
 // De-duplicated 2026-09-08 — identical copies existed in estimation/page.jsx
 // and repair/page.jsx; see lib/priceUtils.js's formatAmountOrDash and
@@ -398,7 +399,7 @@ function SoldItemFlowForm({ flow, onDone }) {
 
         {!customerId ? (
           <p className="rounded-xl border border-dashed border-border px-3 py-6 text-center text-sm text-muted-foreground">
-            Attach a customer to see their purchases.
+            Assign a customer to see their purchases.
           </p>
         ) : soldLoading ? (
           <InlineLoader className="py-6" label="Loading purchases…" />
@@ -1135,7 +1136,38 @@ function TransactionList({ hook: useHook, emptyMessage }) {
   const [skip, setSkip]         = useState(0);
   const [selected, setSelected] = useState(null);
 
-  const { items, totalCount, take, isLoading, isFetching, isError, refetch } = useHook({ skip });
+  // ADDED 2026-09-09 — "Show only my transactions" toggle, requested to
+  // mirror the customer profile page's own party-scoped view. Only offered
+  // when a customer is actually attached (same header-level attach state
+  // this file already reads for CustomerAttachedBanner above — global,
+  // independent of checkout, so it's available on this plain list view
+  // too). Off by default and reset per tab — TABS.map below mounts a fresh
+  // TransactionList per tab, so switching tabs never silently carries the
+  // filter over to a different transaction type.
+  //
+  // CLIENT-SIDE, not a server param — confirmed (useTransactionLists.js's
+  // own header + transactionService.js) none of the 6 List endpoints
+  // (Return/Refund/CreditNote/Exchange/BuyBack/URDPurchase) accept a
+  // party_id filter; they're store-scoped and paginated only. So this
+  // narrows whatever page is ALREADY loaded to this customer's own rows in
+  // it — the same page window as the unfiltered view, not a guaranteed
+  // search of this customer's entire history. That's a real, different
+  // (lesser) guarantee than the customer profile page's own 360 tab, which
+  // calls a genuinely party_id-scoped endpoint — see useCustomer360.js.
+  // Reusing that richer endpoint here instead would need per-tab mapping
+  // work (its response has no Refund/CreditNote arrays at all), so this
+  // stays a straightforward in-page filter for now, honestly presented as
+  // such via the "on this page" wording in the empty state below.
+  const [showOnlyCustomer, setShowOnlyCustomer] = useState(false);
+  const customerId   = useSelector(selectCartCustomerId);
+  const customerName = useSelector(selectCartCustomerName);
+  const isAttached   = !!customerId;
+
+  const { items: allItems, totalCount, take, isLoading, isFetching, isError, refetch } = useHook({ skip });
+
+  const items = showOnlyCustomer && isAttached
+    ? allItems.filter((item) => item.customerId === customerId)
+    : allItems;
 
   const totalPages  = Math.max(1, Math.ceil(totalCount / take));
   const currentPage = Math.floor(skip / take) + 1;
@@ -1154,26 +1186,43 @@ function TransactionList({ hook: useHook, emptyMessage }) {
     </div>
   );
 
-  if (!items.length) return <p className="text-sm text-muted-foreground text-center py-12">{emptyMessage}</p>;
-
   return (
     <>
-      {isFetching && !isLoading && (
-        <div className="flex justify-center py-2">
-          <RefreshCw className="w-3.5 h-3.5 text-muted-foreground animate-spin" />
-        </div>
+      {isAttached && (
+        <label className="flex h-11 w-full items-center justify-between gap-3 rounded-lg border border-border bg-card px-4">
+          <span className="text-sm font-medium text-foreground truncate">
+            Show only {customerName ?? 'this customer'}&apos;s transactions
+          </span>
+          <Switch checked={showOnlyCustomer} onCheckedChange={setShowOnlyCustomer} />
+        </label>
       )}
-      <div className="rounded-xl border border-border overflow-hidden">
-        {items.map((item) => (
-          <TransactionRow key={item.transactionId ?? item.documentNo} item={item} onSelect={setSelected} />
-        ))}
-      </div>
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between gap-3 pt-2">
-          <button onClick={handlePrev} disabled={skip === 0} className="text-xs font-medium text-primary disabled:text-muted-foreground disabled:cursor-not-allowed">← Previous</button>
-          <p className="text-xs text-muted-foreground">Page {currentPage} of {totalPages}</p>
-          <button onClick={handleNext} disabled={currentPage >= totalPages} className="text-xs font-medium text-primary disabled:text-muted-foreground disabled:cursor-not-allowed">Next →</button>
-        </div>
+
+      {!items.length ? (
+        <p className="text-sm text-muted-foreground text-center py-12">
+          {showOnlyCustomer && isAttached && allItems.length > 0
+            ? `No transactions for ${customerName ?? 'this customer'} on this page.`
+            : emptyMessage}
+        </p>
+      ) : (
+        <>
+          {isFetching && !isLoading && (
+            <div className="flex justify-center py-2">
+              <RefreshCw className="w-3.5 h-3.5 text-muted-foreground animate-spin" />
+            </div>
+          )}
+          <div className="rounded-xl border border-border overflow-hidden">
+            {items.map((item) => (
+              <TransactionRow key={item.transactionId ?? item.documentNo} item={item} onSelect={setSelected} />
+            ))}
+          </div>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between gap-3 pt-2">
+              <button onClick={handlePrev} disabled={skip === 0} className="text-xs font-medium text-primary disabled:text-muted-foreground disabled:cursor-not-allowed">← Previous</button>
+              <p className="text-xs text-muted-foreground">Page {currentPage} of {totalPages}</p>
+              <button onClick={handleNext} disabled={currentPage >= totalPages} className="text-xs font-medium text-primary disabled:text-muted-foreground disabled:cursor-not-allowed">Next →</button>
+            </div>
+          )}
+        </>
       )}
       {selected && <TransactionDetailSheet transaction={selected} onClose={() => setSelected(null)} />}
     </>

@@ -26,14 +26,14 @@ export default function ProductTrustBadge() {
     // Grid: 1 col mobile / 2 tablet / 4 desktop, not the old fixed
     // 2-then-4 — that skipped straight from 2 columns to 4 with no
     // dedicated mobile single-column state.
-    <div className="rounded-2xl bg-primary p-3">
+    <div className="rounded-2xl bg-accent/10 p-3">
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
         {TRUST_BADGES.map(({ icon: Icon, title, subtitle }) => (
           // bg-primary-foreground/10, not bg-muted (2026-08-24) — a light
           // box on the new dark bg-primary wrapper instead of one that was
           // only ever designed to sit on a plain white page background.
-          <div key={title} className="flex items-center gap-2.5 rounded-2xl bg-primary-foreground/10 p-4">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-foreground/15 text-primary-foreground">
+          <div key={title} className="flex items-center gap-2.5 rounded-2xl p-4">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent/15 text-accent">
               <Icon size={17} aria-hidden="true" />
             </span>
             <div className="min-w-0">
@@ -45,10 +45,10 @@ export default function ProductTrustBadge() {
                   text-muted-foreground swapped for text-primary-foreground
                   (full/70% opacity) — the old dark-gray tones were meant
                   for a light bg-muted box, not this dark bg-primary one. */}
-              <p className="text-sm font-semibold leading-tight text-primary-foreground">
+              <p className="text-sm font-semibold leading-tight text-accent">
                 {title}
               </p>
-              <p className="text-xs leading-tight text-primary-foreground/70">
+              <p className="text-xs leading-tight text-accent">
                 {subtitle}
               </p>
             </div>

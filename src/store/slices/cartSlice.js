@@ -141,6 +141,20 @@ const cartSlice = createSlice({
 
     updateQuantity: (state, action) => {
       const { itemId, sizeId, styleId, quantity } = action.payload;
+      // DEFENSIVE (2026-09-09) — this reducer used to trust every caller to
+      // pre-validate quantity > 0; only useCart.js's handleUpdateQuantity
+      // actually did (redirecting <= 0 to removeItem instead of dispatching
+      // this). A caller that skipped that check would silently set a
+      // zero/negative quantity here. Mirrors that same redirect-to-remove
+      // behavior directly in the reducer so it can't be bypassed again.
+      if (quantity <= 0) {
+        state.items = state.items.filter(
+          (i) => !(i.itemId === itemId && i.sizeId === sizeId && i.styleId === styleId)
+        );
+        recalculateTotals(state);
+        return;
+      }
+
       const item = state.items.find(
         (i) =>
           i.itemId  === itemId &&
@@ -155,6 +169,29 @@ const cartSlice = createSlice({
 
     attachCustomer: (state, action) => {
       const { customerId, customerName, customerMobile, customerAddress } = action.payload;
+      // DEFENSIVE (2026-09-09) — LAST-RESORT guard, not a replacement for
+      // detaching first. Every call site should still dispatch
+      // detachCustomer() before attaching a DIFFERENT customer over an
+      // existing one with items — that's the ONLY place
+      // (abandonedCartMiddleware's 'cart/detachCustomer' case) that
+      // snapshots the OUTGOING customer's cart to Mongo before it's gone;
+      // this reducer has no way to trigger that save. This only stops the
+      // worse outcome of a caller that forgets: items/promos/coins ending
+      // up silently misattributed to the wrong customer's identity. This
+      // gap was confirmed real, not theoretical — see useCart.js's
+      // handleLoadFromOrder fix, the one call site that had actually
+      // slipped through it.
+      if (state.customerId && state.customerId !== customerId && state.items.length > 0) {
+        state.items              = [];
+        state.appliedPromos      = [];
+        state.redeemedCoins      = 0;
+        state.discountAmount     = 0;
+        state.subtotal           = 0;
+        state.taxAmount          = 0;
+        state.total              = 0;
+        state.fulfillmentOrderId = null;
+        state.fulfillmentOrderNo = null;
+      }
       state.customerId      = customerId;
       state.customerName    = customerName;
       state.customerMobile  = customerMobile;
@@ -316,12 +353,33 @@ const cartSlice = createSlice({
         appliedPromos = [];
       }
 
+      // FIXED 2026-09-09 — `items` had no equivalent guard: recalculateTotals
+      // below does `state.items.reduce(...)` unconditionally, so a
+      // persisted `items` value that's ever anything other than a real
+      // array (a corrupted/partial write, or a future schema change) would
+      // throw `TypeError: items.reduce is not a function` INSIDE this
+      // REHYDRATE reducer — i.e. on every single app load, before the
+      // operator can do anything, since redux-persist dispatches REHYDRATE
+      // on init. Individual malformed line items (missing unitPrice/
+      // quantity) are dropped too, rather than silently producing NaN
+      // subtotal/tax/total that would render as literal "NaN" in the cart —
+      // same "don't trust persisted state blindly" reasoning as
+      // appliedPromos just above.
+      const items = Array.isArray(persistedCart.items)
+        ? persistedCart.items.filter((item) =>
+            item &&
+            item.itemId != null &&
+            typeof item.unitPrice === 'number' &&
+            typeof item.quantity === 'number'
+          )
+        : [];
+
       // Recompute rather than trust the persisted subtotal/discount/total. A
       // cart persisted before the discount became derived carries a frozen
       // figure costed against whatever the subtotal was when the promo was
       // typed in; restoring it verbatim would put a stale discount straight
       // back into a live basket.
-      const rehydrated = { ...state, ...persistedCart, appliedPromos };
+      const rehydrated = { ...state, ...persistedCart, appliedPromos, items };
       recalculateTotals(rehydrated);
       return rehydrated;
     });

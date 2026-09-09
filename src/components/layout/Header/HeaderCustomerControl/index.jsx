@@ -10,10 +10,13 @@
 // Unattached state is unchanged from the original ghost-button treatment.
 
 import { useState } from 'react';
+import { useSelector } from 'react-redux';
 import { UserPlus, X } from 'lucide-react';
+import { toast } from 'react-toastify';
 import { Button } from '@/components/ui/button';
 import CustomerSessionSheet from '@/components/features/customers/CustomerSessionSheet';
 import { useCustomerSession } from '@/hooks/customer/useCustomerSession';
+import { selectCheckoutInProgress } from '@/store/slices/uiSlice';
 import { cn } from '@/lib/utils';
 
 function getInitials(name) {
@@ -27,6 +30,31 @@ function getInitials(name) {
 export default function HeaderCustomerControl() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const { isAttached, customerName, customerMobile, detach } = useCustomerSession();
+  // FIXED 2026-09-09 — CONFIRMED real risk: this control is reachable from
+  // every screen, checkout included, with no guard of its own. Detaching or
+  // switching customers while a payment confirmation is in flight
+  // (checkout/page.jsx's handlePaymentConfirmed) could redirect checkout
+  // away before it ever saw the sale complete — the sale still goes
+  // through server-side, but the operator never gets the confirmation
+  // screen and could re-submit, risking a duplicate charge. See
+  // uiSlice.js's setCheckoutInProgress for the full mechanism.
+  const checkoutInProgress = useSelector(selectCheckoutInProgress);
+
+  const guardedSheetOpen = () => {
+    if (checkoutInProgress) {
+      toast.error('A sale is being processed — please wait for it to finish before switching customers.');
+      return;
+    }
+    setSheetOpen(true);
+  };
+
+  const guardedDetach = () => {
+    if (checkoutInProgress) {
+      toast.error('A sale is being processed — please wait for it to finish before removing this customer.');
+      return;
+    }
+    detach();
+  };
 
   if (!isAttached) {
     return (
@@ -34,7 +62,7 @@ export default function HeaderCustomerControl() {
         <Button
           type="button"
           variant="outline"
-          onClick={() => setSheetOpen(true)}
+          onClick={guardedSheetOpen}
           // rounded-full removed 2026-08-23 — was overriding the base
           // Button's own corner radius with a pill shape; every other
           // rectangular control in the app was flattened to the small
@@ -72,7 +100,7 @@ export default function HeaderCustomerControl() {
       >
         <button
           type="button"
-          onClick={() => setSheetOpen(true)}
+          onClick={guardedSheetOpen}
           className="flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
           aria-label={`Customer: ${customerName}. Tap to view details.`}
         >
@@ -91,7 +119,7 @@ export default function HeaderCustomerControl() {
         </button>
         <button
           type="button"
-          onClick={detach}
+          onClick={guardedDetach}
           aria-label={`Remove customer ${customerName}`}
           className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-status-in-stock/70 hover:bg-status-in-stock/20 hover:text-status-in-stock focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >

@@ -5,12 +5,14 @@
 // unauthenticated read/write surface. Only a signed-in operator can call
 // this, same trust boundary as the rest of the app.
 //
-// POST   — add one item to a party_id's wishlist.
-// GET    — fetch the full wishlist for a party_id (party_id query param) —
-//          used both by wishlistMiddleware (attached customer, for heart-
-//          icon state) and by the customer profile page's Wishlist tab
-//          (any customer being viewed, whether attached or not).
-// DELETE — remove one item (party_id + item_id query params, plus an
+// POST   — add one item to a customer's wishlist.
+// GET    — fetch the full wishlist (party_id + customer_mobile query params
+//          — see lib/mongo/wishlist.js's buildFilter: mobile is the real
+//          lookup key now, party_id the fallback) — used both by
+//          wishlistMiddleware (attached customer, for heart-icon state) and
+//          by the customer profile page's Wishlist tab (any customer being
+//          viewed, whether attached or not).
+// DELETE — remove one item (same two identity params + item_id, plus an
 //          optional item_size_id — see removeWishlistItem's own header for
 //          why a wishlist entry's real identity is (item_id, item_size_id),
 //          not item_id alone).
@@ -26,6 +28,12 @@ function requireBearerToken(request) {
 function parseIntParam(url, name) {
   const value = Number(new URL(url).searchParams.get(name));
   return Number.isInteger(value) && value > 0 ? value : null;
+}
+
+// FIXED 2026-09-09 — see this file's own header + lib/mongo/wishlist.js's
+// buildFilter for why.
+function parseMobileParam(url) {
+  return new URL(url).searchParams.get('customer_mobile') || null;
 }
 
 // Distinct from parseIntParam above: an ABSENT item_size_id is the normal,
@@ -70,12 +78,13 @@ export async function GET(request) {
   }
 
   const partyId = parseIntParam(request.url, 'party_id');
-  if (!partyId) {
+  const customerMobile = parseMobileParam(request.url);
+  if (!partyId && !customerMobile) {
     return Response.json({ error: 'Invalid party_id' }, { status: 400 });
   }
 
   try {
-    const items = await getWishlist(partyId);
+    const items = await getWishlist({ partyId, customerMobile });
     return Response.json({ items });
   } catch (err) {
     console.error('[api/customers/wishlist] GET', err);
@@ -89,14 +98,15 @@ export async function DELETE(request) {
   }
 
   const partyId    = parseIntParam(request.url, 'party_id');
+  const customerMobile = parseMobileParam(request.url);
   const itemId     = parseIntParam(request.url, 'item_id');
   const itemSizeId = parseOptionalIntParam(request.url, 'item_size_id');
-  if (!partyId || !itemId) {
+  if ((!partyId && !customerMobile) || !itemId) {
     return Response.json({ error: 'Invalid party_id or item_id' }, { status: 400 });
   }
 
   try {
-    await removeWishlistItem({ party_id: partyId, item_id: itemId, item_size_id: itemSizeId });
+    await removeWishlistItem({ party_id: partyId, customerMobile, item_id: itemId, item_size_id: itemSizeId });
     return Response.json({ ok: true });
   } catch (err) {
     console.error('[api/customers/wishlist] DELETE', err);

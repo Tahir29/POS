@@ -2,7 +2,8 @@
 
 // Single cart line item: image, name, SKU, an In Stock/Made to Order badge,
 // attributes, quantity control, unit price, line total, a remove action, and
-// (opt-in — see showPriceBreakdown below) the full per-product cost breakup.
+// (opt-in — see showPriceBreakdown below) the full per-product cost breakup,
+// collapsed behind a toggle by default.
 //
 // readOnly MODE: when true, hides the qty stepper, showing a plain "N ×"
 // static label instead — used to reuse this exact row on the Checkout
@@ -21,11 +22,12 @@
 import { useState } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { Trash2 } from 'lucide-react';
+import { Trash2, Coins, ChevronDown } from 'lucide-react';
 import Logo from '@/components/shared/Logo';
 import StockStatusBadge from '@/components/shared/StockStatusBadge';
 import CartItemQuantityControl from '@/components/features/cart/CartItemQuantityControl';
 import PriceBreakdown from '@/components/features/products/PriceBreakdown';
+import { cn } from '@/lib/utils';
 
 /**
  * @param {{
@@ -48,19 +50,34 @@ import PriceBreakdown from '@/components/features/products/PriceBreakdown';
  *   and misquotes the customer — hence the SKU of the actual piece is shown
  *   too, so the counter knows which one it is billing.
  *
- *   showPriceBreakdown (2026-08-26, default false) — renders the same
+ *   showPriceBreakdown (2026-08-26, default false) — makes available the same
  *   Metal/Diamond/.../Total(incl. GST) card the product detail page shows
  *   (see components/products/PriceBreakdown), sourced from priced.breakdown,
  *   below this line's own details. Cart page and checkout's "Order Items"
  *   summary opt in (per-product breakup requested for both); the mini cart
  *   drawer deliberately does NOT — it's a quick glance/edit surface, not
  *   where a customer reviews a full cost breakup per piece.
+ *
+ *   COLLAPSED BY DEFAULT (2026-09-09) — this used to render unconditionally
+ *   whenever showPriceBreakdown was true, meaning every line on Cart and
+ *   Checkout's Order Items always carried the full breakdown card, all the
+ *   time — with several lines in the sale, that's a lot of vertical space
+ *   spent on detail most glances at the cart don't need. Same fields, same
+ *   detail, nothing removed — now sits behind a per-line "View price
+ *   breakdown" toggle instead, so the common case (just checking what's in
+ *   the cart) stays compact, and the full breakup is still one tap away.
+ *   Local to this row's own mount, not global — expanding one line's detail
+ *   doesn't expand every other line too. Survives a quantity change on the
+ *   SAME line (the key callers use — itemId/sizeId/styleId — doesn't
+ *   include quantity, so this component doesn't remount for that), only
+ *   resetting if the row itself is removed and re-added.
  */
 export default function CartItemRow({
   item, onUpdateQuantity, onRemove, readOnly = false, priced = null, showPriceBreakdown = false,
 }) {
   const router = useRouter();
   const [imgError, setImgError] = useState(false);
+  const [breakdownOpen, setBreakdownOpen] = useState(false);
 
   const unitPrice = priced ? priced.unitPrice : item.unitPrice;
   const lineTotal = priced ? priced.lineTotal : item.unitPrice * item.quantity;
@@ -84,10 +101,21 @@ export default function CartItemRow({
     if (item.itemId) router.push(`/products/${item.itemId}`);
   };
 
+  // FIXED 2026-09-09 — was `item.attributes?.metalColor` (camelCase), which
+  // never matched anything: buildProductAttributes (lib/analytics/
+  // productAttributes.js) writes this whole object in snake_case
+  // (item_id, gross_weight, metal_color, ...) end to end — `metalColor` is
+  // a leftover name from the OLD 3-field { karat, metalColor, weight }
+  // shape AddToCartButton's own header describes replacing on 2026-09-08.
+  // `karat` happened to keep working (same key spelled the same way in
+  // both old and new shapes) while `metal_color` silently read as
+  // undefined ever since — the color was captured in Redux the whole time
+  // (confirmed via cartSlice/buildProductAttributes), just never reached
+  // this row.
   const metaParts = [
     item.sizeName,
     item.attributes?.karat,
-    item.attributes?.metalColor,
+    item.attributes?.metal_color,
   ].filter(Boolean);
 
   // In Stock / Made to Order per line (2026-08-24) — same signal
@@ -236,13 +264,31 @@ export default function CartItemRow({
         </div>
       </div>
 
-      {/* Full per-product cost breakup (2026-08-26) — same card the product
-          detail page shows, reused verbatim (see this prop's own JSDoc for
-          which screens opt in). Nothing to show until pricing has actually
-          resolved this line (priced?.breakdown), same gate PriceBreakdown
-          itself applies for a null `priced`. */}
+      {/* Full per-product cost breakup (2026-08-26), collapsed behind a
+          toggle by default (2026-09-09 — see this prop's own JSDoc). Same
+          card the product detail page shows, reused verbatim. Nothing to
+          show until pricing has actually resolved this line
+          (priced?.breakdown), same gate PriceBreakdown itself applies for a
+          null `priced` — the toggle itself only renders once there's
+          something real behind it. */}
       {showPriceBreakdown && priced?.breakdown && (
-        <PriceBreakdown priced={priced.breakdown} />
+        <div className="flex flex-col gap-2">
+          <button
+            type="button"
+            onClick={() => setBreakdownOpen((open) => !open)}
+            aria-expanded={breakdownOpen}
+            className="flex w-fit items-center gap-1.5 text-xs font-semibold text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
+          >
+            <Coins size={12} aria-hidden="true" />
+            {breakdownOpen ? 'Hide Price Breakdown' : 'View Price Breakdown'}
+            <ChevronDown
+              size={12}
+              aria-hidden="true"
+              className={cn('transition-transform', breakdownOpen && 'rotate-180')}
+            />
+          </button>
+          {breakdownOpen && <PriceBreakdown priced={priced.breakdown} />}
+        </div>
       )}
     </div>
   );

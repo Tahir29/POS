@@ -82,7 +82,16 @@ export const QUERY_KEYS = {
   // ── CATALOG (Live store inventory) ────────────────────────────────────────
   CATALOG: {
     PRODUCTS:              (params)  => ['catalog', 'products', params],
-    ALL:                   (storeId) => ['catalog', 'all', storeId],
+    // FIXED 2026-09-09 — was ALL(storeId) => ['catalog','all',storeId]. See
+    // useAllCatalog.js's own header: current_company_id doesn't actually
+    // scope this fetch (confirmed live), so every store was re-running the
+    // identical ~15-round sweep under its own cache key. One shared,
+    // store-agnostic key now — filtering to a specific store happens via
+    // `select` in useAllCatalog.js instead, over this one cached fetch.
+    // ['catalog','all', ...] prefix kept for queryPersister.js's own
+    // prefix-matching (only checks the first 2 segments, so this is still
+    // persisted the same way).
+    ALL_SHARED:            () => ['catalog', 'all', 'shared'],
     SKU_SEARCH:            (query, storeId) => ['catalog', 'sku-search', query, storeId],
     CATEGORY_SEARCH:       (typeIds, storeId) => ['catalog', 'category-search', typeIds, storeId],
     STOCK_BY_STORES:       (itemId)  => ['catalog', 'stock-by-stores', itemId],

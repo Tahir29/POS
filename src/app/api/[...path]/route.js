@@ -122,12 +122,40 @@ async function proxy(request, { params }) {
     }
   }
 
-  const upstreamRes = await fetch(targetUrl, {
-    method: request.method,
-    headers,
-    body,
-    cache: 'no-store',
-  });
+  // FIXED 2026-09-09 — this fetch had no try/catch, unlike every sibling
+  // proxy route in this codebase (api/customers/sync, api/shopify/
+  // product-media, api/report/render all wrap their upstream fetch and
+  // return a clean JSON error). This one route carries 100% of the app's
+  // OrnaVerse traffic (axiosInstance's baseURL resolves here), so an
+  // unreachable upstream (DNS failure, connection refused, TLS error) threw
+  // out of this handler uncaught — Next's own generic error response isn't
+  // the `{Error:{Message}}"/`{message}` shape normalizeError/
+  // extractServerMessage (lib/axios/interceptors.js) expect, so every
+  // in-flight operation (submitting an invoice, looking up a customer, ...)
+  // surfaced as a garbled message instead of "Network error" or "Server
+  // error" the rest of the app is built to show cleanly.
+  let upstreamRes;
+  try {
+    upstreamRes = await fetch(targetUrl, {
+      method: request.method,
+      headers,
+      body,
+      cache: 'no-store',
+    });
+  } catch (err) {
+    console.error('[api proxy] upstream fetch failed', targetUrl, err);
+    // `error_description` matches extractServerMessage's recognized fields
+    // (lib/axios/interceptors.js) and mirrors this same file's own 429
+    // response shape a few lines up — so this surfaces as a real, readable
+    // message instead of the generic 5xx fallback copy.
+    return new Response(
+      JSON.stringify({
+        error: 'upstream_unreachable',
+        error_description: 'Could not reach the OrnaVerse server. Please check your connection and try again.',
+      }),
+      { status: 502, headers: { 'Content-Type': 'application/json' } },
+    );
+  }
 
   const responseBody = await upstreamRes.arrayBuffer();
   return new Response(responseBody, {

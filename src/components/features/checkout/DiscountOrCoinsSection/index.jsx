@@ -23,6 +23,7 @@ import PillTabs from '@/components/shared/PillTabs';
 import DiscountSection from '@/components/features/checkout/DiscountSection';
 import LucraCoinsSection from '@/components/features/checkout/LucraCoinsSection';
 import { useCart } from '@/hooks/cart/useCart';
+import { useCustomerSession } from '@/hooks/customer/useCustomerSession';
 
 const TABS = ['discount', 'coins'];
 const TAB_LABELS = { discount: 'Discount', coins: 'Lucira Coins' };
@@ -34,7 +35,23 @@ const TAB_LABELS = { discount: 'Discount', coins: 'Lucira Coins' };
  */
 export default function DiscountOrCoinsSection({ payableTotal, isPricing = false }) {
   const { redeemedCoins } = useCart();
+  const { customerMobile } = useCustomerSession();
   const [tab, setTab] = useState(() => (redeemedCoins > 0 ? 'coins' : 'discount'));
+
+  // FIXED 2026-09-09 — Lucira Coins are tied to a customer's own Nector
+  // wallet (looked up by customerMobile — see LucraCoinsSection's own
+  // header); there is no such thing as a guest's coin balance. Before this,
+  // the tab strip always showed BOTH tabs regardless of whether a customer
+  // was attached, so a guest cart showed a perfectly clickable "Lucira
+  // Coins" tab that rendered nothing at all once tapped (LucraCoinsSection
+  // returns null with no customerMobile) — a dead end with no explanation.
+  // Hidden entirely instead, same as a real loyalty program only ever
+  // offering itself to an identified customer; no single-tab strip left
+  // behind either, since with only one mechanism available there's nothing
+  // to switch between — DiscountSection renders directly.
+  if (!customerMobile) {
+    return <DiscountSection />;
+  }
 
   return (
     <div className="flex flex-col gap-3">

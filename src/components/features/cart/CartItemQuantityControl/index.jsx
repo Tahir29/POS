@@ -14,6 +14,11 @@ import QuantityStepper from '@/components/shared/QuantityStepper';
  */
 export default function CartItemQuantityControl({ quantity, onIncrement, onDecrement }) {
   return (
-    <QuantityStepper quantity={quantity} onDecrement={onDecrement} onIncrement={onIncrement} />
+    <QuantityStepper
+      quantity={quantity}
+      onDecrement={onDecrement}
+      onIncrement={onIncrement}
+      size="compact"
+    />
   );
 }

@@ -25,6 +25,12 @@ const TOAST = {
     LOGIN_SUCCESS:   'Logged in successfully.',
     LOGIN_FAILED:    'Invalid username or password. Please try again.',
     LOGOUT_SUCCESS:  'Logged out successfully.',
+    // ADDED 2026-09-09 — see useAuth.js login()'s own comment: createReportSession
+    // now gets 3 tries at login time instead of 1, so this should only ever
+    // fire on a genuine, non-transient failure. Named honestly ("open an
+    // invoice to reconnect") rather than implying the operator did something
+    // wrong — the reconnect panel on InvoiceReportButton is the actual fix path.
+    PRINT_SESSION_UNAVAILABLE: 'Signed in — but printing needs reconnecting. Open any invoice\'s print button to reconnect.',
   },
 
   STORE: {

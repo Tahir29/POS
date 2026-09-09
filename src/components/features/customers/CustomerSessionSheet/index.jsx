@@ -220,7 +220,7 @@ export default function CustomerSessionSheet({ isOpen, onClose }) {
               )}
               <CustomerDisplayCard customer={customer} />
               <Button type="button" onClick={handleAttachFound} className="h-11">
-                Attach to Session
+                Assign to Session
               </Button>
             </div>
           )}
@@ -291,7 +291,7 @@ export default function CustomerSessionSheet({ isOpen, onClose }) {
               )}
               <CustomerDisplayCard customer={customer} />
               <Button type="button" onClick={handleAttachFound} className="h-11">
-                Attach to Session
+                Assign to Session
               </Button>
             </div>
           )}

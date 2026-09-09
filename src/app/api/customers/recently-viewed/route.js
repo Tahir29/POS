@@ -56,13 +56,21 @@ export async function GET(request) {
     return Response.json({ error: 'Missing bearer token' }, { status: 401 });
   }
 
-  const partyId = Number(new URL(request.url).searchParams.get('party_id'));
-  if (!Number.isInteger(partyId) || partyId <= 0) {
+  // FIXED 2026-09-09 — customer_mobile added alongside party_id, same fix
+  // and same reason as api/customers/abandoned-cart/route.js's own comment:
+  // party_id is tenant-specific (UAT vs LIVE), mobile isn't — see
+  // lib/mongo/recentlyViewed.js's buildFilter. party_id alone still works
+  // as the fallback when a normalizable mobile isn't available.
+  const url = new URL(request.url);
+  const partyId = Number(url.searchParams.get('party_id'));
+  const customerMobile = url.searchParams.get('customer_mobile') || null;
+  const validPartyId = Number.isInteger(partyId) && partyId > 0 ? partyId : null;
+  if (!validPartyId && !customerMobile) {
     return Response.json({ error: 'Invalid party_id' }, { status: 400 });
   }
 
   try {
-    const items = await getRecentlyViewedItems(partyId);
+    const items = await getRecentlyViewedItems({ partyId: validPartyId, customerMobile });
     return Response.json({ items });
   } catch (err) {
     console.error('[api/customers/recently-viewed] GET', err);

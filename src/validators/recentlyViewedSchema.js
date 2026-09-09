@@ -9,11 +9,21 @@
 // item_id is optional/nullable: a product missing a karat or an image
 // shouldn't fail the whole write, it should just render that field blank
 // in the carousel later, same as ProductCard already tolerates.
+//
+// FIXED 2026-09-09 — numeric fields switched from z.number() to
+// z.coerce.number(), same fix and same reason as abandonedCartSchema.js's
+// own comment: a numeric-string value ("7" instead of 7) used to fail
+// validation outright instead of just being accepted. This file's own
+// saves happened not to have hit that yet when the sibling bug was found
+// live, but the shape is identical, so the same landmine was sitting here
+// too — fixed proactively rather than waiting for its own live failure.
 
 import { z } from 'zod';
 
+const numeric = () => z.coerce.number();
+
 export const recentlyViewedItemSchema = z.object({
-  item_id:    z.number().int().positive(),
+  item_id:    numeric().int().positive(),
   item_code:  z.string().nullable().optional(),
   item_name:  z.string().nullable().optional(),
   image:      z.string().nullable().optional(),
@@ -23,7 +33,7 @@ export const recentlyViewedItemSchema = z.object({
   // can render the exact catalog ProductCard component, which is keyed to
   // these fields, not the karat_name/metal_color_name pair this used to
   // store (see useRecentlyViewed.js's deriveKaratCode for why).
-  metal_id:   z.number().int().nullable().optional(),
+  metal_id:   numeric().int().nullable().optional(),
   karat_code: z.string().nullable().optional(),
   // metal_color_code/metal_color_name (2026-08-23) — ProductCard's
   // descriptive "14 Karat Yellow Gold" label needs one of these; Items/
@@ -34,13 +44,13 @@ export const recentlyViewedItemSchema = z.object({
   metal_color_code: z.string().nullable().optional(),
   metal_color_name: z.string().nullable().optional(),
   has_stock:  z.boolean().nullable().optional(),
-  net_weight: z.number().nullable().optional(),
-  weight:     z.number().nullable().optional(),
-  style_id:   z.number().int().nullable().optional(),
+  net_weight: numeric().nullable().optional(),
+  weight:     numeric().nullable().optional(),
+  style_id:   numeric().int().nullable().optional(),
 });
 
 export const recordViewSchema = z.object({
-  party_id:       z.number().int().positive(),
+  party_id:       numeric().int().positive(),
   customerName:   z.string().nullable().optional(),
   customerMobile: z.string().nullable().optional(),
   item:           recentlyViewedItemSchema,

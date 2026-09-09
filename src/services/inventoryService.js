@@ -2,6 +2,7 @@
 
 import axiosInstance from '@/lib/axios/axiosInstance';
 import API from '@/constants/apiEndpoints';
+import { ACTIVE_ENV } from '@/lib/ornaverse/environment';
 
 /**
  * Real-time stock check for a specific item SKU as of today.
@@ -63,28 +64,32 @@ export const getStockPieces = ({ itemId, itemIds, companyId, take = 50 }) =>
  * style). The catalog barcode-scan handler previously matched only against
  * `item_code`, which is why a real physical-piece scan could never resolve.
  *
- * REQUEST SHAPE CONFIRMED 2026-08-09 from a live capture of OrnaVerse's OWN
- * UAT client performing this exact lookup: `{ sku, Take: 1 }` — nothing
- * else. Two earlier guesses here (adding `company_id`/`has_sku`, then also
- * an `EqualityFilter` wrapper) were both OVER-filtered relative to this —
- * they returned zero rows for a sku confirmed to exist. Mirror the real
- * shape exactly rather than adding anything back without live proof it
- * belongs.
+ * REQUEST SHAPE — CONFIRMED TO DIVERGE BETWEEN ENVIRONMENTS:
+ *   - UAT (confirmed 2026-08-09, live capture of OrnaVerse's own client):
+ *     `{ sku, Take: 1 }` alone. Adding `company_id`/`has_sku`, or an
+ *     `EqualityFilter` wrapper, OVER-filtered there — zero rows for a sku
+ *     confirmed to exist.
+ *   - LIVE (CONFIRMED 2026-09-09 by direct testing against 3 real stock
+ *     pieces across 2 stores): the OPPOSITE. `{ sku, Take: 1 }` alone
+ *     returns ZERO rows for skus confirmed to exist via a company_id-scoped
+ *     StockJournal/List call — meaning "Scan Barcode" never resolved
+ *     anything at all on LIVE before this fix, every scan hitting "No
+ *     product found" unconditionally. Sending the CORRECT `company_id`
+ *     returns the real row; sending the WRONG one correctly returns empty
+ *     (genuine server-side scoping on LIVE, not a coincidence).
+ * So: send `company_id` only on LIVE (gated on ACTIVE_ENV), preserving
+ * UAT's own already-confirmed-working shape rather than regressing it.
  *
- * NOT server-side scoped to a store, unlike getStockPieces above — skus are
- * expected to be unique per physical piece, so this should rarely matter,
- * but callers that care should check the returned row's own `company_id`
- * rather than relying on a request-side filter that isn't part of the
- * confirmed shape.
- *
- * @param {{ sku: string }} params
+ * @param {{ sku: string, companyId?: number }} params — companyId required
+ *   for a working lookup on LIVE; ignored on UAT (see above)
  * @returns {Promise<import('axios').AxiosResponse>} { Entities: StockJournalRow[] }
  */
-export const getStockPieceBySku = ({ sku }) =>
+export const getStockPieceBySku = ({ sku, companyId }) =>
   axiosInstance.post(API.INVENTORY.STOCK_JOURNAL_LIST, {
     Skip: 0,
     Take: 1,
     sku,
+    ...(ACTIVE_ENV === 'LIVE' ? { company_id: companyId } : {}),
   });
 
 /**

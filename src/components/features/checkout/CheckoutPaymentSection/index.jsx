@@ -338,6 +338,14 @@ export default function CheckoutPaymentSection({ onChange, amountDue, allowParti
     { label: 'Credit Note',     code: 'CreditNote',  data: helpers.creditNote, loading: helpers.creditNote?.isLoading },
     { label: 'Old Gold Value',  code: 'OldGold',     data: helpers.oldGold,    loading: helpers.oldGold?.isLoading },
     { label: 'Advance Paid',    code: 'Advances',    data: helpers.advances,   loading: helpers.advances?.isLoading },
+    // ADDED 2026-09-09 — catch-all for any credit-bearing receipt whose
+    // document type isn't one of the 5 named buckets above (see
+    // useInvoiceHelpers.js's bucketReceipts comment — this is what fixed a
+    // real customer's ₹63,200 "POS Receipt" credit silently showing as
+    // nothing). Rendered last, and only ever appears at all when it's
+    // actually carrying something — same `amount > 0` gate every other row
+    // already has via HelperBalanceRow.
+    { label: 'Other Credit',    code: 'Other',       data: helpers.other,      loading: helpers.other?.isLoading },
   ]; // each `data.rows` is the underlying POSReceiptsSelect rows for that bucket — see useInvoiceHelpers.js
 
   const hasVisibleHelpers = customerId && helperItems.some((h) => h.data?.amount > 0);
@@ -385,7 +393,7 @@ export default function CheckoutPaymentSection({ onChange, amountDue, allowParti
         </div>
       )}
 
-      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Payment Method</p>
+      {/* <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Payment Method</p> */}
 
       {/* Cash ceiling — see the note beside cashHeadroom above. Stated before
           the operator picks a tender, because OrnaVerse's own rejection

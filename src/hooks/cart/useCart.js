@@ -133,9 +133,22 @@ export function useCart() {
   //   lines: object[] }} params — lines are raw rows from
   //   getReadyToInvoiceLines/getAllOpenOrderLines
   const handleLoadFromOrder = ({ order, lines }) => {
-    const items = lines.map(mapFulfillmentLineToCartItem);
+    // FIXED 2026-09-09 — detach the OUTGOING customer first, mirroring
+    // every other customer-switch path (CustomerSessionSheet.performAttach,
+    // customers/page.jsx's handleAttach/wouldSwitchCustomer). This path
+    // used to silently discard whoever was previously attached with items:
+    // hydrateFromOrder wholesale-replaces the cart with no detach step, so
+    // abandonedCartMiddleware's own 'cart/detachCustomer' case — the ONLY
+    // thing that snapshots an outgoing customer's cart to Mongo — never ran
+    // for this specific switch, unlike every other place the app switches
+    // customers.
+    if (customerId && customerId !== order.partyId && items.length > 0) {
+      dispatch(detachCustomer());
+    }
+
+    const mappedItems = lines.map(mapFulfillmentLineToCartItem);
     dispatch(hydrateFromOrder({
-      items,
+      items: mappedItems,
       customerId:         order.partyId,
       customerName:       order.partyName,
       customerMobile:     order.mobile,

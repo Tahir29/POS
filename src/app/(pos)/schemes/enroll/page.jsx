@@ -201,7 +201,7 @@ function EnrollScreen() {
         customerId={customerId}
         customerName={customerName}
         attachedLabel="Enrolling:"
-        emptyMessage="Attach a customer from the header before enrolling."
+        emptyMessage="Assign a customer from the header before enrolling."
       />
 
       <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5">

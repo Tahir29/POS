@@ -106,7 +106,7 @@ function StoreIndicator({ onOpen }) {
         'flex items-center gap-1.5 rounded-lg border border-input bg-card px-3 py-2 min-h-[44px]',
         'text-sm font-medium text-foreground transition-colors duration-standard ease-premium',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-        hasMultipleStores ? 'hover:bg-accent hover:shadow-sm cursor-pointer' : 'cursor-default'
+        hasMultipleStores ? 'hover:bg-gray-100 hover:shadow-sm cursor-pointer' : 'cursor-default'
       )}
     >
       <Store size={15} aria-hidden="true" className="shrink-0 text-muted-foreground" />

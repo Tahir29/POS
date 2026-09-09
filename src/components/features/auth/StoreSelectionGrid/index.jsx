@@ -15,7 +15,8 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'react-toastify';
 import Image from 'next/image';
-import { LogOut, ChevronsUpDown, Check, CheckCircle2, Store, ArrowRight, Sparkle } from 'lucide-react';
+import { LogOut, ChevronsUpDown, Check, CheckCircle2, Store, ArrowRight } from 'lucide-react';
+import Diamond from '@/components/shared/icons/BrandDiamond';
 
 import { useActiveStore } from '@/hooks/store/useActiveStore';
 import Logo from '@/components/shared/Logo';
@@ -91,7 +92,7 @@ export default function StoreSelectionGrid() {
 
             <div className="mt-1 flex items-center gap-3 text-accent">
               <span className="h-px w-8 bg-accent/70" aria-hidden="true" />
-              <Sparkle size={12} aria-hidden="true" />
+              <Diamond size={12} aria-hidden="true" />
               <span className="h-px w-8 bg-accent/70" aria-hidden="true" />
             </div>
 

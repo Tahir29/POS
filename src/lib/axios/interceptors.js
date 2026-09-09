@@ -239,13 +239,24 @@ const handleLogout = (store) => {
   // reject this too; it must never block the local cleanup below.
   destroyReportSession().catch(() => {});
 
-  store.dispatch(clearAuth());
-  store.dispatch(clearStore());
+  // FIXED 2026-09-09 — this dispatch used to come AFTER clearAuth()/
+  // clearStore() below, same bug and same fix as useAuth.js's manual
+  // logout() (see that function's own comment for the full explanation):
+  // abandonedCartMiddleware's 'cart/clearCart' case needs a LIVE bearer
+  // token to actually save the cart to Mongo before it's wiped locally, but
+  // dispatch() is synchronous — clearAuth() had already wiped
+  // state.auth.accessToken to null by the time this action reached that
+  // middleware, so its token guard silently failed and nothing was ever
+  // saved. Moved ahead of clearAuth()/clearStore() so the token (and
+  // activeStoreId, for the same reason) are both still live when this fires.
+  //
   // reason: 'session_reset' — same as useAuth.js's manual logout: this is
   // the SESSION ending, not the customer's cart being resolved, so an
   // unpaid cart is preserved as abandoned rather than deleted outright
   // (see abandonedCartMiddleware's cart/clearCart case).
   store.dispatch(clearCart({ reason: 'session_reset' }));
+  store.dispatch(clearAuth());
+  store.dispatch(clearStore());
   store.dispatch(clearRecentlyViewed());
   store.dispatch(clearWishlist());
   // Match normal logout — don't let a stale backend cookie survive
@@ -299,7 +310,22 @@ const handleLogout = (store) => {
  */
 const extractServerMessage = (data) => {
   if (!data) return null;
-  if (typeof data === 'string') return data.trim() || null;
+  if (typeof data === 'string') {
+    const trimmed = data.trim();
+    if (!trimmed) return null;
+    // FIXED 2026-09-09 — an intermediary fronting the upstream (nginx/a
+    // load balancer/CDN) can return an HTML error page under load instead
+    // of OrnaVerse's own JSON body — this codebase's own history includes
+    // exactly that failure mode (see api/[...path]/route.js's header:
+    // "empty-body 400s (bare nginx headers...)"). Axios can't parse that as
+    // JSON, so it fell back to this raw string, which used to be shown
+    // verbatim — a raw HTML page dumped into a toast instead of a sensible
+    // message. A genuine OrnaVerse plain-text reason never looks like
+    // markup, so anything tag-shaped is untrustworthy here; return null and
+    // let the generic status-based fallback below take over instead.
+    if (/^<(!doctype|html|\?xml)/i.test(trimmed) || /<\/?html[\s>]/i.test(trimmed)) return null;
+    return trimmed;
+  }
   return (
     data.Error?.Message ??      // Serenity business rule / validation
     data.error_description ??   // OAuth token endpoint

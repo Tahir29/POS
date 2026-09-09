@@ -18,12 +18,12 @@
 // the current filters, so a store with zero matches doesn't leave a bare
 // heading sitting on the page.
 
-import { useMemo } from 'react';
+import { useState } from 'react';
 import { Store } from 'lucide-react';
 import ProductGrid from '@/components/features/catalog/ProductGrid';
 import { useCatalogProducts } from '@/hooks/catalog/useCatalogProducts';
 import { useLiveCatalogPrices } from '@/hooks/catalog/useLiveCatalogPrices';
-import { sortProducts } from '@/lib/catalogSort';
+import { stableSortProducts } from '@/lib/catalogSort';
 
 /**
  * @param {{
@@ -52,13 +52,34 @@ export default function OtherStoreSection({ store, showOutOfStock, categoryId, s
   // active/browsing store. See this file's header and useLiveCatalogPrices'.
   const { priceById, settledIds } = useLiveCatalogPrices(rawProducts, store.company_id);
 
-  const products = useMemo(() => {
-    const priced = rawProducts.map((p) => {
-      const price = p.price ?? priceById.get(p.item_id) ?? null;
-      return { ...p, price, is_pricing: price == null && !settledIds.has(p.item_id) };
-    });
-    return sortProducts(priced, sortBy);
-  }, [rawProducts, priceById, settledIds, sortBy]);
+  // FIXED 2026-09-09 — this used to be a plain sortProducts() re-run over
+  // the full accumulated list on every rawProducts/priceById change,
+  // reintroducing the "infinite scroll jump" bug catalog/page.jsx's own
+  // sortedDisplayProducts was rewritten to fix (see that file's header):
+  // re-sorting the whole list on every fetchNextPage()/price-settle tick
+  // interleaves a freshly-fetched page's rows among ones the operator is
+  // already scrolling past, snapping cards below the insertion point to a
+  // new position. stableSortProducts (catalogSort.js) keeps already-
+  // rendered rows frozen in place and only sorts/appends genuinely new
+  // ones — same idiom (and same reason for using guarded state-during-
+  // render instead of useMemo/a ref) as catalog/page.jsx's own
+  // sortedDisplayProducts.
+  const pricedProducts = rawProducts.map((p) => {
+    const price = p.price ?? priceById.get(p.item_id) ?? null;
+    return { ...p, price, is_pricing: price == null && !settledIds.has(p.item_id) };
+  });
+
+  const sortResetKey = `${sortBy}|${store.company_id}|${categoryId ?? ''}|${showOutOfStock}`;
+  const pricedSignature = pricedProducts.map((p) => `${p.item_id}:${p.price ?? ''}`).join('|');
+
+  const [stableSort, setStableSort] = useState({ key: sortResetKey, signature: null, order: [] });
+
+  let products = stableSort.order;
+  if (stableSort.signature !== pricedSignature || stableSort.key !== sortResetKey) {
+    const baseOrder = stableSort.key !== sortResetKey ? [] : stableSort.order;
+    products = stableSortProducts(baseOrder, pricedProducts, sortBy);
+    setStableSort({ key: sortResetKey, signature: pricedSignature, order: products });
+  }
 
   // Loading its first page: render nothing rather than a second skeleton
   // stacked under the primary grid's own — the section only earns a heading

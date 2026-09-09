@@ -30,7 +30,7 @@ export default function CustomerAttachedBanner({
   customerId,
   customerName,
   attachedLabel = 'Customer:',
-  emptyMessage = 'Attach a customer from the header before submitting.',
+  emptyMessage = 'Assign a customer from the header before submitting.',
 }) {
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const mounted = useHasMounted();

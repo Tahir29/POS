@@ -18,7 +18,8 @@
 import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Eye, EyeOff, User, Lock, ArrowRight, Sparkle, ShieldCheck } from 'lucide-react';
+import { Eye, EyeOff, User, Lock, ArrowRight, ShieldCheck } from 'lucide-react';
+import Diamond from '@/components/shared/icons/BrandDiamond';
 import { useRouter } from 'next/navigation';
 import { useSelector } from 'react-redux';
 import { toast } from 'react-toastify';
@@ -130,6 +131,17 @@ export default function LoginForm() {
       await login(data.username, data.password);
       setFailedAttempts(0);
     } catch (err) {
+      // FIXED 2026-09-09 — see useAuth.js's login(): a post-login failure
+      // to load stores (network blip, transient 5xx) used to reach here
+      // indistinguishable from bad credentials, counting a genuinely
+      // correct password toward the 5-attempt lockout. The token request
+      // already succeeded at this point, so this isn't a credential
+      // failure — show the message, don't touch the lockout counter.
+      if (err?.isPostAuthFailure) {
+        toast.error(err.message);
+        return;
+      }
+
       const nextAttempts = failedAttempts + 1;
       setFailedAttempts(nextAttempts);
 
@@ -194,7 +206,7 @@ export default function LoginForm() {
 
             <div className="mt-1 flex items-center gap-3 text-accent">
               <span className="h-px w-8 bg-accent/70" aria-hidden="true" />
-              <Sparkle size={12} aria-hidden="true" />
+              <Diamond size={12} aria-hidden="true" />
               <span className="h-px w-8 bg-accent/70" aria-hidden="true" />
             </div>
 
@@ -330,7 +342,7 @@ export default function LoginForm() {
 
             <div className="mt-8 flex items-center gap-3 text-border" aria-hidden="true">
               <span className="h-px flex-1 bg-border" />
-              <Sparkle size={12} className="text-accent/70" />
+              <Diamond size={12} className="text-accent/70" />
               <span className="h-px flex-1 bg-border" />
             </div>
 

@@ -5,9 +5,13 @@
 // unauthenticated read/write surface. Only a signed-in operator can call
 // this, same trust boundary as the rest of the app.
 //
-// POST   — upsert the current cart snapshot for a party_id.
-// GET    — fetch the stored snapshot for a party_id (party_id query param).
-// DELETE — remove it (party_id query param) — called once the cart is no
+// POST   — upsert the current cart snapshot for a customer.
+// GET    — fetch the stored snapshot (party_id + customer_mobile query
+//          params — see lib/mongo/abandonedCart.js's buildFilter for why
+//          both are accepted: mobile is the real lookup key now, party_id
+//          is the fallback for the rare case a normalizable mobile isn't
+//          available).
+// DELETE — remove it (same two query params) — called once the cart is no
 //          longer pending, whether from a completed sale or a manual clear.
 
 import { upsertAbandonedCartSchema } from '@/validators/abandonedCartSchema';
@@ -18,9 +22,19 @@ function requireBearerToken(request) {
   return authHeader?.startsWith('Bearer ') ? authHeader : null;
 }
 
-function parsePartyId(request) {
-  const partyId = Number(new URL(request.url).searchParams.get('party_id'));
-  return Number.isInteger(partyId) && partyId > 0 ? partyId : null;
+// FIXED 2026-09-09 — customer_mobile added alongside party_id (see this
+// file's own header + lib/mongo/abandonedCart.js's buildFilter). party_id
+// alone used to be the whole lookup; it's now only the fallback, so a
+// caller that omits customer_mobile still works exactly as before for that
+// edge case, but the common case resolves by mobile instead.
+function parseIdentity(request) {
+  const url = new URL(request.url);
+  const partyId = Number(url.searchParams.get('party_id'));
+  const customerMobile = url.searchParams.get('customer_mobile') || null;
+  return {
+    partyId: Number.isInteger(partyId) && partyId > 0 ? partyId : null,
+    customerMobile,
+  };
 }
 
 export async function POST(request) {
@@ -54,13 +68,13 @@ export async function GET(request) {
     return Response.json({ error: 'Missing bearer token' }, { status: 401 });
   }
 
-  const partyId = parsePartyId(request);
-  if (!partyId) {
+  const { partyId, customerMobile } = parseIdentity(request);
+  if (!partyId && !customerMobile) {
     return Response.json({ error: 'Invalid party_id' }, { status: 400 });
   }
 
   try {
-    const cart = await getAbandonedCart(partyId);
+    const cart = await getAbandonedCart({ partyId, customerMobile });
     return Response.json({ cart });
   } catch (err) {
     console.error('[api/customers/abandoned-cart] GET', err);
@@ -73,13 +87,13 @@ export async function DELETE(request) {
     return Response.json({ error: 'Missing bearer token' }, { status: 401 });
   }
 
-  const partyId = parsePartyId(request);
-  if (!partyId) {
+  const { partyId, customerMobile } = parseIdentity(request);
+  if (!partyId && !customerMobile) {
     return Response.json({ error: 'Invalid party_id' }, { status: 400 });
   }
 
   try {
-    await deleteAbandonedCart(partyId);
+    await deleteAbandonedCart({ partyId, customerMobile });
     return Response.json({ ok: true });
   } catch (err) {
     console.error('[api/customers/abandoned-cart] DELETE', err);

@@ -99,7 +99,7 @@ function ProfileTab({ customer, onAttach, isAttached, onClose }) {
             session, not just "the cart" specifically — the same customer
             then carries through checkout, order history, everywhere else
             the session is read, not something scoped to a cart alone. */}
-        {isAttached ? 'Already attached to session' : 'Attach to Session'}
+        {isAttached ? 'Already assigned to session' : 'Assign to Session'}
       </Button>
 
       {/* Both links below only make sense once this customer is actually

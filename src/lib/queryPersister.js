@@ -94,7 +94,19 @@ export const PERSIST_MAX_AGE = 24 * 60 * 60 * 1000;
 // by invalidating everything daily on its own) if the cached shape of a
 // persisted query ever changes incompatibly. Passed to
 // PersistQueryClientProvider's persistOptions.buster.
-export const PERSIST_BUSTER = 'v1';
+//
+// BUMPED 2026-09-09 (v1 -> v2) — catalogService.fetchEntireStoreCatalog
+// (feeds the ['catalog','all', storeId] persisted query above) changed its
+// result set incompatibly: was pulling ~106,130 tenant-wide items
+// (show_out_of_stock:true, no real company scoping — see that function's
+// own header for the confirmed-live root cause), now correctly a filtered
+// ~2,699. Any browser that already ran the OLD sweep before this fix has
+// that huge, pre-fix result sitting in IndexedDB with up to 24h left on its
+// staleTime — without bumping this, that stale cache keeps serving the old
+// "indexes everything" result indefinitely (silently reusing it rather
+// than ever re-running the now-fixed fetch), which is exactly what made
+// the fix look reverted after the first successful test.
+export const PERSIST_BUSTER = 'v2';
 
 const PERSISTED_QUERY_KEY_PREFIXES = [
   ['catalog', 'products'],

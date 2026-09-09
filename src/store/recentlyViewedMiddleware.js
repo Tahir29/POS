@@ -27,9 +27,22 @@
 import { REHYDRATE } from 'redux-persist';
 import { hydrateRecentlyViewed, clearRecentlyViewed } from './slices/recentlyViewedSlice';
 
-async function fetchRecentlyViewed(partyId, token) {
+// FIXED 2026-09-09 — customerMobile threaded through alongside party_id,
+// same fix and same root cause as abandonedCartMiddleware.js's own comment:
+// party_id is assigned per OrnaVerse TENANT, so it isn't stable across a
+// UAT/LIVE switch; mobile is. This file's own failure mode was invisible
+// (an empty carousel just renders nothing) rather than conspicuous, which
+// is why the report that surfaced this was about abandoned cart, not this.
+function buildQuery(partyId, customerMobile) {
+  const params = new URLSearchParams();
+  if (partyId != null) params.set('party_id', String(partyId));
+  if (customerMobile) params.set('customer_mobile', customerMobile);
+  return params.toString();
+}
+
+async function fetchRecentlyViewed(partyId, customerMobile, token) {
   try {
-    const res = await fetch(`/api/customers/recently-viewed?party_id=${partyId}`, {
+    const res = await fetch(`/api/customers/recently-viewed?${buildQuery(partyId, customerMobile)}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (!res.ok) return [];
@@ -57,21 +70,22 @@ export const recentlyViewedMiddleware = (store) => (next) => (action) => {
       const persistedCart = action.payload?.cart;
       const persistedAuth = action.payload?.auth;
       const customerId = persistedCart?.customerId;
+      const customerMobile = persistedCart?.customerMobile;
       const token       = persistedAuth?.accessToken;
       if (!customerId || !token) break;
 
-      fetchRecentlyViewed(customerId, token).then((items) => {
+      fetchRecentlyViewed(customerId, customerMobile, token).then((items) => {
         store.dispatch(hydrateRecentlyViewed(items));
       });
       break;
     }
 
     case 'cart/attachCustomer': {
-      const { customerId } = action.payload;
+      const { customerId, customerMobile } = action.payload;
       const token = store.getState().auth?.accessToken;
       if (!customerId || !token) break;
 
-      fetchRecentlyViewed(customerId, token).then((items) => {
+      fetchRecentlyViewed(customerId, customerMobile, token).then((items) => {
         store.dispatch(hydrateRecentlyViewed(items));
       });
       break;
