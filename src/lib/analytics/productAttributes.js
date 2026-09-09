@@ -45,6 +45,8 @@
 // module has no opinion on which destination gets which field, that
 // split still belongs to each call site.
 
+import { resolveMetalColorName } from '@/lib/metalColor';
+
 const GEMSTONE_GROUP_ID = 113;
 const GEMSTONE_GROUP_NAME = 'Color Stone';
 
@@ -120,7 +122,17 @@ export function buildProductAttributes({
     // Metal
     metal:       item.metal_name ?? null,
     karat:       item.karat_name ?? null,
-    metal_color: item.metal_color_name ?? null,
+    // FIXED 2026-09-09 — was `item.metal_color_name ?? null`. ProductCatalogRow
+    // (a catalog-listed `product`) only ever carries the short code
+    // (metal_color_code: "YG"/"WG"/"RG"), not the full name — see
+    // resolveMetalColorName's own header (ProductCard already uses it for
+    // exactly this reason). The add-to-cart path today always passes a full
+    // Items/Retrieve `product` (which does carry metal_color_name), so this
+    // rarely bit in practice — but it's the same field this app already
+    // treats as unreliable everywhere else, so resolving it the same
+    // defensive way here too rather than assuming today's one caller always
+    // will.
+    metal_color: resolveMetalColorName(item) ?? null,
 
     // Size
     size_id:   selectedSizeId   ?? item.item_size_id   ?? null,

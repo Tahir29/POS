@@ -54,11 +54,18 @@ export function useAuth() {
   const login = useCallback(async (username, password) => {
     const tokenData = await generateToken(username, password);
 
-    // Also establish the OrnaVerse cookie session that invoice printing
-    // needs — /Print/Render ignores the bearer token above. Deliberately not
-    // awaited into the critical path and it cannot throw: if it fails, the
-    // POS works normally and only printing is unavailable until next sign-in.
-    createReportSession(username, password);
+    // FIXED 2026-09-09 — this used to be fire-and-forget with its result
+    // never checked (see createReportSession's own comment for why that
+    // silently dropped print sessions on any one-off network blip, only
+    // discovered by the operator much later at print time). Kicked off here
+    // (not awaited yet) so it runs CONCURRENTLY with getUserStores() below
+    // rather than serially after it — printing readiness shouldn't add to
+    // the time before the dashboard appears. Awaited further down, once
+    // stores have resolved, so a genuine (non-transient, already-retried)
+    // failure can be surfaced to the operator instead of discovered cold at
+    // print time. Still cannot throw into the login flow — createReportSession
+    // itself never rejects, only resolves false.
+    const reportSessionPromise = createReportSession(username, password);
 
     dispatch(
       setTokens({
@@ -116,7 +123,30 @@ export function useAuth() {
     tracker.clear();
     queryClient.clear();
 
-    const storesData = await getUserStores();
+    // FIXED 2026-09-09 — getUserStores() had no try/catch here, unlike
+    // checkMetalRateToday() a few lines below. dispatch(setTokens(...))
+    // above already flipped isAuthenticated true — LoginForm's own
+    // redirect-on-isAuthenticated effect and StoreGuard (bounces an
+    // authenticated-but-store-less session to /store-selection's "No
+    // stores are assigned to your account" screen) can both race ahead of
+    // a transient failure here, since credentials were genuinely valid at
+    // this point — the token request already succeeded. Worse: the
+    // rejection below still reaches LoginForm's onSubmit catch block,
+    // which counted it as a FAILED LOGIN ATTEMPT toward the 5-try lockout,
+    // penalizing a correct password for a network blip. Roll back auth
+    // state so isAuthenticated goes back to false (self-corrects the
+    // redirect races above), and flag the error so LoginForm's catch can
+    // tell this apart from a real bad-credentials rejection.
+    let storesData;
+    try {
+      storesData = await getUserStores();
+    } catch (err) {
+      dispatch(clearAuth());
+      dispatch(clearStore());
+      const wrapped = new Error('Signed in, but could not load your stores. Please try again.');
+      wrapped.isPostAuthFailure = true;
+      throw wrapped;
+    }
     const stores = Array.isArray(storesData)
       ? storesData
       : storesData?.Entities ?? storesData?.data ?? storesData?.result ?? [];
@@ -133,6 +163,17 @@ export function useAuth() {
       }
     } catch {
       // Network or auth issue — don't block login
+    }
+
+    // Resolved AFTER stores/metal-rate above so it ran fully in the
+    // background this whole time (see the kick-off comment above) — by now
+    // its 3 retries (createReportSession) have almost certainly already
+    // finished, so this rarely adds any wait at all. Only warns on a
+    // genuine failure; the reconnect panel on InvoiceReportButton is the
+    // actual recovery path, not this toast.
+    const reportSessionReady = await reportSessionPromise;
+    if (!reportSessionReady) {
+      toast.warn(TOAST.AUTH.PRINT_SESSION_UNAVAILABLE);
     }
 
     if (stores.length === 1) {
@@ -186,14 +227,30 @@ export function useAuth() {
       storeName: activeStoreName,
     });
 
-    dispatch(clearAuth());
-    dispatch(clearStore());
+    // FIXED 2026-09-09 — this dispatch used to come AFTER clearAuth()/
+    // clearStore() below. abandonedCartMiddleware's 'cart/clearCart' case
+    // (see its own comment) needs a LIVE bearer token to actually save the
+    // cart to Mongo before it's wiped locally — but dispatch() is
+    // synchronous, so by the time THIS action reached that middleware,
+    // clearAuth() had already fully run and wiped state.auth.accessToken to
+    // null. The middleware's own `if (preCart.customerId && token)` guard
+    // then silently failed (no error, no log — token is simply falsy) and
+    // saveAbandonedCart() was never called at all. Reported live 2026-09-09:
+    // "logged out after adding a product to the cart, logging back in never
+    // restored it" — root cause was exactly this: nothing was ever saved to
+    // Mongo to restore in the first place, not a restore-side bug. Moved
+    // ahead of clearAuth()/clearStore() so the token (and activeStoreId, for
+    // the same reason — the middleware's `company_id` tag) are both still
+    // live when this fires.
+    //
     // reason: 'session_reset' — see abandonedCartMiddleware's cart/clearCart
     // case. This is the OPERATOR's session ending, not the customer's cart
     // being resolved — a customer who still has an unpaid cart at logout
     // should have it PRESERVED as abandoned, not deleted, which is what the
     // default (no reason) clearCart() means everywhere else it's called.
     dispatch(clearCart({ reason: 'session_reset' }));
+    dispatch(clearAuth());
+    dispatch(clearStore());
     // FIXED 2026-08-22: recentlyViewed isn't in persistConfig's whitelist
     // (see that slice's own header comment), so it was never written to
     // localStorage — but it's still a live, in-memory Redux slice, and

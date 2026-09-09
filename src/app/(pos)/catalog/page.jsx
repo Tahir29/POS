@@ -31,7 +31,6 @@ import TOAST from '@/constants/toastMessages';
 import { selectAvailableStores } from '@/store/slices/storeSlice';
 
 const { SEARCH } = APP_CONFIG;
-const MAX_RECENT  = 5;
 
 const selectActiveStoreId = (s) => s.store.activeStoreId;
 
@@ -135,8 +134,6 @@ function CatalogScreen() {
   const router       = useRouter();
   const reduxStoreId = useSelector(selectActiveStoreId);
 
-  const [recentSearches, setRecentSearches] = useState([]);
-
   const { filters, hasActiveFilters, actions } = useCatalogFilters();
   const {
     activeCategorySlug,
@@ -236,7 +233,6 @@ function CatalogScreen() {
     isLoading:   allLoading,
     isSuccess:   allReady,
     isError:     allError,
-    loadedCount,
   } = useAllCatalog(effectiveStoreId, { enabled: hasSearched });
 
   const {
@@ -283,8 +279,6 @@ function CatalogScreen() {
     isSearchMode, allReady, allProducts, skuResults, categoryNameResults,
     searchQuery, activeCategoryId, showOutOfStock, categories,
   ]);
-
-  const isIndexingFullCatalog = isSearchMode && !allReady;
 
   // ── Error toasts ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -452,17 +446,23 @@ function CatalogScreen() {
   // "not found". A scan is a targeted, instant lookup; it should say found
   // or not found and stop there, not silently start an unrelated fetch.
   //
-  // Request shape confirmed live 2026-08-09 against OrnaVerse's own UAT
-  // client: `{ sku, Take: 1 }`, no company_id — see getStockPieceBySku's
-  // header for why two earlier, more-filtered guesses here were wrong.
-  // Since the request isn't store-scoped server-side, a match is checked
-  // against the active store client-side before being accepted.
+  // FIXED 2026-09-09 — CONFIRMED LIVE this endpoint's real contract diverges
+  // from the UAT-only shape this comment used to describe: on LIVE,
+  // `company_id` is REQUIRED — omitting it (the old shape) returned ZERO
+  // rows for skus confirmed to exist, meaning every barcode scan on LIVE
+  // production hit "No product found" unconditionally before this fix. See
+  // getStockPieceBySku's own header for the full evidence (including that
+  // UAT's own confirmed shape is the OPPOSITE, which is why this is only
+  // sent on LIVE). The client-side company-match check below is kept
+  // regardless — it's what surfaces the (rare, cross-store) case in the
+  // console warning further down, now genuinely reachable since the lookup
+  // itself works.
   const handleBarcodeDetected = useCallback(async (code) => {
     const trimmed = code.trim();
     if (!trimmed) return;
 
     try {
-      const skuResponse = await getStockPieceBySku({ sku: trimmed });
+      const skuResponse = await getStockPieceBySku({ sku: trimmed, companyId: effectiveStoreId });
       const skuMatch = skuResponse.data?.Entities?.[0];
 
       if (skuMatch?.item_id && (skuMatch.company_id == null || skuMatch.company_id === effectiveStoreId)) {
@@ -511,10 +511,6 @@ function CatalogScreen() {
     actions.setSearch(q);
     if (q.trim().length >= SEARCH.MIN_QUERY_LENGTH) {
       tracker.track(EVENTS.PRODUCT_SEARCHED, { query: q.trim() });
-      setRecentSearches((prev) => {
-        const deduped = [q, ...prev.filter((s) => s !== q)];
-        return deduped.slice(0, MAX_RECENT);
-      });
     }
   }, [actions]);
 
@@ -532,13 +528,16 @@ function CatalogScreen() {
     return `${n} product${n !== 1 ? 's' : ''}${hasActiveFilters ? ' matching filters' : ''}`;
   }, [isLoading, displayProducts.length, isSearchMode, searchQuery, hasActiveFilters]);
 
-  // Shown alongside search results while the background full-catalog sync
-  // is still running — SKU search is instant, but name search (and a fully
-  // complete result set) isn't available until this finishes. A store's
-  // real catalog can be large enough that this takes a while.
-  const indexingLabel = isIndexingFullCatalog
-    ? `Indexing full catalog for name search… ${loadedCount.toLocaleString('en-IN')} items so far`
-    : null;
+  // REMOVED 2026-09-09 — the "Indexing full catalog…" banner that used to
+  // render here. It never actually blocked anything (searchResults already
+  // shows the fast SKU/category-name matches immediately regardless of
+  // whether the background full-catalog sync has finished — see that
+  // useMemo above), but its spinner + amber warning styling read as "the
+  // search is slow/stuck" even while real results were already on screen
+  // underneath it — exactly the impression a fast search bar shouldn't
+  // give. The background sync itself is unchanged (still runs, still
+  // eventually unlocks full name-search accuracy) — only this visible,
+  // alarming-looking indicator of it is gone.
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -588,8 +587,6 @@ function CatalogScreen() {
               value={searchQuery ?? ''}
               onSearch={handleSearch}
               onBarcodeDetected={handleBarcodeDetected}
-              recentSearches={recentSearches}
-              onRecentSelect={actions.setSearch}
             />
           </div>
 
@@ -629,13 +626,6 @@ function CatalogScreen() {
         {countLabel && (
           <p className="pb-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
             {countLabel}
-          </p>
-        )}
-
-        {indexingLabel && (
-          <p className="flex items-center gap-1.5 pb-2 text-xs text-status-made-order">
-            <span className="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-status-made-order/40 border-t-status-made-order" aria-hidden="true" />
-            {indexingLabel} — showing SKU matches only until this finishes
           </p>
         )}
 

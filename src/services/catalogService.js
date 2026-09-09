@@ -328,12 +328,72 @@ export async function getProducts(params) {
  * one company — so completion is detected by an empty/partial page, not by
  * comparing against TotalCount.
  *
- * @param {number} storeId — current_company_id
- * @returns {Promise<object[]>} ProductCatalogRow[]
+ * ROOT CAUSE OF THE "5-10 MINUTE" SEARCH DELAY — CONFIRMED LIVE 2026-09-09
+ * against production (all 8 real stores). `current_company_id` does NOT
+ * scope this endpoint's result set AT ALL — every company_id returns the
+ * exact same TotalCount (106,130 with show_out_of_stock:true), and paging
+ * deep (e.g. Skip 2000 for company 4/Pune) returns real, distinct items
+ * whose own `company_ids`/`current_company_pieces` fields prove they
+ * belong to OTHER stores entirely (company_ids:[8], current_company_pieces:0
+ * — company 4 has none of it). The parameter only re-sorts results (a
+ * company's own items surface first), it never restricts them — so
+ * "this store's entire catalog" was, in practice, paginating through the
+ * WHOLE TENANT's item master, all 8 stores combined, not this one store's
+ * real assortment.
+ *
+ * `show_out_of_stock:true` is what made this catastrophic:
+ * confirmed live that flag ALSO isn't company-scoped, but it IS a genuine,
+ * tenant-wide filter — flipping it to `false` (matching getProducts' own
+ * default just above, used for normal non-search browsing) cut the real,
+ * confirmed TotalCount from 106,130 to 2,699 — a ~40x reduction, because
+ * the ~103,000 excluded rows have literally zero stock at ANY of the 8
+ * real stores (dead/incomplete master records — raw materials, discontinued
+ * designs never given real stock — not orderable products). Measured live:
+ * a full 8-concurrent round of pages takes ~1.1-1.4s either way, so this
+ * alone turns the ~13-minute sweep (553 rounds) into ~15-20 seconds (15
+ * rounds) — this is the fix for the reported slowness.
+ *
+ * The cross-store leakage (real items belonging to OTHER stores, mixed into
+ * this raw response) is NOT filtered here any more — see the 2026-09-09
+ * SHARED-FETCH note below for why, and belongsToStore (exported) for the
+ * per-store filter callers now apply themselves. NOTE: getProducts (normal
+ * paginated browse, above) has this exact same cross-store-leakage exposure
+ * once an operator scrolls past however many items THIS store genuinely
+ * stocks — not fixed here, since that path pages incrementally (filtering
+ * client-side there would produce short/uneven pages needing a backfill
+ * redesign, not a one-line change).
+ *
+ * SHARED FETCH (2026-09-09) — since `current_company_id` doesn't scope the
+ * result set at all (confirmed above), this now returns the SAME raw
+ * ~2,699-item tenant-wide pool no matter which `seedCompanyId` is passed —
+ * that argument only seeds the request payload (the API requires SOME
+ * company_id), it does not change what comes back once the sweep runs to
+ * completion. Callers used to key their cache per store, which meant
+ * switching stores (or searching again on a different store after
+ * clearing) re-ran the entire ~15-round sweep from scratch even though the
+ * identical data was already cached under a different store's key — that's
+ * what made clearing the search bar feel like it "waited" on a fresh burst
+ * of API calls. useAllCatalog now caches this under ONE shared, store-
+ * agnostic key and applies belongsToStore per-consumer via `select`
+ * instead, so this sweep runs at most once per staleTime window, ever — not
+ * once per store.
+ *
+ * CONCURRENCY lowered 8 -> 4 (2026-09-09) alongside the shared-fetch change
+ * above: with the sweep now running far less often, trading a bit more of
+ * its own wall-clock time for leaving more of the browser's per-origin
+ * connection pool free for whatever ELSE the operator is doing while it
+ * runs is the better trade — a saturated pool was part of why unrelated
+ * requests (e.g. the normal browse view rendering after a search is
+ * cleared) could appear to queue up behind this sweep.
+ *
+ * @param {number} seedCompanyId — a company_id to send with each request;
+ *   does not restrict the result (see above), any real store's id works.
+ * @returns {Promise<object[]>} ProductCatalogRow[], UNFILTERED by store —
+ *   callers apply belongsToStore(entity, storeId) themselves
  */
-async function fetchEntireStoreCatalog(storeId, onProgress) {
+async function fetchEntireStoreCatalog(seedCompanyId, onProgress) {
   const PAGE_SIZE = 24; // the server's real hard cap, confirmed by direct testing
-  const CONCURRENCY = 8;
+  const CONCURRENCY = 4;
   const SAFETY_MAX_PAGES = 500; // ~12,000 items — generous ceiling against a runaway loop
 
   const all = [];
@@ -363,10 +423,14 @@ async function fetchEntireStoreCatalog(storeId, onProgress) {
       batchSkips.map((s) =>
         axiosInstance
           .post(API.CATALOG.GET_PRODUCTS, {
-            current_company_id: storeId,
+            current_company_id: seedCompanyId,
             Take: PAGE_SIZE,
             Skip: s,
-            show_out_of_stock: true,
+            // FIXED 2026-09-09 — was `true`. See this function's header for
+            // the confirmed-live measurement: this cuts the real, tenant-wide
+            // TotalCount from 106,130 to 2,699 (~40x), which is the actual
+            // fix for the reported 5-10 minute search-indexing delay.
+            show_out_of_stock: false,
           })
           .then((res) => res.data?.Entities ?? [])
       )
@@ -396,27 +460,64 @@ async function fetchEntireStoreCatalog(storeId, onProgress) {
   if (pagesFetched >= SAFETY_MAX_PAGES) {
     console.error(
       `[catalogService] fetchEntireStoreCatalog: hit the safety cap of ${SAFETY_MAX_PAGES} pages ` +
-      `for store ${storeId} — its real catalog may be larger than what was fetched.`
+      `(seed company ${seedCompanyId}) — the real tenant-wide catalog may be larger than what was fetched.`
     );
   }
 
+  // UNFILTERED (2026-09-09) — see this function's own SHARED FETCH note.
+  // Callers apply belongsToStore(entity, storeId) themselves, per-consumer,
+  // so this same cached sweep can serve every store's search without
+  // re-fetching.
   return all;
 }
 
 /**
- * Full catalog for a store, enriched with price — used for client-side
- * search, filter, and barcode lookup on the catalog page. See
- * fetchEntireStoreCatalog for why this has to paginate rather than rely on
- * a single large Take. Can take a while for a large store — pass onProgress
- * to show a running count while it loads.
- *
- * @param {number} storeId — current_company_id
- * @param {(loaded: number) => void} [onProgress]
- * @returns {Promise<object[]>} ProductCatalogRow[]
+ * CONFIRMED LIVE 2026-09-09 (see fetchEntireStoreCatalog's header) —
+ * ProductCatalog/List's `current_company_id` doesn't restrict its result
+ * set at all, so a full sweep genuinely contains other stores' exclusive
+ * items. `company_ids` (falling back to parsing the `available_company_ids_raw`
+ * CSV string, in case a future response ever omits the array form) is each
+ * row's own honest record of which stores actually carry it — this is what
+ * the request parameter should have filtered by server-side, done here
+ * client-side instead. Exported so useAllCatalog.js can apply it per-store
+ * via react-query's `select`, over the ONE shared raw fetch — see
+ * fetchEntireStoreCatalog's SHARED FETCH note for why this moved out here
+ * instead of being baked into the fetch itself.
+ * @param {object} entity — ProductCatalogRow
+ * @param {number} storeId
+ * @returns {boolean}
  */
-export async function getAllProducts(storeId, onProgress) {
+export function belongsToStore(entity, storeId) {
+  if (Array.isArray(entity.company_ids)) return entity.company_ids.includes(storeId);
+  if (typeof entity.available_company_ids_raw === 'string') {
+    return entity.available_company_ids_raw
+      .split(',')
+      .map((id) => Number(id.trim()))
+      .includes(storeId);
+  }
+  // Neither field present — fail OPEN (keep the row) rather than silently
+  // dropping real products from search/browse just because this particular
+  // response happened not to carry either scoping field.
+  return true;
+}
+
+/**
+ * The tenant-wide catalog (SHARED across every store — see
+ * fetchEntireStoreCatalog's header for why `current_company_id` doesn't
+ * actually scope this), enriched with price out-of-band, used for
+ * client-side search/filter/barcode lookup on the catalog page. Callers
+ * filter to their own store via belongsToStore(entity, storeId) — see
+ * useAllCatalog.js. Can take a while on a cold cache — pass onProgress to
+ * show a running count while it loads.
+ *
+ * @param {number} seedCompanyId — any real company_id; seeds the request
+ *   payload only, does not scope the result (see above)
+ * @param {(loaded: number) => void} [onProgress]
+ * @returns {Promise<object[]>} ProductCatalogRow[], unfiltered by store
+ */
+export async function getAllProducts(seedCompanyId, onProgress) {
   // Unpriced — see the PRICING note above.
-  return fetchEntireStoreCatalog(storeId, onProgress);
+  return fetchEntireStoreCatalog(seedCompanyId, onProgress);
 }
 
 /**

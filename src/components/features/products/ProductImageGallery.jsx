@@ -266,7 +266,7 @@ export default function ProductImageGallery({
               an arbitrary product photo, same technique as the nav/zoom
               buttons below. */}
           {stockStatus && (
-            <div className="absolute right-3 top-3 rounded-full bg-white/95 p-0.5">
+            <div className="absolute right-3 top-3 rounded-full bg-white/95">
               <StockStatusBadge status={stockStatus} size="sm" />
             </div>
           )}

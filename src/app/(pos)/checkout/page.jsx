@@ -61,7 +61,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
 import { useQueryClient } from '@tanstack/react-query';
 import { ShieldCheck } from 'lucide-react';
 import ConfirmDialog    from '@/components/shared/ConfirmDialog';
@@ -87,6 +87,7 @@ import { useBackGuard } from '@/contexts/NavigationGuardContext';
 import { useSmartBack }  from '@/hooks/navigation/useSmartBack';
 import { checkoutSchema }             from '@/validators/checkoutSchema';
 import { selectActiveStoreId } from '@/store/slices/storeSlice';
+import { setCheckoutInProgress } from '@/store/slices/uiSlice';
 import tracker from '@/lib/analytics/tracker';
 import EVENTS, { GA_ECOMMERCE_EVENTS } from '@/lib/analytics/events';
 import { redeemLoyaltyCoins } from '@/services/nectorService';
@@ -95,6 +96,7 @@ import { formatAmount } from '@/lib/priceUtils';
 
 function CheckoutScreen() {
   const router  = useRouter();
+  const dispatch = useDispatch();
   const queryClient = useQueryClient();
   const { items, isEmpty, clearCartKeepCustomer, removeItem, redeemedCoins } = useCart();
   const { total }          = useCartTotals();
@@ -256,6 +258,12 @@ function CheckoutScreen() {
   // forward unchanged.
   useEffect(() => {
     if (isConfirmed && result) {
+      // FIXED 2026-09-09 — see handlePaymentConfirmed's own comment on
+      // setCheckoutInProgress(true): this is the "we're actually leaving
+      // checkout now" moment for the success path, so this is where the
+      // customer-switch block set there gets lifted — right alongside the
+      // navigation away, not a moment earlier.
+      dispatch(setCheckoutInProgress(false));
       if (!isEmpty) clearCartKeepCustomer();
       // coinsRedeemed carried forward via the URL (2026-09-08) — see
       // order-success/page.jsx's own header for why: not an OrnaVerse
@@ -272,7 +280,7 @@ function CheckoutScreen() {
       );
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isConfirmed, result, confirmedType, isEmpty, clearCartKeepCustomer, router]);
+  }, [isConfirmed, result, confirmedType, isEmpty, clearCartKeepCustomer, router, dispatch]);
 
   // Fire begin_checkout once per visit to this screen with items in cart
   //
@@ -378,6 +386,23 @@ function CheckoutScreen() {
       promotionDetails,
     };
 
+    // FIXED 2026-09-09 — CONFIRMED real risk: the header's customer detach
+    // control has no guard of its own and is reachable from every screen,
+    // checkout included. Confirming payment here starts a real network
+    // round trip (placeOrder/placeInvoice) — if the customer got
+    // switched/detached before it resolved, useRedirectOnCustomerChange
+    // (enabled whenever !isConfirmed, which is true for this entire
+    // window) would bounce this page to /catalog immediately. The mutation
+    // isn't tied to this component's lifetime, so the sale still completes
+    // server-side either way — but this component would never get to run
+    // its own isConfirmed effect (clear the cart, show the confirmation
+    // screen), risking the operator retrying a sale that already went
+    // through. HeaderCustomerControl checks this flag and disables
+    // switching for as long as it's true. Cleared once we actually
+    // navigate away — the isConfirmed effect above for success, the catch
+    // block below for a genuine save failure — not a moment earlier.
+    dispatch(setCheckoutInProgress(true));
+
     try {
       if (isOrderMode) await placeOrder(submission);
       else             await placeInvoice(submission);
@@ -417,6 +442,11 @@ function CheckoutScreen() {
         });
       }
     } catch (error) {
+      // See setCheckoutInProgress(true) above — this is the "we're actually
+      // leaving checkout now" moment for the failure path, matching the
+      // success path's own placement in the isConfirmed effect.
+      dispatch(setCheckoutInProgress(false));
+
       // placeOrder/placeInvoice's own onError already toasted OrnaVerse's
       // specific reason and left the operator's cart/payment entries
       // exactly as they were (see useCreateOrder.js/useCreateInvoice.js) —

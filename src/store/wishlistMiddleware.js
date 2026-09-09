@@ -24,9 +24,20 @@
 import { REHYDRATE } from 'redux-persist';
 import { hydrateWishlist, clearWishlist } from './slices/wishlistSlice';
 
-async function fetchWishlist(partyId, token) {
+// FIXED 2026-09-09 — customerMobile threaded through fetch/remove (add's
+// POST body already carried it). Same root cause and same fix as
+// abandonedCartMiddleware.js's own comment: party_id is assigned per
+// OrnaVerse TENANT, so it isn't stable across a UAT/LIVE switch; mobile is.
+function buildQuery(partyId, customerMobile) {
+  const params = new URLSearchParams();
+  if (partyId != null) params.set('party_id', String(partyId));
+  if (customerMobile) params.set('customer_mobile', customerMobile);
+  return params;
+}
+
+async function fetchWishlist(partyId, customerMobile, token) {
   try {
-    const res = await fetch(`/api/customers/wishlist?party_id=${partyId}`, {
+    const res = await fetch(`/api/customers/wishlist?${buildQuery(partyId, customerMobile)}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (!res.ok) return [];
@@ -50,8 +61,9 @@ function addToWishlist(partyId, customerName, customerMobile, item, token) {
 // by item_id alone there and remove every size variant of this item_id
 // instead of just the one that was actually un-hearted. See
 // lib/mongo/wishlist.js's removeWishlistItem.
-function removeFromWishlist(partyId, itemId, itemSizeId, token) {
-  const params = new URLSearchParams({ party_id: partyId, item_id: itemId });
+function removeFromWishlist(partyId, customerMobile, itemId, itemSizeId, token) {
+  const params = buildQuery(partyId, customerMobile);
+  params.set('item_id', String(itemId));
   if (itemSizeId != null) params.set('item_size_id', itemSizeId);
   fetch(`/api/customers/wishlist?${params.toString()}`, {
     method:  'DELETE',
@@ -67,21 +79,22 @@ export const wishlistMiddleware = (store) => (next) => (action) => {
       const persistedCart = action.payload?.cart;
       const persistedAuth = action.payload?.auth;
       const customerId = persistedCart?.customerId;
+      const customerMobile = persistedCart?.customerMobile;
       const token       = persistedAuth?.accessToken;
       if (!customerId || !token) break;
 
-      fetchWishlist(customerId, token).then((items) => {
+      fetchWishlist(customerId, customerMobile, token).then((items) => {
         store.dispatch(hydrateWishlist(items));
       });
       break;
     }
 
     case 'cart/attachCustomer': {
-      const { customerId } = action.payload;
+      const { customerId, customerMobile } = action.payload;
       const token = store.getState().auth?.accessToken;
       if (!customerId || !token) break;
 
-      fetchWishlist(customerId, token).then((items) => {
+      fetchWishlist(customerId, customerMobile, token).then((items) => {
         store.dispatch(hydrateWishlist(items));
       });
       break;
@@ -104,12 +117,12 @@ export const wishlistMiddleware = (store) => (next) => (action) => {
 
     case 'wishlist/removeWishlistItemLocal': {
       const state = store.getState();
-      const { customerId } = state.cart;
+      const { customerId, customerMobile } = state.cart;
       const token = state.auth?.accessToken;
       if (!customerId || !token) break;
 
       const { item_id, item_size_id } = action.payload;
-      removeFromWishlist(customerId, item_id, item_size_id, token);
+      removeFromWishlist(customerId, customerMobile, item_id, item_size_id, token);
       break;
     }
 

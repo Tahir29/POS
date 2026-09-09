@@ -91,6 +91,7 @@ import ConfirmDialog from '@/components/shared/ConfirmDialog';
 import { Button }  from '@/components/ui/button';
 import { Input }   from '@/components/ui/input';
 import { Label }   from '@/components/ui/label';
+import { Switch }  from '@/components/ui/switch';
 import PaymentModeSelect from '@/components/shared/PaymentModeSelect';
 import PillTabs from '@/components/shared/PillTabs';
 import ListRowsSkeleton from '@/components/shared/ListRowsSkeleton';
@@ -790,7 +791,26 @@ function RepairInvoiceNewForm({ onDone }) {
 // ─── List views ───────────────────────────────────────────────────────────────
 
 function RepairList({ hook: useHook, emptyMessage }) {
-  const { items, isLoading, isError, refetch } = useHook({});
+  // ADDED 2026-09-09 — same "Show only my transactions" toggle just added to
+  // the Transactions tab (see TransactionList in transactions/page.jsx for
+  // the full rationale) — this list shares the identical normalized shape
+  // (normalizeRepairRecord in useRepairLists.js maps party_id/party_name to
+  // customerId/customerName, mirroring normalizeTransaction exactly), so the
+  // same client-side filter applies unchanged. Same caveat too: RepairIn/
+  // Out/Invoice/List are store-scoped and paginated only, no party_id
+  // param — this narrows whatever page is already loaded to the attached
+  // customer's own rows in it, not a guaranteed search of their entire
+  // repair history.
+  const customerId   = useSelector(selectCartCustomerId);
+  const customerName = useSelector(selectCartCustomerName);
+  const isAttached   = !!customerId;
+  const [showOnlyCustomer, setShowOnlyCustomer] = useState(false);
+
+  const { items: allItems, isLoading, isError, refetch } = useHook({});
+
+  const items = showOnlyCustomer && isAttached
+    ? allItems.filter((item) => item.customerId === customerId)
+    : allItems;
 
   if (isLoading) return <ListRowsSkeleton />;
 
@@ -803,23 +823,40 @@ function RepairList({ hook: useHook, emptyMessage }) {
     </div>
   );
 
-  if (!items.length) return <p className="text-sm text-muted-foreground text-center py-12">{emptyMessage}</p>;
-
   return (
-    <div className="rounded-xl border border-border overflow-hidden">
-      {items.map((item) => (
-        <div key={item.transactionId} className="flex items-center justify-between gap-3 px-4 py-3.5 border-b border-border last:border-0">
-          <div className="flex flex-col gap-0.5 min-w-0">
-            <p className="text-sm font-medium text-foreground truncate">{item.documentNo ?? `#${item.transactionId}`}</p>
-            <p className="text-xs text-muted-foreground truncate">{item.customerName ?? 'Unknown customer'}</p>
-            <p className="text-xs text-muted-foreground">{formatDate(item.documentDate)}</p>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            {item.amount != null && <p className="text-sm font-semibold text-foreground tabular-nums">{formatINR(item.amount)}</p>}
-            <ChevronRight className="w-4 h-4 text-muted-foreground" />
-          </div>
+    <div className="flex flex-col gap-3">
+      {isAttached && (
+        <label className="flex h-11 w-full items-center justify-between gap-3 rounded-lg border border-border bg-card px-4">
+          <span className="text-sm font-medium text-foreground truncate">
+            Show only {customerName ?? 'this customer'}&apos;s transactions
+          </span>
+          <Switch checked={showOnlyCustomer} onCheckedChange={setShowOnlyCustomer} />
+        </label>
+      )}
+
+      {!items.length ? (
+        <p className="text-sm text-muted-foreground text-center py-12">
+          {showOnlyCustomer && isAttached && allItems.length > 0
+            ? `No records for ${customerName ?? 'this customer'} on this page.`
+            : emptyMessage}
+        </p>
+      ) : (
+        <div className="rounded-xl border border-border overflow-hidden">
+          {items.map((item) => (
+            <div key={item.transactionId} className="flex items-center justify-between gap-3 px-4 py-3.5 border-b border-border last:border-0">
+              <div className="flex flex-col gap-0.5 min-w-0">
+                <p className="text-sm font-medium text-foreground truncate">{item.documentNo ?? `#${item.transactionId}`}</p>
+                <p className="text-xs text-muted-foreground truncate">{item.customerName ?? 'Unknown customer'}</p>
+                <p className="text-xs text-muted-foreground">{formatDate(item.documentDate)}</p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {item.amount != null && <p className="text-sm font-semibold text-foreground tabular-nums">{formatINR(item.amount)}</p>}
+                <ChevronRight className="w-4 h-4 text-muted-foreground" />
+              </div>
+            </div>
+          ))}
         </div>
-      ))}
+      )}
     </div>
   );
 }

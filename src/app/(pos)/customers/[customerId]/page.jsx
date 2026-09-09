@@ -550,8 +550,8 @@ function PointsTab({ customerMobile }) {
 // badges/star ratings/tap-to-navigate all come for free. A plain grid
 // rather than a carousel — this is a dedicated tab with room to show
 // everything at once, not a bottom-of-page strip fighting for space.
-function WishlistTab({ customerId }) {
-  const { items, isLoading, isError } = useCustomerWishlist(customerId);
+function WishlistTab({ customerId, customerMobile }) {
+  const { items, isLoading, isError } = useCustomerWishlist(customerId, customerMobile);
 
   // Same live-pricing pipeline the catalog page uses — a wishlisted item's
   // price is exactly as likely to have moved since it was saved as a
@@ -717,7 +717,7 @@ export default function CustomerDetailPage() {
             {activeTab === 'schemes' && <SchemesTab customerId={customer.customerId} />}
             {activeTab === 'points'  && <PointsTab customerMobile={customer.customerMobile} />}
             {activeTab === '360'     && <Customer360Tab customerId={customer.customerId} />}
-            {activeTab === 'wishlist' && <WishlistTab customerId={customer.customerId} />}
+            {activeTab === 'wishlist' && <WishlistTab customerId={customer.customerId} customerMobile={customer.customerMobile} />}
           </div>
 
         </div>

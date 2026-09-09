@@ -40,6 +40,49 @@ const paymentModeSchema = z.object({
   amount: z
     .number({ message: 'Enter an amount' })
     .positive({ message: 'Amount must be greater than 0' }),
+  // FIXED 2026-09-09 — modeCode/bankPosId/refNo/creditRef were never
+  // validated at all, even though CheckoutPaymentSection renders the bank
+  // account + reference number fields as required for any bank-settled
+  // tender (see its own requiresBank() check) and
+  // lib/checkout/documentFields.js's own header confirms the reference
+  // number is genuinely required server-side ("their own UI marks it
+  // 'Reference *' — required, not cosmetic"). Without this, "Complete
+  // Sale"/"Place Order" stayed enabled with both left empty, and the app
+  // submitted `ref_no: ''` with no `bank_pos` silently.
+  modeCode: z.string().optional().default(''),
+  bankPosId: z.number().nullable().optional().default(null),
+  refNo: z.string().optional().default(''),
+  // A toggled credit/helper balance (Scheme/Exchange/Credit Note/Old
+  // Gold/Advance) — see the modeId comment above. Its shape comes straight
+  // from a POSReceiptsSelect/List row (not something this app defines), so
+  // deliberately loosely typed rather than re-declaring OrnaVerse's own
+  // receipt schema here just to gate one boolean check below.
+  creditRef: z.any().nullable().optional().default(null),
+}).superRefine((mode, ctx) => {
+  // Cash and helper/credit balances (Scheme/Exchange/Credit Note/Old
+  // Gold/Advance — identified by creditRef, the same field
+  // CheckoutPaymentSection's own onChange payload actually carries; there
+  // is no separate `isHelper` flag in that payload) never touch a bank —
+  // same requiresBank() logic CheckoutPaymentSection itself uses to decide
+  // whether to even show these fields, so this doesn't demand them for a
+  // mode the UI never asked for either.
+  const requiresBank = !mode.creditRef && mode.modeCode !== 'Cash';
+  if (!requiresBank) return;
+
+  if (mode.bankPosId == null) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `Select a bank account for ${mode.modeName}`,
+      path: ['bankPosId'],
+    });
+  }
+  if (!mode.refNo || !mode.refNo.trim()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `Enter a reference number for ${mode.modeName}`,
+      path: ['refNo'],
+    });
+  }
 });
 
 export const checkoutSchema = z

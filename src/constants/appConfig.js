@@ -68,6 +68,17 @@ const APP_CONFIG = {
     //   • ledger_id 129, number_of_backdated_days 60.
     CREDIT_NOTE:     123, // prefix "CRN"
     REFUND:          126, // prefix "RFD"
+    // CONFIRMED LIVE 2026-09-09 — a standalone "POS Receipt" (e.g. a walk-in
+    // advance taken with no sale attached yet), distinct from POS_ORDER/
+    // POS_INVOICE's own advance receipts. Real example: party 3372 (Kavya
+    // Yellapu), document_no "HO-PRC-08-26-8", balance_amount 63200,
+    // mode_code "Advance" — this is exactly the credit OrnaVerse's own
+    // checkout screen shows as "Choose credits ₹63,200.00 available", which
+    // this app's own checkout showed NOTHING for before this was added:
+    // useInvoiceHelpers.js's BUCKET_BY_DOCUMENT_ID had no entry for this
+    // document type, so POSReceiptsSelect/List's row for it was silently
+    // dropped rather than bucketed. See that file's own comment.
+    POS_RECEIPT:     57,  // prefix "PRC"
     EXCHANGE:        56,  // prefix "EXC"
     BUYBACK:         97,  // prefix "BYB"
     URD_PURCHASE:    104, // prefix "URD"
@@ -207,12 +218,23 @@ const APP_CONFIG = {
   // Controls which modes from PaymentReceiptMode/List appear at checkout.
   //
   // A mode is SHOWN at checkout if:
-  //   only_for_pos === true  OR  mode_code is in ALLOWLIST
-  // AND NOT in DENYLIST
+  //   mode_sub_type !== 2 (see usePaymentModes.js's own comment — this is
+  //   OrnaVerse's own discriminator for a credit-application row, not a
+  //   directly selectable tender: "Advance"/"Order Advance"/"Return"/
+  //   "Scheme Payment"/"scheme Enrollment"/"COD" are all this type)
+  //   AND (only_for_pos === true  OR  mode_code is in ALLOWLIST)
+  //   AND NOT in DENYLIST
   //
-  // DENYLIST excludes internal adjustment modes that appear as payment modes
-  // in OrnaVerse but are not customer-facing cash payment instruments.
-  // These are handled via their own dedicated screens (exchange, scheme, etc).
+  // DENYLIST excludes modes that are still mode_sub_type:1 ("normal" tenders
+  // by OrnaVerse's own classification) but genuinely don't apply to an
+  // in-person counter sale — online/marketplace-only channels (GoKwik,
+  // Razorpay, District - Zomato) and promotional-only rows (Spin the
+  // Wheel). Everything mode_sub_type:2 is excluded by that rule directly
+  // now, not by name here — CONFIRMED LIVE 2026-09-09 that "Advance" has
+  // only_for_pos:true and was never in this list (only the differently-
+  // named "Order Advance" was), so it slipped through as a selectable
+  // tender before that rule was added; a name-only list will always
+  // eventually miss the next one like it.
   //
   // ALLOWLIST ensures Cash/Card/UPI always appear even if OrnaVerse hasn't
   // flagged them only_for_pos yet.
@@ -229,6 +251,10 @@ const APP_CONFIG = {
       'Spin the Wheel :-Coin',
       'GoKwik',
       'Razorpay',
+      // ADDED 2026-09-09 — CONFIRMED LIVE: only_for_pos:true, mode_sub_type:1
+      // (so not caught by the sub_type rule above), but an online District/
+      // Zomato marketplace channel, not an in-person counter tender.
+      'District - Zomato',
     ],
   },
 

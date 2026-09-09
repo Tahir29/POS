@@ -38,15 +38,11 @@ const SCAN_THRESHOLD_MS = 80;
  * @param {string}    props.value              - Controlled value from URL/parent
  * @param {function}  props.onSearch           - Called with debounced text query
  * @param {function}  props.onBarcodeDetected  - Called with raw code string on scan
- * @param {string[]}  props.recentSearches     - Recent search terms
- * @param {function}  props.onRecentSelect     - Called when a recent term is tapped
  */
 export default function ProductSearchBar({
   value,
   onSearch,
   onBarcodeDetected,
-  recentSearches = [],
-  onRecentSelect,
 }) {
   const normalizedValue = value ?? '';
   const [inputVal,      setInputVal]      = useState(normalizedValue);
@@ -94,6 +90,19 @@ export default function ProductSearchBar({
   };
 
   const handleClear = () => {
+    // FIXED 2026-09-09 — CONFIRMED bug: this called onSearch('') directly,
+    // bypassing fireSearch, so it never cancelled a debounce timer still
+    // pending from the last keystroke. Typing "ring" then clicking Clear
+    // within the debounce window (SEARCH.DEBOUNCE_MS) cleared the URL's `q`
+    // param for a moment, but the stale timer scheduled by that last
+    // keystroke fired shortly after with the OLD query, silently
+    // re-applying it — the URL never actually stayed cleared, and the
+    // catalog stayed stuck in search mode showing the old (restricted)
+    // results. clearTimeout here (an event handler, not render — this
+    // repo's lint forbids ref access during render, which is why this
+    // isn't done in the render-time value-sync block above instead) stops
+    // that stale timer from ever firing.
+    clearTimeout(debounceRef.current);
     setInputVal('');
     onSearch('');
     inputRef.current?.focus();
@@ -144,12 +153,11 @@ export default function ProductSearchBar({
 
   useEffect(() => () => clearTimeout(debounceRef.current), []);
 
-  const showClear   = inputVal.length > 0;
-  const showRecents = !showClear && recentSearches.length > 0;
+  const showClear = inputVal.length > 0;
 
   return (
     <>
-      <div className="flex flex-col gap-2 w-full">
+      <div className="w-full">
         <div className="relative flex-1 bg-white">
 
           <span
@@ -204,34 +212,6 @@ export default function ProductSearchBar({
             )}
           </div>
         </div>
-
-        {showRecents && (
-          <div
-            role="list"
-            aria-label="Recent searches"
-            // FIXED: this row is fully wired end-to-end (catalog/page.jsx
-            // tracks recentSearches, dedupes/caps it, passes onRecentSelect)
-            // but was permanently invisible — `flex` had been dropped and
-            // `hidden` added (no explanation in that commit), so the whole
-            // "Recent:" chip row never painted despite showRecents being
-            // true and its content genuinely rendering underneath.
-            className="flex flex-wrap items-center gap-2"
-          >
-            <span className="text-xs text-muted-foreground font-medium shrink-0">Recent:</span>
-            {recentSearches.map((q) => (
-              <button
-                key={q}
-                role="listitem"
-                type="button"
-                onClick={() => onRecentSelect(q)}
-                className="inline-flex items-center gap-1 min-h-[28px] px-3 py-1 text-xs font-medium text-muted-foreground bg-muted hover:bg-primary/10 hover:text-primary rounded-full border border-transparent hover:border-primary/20 transition-colors"
-              >
-                <Search size={10} className="shrink-0 opacity-60" aria-hidden="true" />
-                {q}
-              </button>
-            ))}
-          </div>
-        )}
       </div>
       {/* Mounted only once actually opened (2026-09-08) — not just
           rendering null while closed, but absent from the tree entirely,

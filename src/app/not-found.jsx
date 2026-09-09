@@ -13,7 +13,8 @@ import Link from 'next/link';
 import {
   motion, useMotionValue, useSpring, useTransform, useReducedMotion,
 } from 'motion/react';
-import { Gem, Sparkle, ArrowLeft, ShoppingBag } from 'lucide-react';
+import { Gem, ArrowLeft, ShoppingBag } from 'lucide-react';
+import Diamond from '@/components/shared/icons/BrandDiamond';
 import { Button } from '@/components/ui/button';
 import { EASE_PREMIUM, DURATION } from '@/lib/motion';
 
@@ -63,7 +64,7 @@ function GemSpotlight({ reduceMotion }) {
           }}
           aria-hidden="true"
         >
-          <Sparkle size={s.size} fill="currentColor" />
+          <Diamond size={s.size} fill="currentColor" />
         </motion.span>
       ))}
 

@@ -70,21 +70,57 @@ const MUTATING_TYPES = new Set([
   'cart/hydrateFromOrder',
 ]);
 
-async function fetchAbandonedCart(partyId, token) {
+// FIXED 2026-09-09 — customerMobile threaded through every call in this
+// file (fetch/save/delete) alongside party_id. See lib/mongo/
+// normalizeMobile.js's header for the root cause this closes: party_id is
+// assigned per OrnaVerse TENANT, so the "same" customer resolves to a
+// DIFFERENT party_id under UAT vs LIVE — a cart saved under one environment
+// silently stopped restoring after switching to the other. save() already
+// sent customerMobile in its POST body (untouched below); fetch/delete now
+// send it as a query param too, since GET/DELETE have no body.
+function buildQuery(partyId, customerMobile) {
+  const params = new URLSearchParams();
+  if (partyId != null) params.set('party_id', String(partyId));
+  if (customerMobile) params.set('customer_mobile', customerMobile);
+  return params.toString();
+}
+
+async function fetchAbandonedCart(partyId, customerMobile, token) {
   try {
-    const res = await fetch(`/api/customers/abandoned-cart?party_id=${partyId}`, {
+    const res = await fetch(`/api/customers/abandoned-cart?${buildQuery(partyId, customerMobile)}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
-    if (!res.ok) return null;
+    // FIXED 2026-09-09 — same blind spot as saveAbandonedCart's own comment:
+    // a non-2xx response was silently treated as "nothing saved" with zero
+    // trace of WHY. Now at least visible if it happens again.
+    if (!res.ok) {
+      console.warn('[abandonedCartMiddleware] fetch REJECTED by server', res.status);
+      return null;
+    }
     const data = await res.json();
     return data?.cart ?? null;
   } catch (err) {
-    console.warn('[abandonedCartMiddleware] fetch failed', err);
+    console.warn('[abandonedCartMiddleware] fetch failed (network)', err);
     return null;
   }
 }
 
 function saveAbandonedCart(partyId, cart, token, companyId) {
+  // FIXED 2026-09-09 — this used to be .catch()-only, so a server-side
+  // REJECTION (400/500 — a real HTTP response, not a network failure) was
+  // completely silent: fetch() only rejects its promise on a network-level
+  // failure, never on a non-2xx status, so a bad request or a Mongo error
+  // on the server side produced zero trace anywhere. Investigated live
+  // 2026-09-09 (reported: cart abandoned-restore not working after
+  // logout/login, while recently-viewed/wishlist — which happen to hit
+  // this exact blind spot far less often — worked) by checking Mongo
+  // directly: confirmed writes were happening for recently-viewed/wishlist
+  // but NOT for abandoned-cart in the same session, with nothing in any
+  // log to say why. This makes the next occurrence visible instead of
+  // silent — if this warns, the request reached the server and was
+  // rejected (check the logged status/body); if NOTHING warns at all, the
+  // fetch was never even attempted (a client-side issue upstream of this
+  // function — the debounce timer's own guard, or this action never firing).
   fetch('/api/customers/abandoned-cart', {
     method:  'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -102,7 +138,14 @@ function saveAbandonedCart(partyId, cart, token, companyId) {
       // scopes by.
       company_id:     companyId ?? null,
     }),
-  }).catch((err) => console.warn('[abandonedCartMiddleware] save failed', err));
+  })
+    .then(async (res) => {
+      if (!res.ok) {
+        const body = await res.text().catch(() => '');
+        console.warn('[abandonedCartMiddleware] save REJECTED by server', res.status, body);
+      }
+    })
+    .catch((err) => console.warn('[abandonedCartMiddleware] save failed (network)', err));
 
   // ADDED 2026-09-08 — GA4/WebEngage tracking for whatever just got saved
   // to Mongo above, same call every "cart saved as abandoned" path already
@@ -135,8 +178,8 @@ function saveAbandonedCart(partyId, cart, token, companyId) {
   });
 }
 
-function deleteAbandonedCart(partyId, token) {
-  fetch(`/api/customers/abandoned-cart?party_id=${partyId}`, {
+function deleteAbandonedCart(partyId, customerMobile, token) {
+  fetch(`/api/customers/abandoned-cart?${buildQuery(partyId, customerMobile)}`, {
     method:  'DELETE',
     headers: { Authorization: `Bearer ${token}` },
   }).catch((err) => console.warn('[abandonedCartMiddleware] delete failed', err));
@@ -157,10 +200,19 @@ export const abandonedCartMiddleware = (store) => (next) => (action) => {
 
   switch (action.type) {
     case 'cart/attachCustomer': {
-      const { customerId } = action.payload;
+      // FIXED 2026-09-09 — see the identical fix on detachCustomer/clearCart/
+      // clearCartKeepCustomer below for the full race: a debounced save
+      // timer scheduled under the OUTGOING customer (or no customer at all)
+      // could still be pending when a new customer attaches. Cancelled here
+      // too so no leftover timer from a previous session/customer can fire
+      // once this one is underway.
+      clearTimeout(saveTimer);
+      saveTimer = null;
+
+      const { customerId, customerMobile } = action.payload;
       if (!customerId || !token) break;
 
-      fetchAbandonedCart(customerId, token).then((record) => {
+      fetchAbandonedCart(customerId, customerMobile, token).then((record) => {
         const hasSaved = record && Array.isArray(record.items) && record.items.length > 0;
         store.dispatch(setAbandonedCart(hasSaved ? record : null));
 
@@ -186,6 +238,20 @@ export const abandonedCartMiddleware = (store) => (next) => (action) => {
     }
 
     case 'cart/detachCustomer': {
+      // FIXED 2026-09-09 — a debounced save from an earlier mutating action
+      // (default case below) could still be pending when detach fires.
+      // Without cancelling it, a quick detach-then-reattach of the SAME
+      // customer let that stale timer fire AFTER this save + reset had
+      // already run: it reads latestCart fresh at fire time, sees the same
+      // customerId attached again (matches!) with an empty cart (a fresh
+      // attach starts empty), and calls deleteAbandonedCart — wiping out
+      // the record this very case just saved, racing whatever attach's own
+      // restore fetch was doing. Cancelling here means this save is always
+      // the last word for this customer until a genuinely new mutation
+      // schedules its own timer.
+      clearTimeout(saveTimer);
+      saveTimer = null;
+
       if (preCart.customerId && preCart.items.length > 0 && token) {
         saveAbandonedCart(preCart.customerId, preCart, token, companyId);
       }
@@ -194,6 +260,11 @@ export const abandonedCartMiddleware = (store) => (next) => (action) => {
     }
 
     case 'cart/clearCart': {
+      // Same reasoning as detachCustomer above — a stale pending timer
+      // must not outlive an explicit clear/logout.
+      clearTimeout(saveTimer);
+      saveTimer = null;
+
       // reason: 'session_reset' (2026-08-22) — useAuth.js's logout() also
       // dispatches clearCart() to wipe the OPERATOR's local session; that
       // has nothing to do with whether the CUSTOMER's cart was ever
@@ -210,7 +281,7 @@ export const abandonedCartMiddleware = (store) => (next) => (action) => {
         if (action.payload?.reason === 'session_reset') {
           if (preCart.items.length > 0) saveAbandonedCart(preCart.customerId, preCart, token, companyId);
         } else {
-          deleteAbandonedCart(preCart.customerId, token);
+          deleteAbandonedCart(preCart.customerId, preCart.customerMobile, token);
         }
       }
       store.dispatch(clearAbandonedCartState());
@@ -228,14 +299,22 @@ export const abandonedCartMiddleware = (store) => (next) => (action) => {
     // now-empty cart), the debounced save in the default case below starts
     // a fresh record for them, same as any other cart activity.
     case 'cart/clearCartKeepCustomer': {
-      if (preCart.customerId && token) deleteAbandonedCart(preCart.customerId, token);
+      // Same reasoning as detachCustomer above — the customer STAYS
+      // attached here (post-sale), so a stale timer from just-before-
+      // checkout firing afterward would match customerId again and could
+      // delete a fresh save from new items the customer starts adding
+      // right after the sale completes.
+      clearTimeout(saveTimer);
+      saveTimer = null;
+
+      if (preCart.customerId && token) deleteAbandonedCart(preCart.customerId, preCart.customerMobile, token);
       store.dispatch(clearAbandonedCartState());
       break;
     }
 
     default: {
       if (MUTATING_TYPES.has(action.type)) {
-        const { customerId } = state.cart;
+        const { customerId, customerMobile } = state.cart;
         if (!customerId || !token) break;
 
         clearTimeout(saveTimer);
@@ -243,7 +322,7 @@ export const abandonedCartMiddleware = (store) => (next) => (action) => {
           const latestCart = store.getState().cart;
           if (latestCart.customerId !== customerId) return; // attached customer changed mid-debounce
           if (latestCart.items.length === 0) {
-            deleteAbandonedCart(customerId, token);
+            deleteAbandonedCart(customerId, customerMobile, token);
           } else {
             saveAbandonedCart(customerId, latestCart, token, store.getState().store?.activeStoreId);
           }

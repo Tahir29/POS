@@ -24,12 +24,36 @@
 // the button could never have worked — and a "Print Invoice" button that
 // called window.print(), which printed the confirmation screen rather than
 // an actual invoice document.
+//
+// RECONNECT FLOW (2026-09-09) — CONFIRMED LIVE: the print-session cookie
+// (reportSession.js) lives in server-process memory, not persisted, and
+// createReportSession() is fired-and-forgotten at login (its own comment:
+// "cannot throw: if it fails, the POS works normally and only printing is
+// unavailable until next sign-in") — completely silent to the operator
+// either way. Verified end-to-end against LIVE (both the initial
+// /Print/Render call and the report viewer's own follow-up data call
+// succeed immediately for a freshly-established session), so the render
+// pipeline itself is sound; what actually reaches the operator hours into a
+// shift is a 401 ("session expired" / "no longer valid") once that
+// in-memory session is gone for any reason — the account's own credentials
+// were never wrong. The ONLY recovery the render route could offer before
+// this was "sign out and back in," which also drops the attached customer
+// and cart — a needlessly disruptive fix for something that's only ever
+// about the PRINT session, never the main app session (that one persists
+// via Redux and is unaffected). This adds a narrow, in-place recovery
+// instead: re-enter just the password (username is already known from the
+// signed-in session) to re-establish the print session and automatically
+// retry the exact report that just failed.
 
 import { useState, useRef } from 'react';
+import { useSelector } from 'react-redux';
 import { useQuery } from '@tanstack/react-query';
-import { Printer, Loader2, X } from 'lucide-react';
+import { Printer, Loader2, X, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { getDocumentReports } from '@/services/documentConfigService';
+import { createReportSession } from '@/services/authService';
+import { selectAuthUser } from '@/store/slices/authSlice';
 import APP_CONFIG from '@/constants/appConfig';
 
 /**
@@ -51,6 +75,14 @@ export default function InvoiceReportButton({
   const [isRendering, setIsRendering] = useState(false);
   const frameRef = useRef(null);
 
+  // RECONNECT — see this file's own header comment.
+  const authUser = useSelector(selectAuthUser);
+  const [needsReconnect, setNeedsReconnect] = useState(false);
+  const [reconnectPassword, setReconnectPassword] = useState('');
+  const [isReconnecting, setIsReconnecting] = useState(false);
+  const [reconnectError, setReconnectError] = useState(null);
+  const lastReportRef = useRef(null); // the report that hit a 401, to retry after reconnecting
+
   const { data: reports = [], isLoading } = useQuery({
     queryKey:  ['document-reports', documentId],
     queryFn:   () => getDocumentReports(documentId),
@@ -58,8 +90,10 @@ export default function InvoiceReportButton({
   });
 
   const openReport = async (report) => {
+    lastReportRef.current = report;
     setIsOpen(false);
     setRenderError(null);
+    setNeedsReconnect(false);
     setIsRendering(true);
     try {
       const response = await fetch('/api/report/render', {
@@ -75,9 +109,15 @@ export default function InvoiceReportButton({
       });
 
       if (!response.ok) {
-        // The route answers JSON on failure and HTML on success, and its
-        // messages are written to be actionable (e.g. the service account
-        // isn't configured yet) — show them rather than a generic failure.
+        // 401 specifically means "the print session is gone" (missing or
+        // rejected — see api/report/render/route.js's two 401 cases) —
+        // recoverable in place, unlike a genuine render failure (5xx, a
+        // broken OrnaVerse template) which isn't fixed by reconnecting.
+        if (response.status === 401) {
+          setNeedsReconnect(true);
+          setIsRendering(false);
+          return;
+        }
         const body = await response.json().catch(() => null);
         throw new Error(body?.error ?? `Could not render this report (HTTP ${response.status}).`);
       }
@@ -87,6 +127,27 @@ export default function InvoiceReportButton({
       setRenderError(err.message);
     } finally {
       setIsRendering(false);
+    }
+  };
+
+  const handleReconnect = async () => {
+    if (!reconnectPassword) return;
+    setIsReconnecting(true);
+    setReconnectError(null);
+    try {
+      const ok = await createReportSession(authUser?.username, reconnectPassword);
+      if (!ok) {
+        setReconnectError('Incorrect password, or OrnaVerse could not be reached. Please try again.');
+        return;
+      }
+      setReconnectPassword('');
+      setNeedsReconnect(false);
+      // Automatically retry the exact report that just failed — the
+      // operator picked a format once already, no reason to make them pick
+      // it again after just proving their password.
+      if (lastReportRef.current) await openReport(lastReportRef.current);
+    } finally {
+      setIsReconnecting(false);
     }
   };
 
@@ -140,6 +201,46 @@ export default function InvoiceReportButton({
         <p className="rounded-lg border border-status-error/30 bg-status-error/10 px-3 py-2 text-xs text-status-error">
           {renderError}
         </p>
+      )}
+
+      {/* RECONNECT (2026-09-09) — replaces the old dead-end "sign out and
+          back in" message for a 401 specifically. Only the print session
+          needs re-establishing here; the operator stays signed in, and the
+          attached customer/cart are untouched. */}
+      {needsReconnect && (
+        <div className="flex flex-col gap-2 rounded-xl border border-status-error/30 bg-status-error/5 p-3">
+          <div className="flex items-center gap-2 text-xs font-medium text-status-error">
+            <Lock size={14} aria-hidden="true" />
+            Your OrnaVerse print session needs to reconnect
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Enter {authUser?.username ? <span className="font-medium text-foreground">{authUser.username}</span> : 'your'}
+            {'’'}s password to continue — this only re-establishes printing, you stay signed in and your cart is untouched.
+          </p>
+          <div className="flex items-center gap-2">
+            <Input
+              type="password"
+              value={reconnectPassword}
+              onChange={(e) => setReconnectPassword(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleReconnect(); }}
+              placeholder="Password"
+              autoComplete="current-password"
+              disabled={isReconnecting}
+              className="h-9 flex-1"
+            />
+            <Button
+              type="button"
+              onClick={handleReconnect}
+              disabled={isReconnecting || !reconnectPassword}
+              className="h-9 shrink-0"
+            >
+              {isReconnecting ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : 'Reconnect'}
+            </Button>
+          </div>
+          {reconnectError && (
+            <p className="text-xs text-status-error">{reconnectError}</p>
+          )}
+        </div>
       )}
 
       {/* Preview — mirrors their ReportViewerDialog: the response is a whole
