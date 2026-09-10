@@ -6,15 +6,6 @@ import TOAST from '@/constants/toastMessages';
 import tracker from '@/lib/analytics/tracker';
 import EVENTS from '@/lib/analytics/events';
 
-// FIXED 2026-08-27: this used to hardcode its own success/failure strings
-// (close to, but not the same wording as, TOAST.METAL_RATES.ADDED/
-// ADD_FAILED — the constants this app's toast messages are supposed to be
-// centralized in), and unlike every other mutation hook in this codebase
-// (see useTransactionMutations.js/useRepairMutations.js's identical
-// getErrorMessage), it never surfaced OrnaVerse's own server reason on
-// failure — always the same flat generic string, even when the server
-// sent back something specific like "Rate for this metal/purity already
-// exists today."
 function getErrorMessage(error, fallback = TOAST.METAL_RATES.ADD_FAILED) {
   return (
     error?.response?.data?.Message ??
@@ -28,10 +19,6 @@ function getErrorMessage(error, fallback = TOAST.METAL_RATES.ADD_FAILED) {
  * Mutation hook for creating a metal rate entry.
  * Maps to: POST Services/Costing/MetalRates/Create
  */
-// ENRICHED 2026-09-04 — store_id (which store's rate this is for) was
-// entirely absent from both events; no customer is ever attached while
-// setting a metal rate, so useSessionTrackingContext's customer_id will
-// correctly read 'guest' here, same reasoning as useCreateDailyClosing.js.
 export function useAddMetalRate({ onSuccess } = {}) {
   const queryClient = useQueryClient();
   const sessionCtx = useSessionTrackingContext();
@@ -39,18 +26,12 @@ export function useAddMetalRate({ onSuccess } = {}) {
   return useMutation({
     mutationFn: (payload) => addMetalRate(payload),
     onSuccess: (data, variables) => {
-      // Every live price is computed from the metal rate, so a new rate makes
-      // the cached ones wrong.
-      //
-      // Catalog prices are NOT invalidated directly — they are cached against
-      // a pricing epoch and would only be refetched under the same (now
-      // wrong) key. Invalidate the EPOCH instead: it re-prices its canaries,
-      // sees the new figure, and every catalog price reprices as a
-      // consequence. One small call decides it rather than a blind sweep.
-      //
-      // This is a shortcut for the in-app path only — it just saves waiting
-      // out the epoch's one-minute re-check floor. Rates set in OrnaVerse's
-      // ERP never reach this handler at all; the epoch is what catches those.
+      // A new rate invalidates every cached live price. Catalog prices are
+      // keyed off a pricing epoch rather than invalidated directly, so we
+      // invalidate the epoch canary instead — it re-prices itself, and every
+      // catalog price reprices as a consequence. This only speeds up the
+      // in-app path (saves waiting out the epoch's recheck interval); rates
+      // set directly in OrnaVerse's ERP are still caught by the epoch itself.
       //   ['catalog','price-epoch'] — canary fingerprint (usePricingEpoch)
       //   ['items','pricing']       — product detail / variant (useVariantPricing)
       queryClient.invalidateQueries({ queryKey: ['catalog', 'price-epoch'] });

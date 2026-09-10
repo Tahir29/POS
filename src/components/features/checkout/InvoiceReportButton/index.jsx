@@ -1,49 +1,22 @@
 'use client';
 
-// Print/preview an invoice using OrnaVerse's OWN report pipeline, mirroring
-// what their POS does after a sale (captured from their UAT counter
-// 2026-08-05):
+// Print/preview an invoice via OrnaVerse's own report pipeline, mirroring
+// their POS: DocumentReports/List gets the formats configured for this
+// document type, then POST /Print/Render returns an HTML document shown
+// here in an iframe. Proxied through our own /api/report/render, which
+// holds a server-side OrnaVerse cookie session — /Print/Render is
+// cookie-authenticated and ignores the bearer token the rest of the app
+// uses (see lib/ornaverse/reportSession.js).
 //
-//   1. Administration/DocumentReports/List { document_id, is_disabled:false }
-//      → the formats configured for this document type. On this tenant, POS
-//        Invoice (54) returns "E Certificate", "New Invoice Format" and
-//        "New Invoice Format WO Header". Their UI shows these in a
-//        "Select Report" dialog; so does this.
-//   2. POST /Print/Render with { key, opt, reportFile, reportFolder,
-//      reportSubFolder } → an HTML document they display in an iframe.
+// Replaces two buttons that never worked: "Download Invoice PDF" (called
+// GeneratePDF, which 500s on UAT) and "Print Invoice" (window.print(),
+// which printed the confirmation screen, not the invoice).
 //
-// The report itself is fetched through our own /api/report/render, which
-// holds a server-side OrnaVerse cookie session — /Print/Render is a
-// cookie-authenticated MVC endpoint and ignores the bearer token the rest of
-// the app uses. See lib/ornaverse/reportSession.js. The HTML comes back to
-// us and is shown in an iframe, the same way their ReportViewerDialog does
-// it, so the operator never leaves our POS.
-//
-// This replaces a "Download Invoice PDF" button that called
-// Services/POS/Invoice/GeneratePDF — that endpoint returns 500 on UAT, so
-// the button could never have worked — and a "Print Invoice" button that
-// called window.print(), which printed the confirmation screen rather than
-// an actual invoice document.
-//
-// RECONNECT FLOW (2026-09-09) — CONFIRMED LIVE: the print-session cookie
-// (reportSession.js) lives in server-process memory, not persisted, and
-// createReportSession() is fired-and-forgotten at login (its own comment:
-// "cannot throw: if it fails, the POS works normally and only printing is
-// unavailable until next sign-in") — completely silent to the operator
-// either way. Verified end-to-end against LIVE (both the initial
-// /Print/Render call and the report viewer's own follow-up data call
-// succeed immediately for a freshly-established session), so the render
-// pipeline itself is sound; what actually reaches the operator hours into a
-// shift is a 401 ("session expired" / "no longer valid") once that
-// in-memory session is gone for any reason — the account's own credentials
-// were never wrong. The ONLY recovery the render route could offer before
-// this was "sign out and back in," which also drops the attached customer
-// and cart — a needlessly disruptive fix for something that's only ever
-// about the PRINT session, never the main app session (that one persists
-// via Redux and is unaffected). This adds a narrow, in-place recovery
-// instead: re-enter just the password (username is already known from the
-// signed-in session) to re-establish the print session and automatically
-// retry the exact report that just failed.
+// The print-session cookie lives in server memory and can expire (401)
+// independently of the operator's signed-in session. Rather than forcing
+// a full sign-out (which would also drop the attached customer/cart),
+// reconnect below re-enters just the password to re-establish the print
+// session and retries the report that failed.
 
 import { useState, useRef } from 'react';
 import { useSelector } from 'react-redux';
@@ -59,10 +32,8 @@ import APP_CONFIG from '@/constants/appConfig';
 /**
  * @param {{ transactionId: number, documentId?: number, documentLabel?: string }} props
  *   documentLabel — what this document is called in the UI ("Invoice",
- *   "Order"). The formats themselves come from whatever DocumentReports has
- *   configured for documentId, and the control hides itself when that's
- *   nothing — so an order simply shows no print option if this tenant has no
- *   order format set up, rather than a button that renders an error.
+ *   "Order"). Formats come from DocumentReports for documentId; the
+ *   control hides itself when none are configured.
  */
 export default function InvoiceReportButton({
   transactionId,
@@ -75,7 +46,6 @@ export default function InvoiceReportButton({
   const [isRendering, setIsRendering] = useState(false);
   const frameRef = useRef(null);
 
-  // RECONNECT — see this file's own header comment.
   const authUser = useSelector(selectAuthUser);
   const [needsReconnect, setNeedsReconnect] = useState(false);
   const [reconnectPassword, setReconnectPassword] = useState('');
@@ -109,10 +79,8 @@ export default function InvoiceReportButton({
       });
 
       if (!response.ok) {
-        // 401 specifically means "the print session is gone" (missing or
-        // rejected — see api/report/render/route.js's two 401 cases) —
-        // recoverable in place, unlike a genuine render failure (5xx, a
-        // broken OrnaVerse template) which isn't fixed by reconnecting.
+        // 401 means the print session is gone (recoverable via reconnect,
+        // below) — distinct from a genuine render failure (5xx).
         if (response.status === 401) {
           setNeedsReconnect(true);
           setIsRendering(false);
@@ -142,9 +110,8 @@ export default function InvoiceReportButton({
       }
       setReconnectPassword('');
       setNeedsReconnect(false);
-      // Automatically retry the exact report that just failed — the
-      // operator picked a format once already, no reason to make them pick
-      // it again after just proving their password.
+      // Retry the report that just failed, rather than making the
+      // operator pick a format again after proving their password.
       if (lastReportRef.current) await openReport(lastReportRef.current);
     } finally {
       setIsReconnecting(false);
@@ -203,10 +170,8 @@ export default function InvoiceReportButton({
         </p>
       )}
 
-      {/* RECONNECT (2026-09-09) — replaces the old dead-end "sign out and
-          back in" message for a 401 specifically. Only the print session
-          needs re-establishing here; the operator stays signed in, and the
-          attached customer/cart are untouched. */}
+      {/* Only the print session needs re-establishing here — the operator
+          stays signed in and the attached customer/cart are untouched. */}
       {needsReconnect && (
         <div className="flex flex-col gap-2 rounded-xl border border-status-error/30 bg-status-error/5 p-3">
           <div className="flex items-center gap-2 text-xs font-medium text-status-error">
@@ -270,38 +235,17 @@ export default function InvoiceReportButton({
               srcDoc={html}
               title={`${documentLabel} preview`}
               className="h-full w-full flex-1 bg-white"
-              // The document is OrnaVerse's own markup, but it is still
-              // third-party HTML being injected into our origin — sandbox it
-              // so it can lay itself out and print, and nothing more.
-              //
-              // allow-scripts ADDED 2026-08-21: the report itself carries
-              // inline <script> tags that are the FastReport viewer's own
-              // rendering logic — without allow-scripts the browser blocks
-              // them outright, and the report never finishes initialising.
-              //
-              // SECURITY REVIEW 2026-08-21 — allow-scripts + allow-same-
-              // origin together is a known sandbox-defeating combination:
-              // a script running in that frame gets this origin's full
-              // localStorage, including the operator's live access/refresh
-              // tokens. TESTED removing allow-same-origin to close that —
-              // confirmed live it breaks the report outright: without it
-              // the frame's origin becomes `null`, the viewer's own XHR
-              // back to our /_fr/* proxy (needed to fetch the report body)
-              // gets CORS-blocked ("Access-Control-Allow-Origin" for a null
-              // origin is not something we can grant without exposing the
-              // proxy to every site on the internet), and the preview goes
-              // straight back to a bare "Error 0". allow-same-origin has to
-              // stay for the feature to work at all.
-              //
-              // Mitigated instead with a Content-Security-Policy baked into
-              // the response itself (see api/report/render/route.js) that
-              // still lets the report reach OUR OWN /_fr/* proxy (needed)
-              // but blocks it from reaching any THIRD-PARTY domain — the
-              // actual exfiltration step a compromised report would need,
-              // even though it could still, in principle, read localStorage
-              // in-frame. Doesn't fully close the gap (a real fix means
-              // moving tokens out of localStorage entirely) but removes the
-              // step that turns "can read" into "can send anywhere."
+              // allow-scripts is required for the FastReport viewer's own
+              // inline <script> rendering logic. allow-same-origin is
+              // required too — without it the frame's origin is null and
+              // its XHR back to our /_fr/* proxy gets CORS-blocked — but
+              // the combination lets an in-frame script read this origin's
+              // localStorage (including live auth tokens). Mitigated via a
+              // response-level CSP (api/report/render/route.js) that still
+              // allows /_fr/* but blocks any third-party domain, closing
+              // off exfiltration even though in-frame reading remains
+              // possible in principle. Do not add either flag elsewhere
+              // without the same CSP mitigation in place.
               sandbox="allow-same-origin allow-modals allow-scripts"
             />
           </div>

@@ -1,21 +1,13 @@
-// Customer order history — filtered by party_id from the full orders +
-// invoices list. Checkout now raises ONE of two documents per sale (see
-// checkout/page.jsx): an Invoice (54, in stock + paid in full) or an Order
-// (53, advance/nothing/made-to-order) — OrderRow and InvoiceRow share their
-// field names (see orderService.js), so both normalize identically here and
-// a customer's history isn't missing whichever type a given sale happened
-// to raise.
+// src/hooks/customer/useCustomerOrders.js
+// Shared status-derivation and normalization for customer order/invoice
+// history. OrderRow and InvoiceRow share field names (see orderService.js),
+// so both normalize identically here.
 //
-// STATUS: document_status (0 Draft / 1 Posted / 2 Cancelled) takes
-// precedence — confirmed live 2026-09-03, a real Cancelled invoice
-// (HO-LJ-0726-009, balance_amount: 0) was displaying as "Paid" because
-// document_status was never looked at, only balance/receipt. Only a
-// POSTED document's status is actually about payment progress:
-//   document_status 2 (Cancelled)                              → "cancelled"
-//   document_status 0 (Draft)                                  → "draft"
-//   document_status 1 (Posted), balance_amount <= 0             → "paid"
-//   document_status 1 (Posted), balance > 0 && receipt_amount>0 → "partial"
-//   document_status 1 (Posted), balance > 0 && receipt_amount==0 → "due"
+// document_status (0 Draft / 1 Posted / 2 Cancelled) takes precedence over
+// balance/receipt — only a POSTED document's status reflects payment progress:
+//   Cancelled(2) → "cancelled"; Draft(0) → "draft";
+//   Posted, balance<=0 → "paid"; Posted, balance>0 & receipt>0 → "partial";
+//   Posted, balance>0 & receipt==0 → "due".
 
 import APP_CONFIG from '@/constants/appConfig';
 
@@ -77,13 +69,7 @@ export function normalizeCustomerOrder(entity, documentType = 'order') {
   };
 }
 
-// REMOVED 2026-09-08 — the useCustomerOrders() hook that used to live here
-// (a merged orders+invoices-by-customer fetch, using fetchStoreScopedDocuments)
-// had zero callers anywhere in the app (confirmed via a dead-code audit —
-// the customer profile page's own Orders/History tabs were fully subsumed
-// by Customer 360 back on 2026-08-12, per that page's own TABS comment).
-// deriveDocumentStatus/normalizeCustomerOrder above are NOT dead — they're
-// still imported directly by useInvoiceList.js and useAllOrders.js — so
-// only the unused hook itself was deleted, not this whole file. The
-// Services/POS/Order/List + Invoice/List endpoints this hook called are
-// untouched in apiEndpoints.js in case this needs rebuilding later.
+// Note: the useCustomerOrders() hook that used to live in this file was
+// removed as dead code (superseded by Customer 360). deriveDocumentStatus and
+// normalizeCustomerOrder above are still used directly by useInvoiceList.js
+// and useAllOrders.js.

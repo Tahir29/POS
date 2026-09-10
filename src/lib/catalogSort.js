@@ -1,9 +1,7 @@
 // src/lib/catalogSort.js
 //
-// Extracted from catalog/page.jsx (2026-08-24) so the "Available at other
-// stores" section (OtherStoreSection) can sort its own list the exact same
-// way the primary catalog grid does, instead of drifting out of sync with a
-// second, hand-copied comparator.
+// Shared sort logic for the catalog grid and the "Available at other
+// stores" section, so both stay in sync via one comparator.
 
 export function getWeight(product) {
   return product.net_weight ?? product.weight ?? 0;
@@ -15,9 +13,8 @@ export function getPrice(product) {
 
 /**
  * Shared comparator for both search-mode and browse-mode sorting.
- * Items with no price (not every product has one — see
- * catalogService.enrichWithPrice) always sort after priced ones,
- * regardless of ascending/descending direction.
+ * Items with no price always sort after priced ones, regardless of
+ * ascending/descending direction.
  */
 export function compareProducts(a, b, sortBy) {
   switch (sortBy) {
@@ -39,36 +36,24 @@ export function compareProducts(a, b, sortBy) {
 }
 
 /**
- * THE ONLY sort step, for both browse and search mode (and now the
- * other-stores lane too), applied ONCE — after live prices are merged in.
- * Sorting unpriced rows straight off the catalog/inventory endpoints made
- * price_asc/price_desc a no-op (comparing null against null); this must
- * only ever run after a price has been merged onto each row.
+ * THE ONLY sort step, for both browse and search mode (and the other-stores
+ * lane), applied ONCE — after live prices are merged in. Must only run
+ * after a price has been merged onto each row, or price_asc/price_desc
+ * becomes a no-op (comparing null against null).
  */
 export function sortProducts(products, sortBy) {
   return [...products].sort((a, b) => compareProducts(a, b, sortBy));
 }
 
 /**
- * FIXED 2026-09-04 — the "infinite scroll jump" bug: catalog/page.jsx used
- * to run sortProducts() above over the FULL accumulated list on every
- * change to pricedDisplayProducts, including every new page fetchNextPage()
- * pulled in. Under name_asc (the default) or weight_*, a freshly-fetched
- * page's items are NOT alphabetically/weight-adjacent to the ones already
- * on screen — the server returns pages in its own order, not pre-sorted —
- * so a full re-sort INTERLEAVES the new page's rows in among the ones the
- * operator was already scrolling past, snapping every card below the
- * insertion point to a new position. Confirmed: name/weight are static
- * fields known from the very first fetch, so nothing about an
- * already-rendered card's sort key can legitimately change later — any
- * reordering of it is pure pagination noise, never a real correction.
- *
- * Price is the one exception: a still-pricing card's price genuinely
- * resolves asynchronously after the card is already on screen (see
- * compareProducts' own price-branch comment on why that settle-into-place
- * behaviour is intentional there). So under price_asc/price_desc, a card
- * whose price just went from unresolved to real is deliberately allowed to
- * move — everything else stays frozen in its last rendered position.
+ * Keeps already-rendered cards frozen in place across pagination/price
+ * updates, instead of re-sorting the full accumulated list (which would
+ * interleave each newly-fetched page's rows in among cards already on
+ * screen, snapping everything below the insertion point to a new position).
+ * name/weight are static from the first fetch, so an already-rendered
+ * card's position should never change under those sorts — only under
+ * price_asc/price_desc is a card allowed to move, when its price settles
+ * from unresolved to real after it's already on screen.
  *
  * @param {object[]} prevOrder — this function's own return value from the
  *   last call (or [] on first render / whenever the caller decides to reset
@@ -101,8 +86,7 @@ export function stableSortProducts(prevOrder, nextItems, sortBy) {
     (justSettled ? resettling : frozen).push(fresh);
   }
 
-  // Whatever's in nextItems that wasn't already accounted for above — a
-  // newly-fetched page's rows. Sorted among themselves (and any
+  // A newly-fetched page's rows — sorted among themselves (and any
   // just-settled rows) and appended AFTER the frozen prefix, never spliced
   // into the middle of it.
   const brandNew = nextItems.filter((p) => !carriedIds.has(p.item_id));

@@ -1,44 +1,22 @@
 // src/hooks/checkout/useCreateOrder.js
 // POS Order creation — native POS/Order/Create → POS/Order/Post flow.
-// Replaces the old MarketPlace/Order/Generate approach entirely.
-// POS_CHANNEL_ID blocker is gone — no channel field required.
 //
 // TWO DOCUMENTS, chosen for the operator rather than by them — the checkout
 // screen has no mode selector; what the customer pays decides which is
 // raised (see checkout/page.jsx):
-//
-//   ORDER FLOW  (deposit/reserve — collect later):  ← this hook
-//     createOrder(entity) → SaveResponse { EntityId }
-//     postOrder(EntityId) → finalises stock deduction
-//
-//   INVOICE FLOW (immediate sale):
-//     See useCreateInvoice.js
-//
-// WHY THIS HOOK HAD NO CALLERS, AND WHY THAT MATTERED
-//
-// When checkout moved to direct billing, this hook was left wired to nothing
-// — so POS/Order/Create stopped being called by the app at all, and the
-// Orders screen (which lists POS/Order/List, document type 53) stopped
-// receiving anything. It still showed the last order raised before the
-// switch, which read exactly like sales silently failing to save. They
-// hadn't: they were being filed as invoices, under Invoices.
-//
-// The two documents are not interchangeable and raising both for one sale
-// would double-count it, so checkout raises exactly one:
-//   • Invoice (54) — everything in stock AND settled in full. OrnaVerse
-//     rejects a short-paid invoice outright, and a master-built one with
-//     "Not enough stock", so both conditions are required.
+//   • Invoice (54) — everything in stock AND settled in full (OrnaVerse
+//     rejects a short-paid invoice, or one with insufficient stock).
 //   • Order (53) — anything else: an advance, nothing collected, or a
-//     made-to-order piece. The remainder rides as balance_amount.
-//     Confirmed: doc 53 does not check stock, unlike 54.
+//     made-to-order piece; the remainder rides as balance_amount. Order does
+//     not check stock, unlike Invoice.
+// The two documents are not interchangeable — raising both for one sale
+// would double-count it, so checkout raises exactly one. See useCreateInvoice.js
+// for the Invoice flow.
 //
-// PAYLOAD — OrderRow key fields (confirmed v1.json):
-//   party_id       — customer (required)
-//   company_id     — active store (required)
-//   document_date  — sale date ISO string (required)
-//   currency_id    — 103 = INR
-//   line_items[]   — InvoiceItemsRow subset (item_id, sku, pieces, item_rate, net_amount)
-//   receipt_details[] — InvoiceReceiptRow subset (mode_id, mode_code, mode_name, amount)
+// Note: keep this hook wired to a real caller — if checkout ever raises only
+// invoices, POS/Order/Create stops being called at all and the Orders screen
+// silently goes stale (it looks like orders stopped saving, when really
+// they're just being filed as invoices instead).
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSelector } from 'react-redux';
@@ -62,17 +40,9 @@ import TOAST from '@/constants/toastMessages';
 import { trackDocumentPlaced, trackDocumentFailed } from '@/lib/analytics/orderTracking';
 
 /**
- * Builds the OrderRow Entity payload from cart state.
- * All field names confirmed against OrnaVerse.POS.InvoiceItemsRow schema.
- *
- * employee_id/sales_person_id + exchange_rate — see useCreateInvoice.js
- * header for the full rationale (same schema, same findings 2026-07-16).
- *
- * HEADER FIELDS + LINE ITEMS + PROMOTIONS + RECEIPT DETAILS — see
- * useCreateInvoice.js's header comment for the full root-cause story. This
- * document type is the one that was actually captured, on 2026-08-05:
- * POS/Order/Create → EntityId 259, HO-RPO-08-26-00001, and every field below
- * was diffed against that payload.
+ * Builds the OrderRow Entity payload from cart state. Same schema and
+ * header-field rationale as useCreateInvoice.js's buildInvoiceEntity — see
+ * its header comment for the full story.
  */
 function buildOrderEntity({
   lineItems, promotionDetails,
@@ -88,8 +58,7 @@ function buildOrderEntity({
   } = summarizeLineItems(lineItems);
 
   // Summed straight from the lines, which ApplyPromotions already discounted
-  // and re-taxed. Reference capture: sub_total 104699.04, discount 12177.6,
-  // taxable_amount 92521.44, tax_amount 2775.64, net_amount 95297.
+  // and re-taxed.
   const roundedNet = Math.round(netAmount);
   const round_off  = +(roundedNet - netAmount).toFixed(2);
 
@@ -98,9 +67,8 @@ function buildOrderEntity({
   });
   const receiptAmount = +receipt_details.reduce((s, r) => s + (r.amount ?? 0), 0).toFixed(2);
 
-  // "Fulfill from order" edge case — see useCreateInvoice.js's identical
-  // comment. CONFIRMED LIVE 2026-09-08: no dedicated header field exists;
-  // narration-only audit trail, same as the Invoice path.
+  // "Fulfill from order" — same narration-only audit trail as the Invoice
+  // path; see useCreateInvoice.js.
   const fulfillmentNote = fulfillmentOrderNo ? `Fulfilled from Order ${fulfillmentOrderNo}` : null;
   const combinedNarration = [fulfillmentNote, narration].filter(Boolean).join(' — ') || undefined;
 
@@ -142,7 +110,7 @@ function buildOrderEntity({
     line_items: lineItems,
     receipt_details,
     // The invoice_promotions[] rows from Helper/ApplyPromotions, passed
-    // through untouched — see useCreateInvoice.js.
+    // through untouched.
     promotion_details: promotionDetails ?? [],
   };
 }
@@ -150,8 +118,7 @@ function buildOrderEntity({
 export function useCreateOrder() {
   const queryClient = useQueryClient();
   const { items, appliedPromos, fulfillmentOrderNo } = useCart();
-  // Fallback for analytics only on a failed order — same reasoning as
-  // useCreateInvoice.js's identical cartTotal.
+  // Fallback for analytics only on a failed order — see useCreateInvoice.js.
   const { total: cartTotal } = useCartTotals();
   const { customerId, customerName, customerMobile } = useCustomerSession();
   const customerAddress = useSelector(selectCartCustomerAddress);
@@ -188,10 +155,8 @@ export function useCreateOrder() {
 
       const documentId = APP_CONFIG.DOCUMENT_TYPES.POS_ORDER;
 
-      // Reuse the lines the checkout screen already priced and quoted from,
-      // exactly as the invoice flow does — re-pricing here would risk booking
-      // a different figure than the one the customer was just quoted, and
-      // repeat the slowest calls in the flow.
+      // Reuse the lines checkout already priced and quoted from, exactly as
+      // the invoice flow does — see useCreateInvoice.js.
       let lineItems;
       let promotionDetails;
 
@@ -218,8 +183,7 @@ export function useCreateOrder() {
       });
 
       // Step 1: Create draft order. `stage` is stamped on the error so the
-      // handler can tell create from post without sniffing the message —
-      // see useCreateInvoice.js for why that sniffing never worked.
+      // handler can tell create from post without sniffing the message.
       let createResponse;
       try {
         createResponse = await createOrder(entity);
@@ -236,9 +200,8 @@ export function useCreateOrder() {
       }
 
       // Step 2: Post (finalise) — skipped when the document type auto-posts.
-      // See useCreateInvoice.js for the full note: with auto_posting:true,
-      // Create already posts and a follow-up Post returns
-      // {"Code":"AlreadyPosted"}, which would surface as a failed order.
+      // With auto_posting:true, Create already posts and a follow-up Post
+      // returns {"Code":"AlreadyPosted"}, which would surface as a failed order.
       let postResponse = null;
       if (!headerConfig.autoPosting) {
         try {
@@ -250,20 +213,16 @@ export function useCreateOrder() {
         }
       }
       // entity + lineItems travel back so onSuccess can report the full
-      // order — price breakup, per-item detail — not just the total. See
-      // useCreateInvoice.js's identical reasoning.
+      // order — price breakup, per-item detail — not just the total.
       return { transactionId, createResponse, postResponse, entity, lineItems };
     },
 
     onSuccess: ({ transactionId, entity, lineItems }, variables) => {
       toast.success(TOAST.ORDERS.CREATED(transactionId));
 
-      // THE previously-missing tracking this hook never fired at all (see
-      // this file's own header comment on how easily this document type
-      // goes unwired) — an Order is a real completed step in the funnel
-      // (a deposit/reserve taken), just not a fully-paid sale, so it's
-      // still worth an ORDER_PLACED event, tagged document_type: 'order'
-      // to stay distinguishable from useCreateInvoice.js's immediate sales.
+      // An Order is a real completed step in the funnel (a deposit/reserve
+      // taken), just not a fully-paid sale, so it's tagged document_type:
+      // 'order' to stay distinguishable from useCreateInvoice.js's immediate sales.
       trackDocumentPlaced({
         documentType: 'order',
         transactionId, entity, lineItems,
@@ -274,11 +233,8 @@ export function useCreateOrder() {
         salesPersonName: variables?.salesPersonName,
       });
 
-      // NOT clearing the cart here — same reason as useCreateInvoice: clearing
-      // drops the attached customer a render before `orderResult` is set, and
-      // the checkout screen's own guards bounce the operator to /cart before
-      // they ever see the order number. The screen clears it once the
-      // confirmation is on screen.
+      // Not clearing the cart here — same reason as useCreateInvoice.js.
+      // The screen clears it once the confirmation is on screen.
       queryClient.invalidateQueries({ queryKey: ['orders'] });
     },
 
@@ -299,19 +255,14 @@ export function useCreateOrder() {
         error: reason ?? 'unknown',
       });
 
-      // A post-stage failure means Create ALREADY succeeded — there is a
-      // real draft order sitting server-side under error.transactionId
-      // (stamped above). That fact matters more than whatever raw reason
-      // the failed Post call carries, so it always wins here rather than
-      // falling through to OrnaVerse's own wording (which could be as
-      // unhelpful as "invalid_grant" for a session-expiry-triggered
-      // failure) — see TOAST.ORDERS.POST_FAILED's own comment for why.
+      // A post-stage failure means Create already succeeded — a real draft
+      // order sits server-side under error.transactionId, which matters more
+      // than the raw Post error, so it wins here.
       if (failedAtPost && error?.transactionId) {
         toast.error(TOAST.ORDERS.POST_FAILED(error.transactionId));
         return;
       }
 
-      // Show OrnaVerse's own reason when it sent one — see useCreateInvoice.js.
       toast.error(reason ?? TOAST.ORDERS.CREATE_FAILED);
     },
   });

@@ -31,6 +31,7 @@ import { ChevronLeft, ChevronRight, ZoomIn, Play } from 'lucide-react';
 import ProductImageZoomModal from '@/components/features/products/ProductImageZoomModal';
 import { resolveImageSrc } from '@/lib/resolveImageSrc';
 import { filterShopifyImagesByColor } from '@/lib/productImages';
+import { isShopifyImageUrl, shopifyImageLoader } from '@/lib/shopifyImageLoader';
 import { Skeleton } from '@/components/ui/skeleton';
 import StockStatusBadge from '@/components/shared/StockStatusBadge';
 import Logo from '@/components/shared/Logo';
@@ -177,7 +178,14 @@ export default function ProductImageGallery({
       {slide.type === 'video' ? (
         <>
           {slide.poster ? (
-            <Image src={slide.poster} alt={slide.alt} fill sizes="56px" className="object-cover" />
+            <Image
+              src={slide.poster}
+              alt={slide.alt}
+              fill
+              sizes="56px"
+              className="object-cover"
+              loader={isShopifyImageUrl(slide.poster) ? shopifyImageLoader : undefined}
+            />
           ) : (
             <div className="h-full w-full bg-stone-800" />
           )}
@@ -193,6 +201,7 @@ export default function ProductImageGallery({
           sizes="56px"
           className="object-cover"
           onError={() => handleImgError(i)}
+          loader={isShopifyImageUrl(slide.src) ? shopifyImageLoader : undefined}
         />
       ) : (
         <div className="w-full h-full bg-muted" />
@@ -255,6 +264,7 @@ export default function ProductImageGallery({
                 className="object-cover"
                 priority
                 onError={() => handleImgError(safeIndex)}
+                loader={isShopifyImageUrl(current.src) ? shopifyImageLoader : undefined}
               />
             </button>
           ) : (

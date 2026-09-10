@@ -1,10 +1,6 @@
-// Live per-item price calculation via Services/Helpers/SetSalesItems.
-//
-// This is the endpoint OrnaVerse's own UI calls to price a variant — NOT
-// Services/Helpers/GetRate (confirmed live 2026-07-22: GetRate never fires
-// when a variant is selected there). See apiEndpoints.js HELPERS block for
-// the full confirmed contract and why the fixed context fields below
-// (price_list_id, document_id, exchange_rate, etc.) are safe constants.
+// Live per-item price calculation via Services/Helpers/SetSalesItems — the
+// endpoint OrnaVerse's own UI calls to price a variant (not GetRate, which
+// never fires there once a variant is selected).
 
 import axiosInstance from '@/lib/axios/axiosInstance';
 import { getStockPieces } from '@/services/inventoryService';
@@ -27,15 +23,12 @@ import APP_CONFIG from '@/constants/appConfig';
 export async function calculateItemRates(items, documentId = 52) {
   if (!items?.length) return [];
 
-  // `pieces` is overloaded in this codebase: useDesignVariants patches it to
-  // the REAL per-store stock count (0 for Made-to-Order) for display
-  // purposes, but SetSalesItems expects it as the BOM recipe quantity —
-  // "cost of making one piece" — not a stock count. Confirmed live
-  // 2026-07-22: sending pieces:0 (a real out-of-stock variant, patched by
-  // useDesignVariants) reliably 500s the server (an unhandled exception,
-  // presumably a divide-by-zero in its per-piece cost calc); the same item
-  // with pieces:1 prices correctly. Force it to 1 here so callers never
-  // have to remember to un-patch it before pricing.
+  // `pieces` is overloaded in this codebase: elsewhere it's patched to the
+  // real per-store stock count (0 for made-to-order) for display purposes,
+  // but SetSalesItems expects it as the BOM recipe quantity ("cost of making
+  // one piece"), not a stock count — sending pieces:0 reliably 500s the
+  // server. Force it to 1 here so callers never have to remember to
+  // un-patch it before pricing.
   const pricedItems = items.map((item) => ({ ...item, pieces: 1 }));
 
   const response = await axiosInstance.post(API.HELPERS.SET_SALES_ITEMS, {
@@ -43,11 +36,10 @@ export async function calculateItemRates(items, documentId = 52) {
     price_list_id:        0,
     calculate_rates:      true,
     document_date:        new Date().toUTCString(),
-    // 52 = Estimation, the browse/preview default. An ORDER (53) prices its
-    // catalog items through this same call — confirmed 2026-08-05 from their
-    // own Order counter, whose SetSalesItems request is byte-for-byte this
-    // shape with document_id 53. Invoices do NOT come through here; they
-    // price physical stock rows (priceStockPiecesForSale below).
+    // 52 = Estimation, the browse/preview default. An Order (53) prices its
+    // catalog items through this same call with the same shape. Invoices do
+    // NOT come through here; they price physical stock rows (see
+    // priceStockPiecesForSale below).
     document_id:          documentId,
     exchange_rate:        1,
     generate_line_no:     false,
@@ -64,24 +56,14 @@ export async function calculateItemRates(items, documentId = 52) {
  * Prices ONE item the way it will actually be SOLD — the single source of the
  * figure a customer is shown, from the catalog through to the posted document.
  *
- * WHY THIS EXISTS. The product page used to price the item MASTER while
- * checkout priced the physical PIECE, so the same bracelet read ₹30,877.20 on
- * the product page, in the cart and in the mini cart, and ₹23,507.56 at
- * checkout. The master is a nominal design spec — 2.030g net — and the two
- * bracelets actually in the case weigh 1.349g and 1.620g. Metal is charged per
- * net gram (₹9,440 at 14KT), so the real piece is simply worth less, and it is
- * the real piece that gets billed.
- *
- * That gap is not cosmetic: the cart's unitPrice is persisted in Redux and
- * shown to the customer, so quoting the master means quoting a number no
- * document will ever carry — in the other direction it is far worse
- * (ADJLR00826: ₹48,704 master vs ₹1,07,840 real, which OrnaVerse rejected as
- * short-paid).
- *
- * So: price the piece the counter would claim when the shelf has one, and the
- * master only when it genuinely has nothing to sell (made to order). The
- * document ids match what checkout raises in each case, so the figure is
- * identical end to end.
+ * The item MASTER is a nominal design spec (a fixed weight), while a
+ * physical PIECE on the shelf can weigh meaningfully more or less, and metal
+ * is charged per net gram — so pricing the master and pricing the piece can
+ * disagree by a large margin, in either direction. Since the cart's
+ * unitPrice is persisted and shown to the customer, and the real piece is
+ * what gets billed, this prices the piece the counter would actually claim
+ * when the shelf has one, and only falls back to the master when the item is
+ * genuinely made-to-order (nothing on the shelf to sell).
  *
  * @param {{ item: object, companyId?: number }} params
  * @returns {Promise<object|null>} the priced row (its `sku` is set when a real
@@ -92,14 +74,11 @@ export async function priceItemAsSold({ item, companyId }) {
 
   if (companyId) {
     // The first AVAILABLE row is the one claimStockPieces would take, so the
-    // quote matches the piece that will actually be billed — "available"
-    // now explicitly excludes is_allocated rows (2026-08-27), matching
-    // claimStockPieces' own filter (see its header for why: a row can come
-    // back already reserved by another transaction, confirmed live against
-    // OrnaVerse's own tenant). take: 5, not 1 — with is_allocated now
+    // quote matches the piece that will actually be billed. "Available"
+    // excludes is_allocated rows (already reserved by another transaction —
+    // see claimStockPieces for why). take: 5, not 1 — with is_allocated
     // filtered client-side, take:1 could land exactly on an allocated row
-    // and see nothing else, quoting made-to-order for an item that
-    // genuinely has other real stock one row further down.
+    // and miss other genuinely-available stock one row further down.
     const response = await getStockPieces({ itemId: item.item_id, companyId, take: 5 });
     const row = (response?.data?.Entities ?? []).find((r) => !r.is_allocated);
     if (row) {
@@ -118,7 +97,6 @@ export async function priceItemAsSold({ item, companyId }) {
  * Prices actual STOCK PIECES for a sale — the checkout counterpart of
  * calculateItemRates.
  *
- * Captured verbatim from OrnaVerse's own UAT Invoice counter 2026-08-05.
  * Two things differ from the catalog-preview call above, and both matter:
  *
  *   • `selected_products` are StockJournal rows (real pieces), not item
@@ -128,7 +106,7 @@ export async function priceItemAsSold({ item, companyId }) {
  *     how the Create payload comes to carry them. Feed it a master record
  *     instead and every one of those fields is absent or wrong.
  *   • `document_id` is the real document type (54 = POS Invoice), not the
- *     Estimation type 52 used for browsing. Their call also omits
+ *     Estimation type 52 used for browsing. This call also omits
  *     is_labour_applicable/is_purchase entirely.
  *
  * `pieces` is NOT forced to 1 here (unlike calculateItemRates): a stock row

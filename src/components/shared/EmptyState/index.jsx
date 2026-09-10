@@ -1,26 +1,10 @@
 import { PackageOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-/**
- * EmptyState
- *
- * Reusable empty / no-data state display.
- * Used across the app whenever a list or data section has zero results.
- *
- * Props:
- *   icon      {React.ElementType}  — Lucide icon component (default: PackageOpen)
- *   title     {string}             — Primary message (required)
- *   description {string}           — Supporting detail (optional)
- *   action    {React.ReactNode}    — Optional CTA button/link rendered below text
- *   className {string}             — Extra classes on the root element
- *
- * Usage:
- *   <EmptyState
- *     title="No orders yet"
- *     description="Orders placed today will appear here."
- *     action={<Button onClick={...}>Browse Catalog</Button>}
- *   />
- */
+// Reusable empty/no-data state, used across the app whenever a list or
+// data section has zero results.
+//
+// @param {{ icon?: React.ElementType, title: string, description?: string, action?: React.ReactNode, className?: string }} props
 export default function EmptyState({
   icon: Icon = PackageOpen,
   title,

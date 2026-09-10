@@ -1,19 +1,14 @@
 // Server-side proxy for Shopify product media (images + video).
+// SHOPIFY_ADMIN_TOKEN is a secret with full store access and must never
+// reach the browser; this route fetches from Shopify and returns only
+// normalized data to the client.
 //
-// WHY THIS EXISTS:
-//   SHOPIFY_ADMIN_TOKEN is a secret key with full store access — it must
-//   never be exposed to the browser. This route runs on the Next.js server,
-//   fetches media from Shopify, and returns only the normalized data to the
-//   client.
-//
-// WHY GRAPHQL, NOT THE OLD REST /images.json ROUTE:
-//   Shopify's REST Admin API Product resource only exposes `images` — there
-//   is no video/3D field on it at all. Video and other rich media only exist
-//   on Shopify's newer "Media" object, exposed exclusively via the GraphQL
-//   Admin API's `product.media` connection (MediaImage | Video | Model3d |
-//   ExternalVideo). Confirmed live 2026-07-26: this store DOES have real
-//   video assets uploaded for at least some products (a 360° rotation clip),
-//   which the old REST route could never have surfaced.
+// Uses GraphQL rather than the REST /images.json endpoint because REST's
+// Product resource only exposes `images` — video/3D only exist on Shopify's
+// newer Media object, available exclusively via the GraphQL Admin API's
+// `product.media` connection (MediaImage | Video | Model3d | ExternalVideo).
+// This store does have real video assets on some products (a 360° rotation
+// clip) that the old REST route could never have surfaced.
 //
 // REQUEST:
 //   GET /api/shopify/product-media/{externalProductId}
@@ -57,7 +52,7 @@ const MEDIA_QUERY = `
 `;
 // NOTE: Video's poster/thumbnail field is `preview { image { url } }`, not
 // `previewImage` — the latter doesn't exist on this API version's Video
-// type and 400s the whole query (confirmed live 2026-07-26).
+// type and 400s the whole query.
 
 export async function GET(request, { params }) {
   const { productId } = await params;
@@ -113,10 +108,9 @@ export async function GET(request, { params }) {
       );
     }
 
-    // Normalise to only what the client needs — never pass raw Shopify data.
     // Position is assigned per-array (not the raw media index) so each list
-    // still starts at 1 / is contiguous, matching how the old REST images
-    // endpoint's `position` field behaved.
+    // starts at 1 and is contiguous, matching the old REST endpoint's
+    // `position` field behavior.
     const images = [];
     const videos = [];
 
@@ -142,8 +136,7 @@ export async function GET(request, { params }) {
           });
         }
       }
-      // Model3d / ExternalVideo intentionally not handled — no confirmed
-      // use of either media type in this store's catalog yet.
+      // Model3d / ExternalVideo intentionally not handled — unused so far.
     });
 
     return NextResponse.json({ images, videos });

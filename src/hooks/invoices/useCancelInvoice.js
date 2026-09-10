@@ -1,6 +1,5 @@
 // Cancels a posted POS invoice via POS/Invoice/Cancel.
-// Mirrors useCancelOrder.js exactly — same document family, same contract,
-// just never had a UI caller (cancelInvoice() sat unused in orderService.js).
+// Mirrors useCancelOrder.js — same document family, same contract.
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-toastify';
@@ -10,7 +9,6 @@ import TOAST from '@/constants/toastMessages';
 import tracker from '@/lib/analytics/tracker';
 import EVENTS from '@/lib/analytics/events';
 
-// ENRICHED 2026-09-04 — same fix as useCancelOrder.js's identical gap.
 export function useCancelInvoice() {
   const queryClient = useQueryClient();
   const sessionCtx = useSessionTrackingContext();

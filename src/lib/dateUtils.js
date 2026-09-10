@@ -16,20 +16,10 @@ export function todayDateString() {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-// ADDED 2026-09-08 — de-duplication pass: a codebase audit found ~13 files
-// each independently reimplementing one of these exact same 5 display
-// styles (same options object, same falsy/invalid-date handling, just
-// copy-pasted rather than shared) — see each duplicate site's own comment
-// for which one replaced it and why. Not one "do everything" formatter:
-// the 5 styles are genuinely different display choices used in different
-// contexts (a list row's compact "8 Sep" vs. a detail sheet's full
-// "08 Sep 2026"), so each stays its own named export rather than forcing
-// every call site into one shape.
-//
-// "Missing" behavior differs by function ON PURPOSE, matching whichever
-// behavior the majority of call sites for that exact style already had:
-// some want null (compose your own '—' fallback, e.g. `formatDateShort(x)
-// ?? '—'`), one (formatDatePadded) already always wanted '—' outright.
+// Five distinct display styles, each its own named export (a list row's
+// compact "8 Sep" vs. a detail sheet's full "08 Sep 2026" are genuinely
+// different contexts). "Missing" behavior differs by function ON PURPOSE —
+// see each function's own doc comment.
 
 /** "9/8/2026" — locale-default numeric. Missing → null; unparseable → the
  *  raw input back (never silently prints "Invalid Date"). */

@@ -1,13 +1,8 @@
 // On-demand maturity / foreclose / cancellation calculations for one
-// enrollment.
-//
-// These are READ-ONLY calculators — they work out what a customer would get,
-// they don't close anything. Modelled as a mutation rather than a query
-// because staff trigger them deliberately, one at a time, and re-running is
-// meaningful.
-//
-// The endpoints need the FULL enrollment (including every scheme_monthly_details
-// row), not an id — see services/schemeService.js for the captured shape.
+// enrollment. Read-only calculators (they don't close anything); modelled as
+// a mutation since staff trigger them deliberately, one at a time. The
+// endpoints need the full enrollment (including scheme_monthly_details), not
+// just an id — see services/schemeService.js.
 
 import { useState, useCallback } from 'react';
 import {
@@ -47,8 +42,8 @@ export function useSchemeBenefits(enrollmentId) {
 
     setKind(which); setResult(null); setError(null); setIsLoading(true);
     try {
-      // Always re-fetch: an instalment may have been recorded moments ago,
-      // and the calculation is only as good as the month rows it's given.
+      // Always re-fetch: the calculation is only as good as the current
+      // month rows, and an instalment may have been recorded moments ago.
       const enrollment = await getSchemeEnrollmentDetail(enrollmentId);
       if (!enrollment) throw new Error('Could not load this enrollment.');
 
@@ -56,7 +51,7 @@ export function useSchemeBenefits(enrollmentId) {
         const { allowed, remaining } = canMatureEnrollment(enrollment);
         if (!allowed) {
           // Mirrors OrnaVerse's own gate, so staff get a sentence instead of
-          // a 500 from an unguarded server path.
+          // a server error.
           throw new Error(
             `Maturity needs every instalment paid — ${remaining} still outstanding.`,
           );

@@ -1,13 +1,9 @@
 'use client';
 
-// src/components/shared/PaymentStatusBadge/index.jsx
-//
-// Consolidates 5 independently hand-copied paid/partial/due(-style)
-// status-color maps — orders (OrderListItem, RecentOrdersList,
-// CustomerOrderHistory, customers/[customerId] order tab), scheme
-// monthly schedule (EnrollmentDetailSheet), and returns — onto the same
-// status-in-stock/status-made-order/status-error tokens StockStatusBadge
-// already established. Canonical states: settled/partial/overdue/pending.
+// Shared payment status badge for orders, scheme schedules, and returns.
+// Canonical states: settled/partial/overdue/pending/cancelled/draft — routes
+// through the same status-in-stock/status-made-order/status-error tokens
+// StockStatusBadge uses.
 
 import { Badge } from '@/components/ui/badge';
 
@@ -16,8 +12,6 @@ const CONFIG = {
   partial:   { label: 'Partial',   classes: 'bg-status-made-order/10 text-status-made-order ring-1 ring-status-made-order/20' },
   overdue:   { label: 'Due',       classes: 'bg-status-error/10 text-status-error ring-1 ring-status-error/20' },
   pending:   { label: 'Pending',   classes: 'bg-muted text-muted-foreground ring-1 ring-border' },
-  // ADDED 2026-09-03 — document_status (Cancelled/Draft) now reaches this
-  // badge for the first time; see deriveDocumentStatus in useCustomerOrders.js.
   cancelled: { label: 'Cancelled', classes: 'bg-muted text-muted-foreground ring-1 ring-border' },
   draft:     { label: 'Draft',     classes: 'bg-muted text-muted-foreground ring-1 ring-border' },
 };

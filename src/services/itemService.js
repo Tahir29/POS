@@ -11,12 +11,6 @@ import API from '@/constants/apiEndpoints';
 export const getItemDetail = (entityId) =>
   axiosInstance.post(API.ITEMS.RETRIEVE, { EntityId: entityId });
 
-// REMOVED 2026-09-08 — getItemSizes() had zero callers anywhere (confirmed
-// via a dead-code audit) — size options are sourced from useDesignVariants'
-// own per-style variant list wherever this app needs them (CustomizeSheet),
-// not a standalone master sizes list. API.ITEMS.SIZES is untouched in
-// apiEndpoints.js in case a standalone sizes list is needed later.
-
 /**
  * Fetches product attributes of a specific type
  * (e.g. purity, stone type, finish).

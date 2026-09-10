@@ -1,12 +1,9 @@
 'use client';
 
-// Subtotal / discount / total breakdown.
-//
-// REUSE NOTE: This component is intentionally pure/presentational and
-// driven entirely by useCartTotals(). It is used in the Cart Drawer
-// (Phase 8) and is designed to be reused as-is on the Checkout screen
-// and any order review/confirmation step (Phase 9+) — do not add
-// drawer-specific logic (e.g. close handlers) here.
+// Subtotal / discount / total breakdown. Pure/presentational, driven by
+// useCartTotals() unless server-priced `totals` is supplied — reused as-is
+// across the Cart Drawer, Checkout, and order review; keep it free of
+// drawer-specific logic (e.g. close handlers).
 
 import { useCartTotals } from '@/hooks/cart/useCartTotals';
 import { splitGst } from '@/lib/gst';
@@ -17,33 +14,17 @@ import { splitGst } from '@/lib/gst';
  *   isPricing?: boolean,
  *   coinsRedeemed?: number,
  * }} props
- *   totals — server-priced figures for the ACTUAL stock pieces, after
- *   OrnaVerse's own promotion calculator has run (useCheckoutPricing). When
- *   present these win over the cart's own estimate, because they are what the
- *   document is raised at and what the customer is charged. Showing the cart
- *   estimate next to a Place Order button carrying the real figure is exactly
- *   the mismatch this prevents.
+ *   totals - server-priced figures for the actual stock pieces (after the
+ *   promotion calculator runs), which win over the cart's own estimate
+ *   since they're what the customer is actually charged. netAmount is
+ *   already net of discount and re-taxed.
  *
- *   Every figure here comes from ONE source. Reading the discount off the
- *   cart while the total came from the priced pieces is what made this panel
- *   print a discount line and then not deduct it — the promo was visibly
- *   applied and the total never moved. `netAmount` is already net of the
- *   discount and re-taxed, so nothing is subtracted here.
- *
- *   coinsRedeemed (2026-09-08) — Lucira Coins applied against this order,
- *   ALREADY clamped by the caller to min(wallet balance, payable total) —
- *   see LucraCoinsSection's maxClaimable. Unlike the promo discount above,
- *   this is never folded into `totals` (coins aren't an OrnaVerse concept;
- *   OrnaVerse's own net_amount is untouched by it) — subtracted here,
- *   client-side, on top of `total`. Folded into the same single row as
- *   promoDiscount (2026-09-08, product decision) rather than its own
- *   separate line — a promo and coins are mutually exclusive (cartSlice's
- *   appliedPromos/redeemedCoins can't both be non-zero at once, see
- *   useCart.js/usePromoValidation.js's guards), so there's only ever one
- *   real number to show either way. The LABEL still says which one it was
- *   (2026-09-08, follow-up) — "Discount" for a promo, "Lucira Coins
- *   Redeemed" for coins — only the wording differs; the amount/total math
- *   is exactly the same either way.
+ *   coinsRedeemed - Lucira Coins applied to this order, already clamped by
+ *   the caller to the payable total. Not an ERP concept, so it's never
+ *   folded into `totals`; subtracted client-side on top of the total.
+ *   Promo discount and coins are mutually exclusive, so they share one
+ *   display row (label switches between "Discount" and "Lucira Coins
+ *   Redeemed") even though they come from different sources.
  */
 export default function CartSummary({ totals = null, isPricing = false, coinsRedeemed = 0 }) {
   const cart = useCartTotals();
@@ -51,37 +32,21 @@ export default function CartSummary({ totals = null, isPricing = false, coinsRed
   const subtotal = totals ? totals.subTotal  : cart.subtotal;
   const tax      = totals ? totals.taxAmount : cart.tax;
   const promoDiscount = totals ? (totals.discount ?? 0) : cart.discount;
-  // Folded into one row for display — see coinsRedeemed's own doc comment
-  // above. Kept as two separate inputs (not a single prop) because they
-  // still mean different things internally: promoDiscount is real
-  // OrnaVerse data already folded into `totals.netAmount`; coinsRedeemed is
-  // a client-side deduction applied on top of it (see `total` below) —
-  // only the ON-SCREEN row combines them.
+  // promoDiscount (real data, already folded into totals.netAmount) and
+  // coinsRedeemed (a client-side deduction applied on top, see `total`
+  // below) are kept as separate inputs but combined into one display row.
   const discount = promoDiscount + coinsRedeemed;
-  // Which mechanism actually produced `discount` — mutual exclusivity
-  // means checking coinsRedeemed alone is enough to tell (see above).
   const discountLabel = coinsRedeemed > 0 ? 'Lucira Coins Redeemed' : 'Discount';
 
-  // FIXED 2026-09-08 — Total used to be Math.round(netAmount) with no
-  // corresponding line item, while Subtotal/Discount/Taxable Value/GST
-  // above it all showed the exact decimal figure (maximumFractionDigits:
-  // 2, never rounded) — the same mismatch CartItemRow's own per-line price
-  // breakdown surfaces (those sum to the exact decimal netAmount too). The
-  // displayed lines never actually added up to the displayed Total,
-  // sometimes off by a few paise. Same round_off calculation
-  // useCreateInvoice.js/useCreateOrder.js already send to OrnaVerse as its
-  // own header field (roundedNet - netAmount) — shown here too now, so the
-  // breakdown reconciles exactly with the rounded Total, the same way the
-  // real document does. Whole-rupee rounding itself is unchanged (still
-  // needed so the amount collected settles the invoice to exactly zero,
-  // see useCheckoutPricing's own header) — only the missing line is added.
+  // Total is rounded to a whole rupee (so the amount collected settles the
+  // invoice exactly); roundOff is shown as its own line so the displayed
+  // figures reconcile exactly with the rounded Total.
   const rawTotal   = totals ? totals.netAmount : cart.total;
   const roundedTotal = Math.round(rawTotal);
   const roundOff   = +(roundedTotal - rawTotal).toFixed(2);
   const total      = Math.max(0, roundedTotal - coinsRedeemed);
-  // Bifurcated for display — see lib/gst.js. The combined `tax` above is
-  // still what's actually summed into the header at submission time;
-  // this just shows it the way a GST tax invoice is required to.
+  // Bifurcated into CGST/SGST for display — see lib/gst.js. The combined
+  // `tax` above is still what's summed into the header at submission time.
   const gst = splitGst(tax);
 
   return (
@@ -102,12 +67,8 @@ export default function CartSummary({ totals = null, isPricing = false, coinsRed
         </div>
       )}
 
-      {/* Taxable value — shown only for server-priced totals, and only when
-          a REAL promo (not coins — those never touch taxable value, they're
-          a payment-side deduction, see coinsRedeemed's doc comment above)
-          actually moved it. Mirrors the line their own POS shows between
-          Discount and GST, so the two summaries can be read side by side
-          when cross-checking a sale. */}
+      {/* Taxable value — shown only for server-priced totals with a real
+          promo applied (coins are a payment-side deduction and never touch it). */}
       {totals && promoDiscount > 0 && (
         <div className="flex items-center justify-between text-sm text-muted-foreground">
           <span>Taxable Value</span>
@@ -117,10 +78,7 @@ export default function CartSummary({ totals = null, isPricing = false, coinsRed
         </div>
       )}
 
-      {/* Shown as CGST + SGST, not one "GST" line — see lib/gst.js for why
-          this split is exact for this business, not an estimate. Only the
-          cart's own combined figure (pre-split) is the flat-3% estimate;
-          the priced one is the server's real per-item tax total. */}
+      {/* Shown as CGST + SGST rather than one "GST" line — see lib/gst.js. */}
       {gst && (
         <>
           <div className="flex items-center justify-between text-sm text-muted-foreground">

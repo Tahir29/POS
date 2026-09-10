@@ -51,9 +51,6 @@ const authSlice = createSlice({
 export const { setTokens, updateTokens, clearAuth } = authSlice.actions;
 
 export const selectAccessToken     = (state) => state.auth.accessToken;
-// REMOVED 2026-09-08 — selectRefreshToken had zero callers anywhere
-// (confirmed via a dead-code audit) — the refresh token is only ever read
-// server-side, inside the axios interceptor that performs the refresh call.
 export const selectTokenExpiry     = (state) => state.auth.tokenExpiry;
 export const selectIsAuthenticated = (state) => state.auth.isAuthenticated;
 export const selectAuthUser        = (state) => state.auth.user;

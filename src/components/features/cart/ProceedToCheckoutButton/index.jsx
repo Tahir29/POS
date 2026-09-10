@@ -1,7 +1,6 @@
 'use client';
 
 // CTA navigating to the checkout screen. Disabled when cart is empty.
-// Checkout route/screen itself is built in Phase 9.
 
 import { useRouter } from 'next/navigation';
 import { ArrowRight } from 'lucide-react';

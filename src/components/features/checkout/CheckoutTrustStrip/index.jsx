@@ -1,19 +1,8 @@
 'use client';
 
-// Reassurance strip at the bottom of checkout — same purpose as
-// ProductTrustBadge on the product detail page (build confidence right
-// before the money moment), scaled down to a single compact bar since
-// checkout is a staff screen, not a browsing surface.
-//
-// Icon treatment intentionally mirrors ProductTrustBadge's unified
-// accent-tinted icons (not a different color per badge) — that "same
-// background color for all icons" call was already made once for the
-// product page and carries over here for consistency across the app.
-//
-// Payment network marks are plain <img> tags pointing at the same
-// Shopify CDN host already whitelisted in next.config.mjs and already
-// used the same way for icon assets in ProductSpecifications — small
-// SVGs like this don't go through next/image's optimizer there either.
+// Reassurance strip at the bottom of checkout — a compact, staff-screen
+// version of ProductTrustBadge's trust treatment (same unified
+// accent-tinted icon style for consistency across the app).
 
 import { RotateCcw, ShieldCheck, RefreshCw, Award } from 'lucide-react';
 

@@ -1,34 +1,31 @@
 // Jewellery savings/instalment scheme management.
 // All functions are pure HTTP wrappers — no business logic.
 //
-// SCHEMA — POS.SchemeEnrollmentRow key fields (confirmed v1.json, cross-checked
-// 2026-08-07 against a live SchemeEnrollment/Create capture on Lucira's own
-// UAT tenant — see Lucira_Scheme_Module_Documentation.md §4):
+// SCHEMA — POS.SchemeEnrollmentRow key fields:
 //   scheme_enrollment_id  — primary key
-//   party_id              — customer
-//   party_name            — customer name
-//   mobile                — customer mobile
-//   scheme_id             — linked scheme
-//   scheme_display_name   — scheme name for display
-//   scheme_code           — scheme code
-//   scheme_status         — enum SchemeStatus: 1 active, 0 cancelled/foreclosed-
-//                           pending, 2 matured-pending, 3 redeemed (terminal)
+//   party_id / party_name / mobile — customer
+//   scheme_id / scheme_display_name / scheme_code — linked scheme
+//   scheme_status         — enum SchemeStatus: 1 active, 0 cancelled/
+//                           foreclosed-pending, 2 matured-pending,
+//                           3 redeemed (terminal); meaning of 0/2/3 not
+//                           confirmed against a real transition, see
+//                           closeSchemeEnrollment below
 //   document_date         — enrollment date
 //   scheme_amount         — monthly instalment amount
 //   tenure                — months
 //   scheme_bonus_value    — cash value of the base bonus (scheme_amount × bonus_value)
 //   max_installment_amount— copied from the scheme master, cap per instalment
 //   invested_amount       — total paid so far
-//   benifit_amount        — ⚠️ API-side typo, preserve EXACTLY — benefit from scheme
+//   benifit_amount        — API-side typo, preserve EXACTLY — benefit from scheme
 //   total_payable         — total amount customer will receive at maturity
 //   maturity_year/month   — when scheme matures
-//   nominee / nominee_age — optional; confirmed real fields on Create (live
-//                           capture literally sends "nominee": "Test Nominee"),
-//                           not yet confirmed round-tripping back on List/Retrieve
-//   scheme_monthly_details[] — SchemeMonthlyDetailsRow[]; MUST be built and sent
-//                           by the client on Create — the server does NOT
-//                           synthesize these from scheme_amount/tenure alone
-//                           (see buildSchemeMonthlyDetails() below)
+//   nominee / nominee_age — optional; confirmed sent on Create, not yet
+//                           confirmed round-tripping back on List/Retrieve
+//   scheme_monthly_details[] — SchemeMonthlyDetailsRow[]; MUST be built and
+//                           sent by the client on Create (see
+//                           buildSchemeMonthlyDetails() below) — the server
+//                           does not synthesize these from scheme_amount/
+//                           tenure alone
 
 import axiosInstance from '@/lib/axios/axiosInstance';
 import API from '@/constants/apiEndpoints';
@@ -70,15 +67,11 @@ export async function getSchemeEnrollmentById(enrollmentId) {
 }
 
 /**
- * Builds the SchemeEnrollment/Create scheme_monthly_details[] rows.
- *
- * CAPTURED 2026-08-07 from a live SchemeEnrollment/Create payload on Lucira's
- * own UAT tenant (Lucira_Scheme_Module_Documentation.md §4). Previously this
- * was omitted on the assumption the server would generate it from
- * scheme_amount/tenure/document_date — that assumption was wrong: the real
- * client builds and sends every row itself. One row per tenure month, first
- * due date equal to the enrollment date, one calendar month added per
- * subsequent row (month_id wraps 12 → 1 the same way Date does).
+ * Builds the SchemeEnrollment/Create scheme_monthly_details[] rows — the
+ * server does not generate these itself from scheme_amount/tenure/
+ * document_date, the client must build and send every row. One row per
+ * tenure month, first due date equal to the enrollment date, one calendar
+ * month added per subsequent row.
  *
  * @param {string} documentDate  — enrollment date, "YYYY-MM-DD"
  * @param {number} schemeAmount  — monthly instalment amount
@@ -137,24 +130,14 @@ export async function getSchemeReceipts({ scheme_enrollment_id, take = 0 } = {})
 }
 
 /**
- * Builds the SchemeReceipt/Create Entity.
+ * Builds the SchemeReceipt/Create Entity. This is NOT a sales document, so it
+ * does not go through buildTransactionHeaderFields (no sub_total/
+ * taxable_amount/tax_amount/net_amount/promotion_details) — it has its own
+ * flat shape, built here.
  *
- * SHAPE CAPTURED 2026-07-31 from OrnaVerse's own ERP dialog
- * (/POS/SchemeReceipt → New Scheme Receipt), after our version had been
- * returning an opaque 500 for weeks. Two things were wrong:
- *
- *  1. `month_ids` was missing entirely. It is the array of calendar month
- *     numbers this payment covers (["8"] = August), and their own client
- *     refuses to save without it — "Select Month before Receipt". A scheme
- *     receipt has to say WHICH instalment it pays, otherwise the server has
- *     nothing to mark off.
- *  2. We were running this through buildTransactionHeaderFields, which is
- *     built for SALES documents. A scheme receipt is not one — their payload
- *     carries no sub_total / taxable_amount / tax_amount / net_amount /
- *     receipt_amount / balance_amount / promotion_details / is_tax_applicable
- *     at all. It has its own flat shape, built here.
- *
- * Everything below appears in their captured payload; nothing is invented.
+ * `month_ids` (array of calendar month numbers this payment covers, e.g.
+ * ["8"] for August) is required — a scheme receipt has to say WHICH
+ * instalment it pays, or the server has nothing to mark off.
  *
  * @param {{
  *   enrollmentId: number, schemeType?: number|string, schemeUniqueCode?: string,
@@ -180,9 +163,8 @@ export function buildSchemeReceiptPayload({
   details,
 }) {
   return {
-    // document_no deliberately omitted — the server assigns it. Their dialog
-    // pre-fills one, but predicting it is what broke Refund settlement; see
-    // services/refundService.js.
+    // document_no deliberately omitted — the server assigns it. Predicting
+    // it client-side is what broke Refund settlement; see refundService.js.
     document_date: documentDate,
     document_id:   99,          // POS Scheme Receipt, prefix "SPY"
     mobile:     mobile ?? '',
@@ -251,22 +233,9 @@ export async function getSchemeMonthlyDetails({ scheme_enrollment_id }) {
 }
 
 // ─── SCHEME BENEFIT HELPERS ───────────────────────────────────────────────────
-//
-// ALL THREE TAKE THE WHOLE ENROLLMENT, NOT AN ID.
-//
-// Captured 2026-08-01 from OrnaVerse's own enrollment screen
-// (/POS/SchemeEnrollment → Calculate Maturity / Foreclosure / Cancellation):
-//
-//   { "enrollment": { party_id, scheme_id, tenure, scheme_amount,
-//                     scheme_monthly_details: [ …every month row… ],
-//                     invested_amount, benifit_amount, bonus_type,
-//                     scheme_enrollment_id, … } }
-//
-// This matters: these endpoints were written off as broken after five
-// payload variants all returned an identical generic 500 — but every one of
-// those variants sent an ID. The endpoints were fine; the shape was wrong.
-// The server needs the month rows to compute anything, so an ID alone hits
-// an unguarded path and throws.
+// ALL THREE TAKE THE WHOLE ENROLLMENT, NOT AN ID — the server needs the full
+// scheme_monthly_details rows to compute a figure; an ID alone hits an
+// unguarded path server-side and 500s.
 
 /**
  * Fetches the full enrollment entity — the input these calculators need.
@@ -288,10 +257,8 @@ async function postBenefitCalc(endpoint, enrollment) {
 /**
  * Maturity benefit — the payout at the end of the full tenure.
  *
- * PRECONDITION: their UI blocks this with "To Mature Scheme You Need to Pay
- * Atleast N Installments", where N counts REMAINING instalments — i.e. every
- * instalment must be paid. Callers should check before calling; see
- * canMatureEnrollment() below.
+ * PRECONDITION: every instalment must be paid first; callers should check
+ * with canMatureEnrollment() below before calling.
  *
  * @param {object} enrollment — full entity from getSchemeEnrollmentDetail()
  */
@@ -329,33 +296,17 @@ export function canMatureEnrollment(enrollment) {
 }
 
 /**
- * Records a closure benefit against the enrollment — the first real write
- * this screen has ever done beyond calculating a figure. See
- * EnrollmentDetailSheet's ClosureTab: this used to be pure calculators,
- * "nothing is closed or paid out here" by design/admission.
+ * Records a closure benefit against the enrollment.
  *
- * THERE IS NO DEDICATED CLOSE/MATURE/FORECLOSE/CANCEL ENDPOINT anywhere in
- * the 4,091-endpoint API (confirmed 2026-08-14 by searching the full spec
- * for every scheme-related path) — SchemeEnrollment/Update is the only
- * mutation available on this entity, same generic Serenity CRUD pattern as
- * everywhere else in this codebase. Confirmed live the same day that a
- * genuine no-op Update round-trip (retrieve → send back unchanged)
- * succeeds cleanly against a real enrollment (scheme_enrollment_id 137),
- * so the write mechanism itself is proven.
- *
- * WHAT'S DELIBERATELY NOT DONE HERE: `scheme_status` (a 4-value enum,
- * 0/1/2/3, no labels in the API schema) is NOT set. Every real enrollment
- * checked so far reports status 1, which is consistent with "Active" but
- * not confirmed to mean that, and guessing which of the other 3 values
- * means Matured vs. Foreclosed vs. Cancelled — then writing it to a real
- * customer's financial record — is exactly the kind of guess this
- * codebase's own conventions say not to make (see e.g. the Return/Order
- * header-field saga). Only `benifit_amount` (the API's own field name —
- * see SCHEMES.ENROLL's header comment on the typo) is written, since
- * that's an unambiguous number the calculator already produced. Confirm
- * the status enum with OrnaVerse (or capture it from their own UI
- * completing a real closure) before extending this to also transition
- * scheme_status.
+ * There is no dedicated close/mature/foreclose/cancel endpoint in the API —
+ * SchemeEnrollment/Update is the only mutation available on this entity
+ * (confirmed working via a no-op round trip). Only `benifit_amount` (see the
+ * header note on the API's own typo) is written here — `scheme_status` (a
+ * 4-value enum with no labels in the schema) is deliberately left untouched,
+ * since which of 0/2/3 means Matured vs. Foreclosed vs. Cancelled is not
+ * confirmed, and writing an enum value to a real customer's financial
+ * record on a guess is worse than leaving it as-is. Confirm the status enum
+ * with OrnaVerse before extending this to also transition scheme_status.
  *
  * @param {{ enrollmentId: number, benefitAmount: number }} params
  * @returns {Promise<object>} SaveResponse { EntityId }

@@ -1,26 +1,13 @@
 // Background fetch of ALL sales for in-memory search and date filtering on
-// the /orders page — merging BOTH POS document types.
-//
-// WHY BOTH: checkout raises exactly ONE document per sale, chosen
-// automatically (see checkout/page.jsx) — an Invoice (54) when the shelf can
-// supply the basket and it's settled in full, otherwise an Order (53): an
-// advance, nothing collected, or made-to-order. A store's day is a mix of
-// both, so the "Orders" panel — the operator's one place to look up
-// anything they placed — has to include both, not just document 53.
-// OrderRow and InvoiceRow share the same field names (see orderService.js),
-// so they normalize identically via normalizeCustomerOrder.
-//
-// Mirrors the useAllCustomers pattern:
-//   - Fetches once with Take: 0 (all records) and caches for
-//     STALE_TIME.ORDERS.
-//   - Client-side filtering (order number, customer name, date range)
-//     runs against this in-memory list — no extra network calls per
-//     keystroke.
-//   - Pagination is hidden while any filter is active (the filtered
-//     result set IS the full result; page count is meaningless).
-//
-// Scoped by company_id (active store) — previously omitted here even though
-// the Invoices equivalent (useAllInvoices) always scoped by it.
+// the /orders page — merges BOTH POS document types, since checkout raises
+// exactly one document per sale (Invoice/54 when the shelf can supply the
+// basket and it's settled in full, otherwise Order/53 for an advance,
+// nothing collected, or made-to-order — see checkout/page.jsx), and the
+// Orders panel needs to surface both. OrderRow and InvoiceRow share the
+// same field names (orderService.js), normalizing identically via
+// normalizeCustomerOrder. Mirrors useAllCustomers: fetch once with Take: 0,
+// filter/paginate in memory, cache for STALE_TIME.ORDERS. Scoped by
+// company_id (active store), same as useAllInvoices.
 
 import { useQuery } from '@tanstack/react-query';
 import { useSelector } from 'react-redux';
@@ -32,13 +19,10 @@ import APP_CONFIG from '@/constants/appConfig';
 
 /**
  * @param {{ enabled?: boolean, staleTime?: number, refetchOnWindowFocus?: boolean }} [options]
- *   staleTime/refetchOnWindowFocus (2026-09-08) — each useQuery call is its
- *   own observer and decides FOR ITSELF when to consider this shared cache
- *   entry stale, independent of any other component also calling this hook
- *   (see useDashboardSummary.js, whose KPI-widget needs are far less fresh
- *   than /orders page's own search-while-typing use of this same data) —
- *   overriding these here changes nothing about how often /orders itself
- *   refetches.
+ *   staleTime/refetchOnWindowFocus let a caller override freshness for its
+ *   own observer of this shared cache entry (e.g. useDashboardSummary.js's
+ *   KPI widget needs less freshness than /orders' own search-while-typing
+ *   use) without affecting how often any other caller refetches.
  */
 export function useAllOrders({ enabled = true, staleTime, refetchOnWindowFocus } = {}) {
   const activeStoreId = useSelector(selectActiveStoreId);
@@ -46,15 +30,10 @@ export function useAllOrders({ enabled = true, staleTime, refetchOnWindowFocus }
   const query = useQuery({
     queryKey: QUERY_KEYS.ORDERS.LIST({ skip: 0, take: 0, companyId: activeStoreId }),
     queryFn: async () => {
-      // FIXED 2026-09-03: was calling getOrders/getInvoiceList directly —
-      // confirmed live that Order/List and Invoice/List silently restrict
-      // some identities (e.g. the multi-store "admin" account) to their own
-      // home company regardless of the company_id sent, so switching the
-      // active store showed either merged-together or empty results
-      // depending on whether a filter was applied. fetchStoreScopedDocuments
-      // tries the same cheap List call first and only pays for the
-      // Retrieve-based fallback when List proves unreliable for this
-      // company — see crossStoreDocuments.js for the full write-up.
+      // fetchStoreScopedDocuments (not getOrders/getInvoiceList directly):
+      // Order/List and Invoice/List silently restrict some identities
+      // (e.g. a multi-store "admin" account) to their home company
+      // regardless of company_id — see crossStoreDocuments.js.
       const [ordersRes, invoicesRes] = await Promise.all([
         fetchStoreScopedDocuments({ kind: 'order',   companyId: activeStoreId }),
         fetchStoreScopedDocuments({ kind: 'invoice', companyId: activeStoreId }),
@@ -71,14 +50,10 @@ export function useAllOrders({ enabled = true, staleTime, refetchOnWindowFocus }
         (a, b) => new Date(b.orderDate ?? 0) - new Date(a.orderDate ?? 0)
       );
 
-      // Client-side backstop (2026-08-27) — confirmed live that
-      // POS/Order/List silently ignores its own company_id filter (same
-      // gap useDailyClosing.js already works around for DailyClosing/List):
-      // switching the store dropdown to Pune and re-querying still returned
-      // every HO order unchanged. Invoice/List DOES filter correctly
-      // server-side, so this is a no-op for that half — filtering both
-      // uniformly here is simpler and fail-closed either way, matching
-      // useDailyClosing's own reasoning for financial data.
+      // Client-side backstop — POS/Order/List ignores its own company_id
+      // filter server-side (same gap useDailyClosing.js works around);
+      // Invoice/List does filter correctly, so this is a no-op for that
+      // half. Filtering both uniformly is simpler and fail-closed.
       return merged.filter((o) => o.companyId === activeStoreId);
     },
     enabled: enabled && !!activeStoreId,

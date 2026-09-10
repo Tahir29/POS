@@ -1,11 +1,8 @@
 'use client';
 
-// "Which bank account" picker for a bank-settled payment mode (Credit Card,
-// Debit Card, UPI) at checkout — added 2026-08-13 alongside
-// useBankPosAccounts. Mirrors SalesPersonSelect's plain controlled
-// value/onChange convention.
-//
-// Not shown for Cash — there's no bank to pick for a cash-drawer payment.
+// Bank account picker for a bank-settled payment mode (Credit Card, Debit
+// Card, UPI) at checkout. Not shown for Cash. Plain controlled
+// value/onChange component, same convention as SalesPersonSelect.
 
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,

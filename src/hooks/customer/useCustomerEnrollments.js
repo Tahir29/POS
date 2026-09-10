@@ -1,16 +1,6 @@
 // src/hooks/customer/useCustomerEnrollments.js
-// Scheme enrollments for a specific customer.
-// Now passes party_id to the service for server-side filtering.
-//
-// SCHEMA — POS.SchemeEnrollmentRow confirmed fields:
-//   scheme_enrollment_id, party_id, party_name, mobile
-//   scheme_display_name, scheme_code, scheme_status (enum SchemeStatus)
-//   document_date, scheme_amount, tenure
-//   invested_amount, benifit_amount (⚠️ API typo — preserve exactly)
-//   total_payable, scheme_monthly_details[]
-//   nominee, nominee_age — confirmed real fields sent on SchemeEnrollment/Create
-//   (Lucira_Scheme_Module_Documentation.md §4); not yet independently confirmed
-//   coming back on this List response specifically — normalized defensively below.
+// Scheme enrollments for a specific customer (server-side filtered by party_id).
+// Note: `benifit_amount` is the API's own field name (typo) — preserve exactly.
 
 import { useQuery } from '@tanstack/react-query';
 import { useSelector } from 'react-redux';
@@ -27,11 +17,8 @@ export function normalizeEnrollment(entity) {
   if (!entity) return null;
   const get = (key) => (!isEmptyValue(entity[key]) ? entity[key] : null);
 
-  // invested_amount / total_payable don't exist on the real
-  // SchemeEnrollment/List response, and scheme_status is a bare number
-  // with no documented enum mapping — same findings as
-  // useSchemeEnrollments.js (confirmed 2026-07-16). Deriving from
-  // scheme_monthly_details instead, which is unambiguous.
+  // invested_amount doesn't reliably come back on this response, so derive
+  // it from scheme_monthly_details instead.
   const monthlyDetails = entity.scheme_monthly_details ?? [];
   const investedFromMonths = monthlyDetails
     .filter((m) => m.payment_made)
@@ -63,11 +50,7 @@ export function normalizeEnrollment(entity) {
 }
 
 export function useCustomerEnrollments({ customerId, enabled = true } = {}) {
-  // FIXED 2026-08-27: company_id was never sent here even though
-  // getSchemeEnrollments/SchemeEnrollment/List supports it and is confirmed
-  // live to filter correctly by it (see useSchemeEnrollments.js, the main
-  // /schemes page's own hook, which already sends it) — this profile-tab
-  // hook showed a customer's scheme enrollments across every store.
+  // company_id must be sent so enrollments are scoped to the active store.
   const activeStoreId = useSelector(selectActiveStoreId);
 
   const query = useQuery({

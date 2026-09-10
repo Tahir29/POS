@@ -1,17 +1,13 @@
 // Shared Order/Invoice Create header-field block, generalized for the other
 // POS transaction types (Return/Refund/CreditNote/Exchange/Buyback/URD
-// Purchase/Repair/SchemeReceipt) — all confirmed to share the same
-// OrnaVerse.POS.*Row schema shape as OrderRow/InvoiceRow.
+// Purchase/Repair/SchemeReceipt), which share the same OrnaVerse.POS.*Row
+// schema shape as OrderRow/InvoiceRow.
 //
-// UNVERIFIED FOR THESE OTHER FLOWS — confirmed live only for Order/Invoice
-// (see useCreateInvoice.js's header comment + [[pos-cash-checkout-status]]
-// memory). Extrapolated here on the reasonable assumption that OrnaVerse's
-// transaction rows share one common base schema, per the user's explicit
-// direction 2026-07-28 to code the fix across all remaining flows without
-// a live round-trip per flow. Each flow's own quirks (line-item shape,
-// extra required fields) are NOT guaranteed to be fully covered — treat a
-// 500 on any of these as "apply the same live-capture diagnostic used for
-// Order" rather than a sign this function is wrong.
+// Confirmed live only for Order/Invoice; extrapolated to the other flows on
+// the assumption they share one common base schema. Each flow's own quirks
+// (line-item shape, extra required fields) aren't guaranteed to be fully
+// covered — treat a 500 on any of these as needing its own live-capture
+// diagnostic rather than a sign this function is wrong.
 
 /**
  * @param {{
@@ -49,10 +45,8 @@ export function buildTransactionHeaderFields({
   const roundedNet = Math.round(discountedNet);
   const round_off  = +(roundedNet - discountedNet).toFixed(2);
 
-  // RETURN variant — verified field-by-field against a real Return/Create
-  // captured from OrnaVerse's own UAT UI on 2026-07-30. A Return header is
-  // NOT just an Order header with a different document_id; it differs in
-  // four ways, each of which we previously got wrong:
+  // RETURN variant — a Return header is NOT just an Order header with a
+  // different document_id; it differs in four ways:
   //   · no `taxable_amount`, no `mobile`, no `promotion_details`
   //   · no header-level ref_transaction_id/ref_document_id (the per-line
   //     ref_* fields already tie it to the original sale)

@@ -1,19 +1,11 @@
 'use client';
 
-// SEC-004: Login rate limiting added.
-// After 5 failed attempts the form locks for 5 minutes, preventing
-// brute-force attacks on staff credentials on the shared POS device.
-// Attempt counter and lockout expiry are stored in component state only
-// (not persisted) — a page refresh resets them, which is acceptable for
-// a controlled retail environment where the device is never left unattended.
-//
-// LAYOUT (2026-07-26 redesign): split-screen — left is a full-bleed brand
-// photo (public/images/login-banner.png) under a burgundy gradient wash,
-// right is the sign-in form with larger icon-prefixed inputs. Below `sm`
-// the photo panel is hidden entirely (not stacked) — a compact centered
-// logo replaces it — since a tall product photo above the fold would push
-// the actual form off-screen on a phone, which matters more here than
-// showing the photo at all on small devices.
+// Login form with rate limiting (5 failed attempts locks out for 5 minutes)
+// to slow brute-force attempts on the shared POS device. Attempt counter and
+// lockout expiry live in component state only, not persisted — an
+// acceptable reset-on-refresh trade-off for a controlled retail device.
+// Split-screen layout: brand photo panel is hidden below `sm` (not stacked)
+// so the form stays above the fold on phones.
 
 import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
@@ -38,10 +30,9 @@ import { Label }  from '@/components/ui/label';
 const MAX_ATTEMPTS    = 5;
 const LOCKOUT_MS      = 5 * 60 * 1000;
 
-// ── Large icon-prefixed input — local to this screen only ──────
-// Not folded into the shared <Input>: that component's h-9 size is the
-// app-wide density norm for POS forms, and changing it globally would
-// ripple into every form in the app. Login is a one-off hero screen.
+// Large icon-prefixed input, local to this screen — not folded into the
+// shared <Input> (h-9 is the app-wide density norm; login is a one-off
+// hero screen).
 function AuthField({ icon: Icon, id, error, trailing, ...props }) {
   return (
     <div className="relative">
@@ -115,12 +106,9 @@ export default function LoginForm() {
 
   if (isAuthenticated) return null;
 
-  // Derived from lockCountdown (state), not a fresh Date.now() read — the
-  // ticking effect above already keeps lockCountdown in sync with
-  // lockedUntil every second, including nulling lockedUntil out at exactly
-  // 0, so this stays accurate without calling an impure function during
-  // render (which React Compiler now flags as an error — reading the
-  // clock directly here could disagree with what the last render computed).
+  // Derived from lockCountdown (state), not a fresh Date.now() read — keeps
+  // render pure (React Compiler flags impure reads during render), and the
+  // ticking effect above already keeps this in sync every second.
   const isLockedOut = lockCountdown > 0;
 
   const onSubmit = async (data) => {
@@ -131,12 +119,9 @@ export default function LoginForm() {
       await login(data.username, data.password);
       setFailedAttempts(0);
     } catch (err) {
-      // FIXED 2026-09-09 — see useAuth.js's login(): a post-login failure
-      // to load stores (network blip, transient 5xx) used to reach here
-      // indistinguishable from bad credentials, counting a genuinely
-      // correct password toward the 5-attempt lockout. The token request
-      // already succeeded at this point, so this isn't a credential
-      // failure — show the message, don't touch the lockout counter.
+      // A post-login failure to load stores is not a credential failure —
+      // the token request already succeeded — so it must not count toward
+      // the lockout. See useAuth.js's login().
       if (err?.isPostAuthFailure) {
         toast.error(err.message);
         return;
@@ -146,14 +131,10 @@ export default function LoginForm() {
       setFailedAttempts(nextAttempts);
 
       if (nextAttempts >= MAX_ATTEMPTS) {
-        // Not a render-purity violation despite the lint rule's name: this
-        // whole block only ever runs inside a real submit event, via
-        // handleSubmit(onSubmit) below — never during render. The
-        // react-hooks/purity rule's static analysis can't see through
-        // react-hook-form's handleSubmit() wrapper to know that (the same
-        // documented "incompatible library" limitation this file already
-        // hits on react-hook-form's watch(), and the same class of gap
-        // useMediaQuery.js's own comment calls out elsewhere).
+        // Not a real purity violation — this only runs inside a submit
+        // event handler, never during render. The lint rule's static
+        // analysis just can't see through react-hook-form's handleSubmit()
+        // wrapper (same class of false positive as watch() elsewhere).
         // eslint-disable-next-line react-hooks/purity
         const until = Date.now() + LOCKOUT_MS;
         setLockedUntil(until);

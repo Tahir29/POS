@@ -1,24 +1,9 @@
 'use client';
 
-// src/components/features/products/WishlistButton.jsx
-//
-// Extracted 2026-08-23 from ProductCard so it can also render on the product
-// detail page — same heart, same wishlistSlice/useWishlist wiring, same
-// "cute" pop animation, just two different layouts:
-//
-//   - ProductCard (catalog / RecentlyViewedCarousel / profile Wishlist tab):
-//     floats top-right OVER the image — pass no `className` override, the
-//     default `absolute right-2 top-2 z-10` applies.
-//   - Product detail page: sits inline, top-right of the SKU/name column
-//     (not over an image) — pass `className` to replace the absolute
-//     positioning with static inline placement.
-//
-// stopPropagation still matters even inline on the PDP: nothing there wraps
-// it in a navigable card, but keeping it costs nothing and keeps this
-// component identical in both places.
-//
-// See hooks/products/useWishlist.js for isWishlisted/toggle, and
-// lib/mongo/wishlist.js for the Mongo side.
+// Wishlist heart button — shared between ProductCard (floats over the image;
+// default `className` positions it absolute top-right) and the product
+// detail page (pass `className` to render it inline instead).
+// See hooks/products/useWishlist.js for isWishlisted/toggle.
 
 import { Heart } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -26,10 +11,8 @@ import { useIsWishlisted, useToggleWishlist } from '@/hooks/products/useWishlist
 import { EASE_PREMIUM } from '@/lib/motion';
 
 export default function WishlistButton({ product, reduceMotion, className }) {
-  // item_size_id (2026-08-24) — a confirmed customization on the product
-  // detail page is a DIFFERENT wishlist entry than the item's bare base
-  // design; see useWishlist.js. Catalog/carousel/profile cards never carry
-  // a size, so this is null there, same as always.
+  // A sized customization on the PDP is a different wishlist entry than the
+  // item's bare base design (item_size_id is null on catalog/carousel cards).
   const isWishlisted = useIsWishlisted(product.item_id, product.item_size_id ?? null);
   const toggleWishlist = useToggleWishlist();
 

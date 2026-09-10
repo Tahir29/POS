@@ -1,25 +1,20 @@
 // src/lib/analytics/webengage.js
 // Thin wrapper around the WebEngage Web SDK global — loaded via <Script> in
 // src/app/layout.js, driven by NEXT_PUBLIC_WEBENGAGE_LICENSE_CODE. Every
-// call here is a no-op if the SDK hasn't loaded (env var unset, script
-// blocked, SSR, ad-blocker) — analytics must never be able to break the
-// app. Mirrors gtag.js's shape exactly, on purpose: tracker.js calls both
-// side by side from the same event, so removing either one later is a
-// one-line change there, not a rewrite.
+// call here is a no-op if the SDK hasn't loaded — analytics must never be
+// able to break the app. Mirrors gtag.js's shape on purpose (tracker.js
+// calls both side by side from the same event).
 //
-// UNLIKE gtag.js: GA4's terms prohibit sending PII (name, email, full
-// phone), so sendToGA() only ever gets an opaque customerId + masked
-// mobile (see tracker.js). WebEngage is the opposite — it's a CRM/
-// engagement platform whose entire purpose is identifying real people to
-// segment and message them, so identifyWebEngageUser() below is expected
-// to carry full name/phone. Never copy a WebEngage call's argument list
-// into a sendToGA() call or vice versa without re-reading this note.
+// UNLIKE gtag.js: GA4's terms prohibit sending PII, so sendToGA() only gets
+// an opaque customerId + masked mobile. WebEngage is a CRM/engagement
+// platform whose purpose IS identifying real people, so
+// identifyWebEngageUser() below carries full name/phone. Never copy one's
+// argument list into the other without re-reading this note.
 //
 // Reserved attribute keys (we_phone, we_email, ...) are WebEngage's own
-// System User Attributes — confirmed against their Web SDK docs
-// (docs.webengage.com/docs/web-tracking-users) 2026-08-17. Custom
-// attribute names must NOT start with "we_" — WebEngage silently drops
-// them if they do, to protect its own reserved namespace.
+// System User Attributes (docs.webengage.com/docs/web-tracking-users).
+// Custom attribute names must NOT start with "we_" — WebEngage silently
+// drops them if they do.
 
 export function isWebEngageAvailable() {
   return typeof window !== 'undefined' && typeof window.webengage === 'object' && window.webengage !== null;
@@ -41,11 +36,9 @@ export function sendToWebEngage(eventName, attributes = {}) {
   }
 }
 
-// India-only assumption (this business has no operations outside India as
-// of 2026-08) — a bare 10-digit local number is normalized to E.164 with a
-// +91 country code, since WebEngage's own docs show we_phone examples in
-// E.164 form ('+551155256325'). Revisit if Lucira ever takes an
-// international customer's number.
+// India-only assumption — a bare 10-digit local number is normalized to
+// E.164 with a +91 country code (WebEngage's we_phone expects E.164).
+// Revisit if Lucira ever takes an international customer's number.
 function toE164India(mobile) {
   if (!mobile) return null;
   const digits = String(mobile).replace(/\D/g, '');

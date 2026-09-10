@@ -1,15 +1,7 @@
 'use client';
 
-// Orders directory — paginated browse + full-dataset search/filter.
-//
-// Search/filter behavior (mirrors /customers pattern):
-//   - Any text (2+ chars), date range, or status selection triggers a
-//     filter over the full orders dataset (useAllOrders — fetched once
-//     with Take:0, cached).
-//   - Empty search + no dates + no status shows the paginated browse
-//     list (50/page via useOrders).
-//   - Pagination is hidden while any filter is active.
-//   - A single Clear button resets all active filters at once.
+// Orders directory — paginated browse (50/page) with a full-dataset
+// search/filter that supersedes pagination whenever any filter is active.
 
 import { useMemo, useRef, useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, Loader2, Receipt, Search, X } from 'lucide-react';
@@ -29,10 +21,7 @@ import { useAllOrders } from '@/hooks/orders/useAllOrders';
 import APP_CONFIG from '@/constants/appConfig';
 import { todayDateString } from '@/lib/dateUtils';
 
-// ADDED 2026-09-03: cancelled/draft — document_status now feeds order.status
-// (see deriveDocumentStatus in useCustomerOrders.js). Before this, a
-// Cancelled order had no way to be filtered to at all; it silently sorted
-// under whichever of paid/partial/due its balance/receipt happened to match.
+// document_status feeds order.status — see deriveDocumentStatus in useCustomerOrders.js.
 const STATUS_OPTIONS = [
   { value: 'paid',      label: 'Paid' },
   { value: 'partial',   label: 'Partial' },
@@ -154,22 +143,9 @@ export default function OrdersPage() {
 
   return (
     <div className="flex flex-col gap-3 max-w-3xl mx-auto w-full p-4 md:p-6">
-      {/* ── Filters — sticky (2026-08-24) ──────────────────
-          Pins to the top of #main-content (AppShell's scrolling region)
-          once the list scrolls past it, and releases back to its normal
-          spot the instant you scroll back to the top — that's
-          `position: sticky`'s own native behavior, not something driven by
-          JS/scroll-position state, so there's no "unpin" logic to write.
-          The negative margin + matching padding cancels this page's own
-          p-4/md:p-6 for just this block and re-adds it as the sticky
-          element's OWN padding — otherwise the sticky bar would stick
-          flush at y:0 leaving an awkward gap where the page's top padding
-          used to be, and its background (needed so list rows scrolling
-          underneath don't show through) would only cover the padded
-          content width, not the full column. border-b stays visible in
-          both states (stuck or not) rather than only while stuck — that
-          would need scroll-position JS just for a cosmetic shadow, not
-          worth it for what's otherwise a pure-CSS fix. */}
+      {/* Sticky filter bar (pure CSS, no scroll JS): negative margin cancels
+          the page's own padding so the sticky element re-adds it as its own,
+          keeping the background full-width with no gap when pinned. */}
       <div className="sticky top-0 z-10 -mx-4 -mt-4 flex flex-col gap-2 border-b border-border bg-background px-4 pt-4 pb-3 md:-mx-6 md:-mt-6 md:px-6 md:pt-6">
         {isAllFetching && !isAllLoading && (
           <div className="flex justify-end -mb-1">

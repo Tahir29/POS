@@ -1,4 +1,4 @@
-// src/hooks/products/useStockByStores.js
+// Cross-store stock breakdown for a product.
 
 import { useQuery } from '@tanstack/react-query';
 import { QUERY_KEYS } from '@/constants/queryKeys';
@@ -6,16 +6,7 @@ import APP_CONFIG from '@/constants/appConfig';
 import { getStockByStores } from '@/services/inventoryService';
 
 /**
- * Cross-store stock breakdown for a product.
- * Stale time: 1 minute.
  * @param {number} itemId
- *
- * GetStockByStores response shape (confirmed from API):
- * response.data = {
- *   Entities: [
- *     { company_id, companyname, pieces, location_id, location_name, ... }
- *   ]
- * }
  */
 export function useStockByStores(itemId) {
   const query = useQuery({
@@ -46,11 +37,8 @@ export function useStockByStores(itemId) {
     },
   });
 
-  // isError/refetch surfaced explicitly — a failed fetch must NOT be
-  // indistinguishable from "this store genuinely has zero pieces" to any
-  // caller. See products/[itemId]/page.jsx's baseStockStatus for why this
-  // matters: before this, a network blip on this call read as real,
-  // confirmed out-of-stock to the salesperson.
+  // isError/refetch surfaced explicitly — a failed fetch must never be
+  // indistinguishable from a genuine zero-stock result to callers.
   return {
     data:      query.data,
     isLoading: query.isLoading,

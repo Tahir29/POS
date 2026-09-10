@@ -1,7 +1,5 @@
 // Records a calculated closure benefit against a scheme enrollment — see
-// closeSchemeEnrollment's header in schemeService.js for exactly what this
-// does and does not write (benifit_amount only, scheme_status untouched
-// pending confirmation of its enum meaning).
+// closeSchemeEnrollment in schemeService.js for exactly what it writes.
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-toastify';

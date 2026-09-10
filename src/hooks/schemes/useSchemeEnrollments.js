@@ -1,7 +1,6 @@
 // Fetch scheme enrollments — optionally filtered by customer.
-//
-// NOTE: SchemeEnrollment/List returns a BARE ARRAY on UAT (no Entities wrapper).
-// The select function handles both shapes defensively.
+// SchemeEnrollment/List returns a bare array on UAT (no Entities wrapper);
+// `select` below handles both shapes defensively.
 
 import { useQuery } from '@tanstack/react-query';
 import { useSelector } from 'react-redux';
@@ -17,12 +16,9 @@ export function useSchemeEnrollments({ partyId } = {}) {
   const params = { storeId, partyId };
 
   return useQuery({
-    // FIXED 2026-08-27: the partyId branch's key used to omit storeId even
-    // though the network call below already sends company_id — switching
-    // the store dropdown with a customer selected served stale enrollments
-    // from whichever store was active when this query first ran, instead
-    // of refetching. The no-partyId branch was already correct (storeId is
-    // part of `params`); this just brings the other branch in line.
+    // Both branches include storeId in the key (the network call always
+    // sends company_id) so switching stores with a customer selected
+    // refetches instead of serving stale enrollments from another store.
     queryKey: partyId
       ? QUERY_KEYS.SCHEMES.CUSTOMER_ENROLLMENTS(partyId, storeId)
       : QUERY_KEYS.SCHEMES.ENROLLMENTS(params),
@@ -37,7 +33,6 @@ export function useSchemeEnrollments({ partyId } = {}) {
     staleTime: 5 * 60 * 1000,
 
     select: (data) => {
-      // UAT returns a bare array; production may wrap in { Entities[] }
       const raw = Array.isArray(data) ? data : (data?.Entities ?? []);
       return raw.map(normalizeEnrollment);
     },
@@ -46,21 +41,17 @@ export function useSchemeEnrollments({ partyId } = {}) {
 
 function normalizeEnrollment(raw) {
   // invested_amount / total_payable don't exist on the real
-  // SchemeEnrollment/List response (confirmed 2026-07-16) — invested must
-  // be derived from scheme_monthly_details[] (sum of paid months), and the
-  // real total field is `total_amount`, not `total_payable`.
+  // SchemeEnrollment/List response — invested is derived from
+  // scheme_monthly_details[] (sum of paid months); the real total field is
+  // `total_amount`, not `total_payable`.
   const monthlyDetails = raw.scheme_monthly_details ?? [];
   const investedFromMonths = monthlyDetails
     .filter((m) => m.payment_made)
     .reduce((sum, m) => sum + (Number(m.month_amount) || 0), 0);
 
-  // `status` — NOT derived from raw.scheme_status. Confirmed 2026-07-16
-  // that field is a bare number (0 or 1 seen on real, clearly-ongoing
-  // enrollments) with no documented enum mapping anywhere in the API spec,
-  // and the app previously compared it against the string 'active', which
-  // never matched — silently hiding the Record Payment button on every
-  // enrollment. Deriving status from scheme_monthly_details instead, which
-  // is unambiguous: a month is either paid or it isn't.
+  // `status` is derived from scheme_monthly_details, NOT raw.scheme_status
+  // (a bare number with no documented enum mapping) — a month is either
+  // paid or it isn't, which is unambiguous.
   const hasPendingInstallment = monthlyDetails.length > 0
     ? monthlyDetails.some((m) => !m.payment_made)
     : true; // no monthly schedule loaded yet — don't block payment on that
@@ -75,9 +66,8 @@ function normalizeEnrollment(raw) {
     schemeId:          raw.scheme_id,
     schemeName:        raw.scheme_display_name ?? raw.scheme_code ?? '',
     schemeCode:        raw.scheme_code  ?? '',
-    // Both appear in OrnaVerse's captured SchemeReceipt/Create payload
-    // (scheme_type:"1", scheme_unique_code:"") — surfaced here so
-    // buildSchemeReceiptPayload() can pass them through.
+    // Surfaced so buildSchemeReceiptPayload() can pass these through to
+    // SchemeReceipt/Create.
     schemeType:        raw.scheme_type,
     schemeUniqueCode:  raw.scheme_unique_code ?? '',
     status:            isFullyPaid ? 'completed' : 'active',
@@ -86,9 +76,8 @@ function normalizeEnrollment(raw) {
     schemeAmount:      raw.scheme_amount    ?? 0,
     tenure:            raw.tenure           ?? 0,
     investedAmount:    raw.invested_amount  ?? investedFromMonths,
-    // ⚠ API typo — benifit_amount preserved exactly. Not present on active
-    // enrollments (confirmed 2026-07-16) — likely only populated once
-    // matured/foreclosed via GetSchemeMaturityBenefit/GetSchemeForcloseBenefit.
+    // API typo — benifit_amount preserved exactly as the server sends it.
+    // Only populated once matured/foreclosed.
     benefitAmount:     raw.benifit_amount   ?? 0,
     totalPayable:      raw.total_amount ?? raw.total_payable ?? 0,
     maturityYear:      raw.maturity_year,

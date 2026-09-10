@@ -1,14 +1,9 @@
 'use client';
 
-// Phase 11 — Transfers (informational placeholder).
-//
-// Direct inter-store stock transfer endpoints (initiate, view requests,
-// approve/reject, history, status tracking) are Not Available In Current
-// API Collection (OrnaVerse Advantage API v3.0).
-//
-// Available workaround: GetStockByStores (cross-store stock visibility),
-// surfaced on Product Detail via CrossStoreStockPanel — lets managers see
-// which store holds stock and arrange a manual transfer.
+// Transfers — placeholder page. Inter-store stock transfer endpoints are not
+// available in the current OrnaVerse Advantage API (v3.0). Workaround:
+// GetStockByStores (cross-store stock visibility), surfaced on Product
+// Detail via CrossStoreStockPanel, lets managers locate stock manually.
 
 import Link from 'next/link';
 import { ArrowLeftRight, Search, Boxes } from 'lucide-react';

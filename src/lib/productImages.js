@@ -1,24 +1,10 @@
 // src/lib/productImages.js
 //
-// Shared "which photo actually represents THIS colour variant" resolution.
-// Extracted 2026-09-08 from ProductImageGallery (product detail page's own
-// gallery) so a second caller — resolving what image a cart LINE should
-// carry — can use the exact same logic instead of a naive, colour-blind
-// pick of its own.
-//
-// BUG this fixes: adding the same style to the mini cart in two different
-// metal colours (e.g. Yellow Gold, then 18kt White Gold) showed the SAME
-// Yellow Gold photo on both lines. Root cause: AddToCartButton's
-// `primaryImage` prop came from useShopifyProductImages' raw `images[0]` —
-// literally "whichever photo Shopify lists first, position-wise, for the
-// WHOLE product listing" (Shopify bundles every colour variant's photos
-// into one product), with zero awareness of which variant was actually
-// selected. The product detail page's own gallery already solves exactly
-// this — filterShopifyImagesByColor below matches each photo's alt text
-// against the active variant's colour name — but that filtering only ever
-// ran for the on-screen gallery, never for what got attached to the cart
-// item. Both now call the same function, so the photo added to the cart is
-// guaranteed to be the one the customer was actually looking at.
+// Shared "which photo actually represents THIS colour variant" resolution,
+// used by both the product detail gallery and the add-to-cart flow — so a
+// cart line always gets the photo of the colour actually selected, not
+// Shopify's raw images[0] (which is just the first photo for the whole
+// product listing, colour-agnostic).
 
 // Known colour keywords used in Shopify image `alt` text. Anything whose alt
 // doesn't match one of these (e.g. "Cert") is treated as colour-agnostic and

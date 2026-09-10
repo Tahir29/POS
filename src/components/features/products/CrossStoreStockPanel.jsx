@@ -1,13 +1,9 @@
 'use client';
 
-// Collapsible panel showing stock availability across all stores.
-// Data source: useStockByStores (GetStockByStores endpoint).
-// Active store row is highlighted with "Current" badge.
-// Rendered ABOVE Add to Cart so user sees availability before purchasing.
-//
-// Confirmed API response shape:
-//   { company_id, companyname, pieces }
-// (already grouped by useStockByStores hook — one entry per store)
+// Collapsible panel showing stock availability across all stores, with the
+// active store's row highlighted. Rendered above Add to Cart so the user
+// sees availability before purchasing. Data: useStockByStores, one
+// { company_id, companyname, pieces } entry per store.
 
 import { Store } from 'lucide-react';
 import { useSelector } from 'react-redux';
@@ -19,9 +15,8 @@ import { deriveStockStatus } from '@/components/shared/StockStatusBadge';
 
 const selectActiveStoreId = (state) => state.store.activeStoreId;
 
-// Reuses StockStatusBadge's shared derivation instead of re-implementing the
-// same in-stock/out-of-stock logic locally. Binary only — no "low stock"
-// tier (removed 2026-08-13, see StockStatusBadge/index.jsx).
+// Reuses StockStatusBadge's shared in-stock/out-of-stock derivation (binary
+// only, no "low stock" tier) instead of re-implementing it locally.
 
 const STATUS_TEXT_CLASSES = {
   out_stock: 'text-status-error',
@@ -34,9 +29,6 @@ function StockQty({ qty }) {
   const label = status === 'out_stock' ? 'Out of Stock' : `${n} in stock`;
 
   return (
-    // Dot + label (2026-08-24), same pattern as the always-visible in-stock
-    // indicator further up this page — a quick color glance instead of
-    // having to read the text to tell stock apart at a row scan.
     <span className={`flex shrink-0 items-center gap-1.5 text-xs font-semibold text-nowrap ${STATUS_TEXT_CLASSES[status]}`}>
       <span
         className={`h-1.5 w-1.5 shrink-0 rounded-full ${
@@ -64,14 +56,6 @@ export default function CrossStoreStockPanel({ storeStocks = [], isLoading, isEr
   const totalStores   = storeStocks.length;
 
   return (
-    // Redesigned 2026-08-24 — was flat text rows with no real hierarchy and
-    // a "Current" pill borrowed from status-made-order (amber), the SAME
-    // color this app uses everywhere else for "made to order" stock —
-    // reusing it here for an unrelated "this is the active store" label
-    // read as a stock warning that wasn't actually there. Current now uses
-    // accent (this app's actual "selection/highlight" color) instead, and
-    // every row gets a small icon avatar for visual weight, matching the
-    // header's own icon treatment rather than being plain text.
     <div className="rounded-xl border border-border overflow-hidden shadow-sm">
       <Accordion type="single" collapsible defaultValue="">
         <AccordionItem value="stock" className="border-0">
@@ -108,9 +92,8 @@ export default function CrossStoreStockPanel({ storeStocks = [], isLoading, isEr
               </div>
             )}
 
-            {/* Failed fetch — distinct from "genuinely no stock data" below.
-                storeStocks is [] either way, so isError has to be checked
-                explicitly or a network blip reads as a real empty result. */}
+            {/* storeStocks is [] for both a failed fetch and genuinely no
+                data — isError must be checked explicitly. */}
             {!isLoading && isError && (
               <div className="flex flex-col items-center gap-2 px-4 py-4 text-center">
                 <p className="text-sm text-status-made-order">

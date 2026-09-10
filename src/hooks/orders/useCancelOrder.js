@@ -7,10 +7,8 @@ import TOAST from '@/constants/toastMessages';
 import tracker from '@/lib/analytics/tracker';
 import EVENTS from '@/lib/analytics/events';
 
-// ENRICHED 2026-09-04 — customer_id/store_id were entirely absent from both
-// events (same fix as useTransactionMutations.js). Cancelling an order is
-// keyed only on transactionId, with no fuller payload on hand, so the
-// session-derived customer/store is the only extra context available here.
+// Cancelling an order is keyed only on transactionId, so tracked events use
+// session-derived customer_id/store_id (the only extra context available).
 export function useCancelOrder() {
   const queryClient = useQueryClient();
   const sessionCtx = useSessionTrackingContext();

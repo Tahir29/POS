@@ -1,8 +1,8 @@
 // Settings, payment modes, taxes, metal rates, reason codes.
 // All functions are pure HTTP wrappers — no business logic.
 //
-// NOTE: AppSettings/Retrieve and AppSettings/Update are NOT present
-// in the v1.json spec — those endpoints no longer exist. Removed.
+// NOTE: AppSettings/Retrieve and AppSettings/Update are NOT present in the
+// v1.json spec — those endpoints no longer exist. Removed.
 
 import axiosInstance from '@/lib/axios/axiosInstance';
 import API from '@/constants/apiEndpoints';
@@ -36,8 +36,8 @@ export async function getPaymentModesForRefund() {
 /**
  * Bank/POS accounts a bank-settled payment (Credit Card, Debit Card, UPI)
  * can be deposited against — e.g. "HDFC BANK MAIN", "ICICI BANK MAIN".
- * Do NOT pass company_id — confirmed live 2026-08-13 that this endpoint
- * 500s if you do; it's scoped server-side from the token.
+ * Do NOT pass company_id — this endpoint 500s if you do; it's scoped
+ * server-side from the token.
  * @returns {Promise<object>} Entities[] of {id, code, name, ledger_id, company_id}
  */
 export async function getBankPosAccounts() {
@@ -50,13 +50,10 @@ export async function getBankPosAccounts() {
 /**
  * Fetches applicable taxes for the store (GST slabs, etc.).
  *
- * `exchange_rate` is REQUIRED — confirmed live 2026-08-14: omitting it
- * (this function's only caller before this fix, the new Settings screen,
- * is also the first real caller ever) returns
- * {"Code":"exchange_rate","Message":"Exchange rate must be greater than
- * zero."} before the request even reaches tax lookup. Even with it, a
- * store with no tax template configured returns {"Message":"Tax Template
- * Not Defined!"} — a real per-store config gap, not a bug here.
+ * `exchange_rate` is REQUIRED — omitting it fails with "Exchange rate must
+ * be greater than zero" before the request reaches tax lookup. Even with it,
+ * a store with no tax template configured returns "Tax Template Not
+ * Defined!" — a real per-store config gap, not a bug here.
  * @param {{ company_id: number }} params
  * @returns {Promise<object>} OrnaVerse tax response
  */
@@ -95,28 +92,22 @@ export async function addMetalRate(payload) {
 }
 
 /**
- * TODAY's live sales rate for one specific karat/purity — the same call
- * (and the same fixed set of karat_ids) that powers the highlighted rate
- * strip on OrnaVerse's own POS header (confirmed live 2026-08-27 against
- * lucira.uat.ornaverse.in/pos — see useMetalRates.js for the full write-up
- * and where the karat_id list comes from). One call per karat, not a list
- * endpoint — GetMetalRate needs karat_id up front; nothing here returns
- * "every configured karat" for a store.
+ * TODAY's live sales rate for one specific karat/purity — the same call that
+ * powers the highlighted rate strip on OrnaVerse's own POS header. One call
+ * per karat, not a list endpoint — GetMetalRate needs karat_id up front;
+ * nothing here returns "every configured karat" for a store.
  * @param {{ karatId: number, companyId: number }} params
  * @returns {Promise<{ is_cutomer_item: boolean, rate: number }>}
  *   `is_cutomer_item` is OrnaVerse's own field name (their typo, not ours).
  */
 export async function getMetalRate({ karatId, companyId }) {
-  // BUG FIX: was `new Date().toUTCString()` — converts to UTC first, which
-  // rolls back to "yesterday" for any IST (UTC+5:30) user before ~5:30am
-  // local time (the exact failure mode todayDateString()'s own header
-  // comment warns about). That sent from_date/to_date a day behind local
-  // "today" during early-morning hours, so a rate entered for today could
-  // come back missing or stale. Use the same local-calendar-day helper the
-  // Metal Rate form already uses for from_date.
+  // Use the local-calendar-day helper rather than new Date().toUTCString():
+  // converting to UTC first rolls back to "yesterday" for an IST user before
+  // ~5:30am local time, which could make today's rate come back missing or
+  // stale during early-morning hours.
   const today = todayDateString();
   const response = await axiosInstance.post(API.HELPERS.GET_METAL_RATE, {
-    item_group_id:   APP_CONFIG.METAL_TYPES.GOLD, // 106 — confirmed constant across EVERY karat_id captured, gold or otherwise; see useMetalRates.js
+    item_group_id:   APP_CONFIG.METAL_TYPES.GOLD, // 106 — constant across every karat_id, gold or otherwise
     karat_id:         karatId,
     is_purchase:      false,
     from_date:        today,
@@ -129,8 +120,7 @@ export async function getMetalRate({ karatId, companyId }) {
 
 /**
  * Currency exchange rate — required on Order/Invoice Create alongside
- * currency_id. Confirmed via direct UAT test 2026-07-16: currency_id 103
- * (INR) returns exchange_rate: 1.
+ * currency_id. currency_id 103 (INR) returns exchange_rate: 1.
  * @param {{ currency_id: number, company_id?: number }} params
  * @returns {Promise<object>} { Entity: { exchange_rate, currency_id, ... } }
  */
@@ -146,9 +136,8 @@ export async function getExchangeRate({ currency_id, company_id } = {}) {
  * Fetches reason codes used for returns, cancellations, exchanges.
  * Static dataset — cache for session.
  *
- * CONFIRMED BROKEN live 2026-08-14 — Administration/Reason/List returns a
- * generic 500 unconditionally: bare {Take:0}, {Take:10}, with company_id
- * added directly or via EqualityFilter, all fail identically. Not a payload
+ * NOTE: Administration/Reason/List currently returns a generic 500
+ * unconditionally on this tenant, regardless of payload shape. Not a payload
  * issue on our side; needs OrnaVerse's team.
  * @returns {Promise<object>} Entities[] of ReasonRow
  */

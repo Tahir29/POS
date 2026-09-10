@@ -1,29 +1,11 @@
 'use client';
 
-// Reusable bottom sheet / side sheet primitive.
+// Reusable bottom sheet / side sheet primitive — right-side drawer on
+// tablet (md+), bottom sheet on mobile. Animated in/out via Framer Motion
+// (AnimatePresence), sliding on whichever axis matches the active layout.
 //
-// On tablet (md+): renders as a right-side drawer (side sheet).
-// On mobile     : renders as a bottom sheet.
-//
-// Props:
-//   isOpen    boolean        — controlled open state
-//   onClose   () => void     — close handler
-//   title     string         — sheet header title
-//   children  ReactNode      — sheet body content
-//   footer    ReactNode?     — optional sticky footer (confirm buttons, CTAs)
-//   maxWidth  string?        — Tailwind max-w class for side sheet (default: 'max-w-md')
-//
-// BUG 5 FIX — replaced all hardcoded colors (bg-white, stone-*) with
-// semantic CSS design tokens (bg-card, border-border, text-foreground, etc.)
-// so the sheet respects the Lucira theme and any future dark-mode changes.
-//
-// PREMIUM REVAMP (2026-07-22) — was a hard `if (!isOpen) return null`
-// mount/unmount with no exit animation; now uses Framer Motion's
-// AnimatePresence so the panel actually slides+fades in and out. The panel
-// slides on the axis matching whichever responsive layout is active
-// (y on mobile, x on tablet+) via useMediaQuery, since a single fixed axis
-// would be wrong for one of the two breakpoints. Props API is unchanged —
-// every existing consumer works with zero changes.
+// Props: isOpen, onClose, title, children, footer? (sticky footer node),
+// maxWidth? (Tailwind max-w class for the side sheet, default 'max-w-md').
 
 import { useEffect, useRef } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
@@ -41,13 +23,10 @@ export default function BottomSheet({
   maxWidth = 'max-w-md',
 }) {
   const sheetRef = useRef(null);
-  const isDesktop = useMediaQuery('(min-width: 768px)'); // matches the md: breakpoint below
+  const isDesktop = useMediaQuery('(min-width: 768px)'); // keep in sync with the md: breakpoint below
   const reduceMotion = useReducedMotion();
 
-  // FIXED 2026-09-08 — see useBodyScrollLock's own header for why this
-  // used to cause a visible layout shift (the cart icon among other
-  // things) every time a sheet opened/closed.
-  useBodyScrollLock(isOpen);
+  useBodyScrollLock(isOpen); // prevents layout shift on open/close — see hook's own header
 
   useEffect(() => {
     if (!isOpen) return;
@@ -106,14 +85,7 @@ export default function BottomSheet({
             transition={{ duration: DURATION.panel, ease: EASE_PREMIUM }}
           >
             <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-border shrink-0">
-              {/* uppercase (2026-08-23) — every sidesheet in the app renders
-                  its title through this one component, so this is the
-                  single place that makes them all consistent (was Title
-                  Case, inconsistent with the CONFIRM-style buttons
-                  elsewhere) rather than uppercasing the title string at
-                  each of the ~11 call sites. aria-label above already
-                  carries the real-case title for screen readers, so this
-                  is purely visual. */}
+              {/* Visual uppercase only — aria-label above keeps the real-case title for screen readers. */}
               <h2 className="text-base font-bold uppercase tracking-wide text-foreground">
                 {title}
               </h2>

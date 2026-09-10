@@ -2,41 +2,22 @@
 //
 // Shared purchase-funnel tracking for BOTH checkout documents —
 // useCreateOrder.js (deposit/reserve, POS/Order) and useCreateInvoice.js
-// (immediate sale, POS/Invoice). Built 2026-08-27 because useCreateOrder.js
-// fired NO tracking at all up to this point (see its own header comment on
-// how easy it is for this document type to go quietly unwired), while
-// useCreateInvoice.js fired a GA-only, thin (`items: [{item_id, item_name,
-// item_sku, price, quantity}]`) purchase event with nothing extra ever sent
-// to WebEngage. One shared builder here means both flows carry the same
-// depth of detail and can never drift the way two hand-written copies would.
+// (immediate sale, POS/Invoice) — so both flows carry the same depth of
+// detail instead of two independently hand-written (and drifting) events.
 //
-// GA4 vs WebEngage split follows the SAME rule tracker.js documents
-// throughout (see its jsdoc on track()/trackEcommerce()): everything below
-// that is NOT customer PII goes in the shared params/items[] — both
-// destinations get it, GA4 included, since none of it is name/email/phone:
-//   - full per-item product detail (category, brand, karat, metal, colour,
-//     weight, sku) — the same non-PII product vocabulary the product-detail
-//     page's WebEngage-only bag already sends, now brought to GA4 too, on
-//     the same event, exactly at parity.
-//   - the full order-level price breakup (sub_total/discount/taxable_amount/
-//     tax_amount/round_off/receipt_amount/balance_amount) — none of these
-//     are PII either; GA4's own purchase event already has reserved `tax`
-//     and `shipping` params for exactly this kind of detail.
-//   - store context (company id/code/name) and sales_person_id (an
-//     employee id, not a customer's).
-// Only real customer identity (name/mobile/address) and free-text narration
-// go into webengageExtra — GA4 never sees those, same as everywhere else.
+// GA4 vs WebEngage split follows tracker.js's rule (see its jsdoc): only
+// real customer identity (name/mobile/address) and free-text narration go
+// into webengageExtra. Everything else — full per-item product detail,
+// the order-level price breakup, store context, sales_person_id — is not
+// PII and goes to both destinations via the shared params/items[].
 
 import tracker from './tracker';
 import EVENTS, { GA_ECOMMERCE_EVENTS } from './events';
 import APP_CONFIG from '@/constants/appConfig';
 
-// One row per physical piece (see checkoutPricingService.buildPricedLineItems'
-// own comment: "Both pricing paths emit ONE ROW PER PIECE"), so `quantity` is
-// always 1 per row here — that's correct, not a bug, it mirrors how many
-// rows exist. `price` mirrors the product-detail page's own headline price
-// (sub_total — pre-tax, the figure that page and this line item agree on),
-// not net_amount (which is this row's own post-tax total).
+// One row per physical piece, so `quantity` is always 1 per row here — that
+// mirrors how many rows exist, it's not a bug. `price` is sub_total
+// (pre-tax headline price), not net_amount (post-tax total).
 function toOrderItems(lineItems = []) {
   return lineItems.map((row) => ({
     item_id:           row.item_id != null ? String(row.item_id) : undefined,
@@ -74,9 +55,8 @@ function toOrderItems(lineItems = []) {
  * @param {{activeStoreId, activeStoreCode, activeStoreName}} store
  * @param {{modeCode?, modeName?, amount}[]} paymentModes
  * @param {number} salesPersonId
- * @param {string} [salesPersonName] — resolved from the same Employee/List
- *   SalesPersonSelect already reads (see checkout/page.jsx) — the id alone
- *   used to be sent with no name to actually read in a GA4/WebEngage report.
+ * @param {string} [salesPersonName] — resolved the same way SalesPersonSelect
+ *   does (see checkout/page.jsx), so reports show a readable name, not just an id.
  */
 export function trackDocumentPlaced({
   documentType, transactionId, entity, lineItems,
@@ -88,12 +68,9 @@ export function trackDocumentPlaced({
   const paymentSummary = modes
     .map((p) => `${p.modeCode ?? p.modeName ?? 'mode'}:${p.amount}`)
     .join(', ') || undefined;
-  // ADDED 2026-09-08 — a clean, single value for the (overwhelmingly
-  // common) case of exactly one payment mode, so a report doesn't have to
-  // parse payment_modes' joined summary string just to answer "how many
-  // sales were cash vs card vs UPI". Left null for a genuine split
-  // payment (two or more modes) — payment_modes above is what documents
-  // that case; there is no one "the" method to name for it.
+  // Single clean value for the common single-payment-mode case, so a report
+  // doesn't have to parse payment_modes' joined string. Null for a genuine
+  // split payment (two or more modes) — there's no one "the" method then.
   const paymentMethod = modes.length === 1 ? (modes[0].modeCode ?? modes[0].modeName ?? null) : null;
 
   tracker.trackEcommerce(GA_ECOMMERCE_EVENTS.PURCHASE, EVENTS.ORDER_PLACED, {
@@ -121,11 +98,10 @@ export function trackDocumentPlaced({
     store_name:      activeStoreName,
     items:           toOrderItems(lineItems),
   }, {
-    // WebEngage-only — real customer identity + free text. Same PII rule as
-    // everywhere else (see tracker.js's jsdoc); GA4 never receives these.
-    // customer_id defaults to 'guest' (2026-09-04, same fix as tracker.js's
-    // own GUEST_ID) — a walk-in cash sale with no registered customer used
-    // to omit this field entirely rather than say so explicitly.
+    // WebEngage-only — real customer identity + free text; GA4 never
+    // receives these (see tracker.js's jsdoc). customer_id defaults to
+    // 'guest' (same convention as tracker.js's GUEST_ID) for a walk-in cash
+    // sale with no registered customer.
     customer_id:      customerId ?? 'guest',
     customer_name:    customerName,
     customer_mobile:  customerMobile,

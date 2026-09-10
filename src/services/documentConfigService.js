@@ -1,18 +1,13 @@
-// Per-document-type header config needed by Order/Invoice Create — see
-// apiEndpoints.js DOCUMENT_CONFIG block for the full story on why these two
-// lookups exist (root cause of the Order/Invoice/Create 500s: financial_year_id
-// and ledger_id are neither customer- nor cart-derived, they come from here).
+// Per-document-type header config needed by Order/Invoice Create — supplies
+// financial_year_id and ledger_id, which are neither customer- nor
+// cart-derived and must be looked up from here.
 
 import axiosInstance from '@/lib/axios/axiosInstance';
 import API from '@/constants/apiEndpoints';
 
 /**
- * The print/preview formats configured for a document type.
- *
- * Captured from OrnaVerse's own POS 2026-08-05: this is the call they make
- * immediately after Invoice/Create, to offer the operator a "Select Report"
- * choice. Which formats exist is per-tenant configuration, so they're read
- * rather than hardcoded — this tenant returns three for POS Invoice (54).
+ * The print/preview formats configured for a document type. Per-tenant
+ * configuration, so read rather than hardcoded.
  *
  * @param {number} documentId
  * @returns {Promise<{report_id, report_name, report_key, report_file,
@@ -69,18 +64,13 @@ export async function getDocumentNumberingList() {
  * Find the DocumentNumbering row for a given document type at a given store.
  *
  * Used ONLY for that document type's posting config — ledger_id,
- * is_tax_applicable, auto_posting, is_document_number_editable. The
- * document NUMBER itself is assigned server-side; see the note at the
- * bottom of this file for why we no longer compute it here.
+ * is_tax_applicable, auto_posting, is_document_number_editable. The document
+ * NUMBER itself is assigned server-side (see the note at the bottom of this
+ * file).
  *
- * NOTE (2026-07-29): there is NOT one row per (document_id, company_id) —
- * there's one row PER NUMBERING PERIOD, because these document types use
- * reset_monthly. Confirmed live on UAT: (document_id 53, company_id 1)
- * returns SEVEN rows — 2025-04, 2025-09, 2025-10, 2025-11, 2026-01,
- * 2026-05, 2026-07 — each with its own last_number. A naive `.find()`
- * returns the OLDEST (2025-04). The config fields we read are identical
- * across periods so that wouldn't currently cause a visible bug, but
- * resolving to the current period is the correct, future-proof choice.
+ * There is one row PER NUMBERING PERIOD, not one per (document_id,
+ * company_id), because these document types reset monthly — resolve to the
+ * current period rather than naively taking the first match.
  *
  * @param {object[]} rows
  * @param {number} documentId
@@ -114,33 +104,8 @@ export function resolveDocumentConfig(rows, documentId, companyId, date = new Da
   }, forDocAndStore[0]);
 }
 
-// ─── document_no: DELIBERATELY NOT COMPUTED HERE ────────────────────────────
-//
-// There used to be a buildDocumentNumber() here that reconstructed the next
-// document number client-side from the DocumentNumbering row. It's gone —
-// PROVEN UNNECESSARY AND UNSAFE by two live UAT findings on 2026-07-29:
-//
-// 1. UNNECESSARY. POS/Order/Create was called with document_no omitted
-//    entirely and returned 200 {"EntityId":258}. The server assigned
-//    "HO-RPO-07-26-00005" and atomically advanced that period's
-//    last_number 4 → 5. Server-side numbering works; ours was redundant.
-//
-//    (The earlier belief that document_no was required came from a test
-//    where it was added at the same time as party_name/mobile/pieces/
-//    weight/receipt_amount/balance_amount/promotion_details. One of THOSE
-//    was the real fix; document_no was never isolated. Now it has been.)
-//
-// 2. UNSAFE. last_number is not reliably maintained, so any client-side
-//    counter can collide with a document that already exists. Confirmed on
-//    UAT: document_id 56 (Exchange) / company_id 1 has NO row for 2026-07
-//    (latest is 2026-06) even though a real July document
-//    "HO-EXC-07-26-00001" exists. A client computing from that config
-//    would regenerate the SAME number — a guaranteed duplicate. There is
-//    also no "reserve next number" action in v1.json to make it atomic.
-//
-// So: never send document_no on Create. Let the server assign it, then read
-// it back from the Retrieve/List response for display. If a future change
-// makes document_no genuinely required for some document type, prefer
-// deriving the counter from that type's own */List (real documents) over
-// DocumentNumbering.last_number, and expect to handle duplicate-number
-// rejections as a normal, retryable outcome.
+// document_no is deliberately NOT computed here — the server assigns it on
+// Create. A client-side counter derived from DocumentNumbering.last_number is
+// unreliable (that field isn't consistently maintained) and risks colliding
+// with a document that already exists. Let the server assign the number and
+// read it back from Retrieve/List for display.

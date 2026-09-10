@@ -14,12 +14,8 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-// PHASE 22.5 — all six transaction types (Returns, Refunds, Credit Notes,
-// Exchange, Buyback, URD Purchase) now live as tabs on the single
-// /transactions page, which supports deep-linking via ?tab=<id>. The
-// previously-separate /returns, /exchange, /buyback, /urd-purchase pages
-// have been deleted, so these tiles route there instead. Refunds and
-// Credit Notes are new tiles — they had no create UI anywhere before.
+// All six transaction types route to the single /transactions page, which
+// deep-links via ?tab=<id>.
 
 const QUICK_ACTIONS = [
   {

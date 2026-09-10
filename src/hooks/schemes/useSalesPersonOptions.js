@@ -1,9 +1,7 @@
 // Employees at the active store, for the "Sales Person" picker on scheme
-// enrollment. sales_person_id on SchemeEnrollmentRow is confirmed required
-// (v1.json) — this mirrors the vendor's own Scheme Enrollment screen, which
-// filters HR/Employee/List by company_id and lets staff pick, rather than
-// auto-resolving from the logged-in user (confirmed via real UAT response,
-// 2026-07-13 — no user_id was involved).
+// enrollment. sales_person_id is a required field; staff pick it explicitly
+// (mirroring OrnaVerse's own Scheme Enrollment screen) rather than it being
+// auto-resolved from the logged-in user.
 
 import { useQuery } from '@tanstack/react-query';
 import { QUERY_KEYS } from '@/constants/queryKeys';

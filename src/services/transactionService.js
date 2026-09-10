@@ -106,11 +106,10 @@ export async function getRefundDetail(transactionId) {
   return response.data;
 }
 
-// createRefund / addRefundDetail / addRefundReceipt moved out 2026-07-31.
-// A refund is not a three-step build: it settles credit raised by a
-// Return/Exchange/Buy Back, in ONE call with details[] + receipts[] nested,
-// and its receipt must carry the credit's transaction_id. That lives in
-// services/refundService.js now.
+// Refund creation lives in services/refundService.js — a refund is not a
+// three-step build like the others here: it settles credit raised by a
+// Return/Exchange/Buy Back in ONE call with details[] + receipts[] nested,
+// and its receipt must carry the credit's transaction_id.
 
 /**
  * Delete (void) a refund.

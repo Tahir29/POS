@@ -1,33 +1,12 @@
 'use client';
 
-// Walk-ins directory — every real customer match logged via
-// useWalkInLookup.js's own Mongo write (see lib/mongo/walkins.js's header
-// for why this exists at all: OrnaVerse's WalkIn/Lookup and /Register are
-// both single-customer, mobile-keyed calls with no listing mode — nothing
-// server-side to browse, so this app keeps its own log).
-//
-// SCOPED TO THE ACTIVE STORE, always — company_id travels straight from
-// Redux (selectActiveStoreId) into the query key (useWalkInsList), so
-// switching stores in the header re-queries for the new store
-// automatically; no extra logic needed here (see useWalkInsList's own
-// header for why: switchStore already clears the whole React Query cache
-// on every switch).
-//
-// Date filter mirrors invoices/orders' own pattern exactly — two native
-// <input type="date"> fields, no separate DateRangePicker component exists
-// anywhere in this app to reach for instead. Unlike those two pages,
-// filtering happens SERVER-SIDE (the Mongo query itself takes from/to —
-// see api/customers/walkins/route.js), not over a full pre-fetched
-// dataset — there's no "browse everything, filter client-side" mode here,
-// since a store's walk-in log has no natural page size to cap it at up
-// front the way an invoice/order list does.
-//
-// READ-ONLY BY DESIGN — walkInCustomerId here is a CRM-level id, NOT a
-// party_id (see normalizeWalkInCustomer's own warning), so this list
-// deliberately offers no "Attach"/"View Profile" action: there's no real
-// billing identity to safely jump to from this data alone. It exists to
-// surface contact info (name + mobile) for retargeting outside the app,
-// not to re-enter a sale from here.
+// Walk-ins directory — this app's own log of customer matches (OrnaVerse's
+// WalkIn/Lookup and /Register have no listing mode, so there's nothing
+// server-side to browse). Scoped to the active store via company_id from
+// Redux; date filtering happens server-side (api/customers/walkins/route.js),
+// not client-side like orders/invoices. Read-only by design: walkInCustomerId
+// is a CRM-level id, not a party_id, so no "Attach"/"View Profile" action
+// exists here — this list is for retargeting contact info, not re-entering a sale.
 
 import { useState } from 'react';
 import { useSelector } from 'react-redux';

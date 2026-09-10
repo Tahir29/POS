@@ -1,48 +1,19 @@
 // src/hooks/checkout/useCheckoutPricing.js
-// Prices the ACTUAL STOCK PIECES in the cart, once, at checkout.
+// Prices the ACTUAL STOCK PIECES in the cart, once, at checkout — the
+// catalog's displayed price is not the sale price (it comes from a possibly
+// stale item-master rate, only re-priced live when zero AND the item has a
+// BOM), so checkout re-prices before showing the payment section and every
+// downstream figure (displayed amount, collected amount, submitted line
+// items) is derived from this one result. Pricing once also avoids a second
+// slow SetSalesItems round trip at submit.
 //
-// WHY THIS EXISTS — the cart's price is not the sale price.
-//
-// The catalog fills a product's price from the item master's stored
-// `item_rate` (catalogService.attachStaticPrice), and only re-prices live
-// when that stored rate is 0 AND the item has a BOM
-// (getLivePricesForItems). An item with a stale non-zero rate is therefore
-// never re-priced, and the stored figure can be badly wrong: ADJLR00826
-// shows ₹48,704.82 in the catalog while Helpers/SetSalesItems prices the
-// very same piece at ₹107,840.02 — the stored rate omits the ₹60,888 of
-// diamond in it. Verified live on UAT 2026-08-05; both the catalog-style
-// and checkout-style pricing calls return 107,840.02, so this is a stale
-// master value, not a difference between the two calls.
-//
-// Left unaddressed, the counter collects the catalog figure against an
-// invoice raised at the real figure. That is not a cosmetic mismatch:
-//   • Undercharging by ₹57,674 leaves a balance the customer never paid,
-//     and OrnaVerse rejects the sale outright — "No credit facility is
-//     allowed for 0010900616|Tahir Kutty" (live 400, 2026-08-05).
-//   • It silently understates the till by the value of the stones.
-//
-// So checkout prices the real pieces BEFORE showing the payment section,
-// and everything downstream — the amount displayed, the amount collected,
-// and the line items actually submitted — comes from this one result.
-// Pricing once also avoids a second SetSalesItems round trip at submit,
-// which is the slow call in this flow (6-7s for a page of BOM items).
-
-// ── AND WHY PROMOTIONS ARE PRICED HERE TOO, BY THEM ────────────────────────
-//
-// The discount is not ours to compute. Captured from OrnaVerse's own Order
-// counter 2026-08-05: a promotion's percentage applies to a COMPONENT of the
-// item, chosen by `discount_calc_on` — 3 = diamond, 6 = making charges,
-// 1 = whole value. "20% Off Diamond" on the ₹1,04,699 line above is 20% of
-// its ₹60,888 of diamond = ₹12,177.60, not ₹20,939. Their server then
-// RE-TAXES: taxable_amount 1,04,699.04 → 92,521.44, tax 3,140.98 → 2,775.64,
-// net → 95,297.08. Almost every promotion on this tenant is component-scoped,
-// so a local percentage-of-subtotal was wrong for nearly all of them.
-//
-// So `Helper/ApplyPromotions` runs inside the same query as pricing, and its
-// output lines ARE the line items. Everything downstream — the summary, the
-// Place Order button, the amount collected, and the Create payload's
-// discount/taxable_amount/tax_amount/net_amount — is a sum of what those
-// lines carry. Nothing recomputes anything.
+// Promotions are priced here too, by the server: a promotion's percentage
+// applies to a component of the item (diamond/making-charges/whole-value,
+// selected by `discount_calc_on`), not the subtotal, and the server re-taxes
+// after discounting. So Helper/ApplyPromotions runs inside this same query
+// and its output lines ARE the line items — everything downstream (summary,
+// Place Order, Create payload) is a sum of what those lines carry; nothing
+// is recomputed locally.
 
 import { useQuery } from '@tanstack/react-query';
 import { useSelector } from 'react-redux';

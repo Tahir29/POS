@@ -17,11 +17,9 @@ import { NavigationGuardProvider } from '@/contexts/NavigationGuardContext';
  * the global back button (see useBackGuard) — e.g. Checkout's unsaved-changes dialog.
  */
 export default function AppShell({ children }) {
-  // Keys ScrollToTopButton by route so it fully remounts on navigation —
-  // its own isVisible starts fresh (false) instead of needing an effect to
-  // reset it, which used to call setState synchronously on every route
-  // change purely to undo potentially-stale visibility from the PREVIOUS
-  // page. See ScrollToTopButton's own comment.
+  // Keyed by route so ScrollToTopButton fully remounts on navigation and its
+  // isVisible starts fresh, instead of needing an effect to reset stale
+  // visibility carried over from the previous page.
   const pathname = usePathname();
 
   return (

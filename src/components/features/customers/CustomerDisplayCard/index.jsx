@@ -1,18 +1,9 @@
 'use client';
 
-// ADDED: PAN row (raw.pan_no — confirmed POS.CustomerRow field, see
-// project memory) and an initials avatar, matching the same visual pattern
-// already used in the Header customer pill for consistency.
-// "Verified Customer" badge from the design is intentionally NOT included
-// — no confirmed field backs it.
-//
-// REMOVED 2026-09-08 — this used to show PAN masked ("••••1234") on the
-// assumption OrnaVerse itself masks it. Confirmed live against LIVE
-// (Customer/Retrieve on several unrelated party_ids) that it does NOT —
-// full, real PAN comes back same as mobile/email. Staff viewing this card
-// already have full Retrieve access to the same data; masking it again
-// client-side just hid real data behind a fake asterisk string for no
-// actual privacy benefit. Shown in full now, same as mobile/email above.
+// Compact customer summary card with PAN row and initials avatar. PAN is
+// shown in full, unmasked — OrnaVerse does not mask it server-side (see
+// report), so client-side masking would only hide real data staff already
+// have full access to.
 
 import { User, Mail, Phone, MapPin, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';

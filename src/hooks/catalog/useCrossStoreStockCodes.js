@@ -2,28 +2,21 @@
 // "BO1"/"N18"-style codes ProductCard's stock badge shows. Cross-referenced
 // from availableStores (GetUserStores, already in Redux at login) because
 // GetStockByStores/GetStockByStoresBatch only ever return company_id plus
-// the long `companyname` (e.g. "BO1-Sky City Borivali CoCo Store") — never a
-// short code — confirmed live 2026-08-26.
+// the long `companyname` (e.g. "BO1-Sky City Borivali CoCo Store"), never a
+// short code.
 //
 // Exists because ProductCard's stock badge, outside the main catalog grid,
-// had nothing real to show:
-//   - Recently Viewed: has_stock is a SNAPSHOT taken at whatever store was
-//     active when the product was viewed (see useRecordProductView) — stale
-//     the moment the operator switches stores or comes back later.
-//   - Wishlist: has_stock is never set at all anywhere in the wishlist write
-//     path (Mongo doc has no such field), so it was always falling through
-//     to "Made to Order".
-// Both cases then labeled whatever they DID show with the CURRENTLY active
-// store's code regardless of whether that store — or any store — is what's
-// actually being shown. That's the exact reported bug: a store code "not
-// wired properly ... not just the store the user is logged into". This
-// hook replaces the guess with the genuine per-item, cross-store answer.
+// had nothing real to show: Recently Viewed's has_stock is a snapshot from
+// whichever store was active when the product was viewed, and Wishlist's
+// has_stock is never set at all in the write path — both then labeled
+// whatever they showed with the currently active store's code regardless of
+// whether that's the store actually in stock. This hook replaces the guess
+// with the genuine per-item, cross-store answer.
 //
 // item_id already encodes the specific variant/customization in this ERP
 // model (size, metal color, etc. are baked into a distinct item_id, not a
-// separate filter — see useDesignVariants.js's own header), so checking
-// stock by item_id is naturally scoped to "the same customization" already,
-// no extra matching needed.
+// separate filter), so checking stock by item_id is naturally scoped to
+// "the same customization" with no extra matching needed.
 
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -67,7 +60,7 @@ export function useCrossStoreStockCodes(itemIds) {
     for (const row of query.data ?? []) {
       if (!(row.pieces > 0)) continue;
       const code = codeByCompanyId.get(row.company_id);
-      if (!code) continue; // a store this signed-in user has no access to — nothing useful to show
+      if (!code) continue; // no access to this store — nothing useful to show
       if (!codesByItemId.has(row.item_id)) codesByItemId.set(row.item_id, new Set());
       codesByItemId.get(row.item_id).add(code);
     }

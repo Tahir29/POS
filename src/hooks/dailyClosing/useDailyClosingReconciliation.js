@@ -1,11 +1,9 @@
 // Real payment-mode receipt totals for the active store on a given date —
 // lets the manual EOD entry form be checked against something real instead
-// of being 100% typed from memory. See dailyClosingService.js header for
-// the endpoint this reuses and its confirmed reliability (works for 4 of
-// this tenant's 6 stores; company_id 1 and 4 both 500 on this call today).
-//
-// A failure here is reported as store-specific and non-fatal — the manual
-// entry form still works without it, this is a check, not a dependency.
+// of being 100% typed from memory. Not a hard dependency: this endpoint is
+// known unreliable for some stores (see dailyClosingService.js), so a
+// failure here is reported as store-specific and non-fatal — the manual
+// entry form still works without it.
 
 import { useQuery } from '@tanstack/react-query';
 import { useSelector } from 'react-redux';
@@ -13,10 +11,9 @@ import { getReceiptModeTotals } from '@/services/dailyClosingService';
 import { selectActiveStoreId } from '@/store/slices/storeSlice';
 import { QUERY_KEYS } from '@/constants/queryKeys';
 
-// Naive LOCAL day boundaries, no timezone suffix — same convention as
-// localDocumentDate (lib/checkout/documentFields.js): OrnaVerse's own
-// client never sends UTC-converted timestamps, and a sale near midnight
-// IST would land in the wrong day's bucket if this did.
+// Naive local day boundaries, no timezone suffix — same convention as
+// localDocumentDate (lib/checkout/documentFields.js), so a sale near
+// midnight IST doesn't land in the wrong day's bucket.
 function localDayBounds(dateString) {
   return {
     fromDate: `${dateString}T00:00:00.000`,
@@ -24,12 +21,11 @@ function localDayBounds(dateString) {
   };
 }
 
-// Best-effort grouping of OrnaVerse's real mode labels (seen live: Cash,
-// Credit Card, Debit Card, UPI, GoKwik, Razorpay, NEFT, Old Gold, Advance,
-// Order Advance, Return, Exchange, Cash On Delivery) into the 4 buckets
-// this app's EOD form has always collected. Not a precise accounting
-// mapping (Return/Exchange are money OUT, not sales), just enough to give
-// staff a real number to check their count against — labeled honestly in
+// Best-effort grouping of OrnaVerse's real mode labels (Cash, Credit Card,
+// Debit Card, UPI, GoKwik, Razorpay, NEFT, Old Gold, Advance, Order
+// Advance, Return, Exchange, Cash On Delivery) into this app's 4 EOD
+// buckets. Not precise accounting (Return/Exchange are money OUT, not
+// sales) — just enough for staff to check their count against, labeled in
 // the UI as "system-recorded receipts", not "sales".
 function bucketFor(modeName) {
   const m = (modeName ?? '').toLowerCase();

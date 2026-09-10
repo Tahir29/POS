@@ -1,6 +1,5 @@
 // Applicable tax slabs for a store — read-only reference, no write endpoint
-// exists for this (see settingsService.js getTaxes header for the required
-// exchange_rate field and the "Tax Template Not Defined!" per-store gap).
+// exists (see getTaxes() in settingsService.js).
 
 import { useQuery } from '@tanstack/react-query';
 import { getTaxes } from '@/services/settingsService';
@@ -18,12 +17,10 @@ export function useTaxes(companyId) {
 
   return {
     taxes:    query.data?.Entities ?? [],
-    // A configured-but-empty tenant ("Tax Template Not Defined!") comes
-    // back as a real error, not an empty list — surfaced distinctly so the
-    // Settings screen can say "not configured" rather than "failed to load".
-    // serverMessage is the axios interceptor's own normalized OrnaVerse
-    // reason (see lib/axios/interceptors.js normalizeError) — never reach
-    // into raw response.data here, callers get the normalized error object.
+    // A configured-but-empty tenant ("Tax Template Not Defined!") comes back
+    // as an error, not an empty list — detected here so Settings can show
+    // "not configured" instead of "failed to load". serverMessage is the
+    // axios interceptor's normalized error reason (lib/axios/interceptors.js).
     notConfigured: query.isError && /tax template/i.test(query.error?.serverMessage ?? ''),
     isLoading: query.isLoading,
     isError:   query.isError,

@@ -1,9 +1,8 @@
 'use client';
 
-// src/components/shared/StarRating/index.jsx
-// Five-star rating display with partial-fill support (e.g. 4.3 → 4 full
-// stars + a 30%-filled 5th) — no half-star icon asset needed, each star is
-// an outline icon with a clipped filled icon layered on top.
+// Five-star rating display with partial-fill support (e.g. 4.3 renders as 4
+// full stars + a 30%-filled 5th) — each star is an outline icon with a
+// clipped filled icon layered on top, no half-star asset needed.
 
 import { Star } from 'lucide-react';
 
@@ -19,12 +18,10 @@ const SIZES = {
  *   count?:      number,       // review count — shown as "(count)" when provided
  *   size?:       'sm' | 'md' | 'lg',
  *   showValue?:  boolean,      // show the numeric rating (e.g. "4.3") before the count
- *   compact?:    boolean,      // force the single-star + value + count form at
- *                              // every breakpoint (see below) instead of the
- *                              // responsive dual-mode — for a small fixed-width
- *                              // spot (e.g. ProductCard's image-corner badge)
- *                              // that never has room for 5 full stars, at any
- *                              // viewport.
+ *   compact?:    boolean,      // force single-star + value + count at every
+ *                              // breakpoint — for fixed-width spots (e.g.
+ *                              // ProductCard's image-corner badge) with no
+ *                              // room for 5 full stars
  *   className?:  string,
  * }} props
  */
@@ -33,12 +30,8 @@ export default function StarRating({ rating = 0, count, size = 'sm', showValue =
   const clamped = Math.min(5, Math.max(0, rating));
   const label = `${clamped} out of 5 stars`;
 
-  // ADDED 2026-09-07 — compact mode always renders the single-star form
-  // below, regardless of viewport, rather than picking one of the two
-  // forms further down by breakpoint. Kept as an early, separate return
-  // (not just tweaking those forms' own sm:hidden/hidden classes) so the
-  // two existing responsive forms stay exactly as they render today for
-  // every caller that doesn't pass compact.
+  // compact forces the single-star form at every breakpoint, as an early
+  // return, so callers that don't pass it keep the responsive dual-mode below.
   if (compact) {
     return (
       <div className={`flex items-center gap-1 ${className}`} aria-label={label}>

@@ -59,10 +59,9 @@ function SidebarNavItem({ item, collapsed, onNavigate }) {
 export default function Sidebar() {
   const { sidebarOpen, toggle, close } = useSidebar();
 
-  // Below `md`, sidebarOpen doubles as "mobile drawer visible" — the drawer
-  // is either fully off-canvas or fully open with labels, never icon-only.
-  // At `md` and up it keeps its original meaning: expanded (w-56) vs
-  // collapsed-to-icons (w-16), always visible either way.
+  // sidebarOpen is dual-purpose: below `md` it means "mobile drawer visible"
+  // (off-canvas vs full open with labels); at `md`+ it means expanded (w-56)
+  // vs collapsed-to-icons (w-16), always visible either way.
   const collapsed = !sidebarOpen;
 
   return (
@@ -118,7 +117,7 @@ export default function Sidebar() {
 
         <Separator className="bg-sidebar-border" />
 
-        {/* ── Collapse toggle — collapses to icon-rail at md+, closes the drawer below md ── */}
+        {/* Collapses to icon-rail at md+, closes the drawer below md */}
         <div className="p-2">
           <Button
             variant="ghost"

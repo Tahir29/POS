@@ -1,7 +1,5 @@
 // Shared inline loading indicator (spinner + label) for lists/tabs/sections
-// that are loading data. Unifies three previously-fragmented patterns
-// (inline Loader2+text, a raw spinning div, a bare-text Suspense fallback)
-// onto one look. Not for full-page loading — see PageLoader for that.
+// that are loading data. Not for full-page loading — see PageLoader.
 
 import { Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';

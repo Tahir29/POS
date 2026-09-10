@@ -1,14 +1,10 @@
-// Records a payment against an EXISTING invoice (Partial/Due → less due,
-// or Paid in full). createInvoiceReceipt() has existed fully implemented
-// in orderService.js from the start but had zero callers — this is the
-// first one.
-//
-// UNVERIFIED LIVE: unlike receipt_details[] embedded in Invoice/Create
-// (confirmed live many times over — see documentFields.buildReceiptDetails),
-// a standalone POS/InvoiceReceipt/Create call against an already-posted
-// invoice has never been round-tripped against real UAT data. The payload
-// shape below mirrors buildReceiptDetails' proven field set as closely as
-// possible; treat a failure here as "diagnose live," not "shape is wrong."
+// Records a payment against an EXISTING invoice (Partial/Due -> less due,
+// or Paid in full) via a standalone POS/InvoiceReceipt/Create call.
+// Note: unlike receipt_details[] embedded in Invoice/Create (well-verified
+// live), this standalone call path is unverified against live UAT data —
+// the payload shape mirrors buildReceiptDetails' proven field set as
+// closely as possible; treat a failure here as "diagnose live," not
+// "shape is wrong."
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-toastify';
@@ -52,14 +48,10 @@ export function useAddInvoiceReceipt() {
       });
     },
 
-    // ENRICHED 2026-09-04 — both events used to carry only transactionId.
-    // customer_id/store_id here come from the invoice being paid (partyId/
-    // companyId, part of the mutate variables) rather than
-    // useSessionTrackingContext's currently-attached session — this invoice
-    // may belong to a different customer than whoever is attached right
-    // now (an operator can record a receipt against any invoice from the
-    // /invoices list, not just the attached customer's own), so the
-    // payload's own identity is the correct, authoritative one here.
+    // customer_id/store_id come from the invoice being paid (partyId/
+    // companyId), not the currently-attached session — an operator can
+    // record a receipt against any invoice from the /invoices list, not
+    // just the attached customer's own.
     onSuccess: (_data, { transactionId, partyId, companyId, amount, mode }) => {
       toast.success(TOAST.INVOICES.RECEIPT_ADDED);
       tracker.track(EVENTS.INVOICE_RECEIPT_ADDED, {

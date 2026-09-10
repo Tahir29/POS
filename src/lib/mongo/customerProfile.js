@@ -1,29 +1,21 @@
 // src/lib/mongo/customerProfile.js
 //
-// Mirrors an OrnaVerse CustomerRow into Mongo, keyed by party_id — the thin
-// anchor + full-profile mirror discussed and agreed on, MINUS PAN.
+// Mirrors an OrnaVerse CustomerRow into Mongo, keyed by party_id, for
+// personalization/retargeting — MINUS PAN.
 //
-// PAN EXCLUDED ON PURPOSE (2026-08-21): `pan_no` and `pan_document` are
-// stripped out before every write. Ornaverse already holds and handles
-// this data — mirroring it into a second database (which exists for
-// personalization/retargeting, not KYC) adds real leak exposure for zero
-// personalization value, and the checkout PAN panel already reads it live
-// from Ornaverse, not from this mirror. If a real need for it shows up
-// later, add it back deliberately (with field-level encryption — see the
-// discussion this replaced) rather than by accident.
+// PAN EXCLUDED ON PURPOSE: `pan_no` and `pan_document` are stripped before
+// every write. OrnaVerse already holds this data and the checkout PAN panel
+// reads it live from there, not from this mirror — mirroring it here would
+// add leak exposure for zero personalization value. If a real need for it
+// shows up later, add it back deliberately (with field-level encryption)
+// rather than by accident.
 
 import { getDb } from './client';
 
-// _POS suffix (2026-08-27) — see wishlist.js's identical comment. This is
-// the one real-stakes collection (1480 docs) — renamed live via
-// db.renameCollection and the count was verified to match exactly before
-// and after (1480 -> 1480) before this line was ever touched.
 const COLLECTION = 'customers_POS';
 
-// Fields to never persist here, regardless of what Ornaverse's CustomerRow
-// happens to carry. Keep this list, not a positive allow-list, so any OTHER
-// field Ornaverse adds later still flows through the mirror as intended —
-// only these two are deliberately withheld.
+// Deny-list, not an allow-list, so any OTHER field OrnaVerse adds later
+// still flows through the mirror — only these two are deliberately withheld.
 const EXCLUDED_FIELDS = ['pan_no', 'pan_document'];
 
 function omitExcludedFields(profile) {

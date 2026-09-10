@@ -1,16 +1,12 @@
 // Mutation hooks for the 3-stage repair workflow.
-// Mirrors useTransactionMutations.js — same Create → Post pattern, except
+// Mirrors useTransactionMutations.js — same Create -> Post pattern, except
 // RepairInvoice also gets a receipt step (like Invoice/InvoiceReceipt).
 //
-// ANALYTICS: every mutation fires a tracker.track(). ENRICHED 2026-09-04 —
-// same fix as useTransactionMutations.js: every event used to carry only
-// data.EntityId (success) or a bare error string (failure), nothing that
-// identified who/where/how much. Every event now also carries
-// customer_id/store_id (useSessionTrackingContext — session-derived, since
-// Post/Cancel only ever receive a bare transactionId with nothing else to
-// draw on), and every CREATE additionally carries party_id/net_amount/
-// pieces/weight/line_item_count straight off the same payload just posted
-// to OrnaVerse (createDetails()) — see events.js.
+// Every mutation fires tracker.track() with customer_id/store_id
+// (useSessionTrackingContext, session-derived since Post/Cancel only ever
+// receive a bare transactionId), and every CREATE additionally carries
+// party_id/net_amount/pieces/weight/line_item_count off the same payload
+// posted to OrnaVerse (creationDetails()) — see events.js.
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-toastify';
@@ -25,11 +21,6 @@ import TOAST from '@/constants/toastMessages';
 import tracker from '@/lib/analytics/tracker';
 import EVENTS from '@/lib/analytics/events';
 
-// FIXED 2026-08-27: `fallback` is new — same fix as useTransactionMutations.js's
-// identical helper. Every call site below now passes the matching
-// TOAST.REPAIR.*_FAILED constant instead of every stage of every repair
-// document collapsing onto the same generic 'Something went wrong.' the
-// moment the server didn't send back a usable reason.
 function getErrorMessage(error, fallback = 'Something went wrong.') {
   return (
     error?.response?.data?.Message ??
@@ -39,8 +30,8 @@ function getErrorMessage(error, fallback = 'Something went wrong.') {
   );
 }
 
-// See this file's header — `payload` here is the raw entity object each
-// createX() call posts straight through to OrnaVerse, unmodified.
+// `payload` here is the raw entity object each createX() call posts
+// straight through to OrnaVerse, unmodified.
 function creationDetails(payload) {
   return {
     party_id:        payload?.party_id,
@@ -151,9 +142,7 @@ export function useCancelRepairIn({ onSuccess } = {}) {
       onSuccess?.(data);
     },
     onError: (error, transactionId) => {
-      // No REPAIR.*_CANCEL_FAILED constant exists for repair-in — the
-      // generic default fallback stays here rather than inventing a
-      // message toastMessages.js doesn't actually define.
+      // No REPAIR.*_CANCEL_FAILED constant exists for repair-in — falls back to the generic default.
       const message = getErrorMessage(error);
       toast.error(message);
       tracker.track(EVENTS.REPAIR_IN_FAILED, { stage: 'cancel', transactionId, error: message, ...sessionCtx });

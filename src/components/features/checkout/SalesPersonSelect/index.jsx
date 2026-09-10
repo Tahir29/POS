@@ -1,14 +1,9 @@
 'use client';
 
-// "Sales Person" picker for checkout — mirrors the same field on the
-// vendor's own POS Sale screen (confirmed 2026-07-16: they select an
-// employee name before placing the order). Reuses useSalesPersonOptions,
-// the same store-scoped Employee/List picker already used and confirmed
-// working on Scheme Enrollment — not duplicated here.
-//
-// Plain controlled component (value/onChange), not react-hook-form bound —
-// checkout/page.jsx drives it with local state. schemes/enroll/page.jsx
-// wraps it in a Controller to reuse the same picker within its RHF form.
+// Sales person picker for checkout, reusing the store-scoped
+// useSalesPersonOptions hook shared with Scheme Enrollment. Plain
+// controlled component (value/onChange); schemes/enroll/page.jsx wraps it
+// in a react-hook-form Controller to reuse it in an RHF form.
 
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,

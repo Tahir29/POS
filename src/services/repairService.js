@@ -16,16 +16,10 @@ import APP_CONFIG from '@/constants/appConfig';
 
 // ─── REPAIR ORDER (the workshop job the intake is raised against) ─────────────
 //
-// Confirmed 2026-08-01 off real posted UAT records (see [[repair-flow-contract]]).
-//
-// A Repair In line item is NOT free-typed — it is COPIED from a Repair Order
-// line and points back at it. Real record: Repair In REPI-06-26-027 line
-// carries ref_document_id 75, ref_transaction_id 122, ref_transaction_item_id
-// 146, i.e. the line of order FCS-REP-06-26-2.
-//
-// Repair Order lines are ~188-key objects; the Repair In line is a ~47-key
-// subset. mapOrderLineToRepairInLine() below performs exactly that projection,
-// copying only fields observed on a real Repair In line — nothing invented.
+// A Repair In line item is COPIED from a Repair Order line, not free-typed —
+// it points back at its source via ref_document_id/ref_transaction_id/
+// ref_transaction_item_id. mapOrderLineToRepairInLine() below performs that
+// projection.
 
 /** document_id of the workshop Repair Order. */
 export const REPAIR_ORDER_DOCUMENT_ID = 75;
@@ -49,9 +43,7 @@ export const REPAIR_LOCATION_TYPE = {
  * Sold items eligible for repair.
  *
  * `transaction_type: 3` is the repair-specific value — Return/Buyback/
- * Exchange use 1 and Credit Note uses 4. Confirmed from their client source,
- * which also refuses with "Please select Party to proceed" when repair_type
- * is CUSTOMER_ITEM and no party is set.
+ * Exchange use 1 and Credit Note uses 4.
  *
  * @param {{ partyId: number, companyId: number, take?: number }} params
  */
@@ -68,10 +60,8 @@ export async function getRepairableSoldItems({ partyId, companyId, take = 25 }) 
 }
 
 /**
- * Prices picked items for a Repair Order.
- *
- * Captured live 2026-08-01: their counter calls Helpers/SetReturnItems — the
- * SAME helper Return uses — with document_id 75 and labour/tax off. Line
+ * Prices picked items for a Repair Order via Helpers/SetReturnItems — the
+ * same helper Return uses — with document_id 75 and labour/tax off. Line
  * items are server-computed, so this is the only correct way to build them.
  *
  * @param {{ selectedProducts: object[], companyId: number }} params
@@ -89,11 +79,9 @@ export async function priceRepairItems({ selectedProducts, companyId }) {
 }
 
 /**
- * Resolves the stock location a repair lands in.
- *
- * Every real Repair Order on this tenant carries `location_id: 2`, which
- * `CompanyWiseLocations/List` names "Repair". Matched by name rather than
- * hardcoded, since the id is per-tenant. Falls back to the first location.
+ * Resolves the stock location a repair lands in. Matched by name ("Repair")
+ * rather than hardcoded, since the id is per-tenant. Falls back to the first
+ * location.
  *
  * @param {number} companyId
  * @returns {Promise<number|null>}
@@ -113,22 +101,13 @@ export async function getRepairLocationId(companyId) {
 /**
  * Builds the Inventory/Repair Entity.
  *
- * Field list transcribed from their own `RepairForm` definition
- * (formKey "Inventory.Repair", 49 fields) in
- * /esm/_chunks/chunk-CJSQNCGC.js — their Save button never fires a Create on
- * this tenant, so the payload could not be captured from traffic.
- * See [[repair-flow-contract]].
+ * Field list transcribed from OrnaVerse's own RepairForm definition (formKey
+ * "Inventory.Repair", 49 fields) — their Save button never fires a Create on
+ * this tenant, so the payload could not be captured from live traffic.
  *
- * CONFIRMED BROKEN live 2026-08-14, independent of anything this function
- * builds: Inventory/Repair/Create returns a generic 500 even for a bare
- * 4-field payload ({document_id, document_date, party_id, company_id}),
- * and adding financial_year_id/ledger_id/repair_type/location_id on top
- * changes nothing. Since this document type has never been captured from
- * real traffic (see above), there's no known-good payload to diff against —
- * unlike Order/Return/etc., which each eventually got fixed by comparing
- * against a real captured request. Every Repair Order visible via
- * Inventory/Repair/List right now (e.g. HO-REP-08-26-1 for Tahir Kutty,
- * transaction_id 130) predates this app entirely. Needs OrnaVerse's team.
+ * NOTE: Inventory/Repair/Create currently 500s server-side even for a bare
+ * minimal payload, independent of anything this function builds. Needs
+ * OrnaVerse's team.
  */
 export function buildRepairOrderPayload({
   partyId, partyName, phoneCode, address, stateName,
@@ -259,13 +238,9 @@ const ORDER_OWNED_LINE_FIELDS = [
  * Projects a Repair Order line into the Repair In line the server expects.
  *
  * The line is passed through LARGELY INTACT — including nested
- * `item_components[]` — rather than rebuilt from a field whitelist. A first
- * attempt copied ~24 selected fields and `RepairIn/Create` returned a generic
- * 500: these are server-computed objects (a real intake line has 47 keys with
- * nested components), and trimming them is the same mistake that broke
- * Order/Return/Exchange before the Set*Items helpers were found. The order's
- * own object is the closest thing to ground truth we have, so it is what gets
- * sent, minus the identity the intake can't inherit.
+ * `item_components[]` — rather than rebuilt from a field whitelist. These
+ * are server-computed objects; trimming them to a hand-picked subset breaks
+ * Create.
  *
  * @param {object} orderLine — a line_items[] entry from getRepairOrderDetail()
  * @param {object} order     — the parent order entity
@@ -318,16 +293,9 @@ const REPAIR_IN_DOCUMENT_ID = 117;
 /**
  * Builds the RepairIn Entity from an order + its already-projected lines.
  *
- * CONFIRMED live 2026-08-14: `document_id` is REQUIRED at the header level,
- * not just on each line item — omitting it returns a plain 400 "document_id
- * is required." (not the generic 500 everything else in this file produces),
- * so this is a real, confirmed contract fix, not a guess.
- *
- * Everything else here is deliberately minimal — createRepairIn's own JSDoc
- * says only party_id/company_id/document_date/line_items are required, and
- * that held up: a header of exactly these 5 fields (this one plus those 4)
- * passed validation cleanly. What's still unconfirmed is line_items itself —
- * see the header note on createRepairIn.
+ * document_id is REQUIRED at the header level, not just on each line item.
+ * Everything else here is deliberately minimal — only party_id/company_id/
+ * document_date/line_items are required beyond it.
  *
  * @param {{ order: object, lines: object[], documentDate?: string }} params
  */
@@ -372,23 +340,13 @@ export async function getRepairInDetail(transactionId) {
  * Create a repair intake (customer drops item).
  * @param {object} repairInEntity — see buildRepairInPayload()
  *   Required: document_id, party_id, company_id, document_date, line_items[]
- *   (document_id confirmed required 2026-08-14 — see buildRepairInPayload)
  * @returns {Promise<object>} SaveResponse { EntityId }
  *
- * NOT FULLY WORKING YET — confirmed live 2026-08-14 against a real existing
- * order (HO-REP-08-26-1, transaction_id 130, for Tahir Kutty): a header-only
- * Create (empty line_items) succeeds cleanly (EntityId 41, then cancelled to
- * clean up). Adding the REAL projected line item — via
- * getRepairOrderAsIntakeLines(130), the exact function this file already
- * provides for this purpose — still returns a generic 500. So the intended
- * flow (previously never wired into the UI at all — see repair/page.jsx)
- * is now correctly wired, but the underlying Create is not yet proven to
- * accept a real line item. Needs the same live-capture treatment that
- * eventually fixed Order/Return: this is one step further than those got.
- * Also worth knowing: Inventory/Repair/Create (the workshop order this
- * whole chain starts from) currently 500s even on a bare 4-field payload —
- * confirmed the same day — so on this tenant right now, nothing downstream
- * of a NEW repair intake can be created end-to-end regardless of this fix.
+ * NOTE: a header-only Create (empty line_items) succeeds; Create with a real
+ * projected line item currently still 500s server-side, and the upstream
+ * Inventory/Repair/Create this whole chain starts from 500s even on a bare
+ * payload — so end-to-end creation is blocked upstream of this function
+ * regardless. Needs OrnaVerse's team.
  */
 export async function createRepairIn(repairInEntity) {
   const response = await axiosInstance.post(API.REPAIR.REPAIR_IN_CREATE, {

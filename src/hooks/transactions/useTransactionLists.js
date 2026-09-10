@@ -1,19 +1,8 @@
-// Paginated list hooks for all 6 POS transaction types.
-// All hooks follow the identical pattern:
-//   - useQuery with QUERY_KEYS.[TYPE].LIST(params)
-//   - staleTime: APP_CONFIG.STALE_TIME.ORDERS (2 min — transactions change often)
-//   - enabled guard on storeId (never fetch without store context)
-//   - Returns normalised shape: { items[], totalCount, take, isLoading, isFetching, isError, refetch }
-//
-// RESPONSE CONVENTION (all list endpoints):
-//   response.data → { Entities[], TotalCount }
-//   These services return response.data directly (unwrapped by service fn).
-//
-// NORMALIZER:
-//   normalizeTransaction() maps the raw API row to a consistent display shape
-//   used by TransactionListRow in the UI. All 6 types share the same header
-//   fields (transaction_id, document_no, document_date, party_name, net_amount)
-//   so one normalizer covers all of them.
+// Paginated list hooks for all 6 POS transaction types (Returns, Refunds,
+// Credit Notes, Exchange, Buyback, URD Purchase). Each hook follows the same
+// pattern: useQuery keyed by QUERY_KEYS.[TYPE].LIST(params), guarded on
+// storeId, returning { items[], totalCount, take, isLoading, isFetching,
+// isError, refetch }.
 
 import { useQuery }      from '@tanstack/react-query';
 import { useSelector }   from 'react-redux';
@@ -28,9 +17,8 @@ import {
 import { QUERY_KEYS }    from '@/constants/queryKeys';
 import APP_CONFIG        from '@/constants/appConfig';
 
-// ─── Shared normalizer ────────────────────────────────────────────────────────
-// Maps raw API transaction row → consistent display shape.
-// "NA" string values from OrnaVerse are treated as null.
+// Maps raw API transaction row → consistent display shape used by
+// TransactionListRow. "NA" string values from OrnaVerse are treated as null.
 
 function isNA(v) {
   return v === null || v === undefined || v === 'NA' || v === '';
@@ -48,18 +36,15 @@ export function normalizeTransaction(entity) {
     documentDate:  get(entity, 'document_date'),
     customerId:    get(entity, 'party_id'),
     customerName:  get(entity, 'party_name'),
-    // RefundRow is the one outlier here — confirmed 2026-07-16 via real
-    // Refund/List data: it has no net_amount field at all, using
-    // total_amount instead. Every other transaction type uses net_amount.
+    // RefundRow has no net_amount field — it uses total_amount instead.
     amount:        get(entity, 'net_amount') ?? get(entity, 'total_amount'),
     companyId:     get(entity, 'company_id') ?? get(entity, 'current_company_id'),
     raw: entity,
   };
 }
 
-// ─── Factory ──────────────────────────────────────────────────────────────────
-// Builds a useQuery hook for a given transaction type.
-// Not exported — consumed internally by the named hooks below.
+// Builds a useQuery hook for a given transaction type. Not exported —
+// consumed internally by the named hooks below.
 
 function makeTransactionListHook({ queryKeyFn, fetchFn }) {
   return function useTransactionList({ skip = 0, enabled = true } = {}) {

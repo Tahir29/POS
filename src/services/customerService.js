@@ -6,12 +6,6 @@
 //   getCustomerList()  → response.data     (useCustomerList/useAllCustomers read .Entities)
 //   createCustomer()   → raw AxiosResponse (useCreateCustomer reads .data.EntityId)
 //   updateCustomer()   → raw AxiosResponse
-//
-// REMOVED 2026-09-08 — retrieveParty() (a thin PARTY.RETRIEVE wrapper) had
-// zero callers anywhere (useCustomer360.js calls API.PARTY.RETRIEVE
-// directly rather than through this wrapper — confirmed via a dead-code
-// audit). API.PARTY.RETRIEVE itself is untouched in apiEndpoints.js in
-// case a wrapper like this is worth rebuilding later.
 
 import axiosInstance from '@/lib/axios/axiosInstance';
 import API from '@/constants/apiEndpoints';

@@ -1,18 +1,14 @@
 // Establishes (POST) or tears down (DELETE) the operator's OrnaVerse cookie
-// session, used only for rendering invoice reports.
+// session, used only for rendering invoice reports. Called right after POS
+// sign-in with the same credentials already sent to connect/token; the
+// resulting cookie is kept server-side (see lib/ornaverse/reportSession.js),
+// never the password. The session id goes back as an httpOnly cookie on our
+// own origin so the browser attaches it to /api/report/render automatically
+// and no script can read the underlying OrnaVerse cookie.
 //
-// Called right after a successful POS sign-in with the SAME credentials that
-// just went to connect/token — they already pass through this server, so this
-// spends them once more and keeps only the resulting cookie. Nothing is
-// stored. See lib/ornaverse/reportSession.js for the full rationale.
-//
-// The session id goes back as an httpOnly cookie on OUR origin, so the
-// browser attaches it to /api/report/render automatically and no script can
-// read it. The client never sees the OrnaVerse cookie itself.
-//
-// Failure here is NOT fatal to signing in: everything except invoice
-// printing works without it, so the caller is expected to treat a non-OK
-// response as "printing unavailable", not "login failed".
+// Failure here is not fatal to signing in — everything except invoice
+// printing works without it, so a non-OK response means "printing
+// unavailable", not "login failed".
 
 import {
   createReportSession,

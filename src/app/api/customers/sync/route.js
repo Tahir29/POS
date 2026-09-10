@@ -1,30 +1,16 @@
-// Mirrors a customer record into Mongo. Fire-and-forget from the client —
-// never something a real sale waits on. See lib/mongo/customerProfile.js
-// for what does (and does NOT — no PAN) get stored.
+// Mirrors a customer record into Mongo. Fire-and-forget from the client;
+// see lib/mongo/customerProfile.js for what does (and does not) get stored.
 //
-// SECURITY FIX 2026-08-21: this used to accept an arbitrary `profile` object
-// straight from the request body with NO authentication at all — any caller
-// who could reach this server could overwrite any party_id's stored profile
-// with whatever they wanted, no login required. Confirmed via security
-// review (see the "customers/sync" finding).
-//
-// Fixed by requiring the caller's own OrnaVerse bearer token (the same one
-// already used for every other authenticated call in this app) and having
-// THIS SERVER re-fetch the authoritative record from OrnaVerse itself —
-// Services/POS/Customer/Retrieve, the same contract customerService.js's
-// retrieveCustomer() already uses client-side — rather than trusting
-// whatever the client claims a customer's profile is. Two birds: a caller
-// without a valid token gets rejected (OrnaVerse itself 401s the retrieve
-// call), and there is no longer an arbitrary-write surface — what gets
-// stored is always exactly what OrnaVerse has for that party_id, which is
-// no more than the caller could already see through the app's normal flows.
+// Only party_id is accepted from the client — the profile itself is always
+// re-fetched server-side from OrnaVerse using the caller's own bearer token
+// (Services/POS/Customer/Retrieve), never trusted from the request body.
+// This also doubles as auth: an invalid/expired token is rejected by
+// OrnaVerse itself before Mongo is touched.
 
 import { customerProfileSchema } from '@/validators/customerProfileSchema';
 import { upsertCustomerProfile } from '@/lib/mongo/customerProfile';
 import { UPSTREAM } from '@/lib/ornaverse/upstream';
 
-// Only party_id comes from the client now — the profile itself is always
-// fetched fresh, server-side, from the authenticated caller's own token.
 const requestSchema = customerProfileSchema.pick({ party_id: true });
 
 export async function POST(request) {
@@ -59,9 +45,6 @@ export async function POST(request) {
     return Response.json({ error: 'Sync failed' }, { status: 502 });
   }
 
-  // OrnaVerse itself is the authority on whether this token is valid — an
-  // invalid/expired token, or a party_id the caller has no business
-  // touching, is rejected right here, before Mongo is ever involved.
   if (!retrieveRes.ok) {
     const status = retrieveRes.status === 401 ? 401 : 502;
     return Response.json({ error: 'Could not verify customer with OrnaVerse' }, { status });

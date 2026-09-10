@@ -1,18 +1,12 @@
 // Cascading location master: Countries → States → Cities.
 //
-// CRITICAL: These endpoints use Serenity's ListRequest convention.
-// Take: 0 means ZERO records (not "fetch all" like POS endpoints).
-// Must send a real Take value large enough to cover the full dataset.
-//   Countries: ~250 worldwide → Take: 300
-//   States:    ~50 per country → Take: 100
-//   Cities:    can be large → Take: 2000
+// These endpoints use Serenity's ListRequest convention: Take: 0 means ZERO
+// records (not "fetch all" like POS endpoints), so a real Take large enough
+// to cover the full dataset must be sent.
 //
-// FILTERING: a flat top-level key (e.g. { country_id: 101 }) 500s on both
-// States/List and Cities/List — confirmed live against UAT 2026-07-19.
-// The working filter shape is Serenity's EqualityFilter object:
-// { EqualityFilter: { country_id: 101 } }. Without this, State/City
-// dropdowns silently stayed empty forever (30-min staleTime + retry:1
-// swallowed the 500 with no visible error).
+// Filtering must use Serenity's EqualityFilter object ({ EqualityFilter: {
+// country_id } }) — a flat top-level key 500s on both States/List and
+// Cities/List.
 
 import axiosInstance from '@/lib/axios/axiosInstance';
 import API from '@/constants/apiEndpoints';

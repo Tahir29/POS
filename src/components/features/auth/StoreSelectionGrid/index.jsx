@@ -1,15 +1,9 @@
 'use client';
 
-// Store selection screen — searchable dropdown replaces the card list.
-// Scales cleanly from 1 store to 100+ stores.
-// Uses shadcn/ui Command (combobox pattern) for search + select.
-//
-// NOTE: The design mockup shows an address/city line under each store
-// (e.g. "14 Hill Road, Bandra West, Mumbai"). The store object returned by
-// useActiveStore only carries company_id / mailing_name / company_code —
-// no address or city field exists on this record — so that line is
-// intentionally omitted rather than fabricated. Revisit if OrnaVerse ever
-// exposes store address fields.
+// Store selection screen — searchable combobox (shadcn/ui Command), scales
+// from 1 store to 100+. No address/city line under each store: the store
+// object only carries company_id / mailing_name / company_code, so it's
+// omitted rather than fabricated.
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';

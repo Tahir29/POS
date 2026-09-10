@@ -248,22 +248,18 @@ export async function generateInvoicePDF(transactionId) {
 /**
  * Every outstanding credit-bearing receipt for this party, in one flat list
  * — Return, Exchange, Scheme Receipt, URD Purchase, Order/Invoice advance,
- * whatever the party currently has. This REPLACES getInvoiceAdvances/
+ * whatever the party currently has. This is the one call OrnaVerse's own
+ * payment screen makes (the per-category getInvoiceAdvances/
  * getInvoiceCreditNote/getInvoiceExchange/getInvoiceOldGold/getInvoiceScheme
- * (removed 2026-08-18) — those five endpoints 500 on this tenant and are
- * never called by OrnaVerse's own POS; this is the one call their payment
- * screen actually makes. See the comment on API.INVOICE_HELPERS for the
- * live capture that confirmed it, and useInvoiceHelpers.js for how the
- * returned rows are bucketed back into the 5 category totals the UI shows.
+ * endpoints 500 on this tenant and were removed); see useInvoiceHelpers.js
+ * for how the rows are bucketed back into the category totals the UI shows.
  *
  * Deliberately no `company_id` in the request — the real call omits it.
  *
  * @param {{ party_id: number }} params
  * @returns {Promise<object[]>} rows: { transaction_id, document_id,
  *   document_no, balance_amount, ledger_id, document_ledger_id, mode_id,
- *   mode_code, mode_type, allow_partial, ... } — same shape
- *   refundService.js's getCustomerCredits() already reads from this
- *   endpoint successfully.
+ *   mode_code, mode_type, allow_partial, ... }
  */
 export async function getPartyReceipts({ party_id }) {
   if (!party_id) return [];

@@ -1,12 +1,8 @@
 'use client';
 
-// Phase 12 — Reservations (Coming Soon placeholder).
-//
-// Product reservation / hold endpoints (create, view active, cancel,
-// expiry management, history) are Not Available In Current API Collection
-// (OrnaVerse Advantage API v3.0). This screen exists so the sidebar item
-// has a destination, and clearly communicates that the feature is pending
-// API availability.
+// Reservations — placeholder page. Product hold/reservation endpoints are
+// not available in the current OrnaVerse Advantage API (v3.0); this screen
+// gives the sidebar item a destination until they ship.
 
 import Link from 'next/link';
 import { Bookmark, ShoppingBag } from 'lucide-react';

@@ -34,17 +34,16 @@ export default function CartDrawer({ isOpen, onClose }) {
     detachCustomer,
   } = useCart();
 
-  // Same query DiscountSection/the cart page/checkout all share, keyed on
-  // cart contents + applied promo codes — applying a code anywhere shows up
-  // everywhere with zero extra requests. See cart/page.jsx's own comment.
+  // Shared query (keyed on cart contents + applied promo codes) with
+  // DiscountSection/cart page/checkout, so applying a code anywhere shows
+  // up everywhere with zero extra requests. See cart/page.jsx.
   const { lineItems: pricedLineItems, totals: pricedTotals, isLoading: isPricing } = useCheckoutPricing();
   const pricedByCartIndex = useMemo(
     () => mapPricedLinesToCart(items, pricedLineItems),
     [items, pricedLineItems]
   );
 
-  // See cart/page.jsx's identical comment — re-derived here, not trusted
-  // from redeemedCoins as-is.
+  // Re-derived from pricedTotals rather than trusting redeemedCoins as-is; see cart/page.jsx.
   const payableTotal = pricedTotals ? Math.round(pricedTotals.netAmount) : 0;
   const coinsRedeemed = Math.max(0, Math.min(redeemedCoins, payableTotal));
 

@@ -1,13 +1,9 @@
 // The two lookups a POS Return needs before it can be created.
 //
-// WHY THIS EXISTS — root cause of the long-running Return/Create 500s
-// (resolved 2026-07-30 by capturing OrnaVerse's own UAT Returns journey):
-// a return line item CANNOT be hand-built from typed item_id/rate/qty. The
+// A return line item cannot be hand-built from typed item_id/rate/qty — the
 // server expects the ~186-field computed object produced by
 // Helpers/SetReturnItems, whose own input is the full nested sold-item
-// record from POS/InvoiceItems/List (get_child:true). Every attempt to
-// synthesise that shape — from an Order line, from an Invoice line, by
-// adding the individually-missing fields — returned an opaque 500.
+// record from POS/InvoiceItems/List (get_child:true).
 //
 // Mirrors the sales side conceptually: SetSalesItems : new sale ::
 // SetReturnItems : return.
@@ -22,20 +18,17 @@ import API from '@/constants/apiEndpoints';
  * invoice — that linkage is what ties the return to the sale, so never
  * strip it before handing the row to calculateReturnItems().
  *
- * BUG FIX 2026-09-03: neither companyId nor a backstop filter was applied —
- * confirmed live this endpoint IGNORES company_id entirely (party_id 2221:
- * identical 10 rows across companies [1,4], with no company_id, company_id:1,
- * and company_id:4 all sent). Without the client-side filter below, the
- * Returns item picker could offer — and let staff attempt to return — an
- * item the customer bought at a DIFFERENT store than the one currently
- * active. company_id is still sent in case OrnaVerse fixes this server-side
- * later.
- * CAVEAT: `take` caps how many rows are fetched before filtering, so if a
- * customer has more than `take` sold items spread across stores, some of
- * the active store's own returnable items could fall outside the fetched
- * page and never reach the filter at all. Raising `take` (or paginating)
- * would close that gap; not done here since it's outside what this fix
- * confirmed live.
+ * This endpoint IGNORES company_id server-side (identical rows come back
+ * regardless of what's sent), so results are also filtered client-side by
+ * companyId — without it, the Returns item picker could let staff attempt to
+ * return an item the customer bought at a DIFFERENT store than the one
+ * currently active. company_id is still sent in case OrnaVerse fixes this
+ * server-side later.
+ *
+ * CAVEAT: `take` caps how many rows are fetched before filtering, so a
+ * customer with more than `take` sold items spread across stores could have
+ * some of the active store's own returnable items fall outside the fetched
+ * page. Raising `take` (or paginating) would close that gap.
  * @param {{ partyId: number, companyId?: number, take?: number }} params
  * @returns {Promise<object[]>} sold-item rows, scoped to companyId
  */
@@ -61,10 +54,9 @@ export async function getSoldItems({ partyId, companyId, take = 25 }) {
  * UNMODIFIED (same contract as calculateItemRates/SetSalesItems — the
  * server needs the whole shape to recompute against).
  *
- * is_tax_applicable:false and calculate_rates:false mirror what OrnaVerse's
- * own Returns screen sends: a return reverses the ORIGINAL sale's figures
- * rather than re-pricing at today's metal rate, which is why rates aren't
- * recalculated here (unlike the sales-side SetSalesItems call).
+ * is_tax_applicable:false and calculate_rates:false mirror OrnaVerse's own
+ * Returns screen: a return reverses the ORIGINAL sale's figures rather than
+ * re-pricing at today's metal rate.
  *
  * @param {{ items: object[], documentDate?: Date }} params
  * @returns {Promise<object[]>} line items ready for Return/Create
@@ -85,10 +77,9 @@ export async function calculateReturnItems({ items, documentDate = new Date() })
 /**
  * Same, for BUY BACK. Separate endpoint rather than a flag — a buyback is
  * the store re-purchasing the piece (valued as goods) rather than reversing
- * a sale, so the server prices it differently.
- *
- * Its request notably omits `calculate_rates` entirely; sending the return
- * variant's body shape here is not equivalent.
+ * a sale, so the server prices it differently. Its request notably omits
+ * `calculate_rates` entirely; the return variant's body shape is not
+ * equivalent.
  *
  * @param {{ items: object[], documentDate?: Date }} params
  * @returns {Promise<object[]>} line items ready for BuyBack/Create
@@ -107,12 +98,11 @@ export async function calculateBuybackItems({ items, documentDate = new Date() }
 /**
  * Same, for EXCHANGE.
  *
- * IMPORTANT — an Exchange document is ONE-SIDED, exactly like a Return.
- * Confirmed live 2026-07-30: it carries a single `line_items` array (the
- * item coming back) and NO replacement item. Completing it simply raises
- * the customer's credit; they then buy the replacement as a normal sale
- * that spends that credit. So "exchange" here does not mean "swap in one
- * document" — don't model a second line-item set for it.
+ * An Exchange document is ONE-SIDED, exactly like a Return: it carries a
+ * single `line_items` array (the item coming back) and no replacement item.
+ * Completing it simply raises the customer's credit; they then buy the
+ * replacement as a normal sale that spends that credit — don't model a
+ * second line-item set for it.
  *
  * @param {{ items: object[], documentDate?: Date }} params
  * @returns {Promise<object[]>} line items ready for Exchange/Create

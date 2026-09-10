@@ -1,11 +1,8 @@
-// Mutation hooks for Estimation/Quotation: Create → Post (convert to sale),
-// or Cancel (customer declined). Mirrors useTransactionMutations.js.
-//
-// ANALYTICS ENRICHED 2026-09-04 — same fix as useTransactionMutations.js:
-// every event now carries customer_id/store_id (session-derived, since
-// Post/Cancel receive only a bare transactionId), and CREATE additionally
-// carries party_id/net_amount/pieces/weight/line_item_count straight off
-// the payload just posted to OrnaVerse.
+// Mutation hooks for Estimation/Quotation: Create -> Post (convert to sale),
+// or Cancel (customer declined). Mirrors useTransactionMutations.js: every
+// tracked event carries customer_id/store_id (session-derived), and CREATE
+// additionally carries party_id/net_amount/pieces/weight/line_item_count
+// off the payload posted to OrnaVerse.
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-toastify';
@@ -17,11 +14,6 @@ import TOAST from '@/constants/toastMessages';
 import tracker from '@/lib/analytics/tracker';
 import EVENTS from '@/lib/analytics/events';
 
-// FIXED 2026-08-27: `fallback` is new — same fix as
-// useTransactionMutations.js's identical helper. Each call site below now
-// passes the matching TOAST.ESTIMATION.*_FAILED constant instead of every
-// stage collapsing onto the same generic 'Something went wrong.' the
-// moment the server didn't send back a usable reason.
 function getErrorMessage(error, fallback = 'Something went wrong.') {
   return (
     error?.response?.data?.Message ??
@@ -77,9 +69,8 @@ export function usePostEstimation({ onSuccess } = {}) {
       onSuccess?.(data);
     },
     onError: (error, transactionId) => {
-      // "Post" here means convert-to-sale — TOAST.ESTIMATION.CONVERT_FAILED
-      // is the matching failure constant, not a POST_FAILED (which doesn't
-      // exist for this domain).
+      // "Post" means convert-to-sale here, so the matching constant is
+      // CONVERT_FAILED, not POST_FAILED (which doesn't exist for this domain).
       const message = getErrorMessage(error, TOAST.ESTIMATION.CONVERT_FAILED);
       toast.error(message);
       tracker.track(EVENTS.ESTIMATION_FAILED, { stage: 'post', transactionId, error: message, ...sessionCtx });

@@ -1,17 +1,9 @@
 // Client-side service for Shopify data used in Lucira POS.
 //
-// ─── FUTURE-PROOF SWAP POINT ───────────────────────────────────────────────
-// Currently: media (images + video) is fetched from Shopify's GraphQL Admin
-//            API via our proxy route.
-// Future:    if OrnaVerse starts returning image URLs natively (image fields
-//            on Style/Retrieve or ProductCatalog/List become non-null), update
-//            ONLY this file. No hooks, components, or pages need to change.
-//
-//   TODAY  → getShopifyProductMedia(externalProductId)
-//              calls /api/shopify/product-media/{id}  (our proxy → Shopify)
-//
-//   FUTURE → replace fetch() body to read OrnaVerse image fields directly
-// ───────────────────────────────────────────────────────────────────────────
+// Media (images + video) is fetched from Shopify's GraphQL Admin API via our
+// proxy route. If OrnaVerse ever starts returning image URLs natively, only
+// this file needs to change — no hooks, components, or pages depend on the
+// source.
 //
 // MEDIA SHAPE returned by getShopifyProductMedia:
 //   {

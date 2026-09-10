@@ -1,14 +1,7 @@
-// src/components/shared/LoadingSpinner/index.jsx
-// Reusable loading spinner component.
-// Used by PersistGate while Redux state is being rehydrated,
-// and across the app for any async loading state.
-
-/**
- * LoadingSpinner
- * Displays an animated spinner — full screen or inline.
- *
- * @param {{ fullScreen?: boolean, size?: 'sm' | 'md' | 'lg' }} props
- */
+// Reusable animated loading spinner (full screen or inline). Used by
+// PersistGate during Redux rehydration, and across the app for async loading.
+//
+// @param {{ fullScreen?: boolean, size?: 'sm' | 'md' | 'lg' }} props
 export default function LoadingSpinner({ fullScreen = false, size = 'md' }) {
   const sizeClasses = {
     sm: 'h-4 w-4 border-2',
