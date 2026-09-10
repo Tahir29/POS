@@ -1,59 +1,34 @@
 // Builds Invoice/Order Create line_items[] from the REAL STOCK PIECES being
-// sold — captured verbatim from OrnaVerse's own UAT sales counter on
-// 2026-08-05, not inferred.
+// sold, captured from OrnaVerse's own UAT sales counter.
 //
-// ── WHY THIS IS BUILT ON STOCK ROWS, NOT CATALOG ITEMS ──────────────────
+// Pricing the catalog record and handing the result to Create produces a
+// payload the server accepts structurally but cannot fulfil, since it never
+// names the physical piece leaving the shelf — every such attempt was
+// rejected with "Not enough stock of <item_code> can not Save", which reads
+// like the shelf is empty even when it isn't. The captured journey:
 //
-// This used to price the CATALOG record (Items/Retrieve or a Style variant)
-// and hand the result to Create. That produces a payload the server accepts
-// structurally but cannot fulfil, because it never names the physical piece
-// leaving the shelf. Every such attempt was rejected with
+//   1. Inventory/StockJournal/List { item_id, company_id, has_sku: true }
+//        → one row per physical piece, already carrying item_line_no, sku,
+//          location_id, item_attribute_id and a real item_cost.
+//   2. Helpers/SetSalesItems { selected_products: [...those rows...],
+//                              document_id: 54 }
+//        → prices them; every identity field above passes through untouched.
+//   3. POS/Invoice/Create { line_items: [...priced rows + sales_person_id] }
+//        → 200. sales_person_id is the only field added after pricing.
 //
-//     "Not enough stock of <item_code> can not Save"
+// item_line_no (the STOCK LINE of the physical piece, not a 1..n counter),
+// sku (the piece's own stock SKU, not the item code) and item_cost (its real
+// purchase cost, not 0 or derived) all arrive on the stock row rather than
+// being fabricated.
 //
-// which reads like the shelf is empty. It isn't — the item had stock the
-// whole time. The message means "I could not find the piece you described".
+// Re-pricing happens at SUBMISSION time rather than trusting whatever was
+// computed at add-to-cart, since metal rates move intraday.
 //
-// OrnaVerse's own POS makes the distinction visible in its UI: the
-// Estimation tab browses "Catalog", the Invoice tab browses "Stock". Their
-// stock picker lists one row per physical piece, each with its own SKU and
-// LINE# (e.g. SKU LJ10251288, LINE# 2844). Billing consumes those rows.
-//
-// The captured journey, reproduced exactly below:
-//
-//   1. Inventory/StockJournal/List  { item_id, company_id, has_sku: true }
-//        → one row per physical piece. The row already carries item_line_no,
-//          sku, location_id, item_attribute_id and a real item_cost.
-//   2. Helpers/SetSalesItems  { selected_products: [ ...those rows... ],
-//                               document_id: 54 }
-//        → prices them. Confirmed against the capture: the response is the
-//          input row plus pricing; every identity field above passes through
-//          untouched.
-//   3. POS/Invoice/Create  { line_items: [ ...priced rows + sales_person_id ] }
-//        → 200. The ONLY field their client adds after pricing is
-//          sales_person_id — verified by diffing their SetSalesItems response
-//          against their Create payload key by key.
-//
-// Three fields we previously fabricated are now simply correct because they
-// arrive on the stock row:
-//   • item_line_no — the STOCK LINE of the piece (2844), not a 1..n counter.
-//     Sending a counter is what made the stock lookup fail.
-//   • sku — the piece's stock SKU ("LJ10251288"), not the item code.
-//   • item_cost — its real purchase cost (29758.13), not 0. It could never
-//     be derived: across 12 sampled posted lines it tracks nothing in the
-//     sale pricing, and no catalog or stock-summary endpoint exposes it.
-//
-// Re-pricing still happens at SUBMISSION time rather than trusting whatever
-// was computed at add-to-cart, since metal rates move intraday.
-//
-// ── ORDERS TAKE A DIFFERENT PATH ENTIRELY ────────────────────────────────
-//
-// Everything above is the INVOICE journey. An ORDER (document 53) is a
-// booking, usually for a piece that is NOT on the shelf — their own counter
-// marks it "(MTO)", made to order — and doc 53 does not check stock. Their
-// Order journey, captured 2026-08-05, makes NO StockJournal call at all: the
-// item MASTER goes straight to SetSalesItems with document_id 53. So
-// buildPricedLineItems branches on the document type; see buildOrderLineItems.
+// An ORDER (document 53) is a different path entirely — a booking, usually
+// for a piece not on the shelf ("MTO", made to order). It does not check
+// stock: the item MASTER goes straight to SetSalesItems with document_id 53,
+// with no StockJournal call at all. buildPricedLineItems branches on which
+// path applies; see buildOrderLineItems.
 
 import { getStockPieces } from '@/services/inventoryService';
 import { getItemDetail, getDesignVariants } from '@/services/itemService';
@@ -69,7 +44,7 @@ import APP_CONFIG from '@/constants/appConfig';
  * percentage applies to a COMPONENT of the item chosen by
  * `discount_calc_on` (diamond / making charges / whole value), and the
  * server re-taxes the line afterwards. See promotionService.applyPromotions
- * for the captured contract and the numbers that prove it.
+ * for the captured contract.
  *
  * Promotions fold in sequence: each round is handed the previous round's
  * lines and the promotion rows raised so far, exactly as their POS does it.
@@ -94,24 +69,17 @@ export async function applyPromotionsToLines({
   for (const promo of appliedPromos) {
     if (!promo?.promoDetails) continue;
 
-    // FIX (2026-08-24, confirmed against OrnaVerse's OWN POS on UAT, not
-    // just guessed at): the comment below about "comes back with no items"
-    // was only ever true for SOME rejections. A component-scoped promotion
-    // ("20% Off Diamond") on an item with zero diamond value gets a normal
-    // 200 with the basket unchanged — the graceful case this function
-    // already handled. But a flat/whole-value promotion applied to a gold
-    // coin (e.g. "lucirablume5%") gets an outright 400: {"Error":{"Message":
-    // "No items match the promotion criteria"}} — reproduced live in
-    // OrnaVerse's own native POS, so this is a genuine server-side
-    // eligibility rule (bullion/coin excluded from that class of promotion),
-    // not a bug to route around. Before this try/catch, that 400 was
-    // UNCAUGHT: it threw out of this whole function, failed
-    // useCheckoutPricing's query for the ENTIRE cart, and disabled Place
-    // Order — for every line, not just the gold coin — while giving the
-    // operator no indication why. Caught here and folded into the exact
-    // same "declined to price" path below, so it now reaches the operator
-    // via DiscountSection's existing "Doesn't apply to these items"
-    // message instead of silently blocking the sale.
+    // A component-scoped promotion ("20% Off Diamond") on an item with zero
+    // diamond value gets a normal 200 with the basket unchanged (handled by
+    // the empty-items check below). But a flat/whole-value promotion applied
+    // to an item ineligible for that promotion class (e.g. a gold coin) gets
+    // an outright 400 "No items match the promotion criteria" — a genuine
+    // server-side eligibility rule, not a bug to route around. Left uncaught,
+    // that 400 fails pricing for the ENTIRE cart and disables Place Order for
+    // every line, not just the ineligible one, with no indication why — so
+    // it's caught here and folded into the same "declined to price" path,
+    // reaching the operator via DiscountSection's "Doesn't apply to these
+    // items" message instead of silently blocking the sale.
     let response;
     try {
       response = await applyPromotions({
@@ -146,36 +114,22 @@ export async function applyPromotionsToLines({
 
 /**
  * Fetches every stock candidate for ALL distinct item_ids in the cart in ONE
- * batched call, instead of claimStockPieces hitting the network once per
- * cart line.
+ * batched call, instead of one network round trip per distinct item.
  *
- * CONFIRMED 2026-09-08 this is safe: the only thing that genuinely needs
- * per-item SEQUENCING is the `claimed` Set (stopping two lines claiming the
- * same physical piece) — and that can only happen between lines sharing an
- * item_id, since getStockPieces' rows are already scoped by item_id
- * server-side. The FETCH itself never needed to be per-item; it was just
- * never batched. getStockPieces' `itemIds` (plural) filter is already
- * proven live for exactly this shape of batching — see catalogService.js's
- * own use of it to price a whole catalog PAGE in one call instead of one
- * per card. A 5-distinct-item cart used to make 5 sequential
- * StockJournal/List round trips before pricing could even start (the
- * customer-facing "how much do I owe" screen); this makes exactly 1,
- * regardless of cart size.
+ * The only thing that genuinely needs per-item sequencing is the `claimed`
+ * Set (stopping two lines claiming the same physical piece), which only
+ * matters between lines sharing an item_id — getStockPieces' rows are
+ * already scoped by item_id server-side, so the fetch itself is safe to
+ * batch. getStockPieces' `itemIds` (plural) filter is already used the same
+ * way to price a whole catalog page in one call.
  *
- * `take` sums the same per-item allowance the old N-calls-of-50 approach
- * guaranteed, but — CORRECTED 2026-09-08 — that's a shared ceiling across
- * every distinct item_id in ONE flat, Take-capped result set, not a
- * guaranteed per-item page the way N separate calls were. Nothing in this
- * codebase's own confirmed-live evidence for getStockPieces' `itemIds`
- * filter (see its header) says the server balances rows fairly across
- * requested ids when the cap binds — only that the plural filter itself is
- * honoured. A high-volume item (hundreds of stock rows) could in principle
- * fill the whole shared cap and crowd a genuinely-in-stock low-volume item
- * out of this batch entirely. claimStockPieces below re-fetches (scoped to
- * just the short item, same as the old per-item call) whenever this batch
- * looks insufficient for a specific item, so that scenario still resolves
- * correctly — it just costs one extra call in that specific, uncommon case
- * instead of silently misclassifying the whole cart as made-to-order.
+ * `take` is a SHARED ceiling across every distinct item_id in one flat,
+ * Take-capped result set — not a guaranteed per-item page. A high-volume
+ * item could in principle fill the whole shared cap and crowd a genuinely
+ * in-stock low-volume item out of this batch entirely; claimStockPieces
+ * below re-fetches (scoped to just that item) whenever this batch looks
+ * insufficient, so that scenario still resolves correctly at the cost of one
+ * extra call in that specific, uncommon case.
  *
  * @param {{itemId:number}[]} items
  * @param {number} activeStoreId
@@ -211,25 +165,22 @@ async function fetchStockCandidatesByItemId({ items, activeStoreId }) {
  * same piece can never be billed twice — possible when the same product sits
  * in the cart under two lines (different size/style selections).
  *
- * is_allocated (2026-08-27) — every StockJournal row carries this field;
- * confirmed live against OrnaVerse's own UAT tenant that it's a real,
- * populated flag (not always false), meaning a row can come back already
- * reserved by ANOTHER transaction. This is what OrnaVerse's own Invoice
- * flow means by "in stock" — not merely "a row exists for this item", but
- * "a row exists AND nothing else has already claimed it". Filtered out
- * here alongside the in-session `claimed` set (same intent, two different
- * scopes: `claimed` stops double-claiming a piece within THIS cart,
- * `is_allocated` stops claiming one some OTHER transaction already holds)
- * — this is the actual mechanism that decides whether a cart becomes an
- * Invoice (stock-backed) or an Order (made-to-order), so getting this
- * filter right IS "how the made to order and in stock order is placed".
+ * Every StockJournal row carries `is_allocated`, a real flag meaning the row
+ * may already be reserved by ANOTHER transaction. This is what "in stock"
+ * actually means to OrnaVerse's own Invoice flow — not merely "a row exists
+ * for this item" but "a row exists AND nothing else has already claimed it".
+ * It's filtered out here alongside the in-session `claimed` set (`claimed`
+ * stops double-claiming within THIS cart; `is_allocated` stops claiming a
+ * piece some OTHER transaction already holds) — this filter is the actual
+ * mechanism that decides whether a cart becomes an Invoice (stock-backed) or
+ * an Order (made-to-order).
+ *
  * `item.fulfillmentItemLineNo` (set by orderFulfillmentService's
- * mapFulfillmentLineToCartItem — see the header comment on
- * API.ORDER_FULFILLMENT for the confirmed-live evidence) steers this to
- * claim the SAME physical piece a source order already reserved, instead of
- * an arbitrary one of the same item_id. That's not an optimization — it's
- * what makes the source order actually close out server-side, and what
- * stops two open orders on the same style from claiming each other's piece.
+ * mapFulfillmentLineToCartItem) steers this to claim the SAME physical piece
+ * a source order already reserved, instead of an arbitrary one of the same
+ * item_id — required for the source order to actually close out
+ * server-side, and to stop two open orders on the same style from claiming
+ * each other's piece.
  *
  * @param {{ item: object, activeStoreId: number, claimed: Set<number>, candidatesByItemId: Map<number, object[]> }} params
  * @returns {Promise<object[]>} exactly `item.quantity` stock rows
@@ -240,12 +191,11 @@ async function claimStockPieces({ item, activeStoreId, claimed, candidatesByItem
   let rows = candidatesByItemId.get(item.itemId) ?? [];
   let available = rows.filter((r) => !r.is_allocated && !claimed.has(r.stock_journal_id));
 
-  // SAFETY NET (2026-09-08) — see fetchStockCandidatesByItemId's header for
+  // Only re-fetches (scoped to just THIS item_id) when the shared batch looks
+  // insufficient for what THIS item needs — see this function's header for
   // why the shared batch can legitimately come up short for one item even
-  // though that item genuinely has stock. Only re-fetches (scoped to just
-  // THIS item_id, exactly the old one-call-per-item shape) when the batch
-  // looks insufficient for what THIS item needs — the common case (every
-  // item's fair share was already in the batch) never pays this extra call.
+  // though it genuinely has stock. The common case (every item's fair share
+  // already in the batch) never pays this extra call.
   const neededForThisItem = item.fulfillmentItemLineNo != null ? 1 : (item.quantity ?? 1);
   if (available.length < neededForThisItem) {
     const response = await getStockPieces({ itemId: item.itemId, companyId: activeStoreId });
@@ -257,9 +207,9 @@ async function claimStockPieces({ item, activeStoreId, claimed, candidatesByItem
     // Fulfilling a specific order line — only the one piece it reserved will
     // do. Falling back to a different piece of the same item_id would still
     // complete A sale, but silently stop being "fulfillment" (the source
-    // order would never close out, since OrnaVerse's own correlation is keyed
-    // off this exact item_line_no) — surfacing that as a clear error beats
-    // an operator believing they fulfilled an order they didn't.
+    // order would never close out, since correlation is keyed off this exact
+    // item_line_no) — surfacing a clear error beats an operator believing
+    // they fulfilled an order they didn't.
     const row = available.find((r) => r.item_line_no === item.fulfillmentItemLineNo);
     if (!row) {
       throw new Error(
@@ -272,9 +222,8 @@ async function claimStockPieces({ item, activeStoreId, claimed, candidatesByItem
 
   const wanted = item.quantity ?? 1;
 
-  // Short stock is NOT an error here any more. The counter no longer asks the
-  // operator to declare up front whether this is a bill or a booking, so a
-  // basket the shelf can't fill simply becomes an order instead of a dead end.
+  // Short stock is NOT an error here — a basket the shelf can't fill simply
+  // becomes an order instead of a dead end.
   if (available.length < wanted) return null;
 
   const taken = available.slice(0, wanted);
@@ -303,29 +252,21 @@ async function resolveFullItem({ itemId, styleId }) {
 /**
  * Prices from the CATALOG ITEM MASTER — the made-to-order path.
  *
- * Used only when the shelf can't supply the basket. An order is a booking,
- * frequently for a piece the store doesn't have (their counter labels this
- * "(MTO)"). Doc 53 doesn't check stock, and their Order journey makes NO
- * StockJournal call at all: the master goes straight to SetSalesItems with
- * document_id 53. Confirmed 2026-08-05 by capturing that journey end to end.
+ * Used only when the shelf can't supply the basket ("(MTO)" on their own
+ * counter). Doc 53 doesn't check stock: the master goes straight to
+ * SetSalesItems with document_id 53, no StockJournal call at all.
  *
  * @returns {Promise<object[]>} one priced line per piece
  */
 async function buildOrderLineItems({ items, documentId }) {
-  // Unlike claimStockPieces, resolveFullItem has no shared mutable state
-  // across items (no `claimed`-style bookkeeping) — nothing here needs
-  // sequencing, so this runs concurrently instead of one distinct item at a
-  // time (was N sequential round trips for N distinct items in a
-  // made-to-order cart).
+  // No shared mutable state across items here (unlike claimStockPieces), so
+  // this runs concurrently rather than one item at a time.
   //
-  // allSettled, not Promise.all — CORRECTED 2026-09-08: Promise.all rejects
-  // on whichever promise fails FIRST CHRONOLOGICALLY, not first by cart
-  // order, so if two items' lookups both fail (a real possibility — a
-  // network blip affects concurrent requests together), the error could
-  // name whichever one happened to reject faster instead of the first item
-  // in the cart. allSettled always resolves, so the check below walks
-  // `items` in cart order itself and reports the first genuine failure —
-  // same deterministic behavior the old sequential loop had.
+  // allSettled, not Promise.all: Promise.all rejects on whichever promise
+  // fails first CHRONOLOGICALLY, not first by cart order, so if two items'
+  // lookups both fail the error could name whichever happened to reject
+  // faster. allSettled always resolves, so the check below walks `items` in
+  // cart order and reports the first genuine failure deterministically.
   const settled = await Promise.allSettled(
     items.map((item) => resolveFullItem({ itemId: item.itemId, styleId: item.styleId }))
   );
@@ -353,14 +294,10 @@ async function buildOrderLineItems({ items, documentId }) {
 /**
  * Prices the basket ONCE, and works out for itself what it is pricing.
  *
- * THE COUNTER NO LONGER ASKS. There used to be a "Complete as" choice —
- * Bill Now or Place Order — which meant the operator had to classify a sale
- * before knowing how it would be paid, and the two modes quoted different
- * figures for the same item. Two prices on one screen is a trust problem in
- * front of a customer, so the choice is gone.
- *
- * What's left is a fact, not a preference: either the shelf can supply this
- * basket or it can't.
+ * The counter no longer asks the operator to classify the sale as "Bill Now"
+ * or "Place Order" up front — that meant quoting two different figures for
+ * the same item before either was known to be true, which is a trust problem
+ * in front of a customer. Instead:
  *
  *   every line in stock  → price the PHYSICAL PIECES (doc 54). This is the
  *     only shape an invoice can be raised from — a master-built invoice is
@@ -369,9 +306,9 @@ async function buildOrderLineItems({ items, documentId }) {
  *   anything short       → price the MASTERS (doc 53). Made-to-order; there
  *     is no piece to name, and only an order can be raised.
  *
- * The document type then follows from what was collected, at submit time.
- * Both are priced by the same server call against today's rates, so the
- * figure the customer is quoted is the figure they are charged either way.
+ * The document type follows from what was collected, at submit time. Both
+ * are priced by the same server call against today's rates, so the figure
+ * the customer is quoted is the figure they are charged either way.
  *
  * @param {{
  *   items: {itemId, itemName, styleId, quantity}[],
@@ -383,8 +320,8 @@ async function buildOrderLineItems({ items, documentId }) {
 export async function buildPricedLineItems({ items, activeStoreId, salesPersonId }) {
   const claimed = new Set();
 
-  // ONE network round trip for every distinct item_id in the cart (was N
-  // sequential ones) — see fetchStockCandidatesByItemId's header comment.
+  // ONE network round trip for every distinct item_id in the cart — see
+  // fetchStockCandidatesByItemId's header comment.
   const candidatesByItemId = await fetchStockCandidatesByItemId({ items, activeStoreId });
 
   // The CLAIMING itself stays sequential, in cart order — `claimed` is what
@@ -436,8 +373,8 @@ export async function buildPricedLineItems({ items, activeStoreId, salesPersonId
  * @param {object[]} items      — cart items, in order
  * @param {object[]} lineItems  — buildPricedLineItems output, AFTER
  *   applyPromotionsToLines has run if any promo is applied — that's what
- *   writes the per-row `discount` field this now also surfaces (see its
- *   own header, and summarizeLineItems' identical sum for the header total).
+ *   writes the per-row `discount` field this also surfaces (see
+ *   summarizeLineItems for the same sum used in the header total).
  * @returns {Map<number, {
  *   lineTotal: number, unitPrice: number, discount: number, skus: string[],
  *   breakdown: object,
@@ -452,10 +389,9 @@ export function mapPricedLinesToCart(items, lineItems) {
   const expected = items.reduce((sum, item) => sum + (item.quantity ?? 1), 0);
   if (expected !== lineItems.length) return byCartIndex;
 
-  // ONE traversal of `rows` accumulating every field this line needs — was
-  // 11 separate .reduce() passes over the same rows (one per sumField call).
-  // This runs on every cart/checkout render, for every cart line, so the
-  // saved passes are real, not just tidiness.
+  // ONE traversal of `rows` accumulating every field this line needs, rather
+  // than a separate .reduce() pass per field — this runs on every
+  // cart/checkout render, for every cart line.
   const emptyTotals = () => ({
     sub_total: 0, discount: 0, metal_amount: 0, diamond_amount: 0,
     stone_amount: 0, color_stone_amount: 0, other_amount: 0,
@@ -490,23 +426,20 @@ export function mapPricedLinesToCart(items, lineItems) {
     byCartIndex.set(index, {
       lineTotal,
       unitPrice: +(lineTotal / quantity).toFixed(2),
-      // Per-line discount bifurcation (2026-08-26) — how much of the
-      // cart-wide discount landed on THIS line specifically. A component-
-      // scoped promo ("20% Off Diamond") can give ₹0 here on a line with no
-      // diamond even while it discounts others, which is correct, not a bug.
+      // How much of the cart-wide discount landed on THIS line specifically.
+      // A component-scoped promo ("20% Off Diamond") can give ₹0 here on a
+      // line with no diamond even while it discounts others — correct, not a
+      // bug.
       discount: round2(totals.discount),
       // Only invoices claim stock rows, so this is empty for an order.
       skus: totals.skus,
-      // Full per-product cost breakdown (2026-08-26) — same fields, same
-      // shape components/products/PriceBreakdown already renders on the
-      // product detail page (metal/diamond/stone/colour-stone/other +
-      // making charges + subtotal/taxable/tax/total), summed across every
-      // physical piece this line represents (quantity > 1 means >1 row).
-      // Deliberately the SAME snake_case field names SetSalesItems itself
-      // uses so this object can be handed straight to <PriceBreakdown
-      // priced={...} /> with no remapping — one component, one source of
-      // truth for what "the breakup" looks like, whether it's shown on the
-      // product page, the cart, or checkout.
+      // Full per-product cost breakdown — same fields/shape components
+      // already render on the product detail page (metal/diamond/stone/
+      // colour-stone/other + making charges + subtotal/taxable/tax/total),
+      // summed across every physical piece this line represents. Deliberately
+      // the SAME snake_case field names SetSalesItems itself uses so this
+      // object can be handed straight to <PriceBreakdown priced={...} /> with
+      // no remapping.
       breakdown: {
         metal_amount:       round2(totals.metal_amount),
         diamond_amount:     round2(totals.diamond_amount),
@@ -526,17 +459,16 @@ export function mapPricedLinesToCart(items, lineItems) {
 }
 
 /**
- * Sums the authoritative per-line totals (computed by SetSalesItems, not
- * the cart's display-only flat-3%-GST estimate) into header-level figures —
+ * Sums the authoritative per-line totals (computed by SetSalesItems, not the
+ * cart's display-only flat-3%-GST estimate) into header-level figures —
  * including the aggregate pieces/weight/net_weight the header itself
- * carries (confirmed live 2026-07-28: omitting these was part of what
- * still 500'd even after every other header field was correct).
+ * carries.
  * @param {object[]} lineItems — output of buildPricedLineItems
  */
 export function summarizeLineItems(lineItems) {
   // ONE traversal of `lineItems` (one row per physical piece in the whole
-  // order) accumulating every header field, instead of 8 separate .reduce()
-  // passes over the same array (one per sum() call).
+  // order) accumulating every header field, rather than a separate .reduce()
+  // pass per field.
   const totals = lineItems.reduce((acc, li) => {
     acc.sub_total      += li.sub_total ?? 0;
     acc.discount        += li.discount ?? 0;
@@ -559,8 +491,7 @@ export function summarizeLineItems(lineItems) {
     // discount onto each line and recomputes taxable_amount/tax_amount/
     // net_amount around it, leaving base_* holding the pre-discount values.
     // Summing what the lines actually carry is therefore correct either way,
-    // and is what their own header does — confirmed field for field against a
-    // real Order/Create (discount 12177.6, taxable 92521.44, tax 2775.64).
+    // matching what the real header does.
     discount:      round2(totals.discount),
     taxableAmount: round2(totals.taxable_amount),
     taxAmount:     round2(totals.tax_amount),

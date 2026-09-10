@@ -1,20 +1,9 @@
 'use client';
 
-// Product detail screen — revamped layout (split panel, sticky ATC bar,
-// image zoom, trust/certification sections) while preserving every piece
-// of existing functionality not shown in the static mockup:
-//   - CustomizeSheet (variant customization) — untouched, fully retained
-//   - CrossStoreStockPanel — retained, copy adjusted to match design
-//   - Made-to-order hint for OOS items — retained
-//   - All existing hooks/data flow — untouched
-//
-// NEW in this revamp:
-//   - Quantity now lives on the page (was hardcoded to 1) so the sticky
-//     bottom Total reflects it live
-//   - Image zoom modal (react-zoom-pan-pinch) via ProductImageGallery
-//   - Sticky bottom action bar (Total + Quantity + Add to Cart)
-//   - Static trust/certification sections (ProductTrustSection) — NOT
-//     per-product data, see that component's header comment
+// Product detail screen — split panel with sticky add-to-cart bar, image
+// zoom, and trust/certification sections. Pricing and stock status are
+// always resolved live (see useVariantPricing/useStockByStores usage below)
+// rather than read from stale catalog snapshot fields.
 
 import { Suspense, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams } from 'next/navigation';
@@ -95,29 +84,18 @@ function ProductDetailScreen() {
   } = useProductDetail(itemId);
 
   // ── UI state ──────────────────────────────────────────────────────────────
-  // Declared before useStockByStores below so the "Stock Across Stores"
-  // panel can be scoped to whichever variant is currently confirmed, not
-  // always the base product.
+  // Declared before useStockByStores so "Stock Across Stores" can scope to
+  // whichever variant is currently confirmed, not just the base product.
   const [customizeOpen, setCustomizeOpen] = useState(false);
   const [selectedVariant, setSelectedVariant] = useState(null);
   const [quantity, setQuantity] = useState(1);
   const reduceMotion = useReducedMotion();
 
-  // Cross-store stock for the confirmed variant when one is selected,
-  // otherwise the base product. MTO variants have no real item_id to check
-  // (see CrossStoreStockPanel's hide condition below) — falls back to the
-  // product's own id, which is fine since the panel is hidden in that case.
-  //
-  // This is also now the ONLY source used to derive the base product's
-  // stock status (see baseStockStatus below) — the separate GetStock-by-SKU
-  // endpoint (useProductStock, removed 2026-07-26) was confirmed live to
-  // return an empty result for real in-catalog SKUs, and its fallback
-  // optimistically defaulted to "in stock" with zero real signal behind it.
-  // That caused a real, user-reported bug: the "In stock at {store}" banner
-  // showed true for a store with genuinely zero pieces, while this exact
-  // per-store data (same call, already correct) showed it had no row for
-  // that store at all. Deriving both from the same source keeps them
-  // consistent by construction.
+  // Cross-store stock for the confirmed variant, else the base product (MTO
+  // variants have no real item_id — falls back to the product's id, which is
+  // safe since the panel is hidden for MTO anyway). Also the sole source for
+  // baseStockStatus below — do not reintroduce a separate SKU-based stock
+  // call here (see baseStockStatus comment for why).
   const {
     data: storeStocks = [],
     isLoading: storeStocksLoading,
@@ -125,9 +103,8 @@ function ProductDetailScreen() {
     refetch: refetchStoreStocks,
   } = useStockByStores(selectedVariant?.item_id ?? product?.item_id);
 
-  // Current store's stock qty. Not a hard cap on quantity — customers can
-  // order more than what's physically in stock; anything beyond this is
-  // fulfilled as Made to Order (see madeToOrderQty below).
+  // Not a hard cap on quantity — anything beyond this is fulfilled as
+  // Made to Order (see madeToOrderQty below).
   const currentStoreStock = useMemo(
     () => storeStocks.find((s) => s.company_id === activeStoreId) ?? null,
     [storeStocks, activeStoreId]
@@ -148,15 +125,12 @@ function ProductDetailScreen() {
   } = useDesignVariants(product?.style_id ?? null, activeStoreId);
 
   // ── Shopify images ────────────────────────────────────────────────────────
-  // Raw `primaryImage` this hook returns (images[0]) is deliberately never
-  // used directly here — it's colour-agnostic; see activePrimaryImage below.
+  // Raw `primaryImage` (images[0]) is deliberately unused here — it's
+  // colour-agnostic; see activePrimaryImage below.
   const { images: shopifyImages, videos: shopifyVideos, isLoading: shopifyImagesLoading } = useShopifyProductImages(externalProductId);
 
-  // Gallery is genuinely "loading" while either: variants are still
-  // resolving (which is what determines externalProductId in the first
-  // place), or the Shopify images fetch itself is in flight. Combining both
-  // avoids the gallery flashing a hard "no image" state before either has
-  // had a chance to return data.
+  // Combines both loading flags so the gallery doesn't flash "no image"
+  // before variants (which resolve externalProductId) have settled.
   const imagesLoading = variantsLoading || shopifyImagesLoading;
 
   useEffect(() => {
@@ -165,20 +139,12 @@ function ProductDetailScreen() {
 
 
   // ── Derived ───────────────────────────────────────────────────────────────
-  // Base product's stock status at the CURRENT store — derived from the
-  // same real per-store data (GetStockByStores) that powers "Stock Across
-  // Stores" below, not a separate/looser signal. No row for the active
-  // store in that response means genuinely zero pieces there.
-  //
-  // Binary only (in_stock / out_stock) — matches the variant path below and
-  // the rest of this page's UI (tag, banner, details block all only ever
-  // render two states). A 1-3-piece "low_stock" tier was tried here and
-  // fixed on 2026-07-26 — the UI doesn't have a third visual state for it,
-  // so it was showing as an unexplained "Low Stock" tag for a genuinely
-  // in-stock product.
-  // 'error' is a distinct third state, never folded into 'out_stock' — a
-  // failed stock check must not read as a confirmed zero (see
-  // useStockByStores' header comment for the real-world bug this caused).
+  // Base stock status at the current store, derived from the same
+  // GetStockByStores data as "Stock Across Stores" (no row for the active
+  // store means genuinely zero pieces). Binary only (in_stock/out_stock) —
+  // the UI has no third visual state, so don't reintroduce a "low_stock"
+  // tier here. 'error' stays a distinct state, never folded into
+  // 'out_stock' — a failed check must not read as a confirmed zero.
   const baseStockStatus = storeStocksLoading
     ? null
     : storeStocksError
@@ -188,37 +154,24 @@ function ProductDetailScreen() {
   // Active item = selected variant (if customized) else original product
   const activeItem = selectedVariant ?? product;
 
-  // FIXED 2026-09-08 — confirmed live: adding the same style to the mini
-  // cart in two different metal colours (Yellow Gold, then 18kt White
-  // Gold) showed the Yellow Gold photo on BOTH cart lines. `primaryImage`
-  // above (useShopifyProductImages' raw images[0]) is colour-BLIND —
-  // "whichever photo Shopify lists first for the whole product listing",
-  // regardless of which variant is actually selected. ProductImageGallery
-  // below already solves this correctly for its own on-screen display via
-  // colour-filtered images; resolveActiveProductImage is that exact same
-  // logic (moved to lib/productImages.js so both callers share it),
-  // applied here too so whatever gets attached to a cart line always
-  // matches the photo the customer was actually looking at — never a
-  // fixed, colour-agnostic pick.
+  // Colour-matched image for the cart line — reuses ProductImageGallery's
+  // own colour-filtering logic (lib/productImages.js) instead of the
+  // colour-blind raw primaryImage, so the cart line always shows the photo
+  // matching the variant actually selected.
   const activePrimaryImage = useMemo(
     () => resolveActiveProductImage(shopifyImages, activeItem?.metal_color_name ?? null, activeItem, resolveImageSrc),
     [shopifyImages, activeItem]
   );
 
-  // A confirmed variant counts as Made to Order either because it's the
-  // pseudo-fallback (_isMTO — no real SKU exists for that combo) or because
-  // it's a real SKU with zero stock everywhere — same condition CustomizeSheet
-  // itself uses for the "Made to Order" badge, kept in sync here so "Stock
-  // Across Stores" hides in both cases, not just the fallback one.
+  // MTO = pseudo-fallback (_isMTO, no real SKU for that combo) or a real SKU
+  // with zero stock everywhere — same condition CustomizeSheet uses for its
+  // badge, kept in sync so "Stock Across Stores" hides in both cases.
   const isSelectedVariantMTO = !!selectedVariant &&
     (selectedVariant._isMTO || (selectedVariant.pieces ?? 0) === 0);
 
-  // Downstream `stockStatus` always means "status of whatever is currently
-  // active" — base product, or the confirmed customized variant — so the
-  // floating image badge, in-stock banner, MTO hint, and sticky bar all stay
-  // in sync with customization instead of being frozen on the base product.
-  // Variant stock is real per-store data (see useDesignVariants), so this is
-  // binary in_stock/out_stock rather than distinguishing low_stock.
+  // "Status of whatever is currently active" — base product or confirmed
+  // variant — so the badge/banner/MTO hint/sticky bar stay in sync with
+  // customization instead of freezing on the base product.
   const stockStatus = selectedVariant
     ? (isSelectedVariantMTO ? 'out_stock' : 'in_stock')
     : baseStockStatus;
@@ -234,9 +187,7 @@ function ProductDetailScreen() {
     (activeSize ? ` · Size ${activeSize}` : '');
   const activeCode = activeItem?.item_code ?? null;
 
-  // Copy-to-clipboard for the SKU line — brief icon swap to a checkmark
-  // (matches the "copied" affordance elsewhere: icon confirms, toast states
-  // it explicitly) rather than only one or the other.
+  // Copy-to-clipboard for the SKU line.
   const [skuCopied, setSkuCopied] = useState(false);
   const skuCopyTimeoutRef = useRef(null);
   useEffect(() => () => clearTimeout(skuCopyTimeoutRef.current), []);
@@ -256,16 +207,10 @@ function ProductDetailScreen() {
     }
   }, []);
 
-  // ALWAYS price live. This used to be conditional on item_rate === 0, on
-  // the assumption that a non-zero item_rate was a real static price. It
-  // isn't: measured on UAT 2026-08-05, stored rates understate the piece by
-  // 2-3x because they omit stone value (ADJLR00826 48,704.82 stored vs
-  // 107,840.02 charged). Because this is the number that becomes the cart's
-  // unitPrice, a stale rate here is what the customer gets quoted — and the
-  // invoice is then raised at the real figure and rejected as short-paid.
-  // Shopify-synced `price` is likewise a snapshot, not today's rate
-  // (confirmed 2026-07-22, ~12% drift). SetSalesItems is the only source
-  // that agrees with what checkout actually bills.
+  // ALWAYS price live via SetSalesItems — the only source that agrees with
+  // what checkout actually bills. Stored item_rate/Shopify price are stale
+  // snapshots (see numericUnitPrice comment below for why neither is a
+  // usable fallback).
   const {
     data:      livePricing,
     isLoading: pricingLoading,
@@ -273,50 +218,32 @@ function ProductDetailScreen() {
     refetch:   refetchPricing,
   } = useVariantPricing(activeItem ?? null);
 
-  // sub_total is rate + labour, PRE-TAX — the cart adds GST itself, so this
-  // keeps the display tax-exclusive and makes the cart total land exactly on
-  // the invoice's net_amount.
-  //
-  // There is deliberately NO fallback to item_rate/sale_price/price/mrp/rate.
-  // Every one of those is a stale snapshot: quoting one and then billing the
-  // live figure is precisely the mismatch this path exists to prevent. If
-  // pricing hasn't resolved — or the server priced it at 0, as it currently
-  // does for every Silver925 item — the price stays null, AddToCartButton
-  // stays disabled, and nothing wrong is ever shown or charged.
+  // sub_total is rate + labour, PRE-TAX (cart adds GST itself, so the
+  // display stays tax-exclusive and the cart total lands on invoice
+  // net_amount). Deliberately NO fallback to item_rate/sale_price/price/mrp
+  // — those are stale snapshots, and quoting one then billing the live
+  // figure is exactly the mismatch this path prevents. If pricing hasn't
+  // resolved, or the server prices it at 0 (currently every Silver925
+  // item), price stays null and AddToCartButton stays disabled.
   const numericUnitPrice = (livePricing?.sub_total ?? 0) > 0
     ? livePricing.sub_total
     : null;
 
   const price = formatPrice(numericUnitPrice);
 
-  // The real, scannable per-piece SKU (e.g. "LJ11255071") — distinct from
-  // `activeCode`/`product.item_code` (e.g. "LJ-PR0329-14RGLGD-12"), the
-  // catalog/style code. `product.sku` on the master record is always an
-  // empty string (confirmed live 2026-08-26) — a catalog item has no
-  // serialized piece attached to it. Only `livePricing` (SetSalesItems,
-  // resolved against one real StockJournal row) ever carries a genuine sku,
-  // and only once a piece was actually found to price against — so this is
-  // null until then, same gating as numericUnitPrice above. The QR/barcode
-  // scanner reads THIS value, not the item code, hence showing both.
+  // Scannable per-piece SKU — distinct from activeCode/product.item_code,
+  // the catalog/style code. Only livePricing ever carries a genuine sku
+  // (product.sku on the master record is always empty); null until a piece
+  // is actually priced. The barcode/QR scanner reads this value, not the
+  // item code — hence showing both.
   const activeSku = livePricing?.sku && livePricing.sku.trim() ? livePricing.sku : null;
 
-  // view_item — once per product, and only once the live price is in.
-  // It used to fire on load with the stale item_rate/sale_price/mrp chain,
-  // which reported a figure to analytics that the shop never charges. Waiting
-  // costs a beat but keeps reported value equal to real value.
-  //
-  // WEBENGAGE-ONLY DETAIL (2026-08-27) — everything the GA4 call above
-  // deliberately leaves out, on the same event, via trackEcommerce()'s
-  // webengageExtra bag (see tracker.js's jsdoc: this never reaches GA4,
-  // only WebEngage). Nothing here is new data — every field already lives
-  // on `activeItem`/`product`, `livePricing` (the same row PriceBreakdown
-  // renders), the cart's attached-customer slice, or storeSlice; this just
-  // makes sure none of it stops at this page instead of reaching WebEngage.
-  // Flat scalars only, no nested objects/arrays (address is destructured
-  // out into its own fields) — WebEngage's SDK only accepts
-  // string/number/boolean/Date per attribute, and omitNullish() in
-  // tracker.js strips anything not on hand yet rather than sending a
-  // stray null.
+  // view_item — fires once per product, only once live price has resolved
+  // (waiting costs a beat but keeps the reported value equal to what's
+  // actually charged). The webengageExtra bag below (see tracker.js jsdoc)
+  // never reaches GA4 — WebEngage only, flat scalars only (its SDK only
+  // accepts string/number/boolean/Date per attribute; omitNullish() in
+  // tracker.js strips anything not on hand).
   const trackedItemIdRef = useRef(null);
   useEffect(() => {
     if (!product || numericUnitPrice == null) return;
@@ -333,14 +260,8 @@ function ProductDetailScreen() {
         price:     numericUnitPrice,
       }],
     }, {
-      // REFACTORED 2026-09-08 to use the shared productAttributes.js
-      // builder (see that file's own header) — this used to hand-pick a
-      // ~20-field subset directly, which the audit that led to this file
-      // existing found was missing gemstone shape/color/size (only had
-      // weight/piece counts), dimensions, the product image, product_url,
-      // and item_size_id. All now included via the shared builder, same
-      // activeItem-then-product fallback and live-priced `livePricing`
-      // this page already used before.
+      // Shared builder (productAttributes.js) — same activeItem-then-product
+      // fallback and live-priced livePricing this page always used.
       ...buildProductAttributes({
         product,
         activeItem,
@@ -353,25 +274,14 @@ function ProductDetailScreen() {
         selectedSizeName: activeSize,
         hasStock: stockStatus === 'in_stock' ? true : stockStatus === 'out_stock' ? false : null,
       }),
-      // sku here stays activeSku specifically (the per-piece scannable
-      // code — see this page's own comment on why it's distinct from
-      // productAttributes.js's own `sku`, which reads the same
-      // livePricing.sku field but only once a size/variant is truly
-      // resolved); kept as its own key for continuity with existing
-      // WebEngage segments already built on `product_sku`.
+      // Kept as its own key (distinct from productAttributes.js's `sku`)
+      // for continuity with existing WebEngage segments built on product_sku.
       product_sku: activeSku,
       product_stock_status: stockStatus,
       price_currency: 'INR',
-      // Attached-customer data — "entirely" whatever the cart session
-      // already has (there's no fuller profile loaded on this page).
-      // FIXED 2026-09-04: an unattached browse used to OMIT customer_id
-      // entirely here (via omitNullish() in tracker.js) rather than say
-      // "guest" — so a product view with no customer attached was
-      // indistinguishable, in WebEngage, from one where the id simply
-      // failed to reach this call. customer_id now always resolves to a
-      // real POS customer id or the literal string "guest"; the rest
-      // (name/mobile/address) still correctly have nothing to report for a
-      // guest and stay omitted.
+      // customer_id always resolves to a real POS id or the literal string
+      // "guest" — never omitted — so a guest view is never indistinguishable
+      // from one where the id failed to reach this call.
       customer_id:              cartCustomerId ?? 'guest',
       customer_name:            cartCustomerName,
       customer_mobile:          cartCustomerMobile,
@@ -379,8 +289,6 @@ function ProductDetailScreen() {
       customer_state:           cartCustomerAddress?.state,
       customer_country:         cartCustomerAddress?.country,
       customer_zip:             cartCustomerAddress?.zip,
-      // Store context — company id + code, same values every other
-      // store-scoped call in this app already keys on.
       store_id:                 activeStoreId,
       store_code:               activeStoreCode,
       store_name:               activeStoreName,
@@ -391,54 +299,29 @@ function ProductDetailScreen() {
     cartCustomerAddress, activeStoreId, activeStoreCode, activeStoreName,
   ]);
 
-  // No stock-based ceiling — quantity is only bounded by QuantitySelector's
-  // own internal sane default (99) inside ProductStickyActionBar.
+  // Quantity has no stock-based ceiling — bounded only by
+  // QuantitySelector's own internal default (99) inside ProductStickyActionBar.
   const madeToOrderQty = Math.max(0, quantity - availableStock);
 
   const hasCustomization = !!product?.style_id;
 
-  // Records this view for RecentlyViewedCarousel — only actually does
-  // anything when a customer is attached (see the hook's own header). Must
-  // run before the loading/error early returns below since hooks can't be
-  // conditional; it already no-ops internally while `product` is still null.
-  // Passes the raw status, NOT stockStatus === 'in_stock' — that comparison
-  // collapses 'loading' (null), 'error', AND 'out_stock' all into the same
-  // false, and Items/Retrieve (product) reliably resolves before the
-  // separate GetStockByStores call (stockStatus) does. The hook needs to
-  // tell "genuinely out of stock" apart from "don't know yet" itself, or it
-  // records has_stock:false for products that are actually in stock — see
-  // useRecordProductView's own comment for the bug this caused live.
+  // Must run before the loading/error early returns (hooks can't be
+  // conditional); no-ops internally while product is null. Passes the raw
+  // stockStatus, NOT a stockStatus === 'in_stock' boolean — collapsing
+  // 'loading'/'error'/'out_stock' into one false would record has_stock:false
+  // for products that are actually in stock (see useRecordProductView's own
+  // comment).
   useRecordProductView(product, stockStatus);
 
-  // Wishlist heart — keyed to activeItem (selectedVariant ?? product), NOT
-  // always the base product the way useRecordProductView just above
-  // deliberately stays. That's intentional divergence, not an
-  // inconsistency: "recently viewed" is about which PAGE you were on, but
-  // a wishlist is the customer saying "I want THIS one" — if they picked
-  // 18KT White Gold, Size 7 in Customize and hit Confirm before tapping the
-  // heart, the wishlist entry must be that exact combination, not the
-  // page's original default. FIXED 2026-08-24 — this used to always read
-  // from `product`, silently discarding any confirmed customization the
-  // instant the heart was tapped.
-  //
-  // item_id is always safe to key on here, including the MTO pseudo-
-  // fallback: mtoFallback (built above) sets `item_id: product.item_id` —
-  // the base product's own real id — it only overrides karat/color/size, so
-  // activeItem.item_id is never a fake/missing id regardless of which
-  // branch produced it.
-  //
-  // Every OTHER field falls back to `product` because a real matched
-  // variant row (from Style/Retrieve) isn't guaranteed to carry every field
-  // ProductCard wants (e.g. image) — see useDesignVariants.js's own
-  // documented shape, which doesn't list one. The MTO fallback doesn't need
-  // this fallback (it already spread ...product for everything it didn't
-  // override), but it's harmless there since activeItem's own value simply
-  // wins first.
-  //
-  // has_stock mirrors stockStatus (the "currently active" status, in sync
-  // with customization) rather than baseStockStatus, matching what the
-  // in-stock banner/details block above already show for this exact page
-  // state.
+  // Keyed to activeItem (selectedVariant ?? product), NOT always the base
+  // product the way useRecordProductView above deliberately stays —
+  // "recently viewed" is about which page you were on, a wishlist is "I want
+  // THIS one" (the confirmed customization, not the page's default).
+  // item_id is always safe here, including the MTO pseudo-fallback (it sets
+  // item_id to the base product's real id). Every other field falls back to
+  // `product` because a matched variant row isn't guaranteed to carry every
+  // field ProductCard wants (see useDesignVariants.js's documented shape).
+  // has_stock mirrors stockStatus (currently active), not baseStockStatus.
   const wishlistProduct = useMemo(() => {
     if (!activeItem?.item_id) return null;
     return {
@@ -450,24 +333,18 @@ function ProductDetailScreen() {
       image_1:    activeItem.image_1    ?? product.image_1    ?? null,
       metal_id:   activeItem.metal_id   ?? product.metal_id   ?? null,
       // Items/Retrieve (and Style/Retrieve variants) have no karat_code
-      // field at all (unlike ProductCatalogRow) — only the human karat_name
-      // ("14KT"). Same conversion useRecordProductView uses above, or every
-      // item wishlisted from the PDP would carry a null karat_code and
-      // silently lose its "14 Karat …" label.
+      // field — only the human karat_name ("14KT") — hence the conversion.
       karat_code: deriveKaratCode(activeItem.karat_name ?? product.karat_name),
-      // Items/Retrieve only ever has the full color name, not the catalog
-      // list's short code — see lib/metalColor.js.
+      // Items/Retrieve only has the full color name, not the catalog list's
+      // short code — see lib/metalColor.js.
       metal_color_code: activeItem.metal_color_code ?? product.metal_color_code ?? null,
       metal_color_name: activeItem.metal_color_name ?? product.metal_color_name ?? null,
       has_stock:  stockStatus === 'in_stock' ? true : stockStatus === 'out_stock' ? false : null,
       net_weight: activeItem.net_weight ?? product.net_weight ?? null,
       weight:     activeItem.weight     ?? product.weight     ?? null,
-      // style_id belongs to the base design, not any one variant — every
-      // variant of a style shares it, so there's no activeItem branch here.
       style_id:   product.style_id ?? null,
-      // Size is ONLY ever a confirmed selection (selectedVariant), never
-      // the base product — a bare, uncustomized product has no size chosen
-      // yet, so this stays null until Customize is actually confirmed.
+      // Only ever a confirmed selection — a bare, uncustomized product has
+      // no size chosen yet, so this stays null until Customize is confirmed.
       item_size_id:   selectedVariant?.item_size_id   ?? null,
       item_size_name: selectedVariant?.item_size_name ?? null,
     };
@@ -523,11 +400,7 @@ function ProductDetailScreen() {
                   {product.item_name ?? 'Product'}
                 </h1>
 
-                {/* Below the images on mobile (this column stacks under
-                    the gallery there), under the title on every
-                    breakpoint — click smooth-scrolls to Customer Reviews
-                    at the bottom. Hidden entirely when there are none —
-                    see that component's own gate. */}
+                {/* Click smooth-scrolls to Customer Reviews at the bottom; hidden when there are none. */}
                 <ProductReviewSummaryLink shopifyProductId={externalProductId} />
               </div>
 
@@ -540,10 +413,8 @@ function ProductDetailScreen() {
               )}
             </div>
 
-            {/* Price. No strikethrough/"% OFF" pair: compare_price is another
-                stale master field, and showing a discount against a figure
-                that no longer matches what's charged is worse than showing
-                none. */}
+            {/* No strikethrough/"% OFF": compare_price is a stale master field —
+                showing a discount against a mismatched figure is worse than none. */}
             <div>
               <div className="flex items-baseline gap-2">
                 {pricingLoading ? (
@@ -562,10 +433,8 @@ function ProductDetailScreen() {
                     </button>
                   </p>
                 ) : (
-                  // Priced at 0 by the server, so it can't be sold — currently
-                  // every Silver925 item on this tenant, which OrnaVerse's own
-                  // POS also totals at 0. Say so rather than leaving a blank
-                  // where the price should be.
+                  // Server prices this at 0 (currently every Silver925 item on
+                  // this tenant — OrnaVerse's own POS also totals it at 0).
                   <p className="text-sm font-medium text-status-made-order">
                     Price not available for this option — needs costing before it can be sold
                   </p>
@@ -587,12 +456,8 @@ function ProductDetailScreen() {
               </div>
             )}
 
-            {/* Product details — karat/color/size + SKU, with a live
-                in-stock/out-of-stock indicator. Always visible (reflects the
-                base product on first load, then whichever variant is
-                confirmed via Customize) rather than only appearing after
-                customizing, so availability is never hidden behind an
-                interaction. */}
+            {/* Always visible (base product, then confirmed variant) so
+                availability is never hidden behind an interaction. */}
             {(activeDetailsLine || activeCode) && (
               <div className="rounded-xl bg-secondary/40 px-4 py-3 text-sm">
                 <div className="flex items-center justify-between gap-3">
@@ -622,9 +487,6 @@ function ProductDetailScreen() {
                 {activeCode && (
                   <p className="text-xs text-muted-foreground mt-0.5">
                     Item Code: {activeCode}
-                    {/* Real per-piece SKU — the scanner reads this, not the
-                        item code above. Only shown once pricing has actually
-                        resolved a physical piece (see activeSku's comment). */}
                     {activeSku && <> · SKU: {activeSku}</>}
                   </p>
                 )}
@@ -662,10 +524,8 @@ function ProductDetailScreen() {
               </p>
             )}
 
-            {/* Stock check failed — say so plainly rather than let it read
-                as a confirmed zero. Only reachable for the base-product
-                path (selectedVariant's own MTO/in-stock branch above never
-                produces 'error'). */}
+            {/* Only reachable for the base-product path — selectedVariant's
+                own MTO/in-stock branch above never produces 'error'. */}
             {stockStatus === 'error' && (
               <p className="flex items-center gap-2 text-sm font-medium text-status-made-order">
                 Couldn&apos;t check stock for this item
@@ -679,9 +539,7 @@ function ProductDetailScreen() {
               </p>
             )}
 
-            {/* Availability at other stores — hidden once the confirmed
-                customization is Made to Order (no real stock anywhere to
-                report), shown for the base product or any in-stock variant */}
+            {/* Hidden once the confirmed customization is Made to Order (no real stock anywhere to report). */}
             {!isSelectedVariantMTO && (
               <CrossStoreStockPanel
                 storeStocks={storeStocks}
@@ -691,14 +549,7 @@ function ProductDetailScreen() {
               />
             )}
 
-            {/* Price Breakdown — moved off the very top of the page (was
-            directly under the headline price, competing with Add to Cart
-            for the first thing seen) but placed BEFORE the spec cards
-            (2026-08-27, per explicit placement request), not beside them —
-            a full-width horizontal strip a customer reads top-to-bottom:
-            what this piece costs, THEN what it's made of. Same component
-            Cart/Checkout reuse per product; here it's simply given the full
-            page width instead of a per-line one. */}
+            {/* Full-width, placed before the spec cards: cost first, then composition. */}
             {numericUnitPrice != null && <PriceBreakdown priced={livePricing} />}
 
           </div>
@@ -710,13 +561,10 @@ function ProductDetailScreen() {
 
         <ProductTrustSection />
 
-        {/* Customer reviews — infinite scroll, bottom of page. Uses the
-            same externalProductId already resolved above for Shopify
-            images, so this adds zero extra OrnaVerse calls. */}
+        {/* Reuses externalProductId already resolved for Shopify images — no extra OrnaVerse calls. */}
         <ProductReviewsList shopifyProductId={externalProductId} />
 
-        {/* Recently viewed — bottom of page, only ever populated for an
-            attached customer (see useRecordProductView above). */}
+        {/* Only ever populated for an attached customer — see useRecordProductView above. */}
         <RecentlyViewedCarousel excludeItemId={product.item_id} />
 
       </div>
@@ -732,12 +580,9 @@ function ProductDetailScreen() {
         selectedSizeName={selectedVariant?.item_size_name ?? null}
         stockStatus={stockStatus}
         primaryImage={activePrimaryImage}
-        // ADDED 2026-09-08 — threaded through to AddToCartButton so its
-        // analytics event/cart-line attributes can carry the real price
-        // breakup (metal/diamond/stone amounts, per-piece sku), the same
-        // row PriceBreakdown/this page's own view_item event already use.
-        // See buildProductAttributes's own header for why this needs to
-        // be the LIVE-priced entity, never the item master's stale rate.
+        // Threaded through to AddToCartButton so its analytics/cart-line
+        // attributes carry the real price breakup — must be the live-priced
+        // entity, never the item master's stale rate.
         pricedItem={livePricing}
       />
 

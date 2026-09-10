@@ -12,10 +12,7 @@ import CatalogSkeleton from '@/components/features/catalog/CatalogSkeleton';
 import EmptyState      from '@/components/shared/EmptyState';
 import { Button }      from '@/components/ui/button';
 
-// Delegates to the shared EmptyState (same card/badge/icon convention used
-// everywhere else) instead of a one-off hand-rolled version — this was the
-// only catalog-specific empty state left over from before that convention existed.
-
+// Delegates to the shared EmptyState (same card/badge/icon convention used elsewhere).
 function CatalogEmptyState({ hasFilters, onClearFilters }) {
   return (
     <EmptyState
@@ -69,13 +66,9 @@ function FetchingSpinner() {
  *   onLoadMore:      () => void,
  *   onClearFilters:  () => void,
  * }} props
- *   storeCode (2026-08-24) — fixes every card's "In Stock" badge to THIS
- *   store's code instead of ProductCard's own default (activeStoreCode, the
- *   signed-in store). Used by OtherStoreSection (a different store's stock
- *   than the one the operator is browsing/signed into) AND, since
- *   2026-08-26, the primary catalog page too — its own store filter
- *   (catalogStoreId) can point at a store other than the signed-in one, and
- *   the badge must follow whichever store's catalog is actually on screen.
+ *   storeCode - overrides ProductCard's default "In Stock" store code
+ *   (activeStoreCode) with the store this grid is actually showing, since
+ *   that isn't always the signed-in store (see OtherStoreSection).
  */
 export default function ProductGrid({
   products       = [],

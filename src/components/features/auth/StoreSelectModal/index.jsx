@@ -7,22 +7,9 @@ import { useActiveStore } from '@/hooks/store/useActiveStore';
 import { useStoreSwitcher } from '@/hooks/store/useStoreSwitcher';
 
 /**
- * StoreSelectModal
- *
- * In-session store switcher. Displayed as a dropdown/panel anchored
- * to the StoreIndicator in the Header.
- *
- * Behaviour:
- *   - Lists all stores from Redux availableStores
- *   - Highlights the currently active store with a check mark
- *   - Tapping a different store calls useStoreSwitcher → invalidates
- *     TanStack Query cache → redirects to /dashboard
- *   - Tapping the active store or the X closes the modal with no action
- *   - Closes when clicking the backdrop overlay
- *
- * Props:
- *   isOpen   {boolean}   — controls visibility
- *   onClose  {Function}  — called when modal should close
+ * In-session store switcher, anchored to the StoreIndicator in the Header.
+ * Selecting a different store calls useStoreSwitcher, which invalidates the
+ * query cache and redirects to /dashboard.
  */
 export default function StoreSelectModal({ isOpen, onClose }) {
   const { availableStores, activeStoreId } = useActiveStore();

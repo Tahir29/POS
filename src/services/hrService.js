@@ -7,14 +7,11 @@ import APP_CONFIG from '@/constants/appConfig';
 
 /**
  * All employees at a given store — used to populate the "Sales Person"
- * picker on scheme enrollment. Confirmed shape (real UAT response,
- * 2026-07-13, via the OrnaVerse admin Scheme Enrollment screen):
- *   [{ employee_id, employee_name, company_id }, ...]
- * filtered by company_id — NOT by the logged-in user's user_id. Mirrors
- * how the vendor's own Scheme Enrollment screen resolves this field.
+ * picker on scheme enrollment. Filtered by company_id, not by the logged-in
+ * user's user_id.
  *
- * Uses an explicit Take (not 0) — Take:0 on Serenity list endpoints is
- * documented elsewhere in this app as returning zero records, not all.
+ * Uses an explicit Take (not 0) — Take:0 on Serenity list endpoints returns
+ * zero records, not all.
  * @param {number} companyId
  * @returns {Promise<object>} { Entities: EmployeeRow[] }
  */

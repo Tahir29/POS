@@ -1,10 +1,8 @@
 'use client';
 
 // Read-only customer summary for the checkout screen. Reads
-// useCustomerSession (single source of truth, shared with
-// HeaderCustomerControl / CartCustomerTag). "Change" reopens
-// CustomerSessionSheet. If no customer is attached, prompts the
-// associate to attach one before order submission.
+// useCustomerSession, shared with HeaderCustomerControl / CartCustomerTag.
+// Prompts the associate to attach a customer before order submission.
 
 import { useState } from 'react';
 import { AlertCircle, User } from 'lucide-react';

@@ -83,14 +83,12 @@ export function useCart() {
     toast.success(TOAST.CART.PROMO_REMOVED);
   };
 
-  // Mutual exclusivity with promos is checked HERE (synchronous, no server
-  // call needed — unlike a promo code, an amount doesn't need validating
-  // against OrnaVerse) rather than via a dedicated hook the way promos use
-  // usePromoValidation. The reverse guard (blocking a promo while coins are
-  // applied) lives in usePromoValidation's own mutationFn instead — see that
-  // file. `amount` is expected to already be capped by the caller (see
-  // LucraCoinsSection's maxClaimable prop) — this only re-checks it's
-  // positive, it doesn't re-derive the cap itself.
+  // Mutual exclusivity with promos is checked here synchronously (an amount
+  // doesn't need validating against OrnaVerse the way a promo code does).
+  // The reverse guard (blocking a promo while coins are applied) lives in
+  // usePromoValidation's own mutationFn instead. `amount` is expected to
+  // already be capped by the caller (see LucraCoinsSection's maxClaimable
+  // prop) — this only re-checks it's positive.
   const handleApplyLoyaltyCoins = (amount) => {
     if (appliedPromos.length > 0) {
       toast.error(TOAST.CART.COINS_BLOCKED_BY_PROMO);
@@ -111,37 +109,31 @@ export function useCart() {
     toast.success(TOAST.CART.CART_CLEARED);
   };
 
-  // ADDED 2026-09-07 — used only by checkout/page.jsx right after a
-  // successful order/invoice. Explicit product decision: completing a sale
-  // must not silently detach the customer — only a manual "Remove"
-  // (detachCustomer) or the agent's own logout should end that session. No
-  // toast here (unlike handleClearCart above) — this runs as an internal
-  // cleanup step right before the redirect to /order-success, not a
-  // user-initiated action that needs its own confirmation.
+  // Used only by checkout/page.jsx right after a successful order/invoice.
+  // Completing a sale must not silently detach the customer — only a
+  // manual "Remove" (detachCustomer) or the agent's own logout should end
+  // that session. No toast here (unlike handleClearCart) — this is an
+  // internal cleanup step before the redirect to /order-success.
   const handleClearCartKeepCustomer = () => {
     dispatch(clearCartKeepCustomer());
   };
 
   // "Fulfill from order" — replaces the whole cart with an order's own
   // customer + selected ready-to-invoice line(s). See cartSlice's
-  // hydrateFromOrder and orderFulfillmentService.js for the full contract —
-  // CONFIRMED LIVE 2026-09-08 that this closes the source order out
-  // server-side, via checkoutPricingService.claimStockPieces claiming the
-  // exact reserved stock piece (fulfillmentItemLineNo), not a header field.
+  // hydrateFromOrder and orderFulfillmentService.js for the full contract;
+  // this closes the source order out server-side via
+  // checkoutPricingService.claimStockPieces claiming the exact reserved
+  // stock piece (fulfillmentItemLineNo), not a header field.
   //
   // @param {{ order: { partyId, partyName, mobile, transactionId, documentNo },
   //   lines: object[] }} params — lines are raw rows from
   //   getReadyToInvoiceLines/getAllOpenOrderLines
   const handleLoadFromOrder = ({ order, lines }) => {
-    // FIXED 2026-09-09 — detach the OUTGOING customer first, mirroring
-    // every other customer-switch path (CustomerSessionSheet.performAttach,
-    // customers/page.jsx's handleAttach/wouldSwitchCustomer). This path
-    // used to silently discard whoever was previously attached with items:
-    // hydrateFromOrder wholesale-replaces the cart with no detach step, so
-    // abandonedCartMiddleware's own 'cart/detachCustomer' case — the ONLY
-    // thing that snapshots an outgoing customer's cart to Mongo — never ran
-    // for this specific switch, unlike every other place the app switches
-    // customers.
+    // Detach the outgoing customer first, mirroring every other
+    // customer-switch path (CustomerSessionSheet.performAttach,
+    // customers/page.jsx) — otherwise hydrateFromOrder's wholesale cart
+    // replace skips abandonedCartMiddleware's 'cart/detachCustomer' case,
+    // the only thing that snapshots an outgoing customer's cart to Mongo.
     if (customerId && customerId !== order.partyId && items.length > 0) {
       dispatch(detachCustomer());
     }

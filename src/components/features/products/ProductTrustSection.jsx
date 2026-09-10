@@ -124,9 +124,10 @@ function CertifiedQualityBlock() {
           </button>
         </div>
         <div className="flex justify-center items-center gap-6 mt-4">
+          {/* unoptimized: fixed, tiny, always-identical badge set — not worth Vercel's optimizer. */}
           {CERT_BADGES.map((label ) => (
             <div key={label} className="flex flex-col items-center gap-1.5">
-              <Image src={label} alt="Certification badge" width={60} height={60} />
+              <Image src={label} alt="Certification badge" width={60} height={60} unoptimized />
             </div>
           ))}
         </div>
@@ -146,8 +147,9 @@ function CertifiedQualityBlock() {
               <AccordionContent className="flex flex-col gap-3 pb-4">
                 {item.image.length > 0 && (
                   <div className="flex items-center justify-start gap-3">
+                    {/* unoptimized: same reasoning as CERT_BADGES above. */}
                     {item.image.map((src) => (
-                      <Image key={src} src={src} alt="" width={80} height={80} className="rounded-xl" />
+                      <Image key={src} src={src} alt="" width={80} height={80} className="rounded-xl" unoptimized />
                     ))}
                   </div>
                 )}

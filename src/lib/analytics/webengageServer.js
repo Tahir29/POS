@@ -1,37 +1,24 @@
 // src/lib/analytics/webengageServer.js
 //
-// SERVER-ONLY WebEngage sender — for events with no browser involved at
-// all (a webhook handler, a cron/scheduled job, a Next.js Route Handler
-// reacting to something OrnaVerse or Shopify pushed at us). Not wired into
-// anything today; this is deliberately-built "future scope" infrastructure
-// per the user's request, not dead code left over from a removed feature.
+// SERVER-ONLY WebEngage sender — for events with no browser involved (a
+// webhook handler, a cron job, a Route Handler reacting to something
+// OrnaVerse/Shopify pushed at us). Not wired into anything today —
+// deliberately-built future-scope infrastructure, not dead code.
 //
-// THIS IS NOT WHAT POWERS TODAY'S EVENT TRACKING. Every event a customer
-// or staff member actually triggers in the browser goes through
-// tracker.js → webengage.js's client-side sendToWebEngage(), which uses
-// the Web SDK (loaded in layout.js) and the PUBLIC license code. This file
-// exists for the DIFFERENT case of firing a WebEngage event from server
-// code that never runs in a browser — do not call this from a React
-// component or a client hook; import it only from a Route Handler
-// ("use server" context) or a script that runs under Node.
+// THIS IS NOT WHAT POWERS TODAY'S EVENT TRACKING — that's tracker.js →
+// webengage.js's client-side sendToWebEngage() (Web SDK, public license
+// code). Do not call this from a React component or client hook; import it
+// only from a Route Handler or a Node script.
 //
-// WHY A SEPARATE FILE: WEBENGAGE_API_KEY is a real bearer secret (unlike
-// the license code, which WebEngage's own Web SDK snippet embeds directly
-// in page source) — it must never be imported into any file that ships to
-// the browser. Keeping it in its own server-only module, never imported
-// by webengage.js/tracker.js/anything under src/app/(pos)/, makes that
-// mistake structurally hard to make rather than relying on remembering not
-// to.
+// Kept in its own server-only module, never imported by anything that
+// ships to the browser, because WEBENGAGE_API_KEY is a real bearer secret
+// (unlike the public license code).
 //
-// API surface: WebEngage Data Platform REST API v1, Track Event —
-// https://api.webengage.com/v1/accounts/{licenseCode}/events. This is a
-// DIFFERENT WebEngage product surface than the four MCP tools already
-// available in this environment (webengage_track_event,
-// webengage_send_transactional, ...) — those let an AI agent call
-// WebEngage directly from a chat session; this is app code calling the
-// same underlying REST API from a running Next.js server process. Prefer
-// this file, not the MCP tools, for anything that needs to run
-// unattended/repeatedly as part of the actual product.
+// API surface: WebEngage Data Platform REST API v1, Track Event
+// (https://api.webengage.com/v1/accounts/{licenseCode}/events) — the same
+// underlying REST API the environment's webengage_* MCP tools call, but
+// from app server code rather than a chat session. Prefer this file, not
+// the MCP tools, for anything that needs to run unattended/repeatedly.
 
 const API_HOST     = process.env.WEBENGAGE_API_HOST;
 const LICENSE_CODE  = process.env.WEBENGAGE_LICENSE_CODE;
@@ -52,7 +39,7 @@ export function isWebEngageServerConfigured() {
  *                                  server- and client-fired events land on
  *                                  the same profile
  *   eventName: string,          — use EVENTS from './events', same as the
- *                                  client path — one shared vocabularyen
+ *                                  client path — one shared vocabulary
  *   attributes?: object,
  * }} params
  * @returns {Promise<boolean>} true if WebEngage accepted the event

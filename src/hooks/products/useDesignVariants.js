@@ -1,40 +1,9 @@
-// Fetches all style variants for a product via Style/Retrieve (GetDesignDetail).
-// Enabled only when product has a style_id.
-//
-// OrnaVerse Style/Retrieve response shape:
-//   response.data.Entity.style_variants[]
-//   Each variant: { item_id, item_code, item_name, karat_id, karat_name,
-//                   metal_color_id, metal_color_name, item_size_id,
-//                   item_size_name, pieces, ... }
-//
-// IMPORTANT — style_variants[].pieces is NOT scoped to the active store.
-// Confirmed 2026-07-15: Style/Retrieve reported pieces:1 for every single
-// one of 36 variants on a real product, but the real per-store check
-// (ProductCatalog/GetStockByStoresBatch) showed only 1 of those 36 was
-// actually stocked at the store in question — the other 35 aren't
-// physically here at all. Using the raw field would show a false green
-// "in stock" dot on every customize option regardless of real
-// availability, so this hook fetches real per-store stock separately and
-// patches it onto each variant before anything downstream sees it.
-//
-// Returns derived data ready for CustomizeSheet:
-//   variants          — style_variants array, with `pieces` corrected to
-//                        real per-store stock
-//   externalProductId — Shopify product ID (Entity.external_product_id)
-//                       used by useShopifyProductImages; null on UAT
-//   metalColors       — unique metal colour options  [{ id, name }]
-//   karats            — unique karat options          [{ id, name }]
-//   sizes             — unique size options           [{ id, name }]
-//   variantStock      — Map<item_id, pieces>  (for in-stock dots) — real
-//                        per-store counts
-//   storesByItemId    — Map<item_id, { company_id, companyname, pieces }[]>
-//                        — full cross-store breakdown per variant (not just
-//                        the active store), built from the same batch call
-//                        as variantStock. Used to show "in stock at X" for
-//                        whichever variant is currently selected in
-//                        CustomizeSheet.
-//   findVariant       — (metalColorId, karatId, sizeId) => variant | null
-//   hasVariants       — boolean
+// Fetches all style variants for a product via Style/Retrieve (GetDesignDetail),
+// and patches in real per-store stock (style_variants[].pieces is not scoped
+// to the active store — see fetch below). Enabled only when product has a
+// style_id. Returns derived data ready for CustomizeSheet: variants, the
+// Shopify externalProductId, unique metalColors/karats/sizes, variantStock
+// and storesByItemId maps, findVariant, and hasVariants.
 
 import { useQuery } from '@tanstack/react-query';
 import { useMemo }  from 'react';
@@ -53,14 +22,10 @@ function unique(arr, keyFn) {
   });
 }
 
-// Robust select with multiple fallback levels.
-// Style/Retrieve returns Entity (singular), not Entities.
-// Guard every level so a malformed response returns safe defaults.
-//
-// Also extracts external_product_id from Entity — used by
-// useShopifyProductImages to fetch images from Shopify Admin API.
-// When OrnaVerse starts serving images natively, remove the Shopify hook
-// call in the product detail page; this field can stay or be removed then.
+// Style/Retrieve returns Entity (singular), not Entities; guard every level
+// so a malformed response returns safe defaults. Also extracts
+// external_product_id, used by useShopifyProductImages to fetch images from
+// the Shopify Admin API.
 function selectStyleData(response) {
   const entity = response?.data?.Entity;
   if (entity?.style_variants && Array.isArray(entity.style_variants)) {
@@ -91,8 +56,6 @@ function isValid(value) {
 /**
  * @param {number|null} styleId
  * @param {number|null} storeId — active store, used to scope real stock
- *   (see the module note above for why the raw style_variants pieces field
- *   can't be trusted on its own).
  */
 export function useDesignVariants(styleId, storeId) {
   const { data, isLoading: designLoading, isError } = useQuery({
@@ -103,11 +66,8 @@ export function useDesignVariants(styleId, storeId) {
     select:    selectStyleData,
   });
 
-  // FIX: `data?.variants ?? []` used to be computed inline below, which
-  // creates a brand-new [] array identity on every render whenever
-  // data?.variants is falsy — that defeated the point of the useMemo calls
-  // further down (their [variants] dep would "change" every render even
-  // with no real data change). Memoizing variants itself once fixes it.
+  // Memoized so a falsy data?.variants doesn't create a new [] identity every
+  // render (which would defeat the useMemo calls further down).
   const rawVariants = useMemo(() => data?.variants ?? [], [data]);
 
   const externalProductId = data?.externalProductId ?? null;
@@ -117,10 +77,9 @@ export function useDesignVariants(styleId, storeId) {
     [rawVariants],
   );
 
-  // Real per-store stock — see module note. Only enabled once we know
-  // which items to check and which store to check them at. Keeps the FULL
-  // row set (every store, not just the active one) so storesByItemId below
-  // can show cross-store availability per variant without a second call.
+  // Real per-store stock, enabled once we know which items/store to check.
+  // Keeps the full row set (every store) so storesByItemId below can show
+  // cross-store availability without a second call.
   const { data: stockRows = [], isLoading: stockLoading } = useQuery({
     queryKey: QUERY_KEYS.CATALOG.STOCK_BY_STORES_BATCH(itemIds),
     queryFn: async () => {
@@ -139,8 +98,7 @@ export function useDesignVariants(styleId, storeId) {
     return map;
   }, [stockRows, storeId]);
 
-  // Full cross-store breakdown per variant — used by CustomizeSheet to show
-  // which store(s) have the currently-selected variant in stock.
+  // Cross-store breakdown per variant, for CustomizeSheet's "in stock at X".
   const storesByItemId = useMemo(() => {
     const map = new Map();
     for (const row of stockRows) {
@@ -156,11 +114,9 @@ export function useDesignVariants(styleId, storeId) {
     return map;
   }, [stockRows]);
 
-  // Patch each variant's `pieces` with the real per-store count (0 when
-  // this store has no stock row for it — i.e. not physically here) so
-  // every downstream consumer (combo/size dots, the matched-variant
-  // summary card, MTO detection) reflects real availability instead of
-  // the misleading style-level field.
+  // Patch each variant's `pieces` with the real per-store count (0 if this
+  // store has no stock row for it) so downstream consumers reflect real
+  // availability instead of the misleading style-level field.
   const variants = useMemo(
     () => rawVariants.map((v) => ({
       ...v,
@@ -178,8 +134,7 @@ export function useDesignVariants(styleId, storeId) {
     ).map((v) => ({ id: v.metal_color_id, name: v.metal_color_name })),
   [variants]);
 
-  // Unique karat options — filter out NA values, sorted numerically (14KT
-  // before 18KT) rather than relying on incidental API response order.
+  // Sorted numerically (14KT before 18KT) rather than API response order.
   const karats = useMemo(() =>
     unique(
       variants.filter((v) => isValid(v.karat_name) && v.karat_id != null),

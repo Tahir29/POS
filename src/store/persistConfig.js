@@ -3,9 +3,7 @@
 // Only explicitly whitelisted slices are persisted.
 // Source of truth: ARCHITECTURE.md Section 18
 
-// NOT 'redux-persist/lib/storage' — that resolves its engine at import time,
-// which under Next.js happens on the server first and pins it to a no-op for
-// the rest of the session. See store/storage.js.
+// Uses the SSR-safe engine from ./storage, not 'redux-persist/lib/storage' directly — see that file.
 import storage from './storage';
 
 // Whitelist controls exactly which slices survive a page refresh.

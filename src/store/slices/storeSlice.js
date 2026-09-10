@@ -48,9 +48,4 @@ export const selectActiveStoreName = (state) => state.store.activeStoreName;
 export const selectActiveStoreCode = (state) => state.store.activeStoreCode;
 export const selectAvailableStores = (state) => state.store.availableStores;
 
-// REMOVED 2026-09-08 — selectCurrentUserId had zero callers anywhere
-// (confirmed via a dead-code audit). The GetUserStores PascalCase-`UserId`-
-// vs-`user_id` quirk this selector worked around is documented here in case
-// a current-user-id selector is needed again later.
-
 export default storeSlice.reducer;

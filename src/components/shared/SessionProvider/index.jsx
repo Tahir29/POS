@@ -1,17 +1,12 @@
 'use client';
 
-// src/components/shared/SessionProvider/index.jsx
-//
-// Two independent idle timers:
-// - Customer idle timer — runs only when a customer is attached
-//   (customerId in cart). Detaches the customer + clears the cart, does
-//   NOT log out the agent. Redirects to /dashboard.
-// - Staff idle timer — runs whenever the agent is authenticated, regardless
-//   of customer state. Fully logs the agent out via useAuth().logout().
-// Both timers reset on the same activity events, tracked separately so
-// each has its own warning/timeout schedule.
-//
-// Tracks page views + clicks only during an active customer session.
+// Runs two independent idle timers off the same activity events:
+// - Customer idle timer (active while a customer is attached) detaches the
+//   customer + clears the cart and redirects to /dashboard — does NOT log
+//   out the agent.
+// - Staff idle timer (active whenever the agent is authenticated) fully
+//   logs the agent out via useAuth().logout().
+// Also tracks page views and clicks while the agent is authenticated.
 
 import { useEffect, useRef, useCallback } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
@@ -124,12 +119,9 @@ export default function SessionProvider({ children }) {
     staffIdleTimerRef.current = setTimeout(() => {
       toast.dismiss('staff-idle-warning');
       toast.info('Logged out due to inactivity.', { toastId: 'staff-idle-expired' });
-      // ENRICHED 2026-09-04 — same gap as AGENT_LOGOUT in useAuth.js:
-      // trackAgent() has no session to auto-derive store context from, so a
-      // caller has to pass its own or lose it. logout() right below this
-      // ALSO now fires its own AGENT_LOGOUT with the same store fields —
-      // that's not a duplicate, this is a distinct event recording WHY
-      // (idle timeout) the logout that follows is about to happen.
+      // trackAgent() can't auto-derive store context, so it's passed explicitly
+      // here. Distinct from the AGENT_LOGOUT event logout() fires next — this
+      // one records why (idle timeout) the logout is happening.
       tracker.trackAgent(EVENTS.AGENT_IDLE_LOGOUT, {
         timeoutMs: APP_CONFIG.SESSION.STAFF_IDLE_TIMEOUT_MS,
         storeId:   activeStoreId,
@@ -161,12 +153,9 @@ export default function SessionProvider({ children }) {
     };
   }, [isAuthenticated, resetStaffIdleTimer, clearStaffIdleTimers]);
 
-  // ── Page view tracking — runs from login onward ────────────────────────────
-  // Broadened 2026-07-16: was gated on isCustomerActive (only tracked once a
-  // customer was attached), which missed all browsing/search activity before
-  // that point. Now tracks the full staff session — includes customer
-  // context in the payload (via tracker.track reading the session) whenever
-  // one happens to be attached, but doesn't require it.
+  // Page view tracking runs for the full staff session (not gated on a
+  // customer being attached) — tracker.track reads customer context from
+  // the session when present, but doesn't require it.
   useEffect(() => {
     if (!isAuthenticated) return;
     if (pathname === lastPathRef.current) return;
@@ -185,16 +174,8 @@ export default function SessionProvider({ children }) {
     }
   }, [isAuthenticated]);
 
-  // FIXED 2026-09-08 — this used to debounce via a SINGLE shared timer:
-  // clearTimeout() on every click cancelled whatever the PREVIOUS click had
-  // queued, so two clicks within CLICK_DEBOUNCE (300ms) of each other only
-  // ever tracked the second one — the first was silently dropped, not
-  // delayed. That's the wrong tool here: a debounce is right when only the
-  // FINAL value in a burst matters (a search box's last keystroke); a click
-  // is not that — a rapid double-tap on a quantity stepper, or clicking two
-  // different buttons in quick succession, are each a real, distinct event
-  // that needs its own row, not a value to collapse down to one. Tracks
-  // every click immediately now, no timer at all.
+  // Tracks every click immediately (no debounce) — each click is a distinct
+  // event that needs its own row, unlike a search box's "final value wins".
   useEffect(() => {
     if (!isAuthenticated) return;
 

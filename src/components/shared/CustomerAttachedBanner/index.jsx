@@ -1,25 +1,16 @@
 'use client';
 
-// The "customer attached / not attached" banner shown at the top of every
+// "Customer attached / not attached" banner shown at the top of every
 // transaction-family form (repair, estimation, returns, exchange, buyback,
-// urd-purchase, schemes/enroll, transactions) — was copy-pasted verbatim
-// in each, hardcoding emerald-200/amber-200 instead of the app's own
-// status-in-stock/status-made-order tokens.
+// urd-purchase, schemes/enroll, transactions). Empty state opens the same
+// CustomerSessionSheet as the header's "Add Customer" control, reading/
+// writing the shared useCustomerSession source of truth.
 //
-// Empty state is clickable — opens the same CustomerSessionSheet the
-// header's "Add Customer" control opens, so the associate doesn't have to
-// go find the header button. Same pattern as CheckoutCustomerSummary's
-// "Attach" prompt: a local sheet instance reading/writing the one shared
-// useCustomerSession source of truth, not a second copy of the state.
-//
-// Portal to document.body rather than rendering CustomerSessionSheet inline:
-// every page that uses this banner (repair/estimation/transactions/
-// schemes-enroll) wraps its whole body in a react-hook-form <form>, and
-// CustomerSessionSheet's search step (CustomerLookupInput) renders its own
-// <form> — nested inline, that's invalid HTML and React 19 logs a hydration
-// error. `mounted` (useHasMounted) is false on the server/first client pass
-// — matching SSR output, since document.body doesn't exist server-side to
-// portal into anyway — and true on every render after hydration.
+// Rendered via a portal to document.body rather than inline: these pages
+// wrap their body in a react-hook-form <form>, and CustomerSessionSheet's
+// search step renders its own nested <form> — invalid HTML that triggers a
+// React 19 hydration error if not portaled out. `mounted` (useHasMounted)
+// stays false through the server/first client pass to match SSR output.
 
 import { useState } from 'react';
 import { createPortal } from 'react-dom';

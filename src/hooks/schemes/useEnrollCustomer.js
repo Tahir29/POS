@@ -9,9 +9,6 @@ import TOAST from '@/constants/toastMessages';
 import tracker from '@/lib/analytics/tracker';
 import EVENTS from '@/lib/analytics/events';
 
-// ENRICHED 2026-09-04 — customer_id/store_id absent from both events (same
-// fix as useTransactionMutations.js); SCHEME_ENROLL_FAILED additionally
-// carried no scheme/amount context at all, only the raw error.
 export function useEnrollCustomer() {
   const queryClient = useQueryClient();
   const sessionCtx = useSessionTrackingContext();

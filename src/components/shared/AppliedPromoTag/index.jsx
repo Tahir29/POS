@@ -1,10 +1,7 @@
 'use client';
 
-// Applied-promo-code pill with a remove action, shown on both the
-// cart (drawer + standalone page) and checkout screens. Was two
-// near-identical components (cart's AppliedPromoTag, checkout's
-// PromoAppliedBadge) differing only in an optional "You saved ₹X"
-// line — merged here with discountAmount as an optional prop.
+// Applied-promo-code pill with a remove action, shown on cart and
+// checkout screens.
 
 import { Tag, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -17,18 +14,9 @@ import { cn } from '@/lib/utils';
  *   onRemove: () => void,
  *   className?: string,
  * }} props
- *   hasEffect (2026-08-24, default true) — the code was applied, but it can
- *   still turn out to give NOTHING for what's in the basket (most promos
- *   here are scoped to the diamond/making-charge component — see
- *   checkoutPricingService.js and DiscountSection's own "no discount given"
- *   caption right under this tag). This always rendered the same green
- *   "success" styling regardless, so a promo that gave ₹0 still LOOKED like
- *   it worked, directly contradicting the caption underneath it. Pass
- *   hasEffect={false} for that case to switch to a neutral/muted look
- *   instead — still shown as applied (removable), just not celebrated as a
- *   win. Every caller of this component goes through DiscountSection now
- *   (2026-08-26 — product page, mini cart, cart page, checkout all share
- *   it), so every one of them knows the real outcome and can pass this.
+ *   hasEffect (default true) — pass false when the code is applied but
+ *   yields no actual discount, to show neutral/muted styling instead of
+ *   the success tone (still shown as applied/removable either way).
  */
 export default function AppliedPromoTag({ promoCode, discountAmount, hasEffect = true, onRemove, className }) {
   if (!promoCode) return null;

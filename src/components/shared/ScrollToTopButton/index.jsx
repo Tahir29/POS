@@ -1,23 +1,13 @@
 'use client';
 
-// src/components/shared/ScrollToTopButton/index.jsx
-// Floating scroll-to-top button shown only on configured pages
-// (see src/constants/scrollToTopConfig.js).
+// Floating scroll-to-top button shown only on configured pages (see
+// src/constants/scrollToTopConfig.js). Hidden near the top; below the
+// threshold it hides on scroll-down and reveals on scroll-up.
 //
-// Behavior:
-//   - Hidden while near the top of the page (nothing to scroll to).
-//   - Once scrolled down past a threshold, the button hides while the
-//     user scrolls DOWN and reveals as soon as they scroll UP — a
-//     common "appears on upward intent" pattern so it doesn't block
-//     content while reading down a long list, but is available the
-//     moment the user starts heading back.
-//   - Clicking smoothly scrolls the active scroll container back to top.
-//
-// SCROLL CONTAINER: most pages scroll via AppShell's #main-content, but
-// some (e.g. /catalog) render their own nested `overflow-y-auto` panel
-// that does the actual scrolling while #main-content stays static.
-// getScrollContainer() picks #main-content if it's scrollable, otherwise
-// finds the first scrollable descendant.
+// Most pages scroll via AppShell's #main-content, but some (e.g. /catalog)
+// scroll inside their own nested overflow-y-auto panel instead —
+// getScrollContainer() picks #main-content if scrollable, else the first
+// scrollable descendant.
 
 import { useEffect, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
@@ -30,11 +20,6 @@ function isScrollable(el) {
   return !!el && el.scrollHeight > el.clientHeight + 1;
 }
 
-/**
- * Finds the element that's actually scrolling for the current page.
- * Prefers #main-content; falls back to the first scrollable descendant
- * with overflow-y auto/scroll (e.g. /catalog's internal panel).
- */
 function getScrollContainer() {
   const main = document.getElementById('main-content');
   if (!main) return null;
@@ -60,12 +45,9 @@ export default function ScrollToTopButton() {
   const enabled = isScrollToTopEnabled(pathname);
 
   useEffect(() => {
-    // No setIsVisible(false) resets in this effect (there used to be one
-    // here and one below) — AppShell now renders this component with
-    // key={pathname}, so a route change fully remounts it and isVisible
-    // starts fresh at false on its own. That's also what makes it safe to
-    // just bail out here while disabled (isVisible is irrelevant anyway
-    // once the component returns null below) instead of resetting it.
+    // No manual isVisible reset needed here: AppShell renders this with
+    // key={pathname}, so a route change remounts it and isVisible starts
+    // fresh at false on its own.
     if (!enabled) return;
 
     let container = getScrollContainer();
@@ -91,9 +73,8 @@ export default function ScrollToTopButton() {
 
     container.addEventListener('scroll', handleScroll, { passive: true });
 
-    // Content (and its scroll container) may render after this effect
-    // runs on route change — re-resolve once shortly after mount in
-    // case the real scrollable element wasn't ready yet.
+    // Content may render after this effect runs on route change — re-resolve
+    // once shortly after mount in case the real scroll container wasn't ready.
     const retryTimer = setTimeout(() => {
       const resolved = getScrollContainer();
       if (resolved && resolved !== container) {

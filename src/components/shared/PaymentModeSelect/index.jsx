@@ -1,16 +1,8 @@
 'use client';
 
-// src/components/shared/PaymentModeSelect/index.jsx
-//
-// Shared payment/payout/refund mode picker — a single shadcn Select-based
-// implementation replacing 6 independently hand-built DropdownMenu copies
-// that had drifted (schemes, returns, transactions ×3, repair,
-// urd-purchase, buyback all rebuilt the same "pick a mode_id, show its
-// modeName" field from scratch with copy-pasted markup).
-//
-// Field values are numeric IDs (modeId) — react-hook-form's Controller
-// keeps that numeric type on the wire, while the underlying shadcn/Radix
-// Select works with string values internally (converted at the boundary).
+// Shared payment/payout/refund mode picker (react-hook-form Controller +
+// shadcn Select). Field values are numeric modeIds; converted to/from
+// string at the Select boundary since Radix Select only works with strings.
 
 import { Controller } from 'react-hook-form';
 import {

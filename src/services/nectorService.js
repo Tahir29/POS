@@ -76,23 +76,16 @@ export async function getReviews({ shopifyProductId, page = 1, limit = 10 }) {
  * A customer's Nector loyalty points balance, looked up by mobile number —
  * Nector's own term for a customer record is a "lead".
  *
- * CONFIRMED LIVE 2026-09-08 (real account, real customer — Tahir Kutty,
- * mobile 8149639991 → 500 available points; see route.js's own header for
- * the full endpoint writeup and the Nector docs this was cross-checked
- * against, nector.readme.io's get_leads-id):
- *   200 → { data: { item: { available: "500" (string!), tier, name,
- *     wallet: { available, ... }, ... } } } — a real Nector lead exists.
- *   422 → { data: { message: "Lead does not exists" } } — NOT an error to
- *     report; a customer who's simply never interacted with the Shopify
- *     storefront (never earned a Nector lead record) is the normal case
- *     for most in-store-only customers, same as most catalog products
- *     having no style_id → no reviews (see getReviewSummary's own
- *     reasoning). `found: false` lets a caller show "not enrolled" instead
- *     of a scary error state.
+ * 200 → { data: { item: { available: "500" (string!), tier, name,
+ *   wallet: { available, ... }, ... } } } — a real Nector lead exists.
+ * 422 → { data: { message: "Lead does not exists" } } — NOT an error to
+ *   report; a customer who's simply never interacted with the Shopify
+ *   storefront (never earned a Nector lead record) is the normal case for
+ *   most in-store-only customers. `found: false` lets a caller show "not
+ *   enrolled" instead of a scary error state.
  *
- * @param {string|number} mobile — real, UNMASKED mobile number (the same
- *   one this app already has via useCustomerSession().customerMobile —
- *   see that hook; no new plumbing needed to get one)
+ * @param {string|number} mobile — real, UNMASKED mobile number (the same one
+ *   this app already has via useCustomerSession().customerMobile)
  * @returns {Promise<{ found: boolean, points: number, tier: string|null, name: string|null }>}
  */
 export async function getCustomerLoyalty(mobile) {
@@ -123,24 +116,19 @@ export async function getCustomerLoyalty(mobile) {
 }
 
 /**
- * Debits (redeems) Lucira Coins from a customer's Nector wallet. Fires
- * AFTER a real POS sale has already completed — see checkout/page.jsx's
- * own comment for exactly when, and why a failure here never blocks or
- * reverses that sale (the sale itself has nothing to do with whether
- * Nector's own wallet ever reflects it).
+ * Debits (redeems) Lucira Coins from a customer's Nector wallet. Fires AFTER
+ * a real POS sale has already completed; a failure here never blocks or
+ * reverses that sale.
  *
- * BEST-EFFORT, NOT CONFIRMED WORKING (2026-09-08) — see this service's own
- * getCustomerLoyalty header and the proxy route's "WALLET TRANSACTIONS"
- * comment for the full story: Nector's debit endpoint needs a lead's own
- * `_id` (or a merchant-assigned `customer_id`, which this app has never
- * set — these leads were created by Nector's own Shopify storefront app,
- * not by us). The mobile-based lookup this function re-runs to find the
- * lead doesn't return either field in its response body (confirmed live —
- * full raw JSON inspected). Sends `mid` as `lead_id` on the working theory
- * that it's the closest available candidate (a per-lead value, unlike
- * entity_id which is shared across different leads — proven not a
- * per-lead id) — this is a genuine guess, expected to fail until Nector
- * support clarifies how to get a lead's real `_id` from a mobile lookup.
+ * BEST-EFFORT, NOT CONFIRMED WORKING — Nector's debit endpoint needs a
+ * lead's own `_id` (or a merchant-assigned `customer_id`, which this app has
+ * never set — these leads were created by Nector's own Shopify storefront
+ * app). The mobile-based lookup this function re-runs to find the lead
+ * doesn't return either field in its response body. Sends `mid` as `lead_id`
+ * as the closest available candidate (a per-lead value, unlike entity_id
+ * which is shared across different leads) — this is a genuine guess,
+ * expected to fail until Nector support clarifies how to get a lead's real
+ * `_id` from a mobile lookup.
  *
  * @param {{ mobile: string, amount: number, title: string, description?: string }} params
  * @returns {Promise<{ ok: boolean, reason?: string }>} — never throws;
@@ -151,8 +139,8 @@ export async function redeemLoyaltyCoins({ mobile, amount, title, description })
   if (!mobile || !(amount > 0)) return { ok: false, reason: 'invalid_params' };
 
   try {
-    // Re-look-up the lead for its `mid` — see this function's own header
-    // for why that's the best candidate identifier available, not a
+    // Re-look-up the lead for its `mid` — see this function's own header for
+    // why that's the best candidate identifier available, not a
     // confirmed-correct one.
     const lookupParams = new URLSearchParams({ mobile: String(mobile) });
     const lookupRes = await fetch(`/api/nector/leads?${lookupParams}`);
@@ -162,11 +150,8 @@ export async function redeemLoyaltyCoins({ mobile, amount, title, description })
     const mid = lookupJson?.data?.item?.mid;
     if (!mid) return { ok: false, reason: 'no_lead_id' };
 
-    // Same lazy require('@/store') pattern useCustomerLookup.js's own
-    // syncCustomerProfile already uses — this route requires a bearer
-    // token (see its own WRITE_PATHS check), and reading the token lazily
-    // here avoids turning this plain service module into a hook-shaped
-    // dependency just for one fire-and-forget call.
+    // Lazy require avoids turning this plain service module into a
+    // hook-shaped dependency just for one fire-and-forget authenticated call.
     const { store } = require('@/store');
     const accessToken = store.getState().auth?.accessToken;
     if (!accessToken) return { ok: false, reason: 'not_authenticated' };

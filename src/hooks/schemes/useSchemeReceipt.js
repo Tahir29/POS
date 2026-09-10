@@ -9,10 +9,6 @@ import TOAST from '@/constants/toastMessages';
 import tracker from '@/lib/analytics/tracker';
 import EVENTS from '@/lib/analytics/events';
 
-// ENRICHED 2026-09-04 — customer_id/store_id were entirely absent from both
-// events (see useTransactionMutations.js's identical fix for the full
-// rationale); SCHEME_PAYMENT_FAILED additionally carried no amount/
-// enrollment at all, only the raw error, unlike its own success twin.
 export function useSchemeReceipt() {
   const queryClient = useQueryClient();
   const sessionCtx = useSessionTrackingContext();

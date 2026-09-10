@@ -52,23 +52,18 @@ export function useOrderHeaderConfig(documentId) {
     ? resolveDocumentConfig(docNumQuery.data, documentId, companyId, now)
     : null;
 
-  // Distinct from isError — the query itself succeeded, there just isn't a
-  // DocumentNumbering row for this (documentId, companyId) pair AT ALL.
-  // CONFIRMED live 2026-08-14: Credit Note (document_id 123) has ZERO rows
-  // across every one of this tenant's 6 stores — not a loading gap, not a
-  // network failure, genuinely never configured on OrnaVerse's side. Create
-  // 500s if attempted anyway (no ledger_id to send). Without this flag every
-  // caller's guard said "still loading — try again in a moment" forever,
-  // which is actively misleading for something that will never resolve on
-  // its own no matter how long you wait or how many times you retry.
+  // Distinct from isError — the query succeeded, there's just no
+  // DocumentNumbering row configured for this (documentId, companyId) pair
+  // (e.g. Credit Note/123 has none on this tenant), which Create will 500 on.
+  // Surfaced separately so a caller doesn't show "still loading" forever for
+  // something that will never resolve no matter how many times it's retried.
   const isConfigMissing = !!(
     docNumQuery.data && companyId && !docConfig &&
     !docNumQuery.data.some((r) => r.document_id === documentId && r.company_id === companyId)
   );
 
-  // NOTE: no documentNo here on purpose — the server assigns document_no on
-  // Create (proven live 2026-07-29) and computing it client-side risks
-  // duplicates. See the note at the bottom of documentConfigService.js.
+  // No documentNo here on purpose — the server assigns document_no on Create;
+  // computing it client-side risks duplicates. See documentConfigService.js.
   return {
     financialYearId:        currentFinancialYear?.financial_year_id ?? null,
     ledgerId:                docConfig?.ledger_id ?? null,
@@ -84,14 +79,9 @@ export function useOrderHeaderConfig(documentId) {
     numberOfBackdatedDays:   docConfig?.number_of_backdated_days ?? null,
     isLoading: finYearQuery.isLoading || docNumQuery.isLoading,
     isReady:   !!currentFinancialYear && !!docConfig,
-    // Surfaced so callers can tell "still loading, will resolve on its
-    // own" from "genuinely failed, isReady will never become true without
-    // a retry" — before this, every one of the ~12 submit-time guards
-    // across Order/Invoice/Return/Exchange/Buyback/Credit Note/URD
-    // Purchase/Repair/Estimation/Schemes said "still loading — try again
-    // in a moment" even when the underlying query had already exhausted
-    // its retries and permanently failed, which left every one of those
-    // create flows stuck with no way out short of a hard refresh.
+    // Lets submit-time guards distinguish "still loading" from "genuinely
+    // failed" so a permanently-failed query doesn't get stuck saying "try
+    // again in a moment" forever.
     isError: finYearQuery.isError || docNumQuery.isError,
     isConfigMissing,
     refetch: () => {

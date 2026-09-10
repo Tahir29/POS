@@ -14,15 +14,9 @@ import { Search, X, ScanBarcode } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import APP_CONFIG from '@/constants/appConfig';
 
-// PERF (2026-09-08) — @zxing/browser (the barcode decoder this modal uses)
-// is ~500KB, confirmed via a real build to be ~21% of the Catalog route's
-// initial JS — and it shipped on EVERY catalog visit, whether or not the
-// operator ever tapped "scan," since it was a plain static import. `ssr:
-// false` is safe (and correct) here: the modal is 100% camera/getUserMedia,
-// nothing it renders can exist on the server. Only fetches the chunk once
-// the JSX below actually mounts it (see the conditional render), not on
-// import — a dynamic() wrapper present in the tree unconditionally would
-// still trigger the fetch immediately regardless of props.
+// Dynamically imported (~500KB, @zxing/browser) so the chunk only loads
+// once the operator actually opens the scanner, not on every catalog
+// visit. `ssr: false` is required — the modal is 100% camera/getUserMedia.
 const BarcodeScannerModal = dynamic(
   () => import('@/components/features/catalog/BarcodeScannerModal'),
   { ssr: false },
@@ -46,28 +40,18 @@ export default function ProductSearchBar({
 }) {
   const normalizedValue = value ?? '';
   const [inputVal,      setInputVal]      = useState(normalizedValue);
-  // Tracks the last `value` prop this component has synced FROM — lets a
-  // render-time comparison detect "value changed externally" (e.g.
-  // clearFilters resetting the URL query) without an effect. Calling
-  // setState here, mid-render (see below), is React's own documented
-  // pattern for adjusting state when a prop changes: React discards this
-  // render and immediately re-renders with the corrected state before
-  // anything is painted, unlike the same call inside a useEffect (the old
-  // shape here), which paints the stale value first and only corrects it a
-  // frame later — and trips react-hooks/set-state-in-effect besides.
+  // Tracks the last `value` prop synced FROM, so a render-time comparison
+  // (below) can detect an external change (e.g. clearFilters) and correct
+  // state before paint — React's documented pattern for this, safer than
+  // a useEffect which paints the stale value first.
   const [lastSyncedValue, setLastSyncedValue] = useState(normalizedValue);
   const [cameraOpen,    setCameraOpen]    = useState(false);
   const debounceRef    = useRef(null);
   const lastKeyTimeRef = useRef(null);
   const inputRef      = useRef(null);
-  // Debounce for the physical/USB scanner path (handleKeyDown below) — this
-  // path had NO duplicate-suppression at all, unlike the camera path in
-  // BarcodeScannerModal, which already debounces repeat detections of the
-  // same code within 2s. A scanner that sends a double terminator (CR+LF is
-  // common), or one left in continuous/repeat-scan mode, would re-fire
-  // onBarcodeDetected for every repeat with nothing to stop it — confirmed
-  // 2026-08-08: this is what was hitting StockJournal/List repeatedly on a
-  // single physical scan. Mirrors BarcodeScannerModal's own lastScannedRef.
+  // Debounces the physical/USB scanner path (handleKeyDown below) against a
+  // scanner that sends a double terminator or is left in repeat-scan mode.
+  // Mirrors BarcodeScannerModal's own lastScannedRef.
   const lastScanRef    = useRef(null);
 
   // Sync when URL is cleared externally (e.g. clearFilters) — during
@@ -90,18 +74,9 @@ export default function ProductSearchBar({
   };
 
   const handleClear = () => {
-    // FIXED 2026-09-09 — CONFIRMED bug: this called onSearch('') directly,
-    // bypassing fireSearch, so it never cancelled a debounce timer still
-    // pending from the last keystroke. Typing "ring" then clicking Clear
-    // within the debounce window (SEARCH.DEBOUNCE_MS) cleared the URL's `q`
-    // param for a moment, but the stale timer scheduled by that last
-    // keystroke fired shortly after with the OLD query, silently
-    // re-applying it — the URL never actually stayed cleared, and the
-    // catalog stayed stuck in search mode showing the old (restricted)
-    // results. clearTimeout here (an event handler, not render — this
-    // repo's lint forbids ref access during render, which is why this
-    // isn't done in the render-time value-sync block above instead) stops
-    // that stale timer from ever firing.
+    // Must cancel any pending debounce timer directly (not via fireSearch/
+    // onSearch alone) — otherwise a stale timer from the last keystroke
+    // fires after Clear and silently re-applies the old query.
     clearTimeout(debounceRef.current);
     setInputVal('');
     onSearch('');
@@ -124,9 +99,7 @@ export default function ProductSearchBar({
         : Infinity;
 
       if (timeSinceLastKey <= SCAN_THRESHOLD_MS && onBarcodeDetected) {
-        // Debounce — ignore the same scanned value re-firing within 2s (a
-        // double CR/LF terminator, a scanner still in the beam, or a stray
-        // repeat trigger pull all look identical from here).
+        // Debounce — ignore the same scanned value re-firing within 2s.
         const prev = lastScanRef.current;
         if (prev?.code === val && Date.now() - prev.ts < 2000) {
           return;
@@ -169,13 +142,10 @@ export default function ProductSearchBar({
 
           <Input
             ref={inputRef}
-            // type="text", not "search" — Chrome/Edge/Safari render their
-            // OWN native clear ("x") button inside a type="search" input
-            // once it has a value, stacking on top of our custom clear
-            // button below and producing two visible "x" icons. inputMode
-            // stays "search" so mobile keyboards still show a search-style
-            // Enter key; that's independent of the native clear-button
-            // behavior, which is keyed off the `type` attribute itself.
+            // type="text", not "search" — a type="search" input shows its
+            // own native clear button, doubling up with our custom one
+            // below. inputMode="search" still gives mobile a search-style
+            // Enter key regardless of `type`.
             type="text"
             inputMode="search"
             autoComplete="off"
@@ -213,11 +183,8 @@ export default function ProductSearchBar({
           </div>
         </div>
       </div>
-      {/* Mounted only once actually opened (2026-09-08) — not just
-          rendering null while closed, but absent from the tree entirely,
-          so the dynamic import above isn't triggered until the operator
-          taps "scan" at least once. Cheap on every reopen after the
-          first — dynamic() caches the loaded module. */}
+      {/* Absent from the tree until opened, so the dynamic import above
+          isn't triggered until the operator taps "scan" at least once. */}
       {cameraOpen && (
         <BarcodeScannerModal
           isOpen={cameraOpen}

@@ -1,50 +1,39 @@
 // Cross-store Order/Invoice fetching for identities whose Order/List and
 // Invoice/List are server-side restricted to their own home company.
 //
-// CONFIRMED LIVE 2026-09-03 against UAT: POS/Order/List and POS/Invoice/List
-// ignore the company_id filter for at least one real identity (the
-// multi-store "admin" account, assigned to all 6 stores via GetUserStores)
-// — no matter what company_id is requested, the server only ever returns
-// that identity's OWN home company's rows (Order/List: 0 rows for company_id
-// 4/Pune, always company_id 1/HO; Invoice/List: 0 rows outright for
-// company_id 4). A dedicated single-store login (e.g. a "pune" account,
-// assigned only to company 4) is unaffected — its own company already
-// matches whatever it asks for, so this whole module is a no-op for it.
+// For at least one real multi-store identity, POS/Order/List and
+// POS/Invoice/List ignore the company_id filter entirely and only ever
+// return that identity's OWN home company's rows, no matter what company_id
+// is requested. A dedicated single-store login is unaffected (its own
+// company already matches whatever it asks for), so this module is a no-op
+// for it.
 //
-// The two List endpoints above are NOT the only way to reach this data,
-// though — also confirmed live:
+// The two List endpoints are not the only way to reach this data:
 //   - POS/OrderReceipt/List and POS/InvoiceReceipt/List DO honour company_id
-//     correctly, even for the restricted "admin" identity (verified: 23 HO
-//     rows vs 18 Pune rows switching only company_id). But they're
-//     RECEIPT-level, not document-level — 84 of 191 real Pune invoices in
-//     one live sample had MORE THAN ONE receipt row (split/instalment
-//     payments), each carrying only that instalment's amount, not the
-//     document's real net_amount/balance_amount/line_items. Showing these
-//     rows directly would list the same invoice twice with wrong partial
-//     amounts.
+//     correctly, even for a restricted identity. But they're RECEIPT-level,
+//     not document-level — many real invoices have more than one receipt row
+//     (split/instalment payments), each carrying only that instalment's
+//     amount, not the document's real net_amount/balance_amount/line_items.
+//     Showing these rows directly would list the same invoice twice with
+//     wrong partial amounts.
 //   - POS/Order/Retrieve and POS/Invoice/Retrieve (fetching ONE document by
-//     its known transaction_id) are NOT restricted at all — confirmed live,
-//     both returned the real cross-store record (company_id: 4, correct
-//     document_no/net_amount) under the restricted admin token.
+//     its known transaction_id) are NOT restricted at all.
 //
 // So: use the Receipt List (correctly scoped) purely to DISCOVER which
-// transaction_ids belong to the target store, collapse the receipt rows
-// back into one entry per transaction_id (summing `amount` is NOT the real
+// transaction_ids belong to the target store, collapse the receipt rows back
+// into one entry per transaction_id (summing `amount` is NOT the real
 // net_amount — it's only used to sort by recency, never shown to the user),
 // then Retrieve only the ones on the requested PAGE for the real record.
 // This path only runs when the plain List call has already proven itself
-// unreliable for the requested company — see fetchStoreScopedDocuments
-// below.
+// unreliable for the requested company — see fetchStoreScopedDocuments below.
 //
-// PAGINATION (2026-09-03): the grouped list (one entry per document) is the
-// real, complete, correctly-scoped index — fetching it costs one receipt
-// List call regardless of how many documents exist. `take`/`skip` are
-// applied to THAT grouped index, not to the raw receipt rows (a raw
-// Take/Skip on receipts could split a multi-instalment document's rows
-// across two pages and produce an incomplete group at the boundary) — so
-// Retrieve only ever runs for the page actually being viewed, not an
-// arbitrary cap, and `totalCount` reflects every real document, enabling
-// correct page-X-of-Y controls even in the fallback path.
+// PAGINATION: the grouped list (one entry per document) is the real,
+// complete, correctly-scoped index. `take`/`skip` are applied to THAT
+// grouped index, not to the raw receipt rows (a raw Take/Skip on receipts
+// could split a multi-instalment document's rows across two pages and
+// produce an incomplete group at the boundary) — so Retrieve only ever runs
+// for the page actually being viewed, and `totalCount` reflects every real
+// document.
 
 import {
   getOrders, getOrderDetail,
@@ -77,14 +66,12 @@ export async function getInvoiceReceiptList({ take = 0, company_id } = {}) {
  * only to pick which transaction_ids to Retrieve, never shown to the user.
  */
 function groupReceiptsByTransaction(rows) {
-  // PERF (2026-09-08) — `documentDateMs` is computed ONCE per raw receipt
-  // row here, instead of re-parsing date strings into `Date` objects both
-  // inside this loop (every duplicate row for the same transaction_id) AND
-  // again on every comparator invocation during the final .sort() below
-  // (O(n log n) comparisons, 2 `new Date()` calls each). `rows` is this
-  // store's entire receipt history when this fallback path runs (see this
-  // file's header for when that is), so for a long-lived store this can be
-  // hundreds to low-thousands of rows.
+  // `documentDateMs` is computed ONCE per raw receipt row here, instead of
+  // re-parsing date strings into Date objects both inside this loop (every
+  // duplicate row for the same transaction_id) and again on every comparator
+  // invocation during the final .sort() below. `rows` is this store's entire
+  // receipt history when this fallback path runs, so for a long-lived store
+  // this can be hundreds to low-thousands of rows.
   const byTx = new Map();
   for (const row of rows) {
     const key = row.transaction_id;
@@ -114,10 +101,7 @@ function groupReceiptsByTransaction(rows) {
  * `take`/`skip` page the GROUPED (one-per-document) index, not the raw
  * receipt rows — see this file's header for why that distinction matters.
  * `take: 0` (or omitted) means "every document", matching how
- * getOrders/getInvoiceList already treat Take: 0 elsewhere in this app —
- * used by the full-list-then-client-paginate hooks (useAllOrders,
- * useCustomerOrders); a real take/skip is used by the server-paginated ones
- * (useInvoiceList).
+ * getOrders/getInvoiceList already treat Take: 0 elsewhere in this app.
  * @param {{ kind: 'order'|'invoice', companyId: number, take?: number, skip?: number }} params
  * @returns {Promise<{ entities: object[], totalCount: number }>} raw
  *   OrderRow[]/InvoiceRow[] (Retrieve shape), scoped to companyId, newest
@@ -137,8 +121,8 @@ export async function fetchDocumentsByRetrieve({ kind, companyId, take = 0, skip
     page.map(({ transactionId }) => getDetail(transactionId).catch(() => null))
   );
 
-  // Defensive re-check, not redundant: Retrieve has no reason to hand back
-  // a different store's record given a transaction_id we sourced from a
+  // Defensive re-check, not redundant: Retrieve has no reason to hand back a
+  // different store's record given a transaction_id sourced from a
   // company_id-filtered receipt list, but this is financial data — fail
   // closed rather than trust that chain silently.
   const entities = details
@@ -172,14 +156,13 @@ export async function fetchStoreScopedDocuments({ kind, companyId, take = 0, ski
   }
 
   // List returned nothing at all, or returned some OTHER company's rows.
-  // Either way its own TotalCount can't be trusted at face value here —
-  // confirmed live that Invoice/List reports TotalCount: 0 outright for a
-  // restricted identity (admin/Pune) even though the store genuinely has
-  // hundreds of real invoices. That's a DIFFERENT failure signature than
-  // Order/List (which at least reports a nonzero TotalCount alongside the
-  // wrong company's rows) — so "TotalCount === 0" is not proof of a
-  // genuinely empty store for every endpoint. The receipt endpoint is the
-  // one source of truth for "does this store actually have anything";
+  // Either way its own TotalCount can't be trusted at face value — a
+  // restricted identity can see Invoice/List report TotalCount: 0 even
+  // though the store genuinely has hundreds of real invoices, while
+  // Order/List reports a nonzero TotalCount alongside the wrong company's
+  // rows — different failure signatures, so "TotalCount === 0" is not proof
+  // of a genuinely empty store for every endpoint. The receipt endpoint is
+  // the one source of truth for "does this store actually have anything";
   // peek at its count (Take: 1, cheap) before deciding.
   const getReceipts = kind === 'order' ? getOrderReceiptList : getInvoiceReceiptList;
   const receiptPeek = await getReceipts({ take: 1, company_id: companyId });

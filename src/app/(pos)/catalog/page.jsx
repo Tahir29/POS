@@ -41,10 +41,8 @@ function isInStock(product) {
 }
 
 /**
- * Resolves a search query against the categories list to find matching type_ids.
- * e.g. "rings" → finds category with type_name "Rings" → returns [1]
- * e.g. "gold"  → no category match → returns []
- * Supports partial match so "ring" matches "Rings", "mangal" matches "Mangalsutra"
+ * Resolves a search query against the categories list to matching type_ids.
+ * Partial match, so "ring" matches "Rings", "mangal" matches "Mangalsutra".
  */
 function getMatchingTypeIds(q, categories) {
   if (!q || !categories.length) return [];
@@ -56,33 +54,20 @@ function getMatchingTypeIds(q, categories) {
 }
 
 /**
- * Client-side filter for search mode — FILTERING ONLY, no sort. Runs against
- * this store's complete catalog (see useAllCatalog / catalogService.getAllProducts)
- * — text matching has to happen here rather than server-side: the live
- * inventory endpoint has no working search parameter at all, and the one
- * real full-text search that does exist (Items/List's ContainsText) can't
- * be scoped to a single store's stock (its result ordering has no
- * awareness of which company carries what, so a store's real matches can
- * fall outside any practical candidate cap — confirmed 2026-07-15 with a
- * real miss on a genuinely-stocked "Tennis Bracelet").
+ * Client-side filter for search mode — filtering only, no sort. Runs against
+ * this store's complete catalog (useAllCatalog / catalogService.getAllProducts):
+ * text matching must happen client-side because the live inventory endpoint
+ * has no working search parameter, and the one real full-text search that
+ * exists (Items/List's ContainsText) can't be scoped to a single store's stock.
  *
- * Match logic (OR across all conditions):
- *   1. item_code contains query        — SKU search ("ALR", "ALR-0289")
- *   2. item_name contains query        — name search (usually same as code on UAT)
- *   3. type_id is in matchingTypeIds   — category name search ("rings", "earrings")
+ * Match logic (OR): item_code contains query (SKU), item_name contains query
+ * (name), or type_id is in matchingTypeIds (category name). Category chip and
+ * OOS toggle apply on top as AND.
  *
- * Category filter chip (activeCategoryId) is applied on top as AND.
- * OOS toggle applied as AND.
- *
- * SORT DELIBERATELY NOT DONE HERE ANYMORE (2026-08-21). This used to sort
- * right here, on rows straight off the catalog/inventory endpoints — which
- * NEVER carry a real price (confirmed in catalogService.js: "Catalog rows
- * leave here with `price: null`"). Live prices only exist once
- * useLiveCatalogPrices has merged them in downstream, so sorting by
- * price_asc/price_desc here was comparing null against null for every pair —
- * a no-op that silently preserved server order and read as "sort doesn't
- * apply." Sorting now happens once, in the page component, AFTER live
- * prices are merged — see stableSortProducts below and its call site.
+ * Sort is deliberately NOT done here — catalog/inventory rows never carry a
+ * real price (price: null until useLiveCatalogPrices merges it in downstream),
+ * so sorting at this stage would compare null against null. Sorting happens
+ * once, in the page component, after live prices are merged (stableSortProducts).
  */
 function applySearchFilterOnly(allProducts, {
   searchQuery,
@@ -106,7 +91,6 @@ function applySearchFilterOnly(allProducts, {
 
     result = result.filter((p) => {
       if (p.item_code?.toLowerCase().includes(q)) return true;
-      // item_name match (on UAT same as code, but may differ on live)
       if (p.item_name?.toLowerCase().includes(q)) return true;
       if (matchingTypeIds.length && matchingTypeIds.includes(p.type_id)) return true;
       return false;
@@ -146,24 +130,18 @@ function CatalogScreen() {
   const effectiveStoreId = catalogStoreId ?? reduxStoreId;
   const isSearchMode     = !!searchQuery && searchQuery.length >= SEARCH.MIN_QUERY_LENGTH;
 
-  // Every OTHER store the operator is assigned to, for the "Available at
-  // other stores" lane below — see the OtherStoreSection render further
-  // down, gated on the primary store's own list actually running out.
+  // Every other store the operator is assigned to, for the "Available at
+  // other stores" lane (gated on the primary store's list running out).
   const availableStores = useSelector(selectAvailableStores);
   const otherStores = useMemo(
     () => availableStores.filter((s) => s.company_id !== effectiveStoreId),
     [availableStores, effectiveStoreId]
   );
 
-  // The primary grid's own stock badge must show whichever store's catalog
-  // is actually on screen — effectiveStoreId, not the signed-in store.
-  // ProductCard's own fallback (activeStoreCode from Redux) is ALWAYS the
-  // signed-in store, so it silently showed the wrong code the moment
-  // catalogStoreId (the store filter above) pointed somewhere else —
-  // confirmed live 2026-08-26, same class of bug already fixed for Recently
-  // Viewed/Wishlist. Looked up from availableStores (already in Redux,
-  // covers every store this operator can browse, not just the signed-in
-  // one) rather than trusting a second network round-trip for one code.
+  // Stock badge must reflect effectiveStoreId (the store filter), not the
+  // signed-in store — ProductCard's own Redux fallback is always the
+  // signed-in store. Looked up from availableStores rather than a second
+  // network round-trip.
   const effectiveStoreCode = useMemo(
     () => availableStores.find((s) => s.company_id === effectiveStoreId)?.company_code ?? null,
     [availableStores, effectiveStoreId]
@@ -203,24 +181,17 @@ function CatalogScreen() {
   const rawBrowseProducts = data?.products ?? [];
 
   // ── Search mode ───────────────────────────────────────────────────────────
-  // Two sources, combined:
-  //   1. useAllCatalog — this store's complete inventory, paginated in the
-  //      background (can take a while for a large store — see
-  //      catalogService.getAllProducts). Once ready, gives fully accurate
-  //      name + SKU search.
-  //   2. useSkuSearch — instant server-side SKU search, shown as an interim
-  //      result set while (1) is still loading, so search isn't blocked on
-  //      a slow first sync.
+  // Two sources, combined: useAllCatalog (full store inventory, paginated in
+  // the background — can take a while for a large store) gives fully accurate
+  // name + SKU search once ready; useSkuSearch (instant server-side SKU
+  // search) covers the interim while (1) is still loading.
   //
-  // useAllCatalog is deferred until the user actually searches (rather than
-  // firing on every catalog page visit) — for a large store it can burst
-  // hundreds of requests, and most catalog visits are pure browsing that
-  // never touch search at all. Once triggered it stays enabled (doesn't
-  // re-gate on isSearchMode) so clearing the search box mid-fetch doesn't
-  // cancel the sync it already started. Latched via the "adjusting state
-  // during render" pattern (react.dev/learn/you-might-not-need-an-effect)
-  // rather than an effect, so the enabled flag is correct in the same
-  // render isSearchMode first turns true.
+  // useAllCatalog is deferred until the user actually searches (a large store
+  // can burst hundreds of requests, and most visits never search at all).
+  // Once triggered it stays enabled regardless of isSearchMode, so clearing
+  // the search box mid-fetch doesn't cancel the sync already in flight.
+  // Latched via "adjust state during render" rather than an effect, so the
+  // enabled flag is correct in the same render isSearchMode first turns true.
   const [hasSearched, setHasSearched]           = useState(isSearchMode);
   const [prevIsSearchMode, setPrevIsSearchMode] = useState(isSearchMode);
   if (isSearchMode !== prevIsSearchMode) {
@@ -240,12 +211,10 @@ function CatalogScreen() {
     isLoading: skuLoading,
   } = useSkuSearch(isSearchMode && !allReady ? searchQuery : '', effectiveStoreId);
 
-  // Category-NAME matches (e.g. "Rings") for the interim pre-index result
-  // set — see useCategoryNameSearch for why this can't just wait on
-  // useSkuSearch, which only ever matches item_code. Categories themselves
-  // load fast/independently of the slow full-catalog scan, so this can
-  // resolve immediately even on a store with thousands of items still
-  // indexing in the background.
+  // Category-name matches for the interim pre-index result set — useSkuSearch
+  // only ever matches item_code. Categories load fast/independently of the
+  // slow full-catalog scan, so this resolves immediately even on a store
+  // with thousands of items still indexing.
   const interimMatchingTypeIds = useMemo(
     () => (isSearchMode && !allReady ? getMatchingTypeIds(searchQuery, categories) : []),
     [isSearchMode, allReady, searchQuery, categories],
@@ -267,7 +236,7 @@ function CatalogScreen() {
       });
     }
     // Full catalog still loading — show what the fast SKU + category-name
-    // paths have so far, deduped (a query can conceivably match both).
+    // paths have so far, deduped (a query can match both).
     const seen = new Set();
     const merged = [...skuResults, ...categoryNameResults].filter((p) => {
       if (seen.has(p.item_id)) return false;
@@ -299,63 +268,36 @@ function CatalogScreen() {
   const hasMore         = !isSearchMode && !!hasNextPage;
   const showStockBadge  = true; // always show — badge content reflects actual stock status
 
-  // Live (SetSalesItems) prices for items whose price couldn't come from the
-  // fast tier — fetched in the background so they never hold up the page
-  // itself; see useLiveCatalogPrices for why this had to be split out.
-  // effectiveStoreId, not reduxStoreId — the catalog's own store filter lets
-  // an operator browse a different store than the one they're signed into,
-  // and pricing must follow whatever store is actually on screen (see
-  // useLiveCatalogPrices' own header for the live-confirmed bug this fixed:
-  // switching this filter re-fetched the product list from the new store,
-  // but every price kept coming from the signed-in store's stock).
+  // Live (SetSalesItems) prices for items the fast tier couldn't price,
+  // fetched in the background so they never block the page. Keyed on
+  // effectiveStoreId, not reduxStoreId — pricing must follow whichever store
+  // the catalog filter has on screen, not the signed-in store.
   const { priceById: livePriceById, settledIds } = useLiveCatalogPrices(displayProducts, effectiveStoreId);
 
-  // PERF (2026-09-08) — reuses the SAME merged object for any item whose
-  // price/is_pricing hasn't actually changed since the last tick, instead of
-  // spreading a brand new `{...p, price, is_pricing}` for every item on
-  // EVERY settle-tick (which used to happen ~every 200ms while pricing
-  // streams in, per useLiveCatalogPrices' own chunking). ProductCard is
-  // React.memo'd specifically so a card whose own price hasn't moved skips
-  // re-rendering — that only works if it also keeps getting the same
-  // `product` object reference; without this, every mounted card re-rendered
-  // on every chunk regardless of whether ITS price just arrived.
-  //
-  // "Adjust state during render" (a ref would be simpler, but this repo's
-  // lint config — react-hooks/refs — forbids reading/writing a ref during
-  // render, matching the React Compiler model this Next version assumes;
-  // see AGENTS.md's warning to check current behavior rather than assume
-  // prior API conventions). Same guarded-setState-during-render idiom
-  // stableSort below already uses, for the same reason: cheap to compute,
-  // and settles after one extra render rather than needing an effect (which
-  // would paint one un-memoized frame first).
+  // Reuses the same merged object for an item whose price/is_pricing hasn't
+  // changed since the last tick, instead of building a new one for every item
+  // on every settle-tick. ProductCard is React.memo'd so a card whose price
+  // hasn't moved skips re-rendering — but only if it keeps the same `product`
+  // object reference, hence this cache. "Adjust state during render" is used
+  // instead of a ref because this repo's lint (react-hooks/refs) forbids
+  // reading/writing a ref during render; same idiom as stableSort below.
   const [mergeCache, setMergeCache] = useState(() => new Map());
 
   const nextMergeCache = new Map();
   const mergedEntries = displayProducts.map((p) => {
     const price = p.price ?? livePriceById.get(p.item_id) ?? null;
-    // is_pricing distinguishes "the number is still coming" from "there
-    // will never be a number", so a card can say which instead of
-    // rendering an empty space where the price belongs.
+    // Distinguishes "still coming" from "there will never be a number".
     const isPricing = price == null && !settledIds.has(p.item_id);
 
-    // CORRECTED 2026-09-08 — this used to also require `cached.raw === p`
-    // (the underlying, pre-merge product object's own reference). Dropped:
-    // the adjacent pricedSignature/stableSort code below this already
-    // documents a CONFIRMED LIVE bug ("Maximum update depth exceeded") from
-    // trusting reference identity on this exact data source — `products`
-    // from useCatalogProducts' select() can get a fresh reference on every
-    // render during the fetching/refetching transition right after a store
-    // switch, not just when content genuinely changed. A reference check
-    // here would re-trigger setMergeCache below on every one of those
-    // renders with no content-based floor to converge on, risking the same
-    // crash in a second place. Comparing on price/isPricing only (content,
-    // like pricedSignature does) guarantees this settles once pricing
-    // itself stops changing, regardless of upstream reference churn.
-    // Trade-off accepted: if `p`'s OTHER fields (name/image/etc.) somehow
-    // changed while price/isPricing coincidentally didn't, the reused entry
-    // would show the old ones — acceptable since those are catalog MASTER
-    // fields, effectively immutable per item_id within a session, unlike
-    // price (which is the one field this cache exists to track).
+    // Compared on price/isPricing content only, not object reference —
+    // `products` from useCatalogProducts' select() can get a fresh reference
+    // on every render during the fetching/refetching transition right after a
+    // store switch, which previously caused an update-depth-exceeded loop
+    // (same class of bug useLiveCatalogPrices hit and fixed the same way).
+    // Trade-off: if a product's other fields (name/image) changed while
+    // price/isPricing didn't, the reused entry shows the old ones — accepted
+    // since those catalog fields are effectively immutable per item_id
+    // within a session.
     const cached = mergeCache.get(p.item_id);
     const entry = (cached && cached.price === price && cached.isPricing === isPricing)
       ? cached
@@ -366,11 +308,10 @@ function CatalogScreen() {
   });
   const pricedDisplayProducts = mergedEntries.map((entry) => entry.merged);
 
-  // Compared AFTER building both maps, in a plain loop rather than a flag
+  // Compared after building both maps, in a plain loop rather than a flag
   // mutated inside the .map() callback above — this repo's lint
   // (react-hooks/immutability) forbids reassigning a render-scoped variable
-  // from inside a nested callback, matching stableSort's own plain
-  // top-level conditional reassignment below.
+  // from inside a nested callback.
   let mergeCacheChanged = nextMergeCache.size !== mergeCache.size;
   if (!mergeCacheChanged) {
     for (const [id, entry] of nextMergeCache) {
@@ -379,47 +320,23 @@ function CatalogScreen() {
   }
   if (mergeCacheChanged) setMergeCache(nextMergeCache);
 
-  // THE sort step — deliberately after pricing is merged in, not before.
-  // compareProducts' price branch always sorts a still-pricing item (price
-  // null) after every priced one regardless of direction, so a card doesn't
-  // jump to the top while it still reads "Pricing…" — it settles into place
-  // once its real price lands.
+  // Sort deliberately runs after pricing is merged in, not before —
+  // compareProducts' price branch always sorts a still-pricing item after
+  // every priced one so a card doesn't jump to the top while it still reads
+  // "Pricing…". stableSortProducts also keeps already-rendered cards frozen
+  // in place on pagination and only sorts/appends genuinely new rows, so an
+  // infinite-scroll page fetch doesn't reshuffle cards the operator is
+  // already scrolling past (a plain re-sort of the full list on every
+  // fetchNextPage() used to do exactly that).
   //
-  // FIXED 2026-09-04 — "infinite scroll jump": this used to be a plain
-  // sortProducts() re-run over the FULL accumulated list on every change,
-  // including every new page fetchNextPage() pulled in. A freshly-fetched
-  // page's rows are not alphabetically/weight-adjacent to whatever's
-  // already on screen (the server returns pages in its own order, not
-  // pre-sorted), so re-sorting the combined list INTERLEAVED the new page's
-  // rows in among ones the operator was already scrolling past, snapping
-  // every card below the insertion point to a new position. stableSortProducts
-  // (catalogSort.js) keeps already-rendered cards frozen in place and only
-  // sorts/appends genuinely new rows after them — see its own header for
-  // the full reasoning, including why price sort is still allowed to
-  // resettle a just-priced card (that movement is real and wanted, not
-  // pagination noise).
+  // sortResetKey forces a genuine fresh sort (not a frozen-prefix carry) only
+  // when sort order, filter, store, or mode actually changes.
   //
-  // sortResetKey: the sort is carried forward (stable) across renders EXCEPT
-  // when one of these legitimately changes the SET of items being shown for
-  // a reason other than pagination/pricing — a different sort order, a
-  // different filter, or a different store/mode entirely. Any of those
-  // deserve a genuine fresh sort from scratch, not a frozen-prefix carry.
-  //
-  // BUG FIX 2026-09-04 (confirmed live: switching the store from the header
-  // and opening /catalog crashed with no data rendered at all — React's
-  // "Maximum update depth exceeded"). The first version of this compared
-  // `pricedDisplayProducts` by REFERENCE to decide whether to update state.
-  // That array is rebuilt by a `.map()` a few lines above on every render
-  // where useCatalogProducts' `select()` hands back a new `products`
-  // array — which, in exactly the conditions right after a store switch
-  // (the infinite query transitioning through fetching/refetching states),
-  // it does on every single render, not just when a page/price genuinely
-  // changed. Comparing by reference meant setState fired on EVERY render
-  // instead of only on real changes — an unconditional render-loop, not a
-  // one-time correction. `useLiveCatalogPrices` (a few lines up) already
-  // hit this exact class of bug ("useQueries hands back a fresh array
-  // every render") and fixed it the same way: a cheap CONTENT signature,
-  // compared by value, not by reference.
+  // pricedSignature is a content signature, not a reference — comparing
+  // `pricedDisplayProducts` by reference caused an update-depth-exceeded
+  // crash right after a store switch, since useCatalogProducts' select() can
+  // hand back a new array reference on every render during that transition
+  // (same bug class as useLiveCatalogPrices, fixed the same way).
   const sortResetKey = `${sortBy}|${activeCategoryId ?? ''}|${showOutOfStock}|${effectiveStoreId ?? ''}|${isSearchMode}`;
   const pricedSignature = pricedDisplayProducts
     .map((p) => `${p.item_id}:${p.price ?? ''}`)
@@ -435,28 +352,12 @@ function CatalogScreen() {
   }
 
   // ── Barcode handler ───────────────────────────────────────────────────────
-  // ONLY calls the sku lookup below — no fallback to item_code matching or
-  // to actions.setSearch() anymore. That fallback used to run on every scan
-  // miss, which sets the page's search query and flips isSearchMode on,
-  // which in turn latches hasSearched (see the "Search mode" block above)
-  // and kicks off useAllCatalog's full-catalog background index — a
-  // multi-thousand-row fetch never meant to be triggered by a single failed
-  // barcode scan. Confirmed 2026-08-09: that's exactly why a scan miss
-  // looked like "0 results, indexing full catalog" instead of a clean
-  // "not found". A scan is a targeted, instant lookup; it should say found
-  // or not found and stop there, not silently start an unrelated fetch.
-  //
-  // FIXED 2026-09-09 — CONFIRMED LIVE this endpoint's real contract diverges
-  // from the UAT-only shape this comment used to describe: on LIVE,
-  // `company_id` is REQUIRED — omitting it (the old shape) returned ZERO
-  // rows for skus confirmed to exist, meaning every barcode scan on LIVE
-  // production hit "No product found" unconditionally before this fix. See
-  // getStockPieceBySku's own header for the full evidence (including that
-  // UAT's own confirmed shape is the OPPOSITE, which is why this is only
-  // sent on LIVE). The client-side company-match check below is kept
-  // regardless — it's what surfaces the (rare, cross-store) case in the
-  // console warning further down, now genuinely reachable since the lookup
-  // itself works.
+  // Only calls the SKU lookup — no fallback to item_code matching or
+  // actions.setSearch(). A scan is a targeted, instant lookup; it should say
+  // found or not found and stop, not flip on isSearchMode and trigger
+  // useAllCatalog's full-catalog background index on a miss. See
+  // getStockPieceBySku for the company_id requirement this endpoint has on
+  // live.
   const handleBarcodeDetected = useCallback(async (code) => {
     const trimmed = code.trim();
     if (!trimmed) return;
@@ -468,11 +369,8 @@ function CatalogScreen() {
       if (skuMatch?.item_id && (skuMatch.company_id == null || skuMatch.company_id === effectiveStoreId)) {
         tracker.track(EVENTS.BARCODE_SCANNED, { code: trimmed, itemId: skuMatch.item_id });
 
-        // Mirrors OrnaVerse's own POS — fired right after StockJournal/List
-        // resolves the sku, confirmed live 2026-08-10. Best-effort and
-        // fire-and-forget: this is a logging side effect on their end, not
-        // part of resolving the scan, so a failure here must never block or
-        // fail the actual navigation below.
+        // Best-effort, fire-and-forget logging (mirrors OrnaVerse's own POS) —
+        // must never block or fail the actual navigation below.
         createItemEnquiry({
           itemId:          skuMatch.item_id,
           itemAttributeId: skuMatch.item_attribute_id,
@@ -489,9 +387,8 @@ function CatalogScreen() {
       }
 
       if (skuMatch?.item_id) {
-        // Matched a real piece, just not one this store holds — skus are
-        // expected to be unique per piece, so this should be rare; worth
-        // knowing about if it isn't.
+        // Matched a real piece, just not one this store holds — SKUs are
+        // expected to be unique per piece, so this should be rare.
         console.warn('[BarcodeScanner] sku matched a piece at a different store', {
           sku: trimmed, matchedCompanyId: skuMatch.company_id, activeStoreId: effectiveStoreId,
         });
@@ -528,56 +425,19 @@ function CatalogScreen() {
     return `${n} product${n !== 1 ? 's' : ''}${hasActiveFilters ? ' matching filters' : ''}`;
   }, [isLoading, displayProducts.length, isSearchMode, searchQuery, hasActiveFilters]);
 
-  // REMOVED 2026-09-09 — the "Indexing full catalog…" banner that used to
-  // render here. It never actually blocked anything (searchResults already
-  // shows the fast SKU/category-name matches immediately regardless of
-  // whether the background full-catalog sync has finished — see that
-  // useMemo above), but its spinner + amber warning styling read as "the
-  // search is slow/stuck" even while real results were already on screen
-  // underneath it — exactly the impression a fast search bar shouldn't
-  // give. The background sync itself is unchanged (still runs, still
-  // eventually unlocks full name-search accuracy) — only this visible,
-  // alarming-looking indicator of it is gone.
-
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    // h-full REMOVED (2026-08-24) — it capped this root to exactly
-    // #main-content's own viewport-height, which is what broke the sticky
-    // filter bar below: position:sticky can only stay "stuck" for as long
-    // as it hasn't scrolled past the bottom of ITS OWN containing block, and
-    // that block was only ever one viewport tall regardless of how much
-    // product-grid content actually rendered beneath it (confirmed live —
-    // the bar detached and started scrolling away exactly once scroll
-    // passed containerHeight-barHeight, ~684px, matching measured drift
-    // exactly). The h-full + flex-1 overflow-y-auto pairing below it was
-    // meant to make the GRID scroll in its own internal box instead of the
-    // whole page — but flex-1 was set on a child of a plain (non-flex)
-    // p-4/md:p-6 wrapper, so it was already inert and never actually
-    // constrained anything; #main-content was doing 100% of the real
-    // scrolling all along. Dropping h-full just makes that the case
-    // honestly — this page now grows to its natural content height like
-    // every other page in the app (orders, invoices, …), which is also
-    // exactly what a sticky filter bar needs: a containing block tall
-    // enough to give it room to stay pinned through the whole scroll.
+    // No h-full here — the page grows to its natural content height (like
+    // orders/invoices) so #main-content is the sole scroll container, which
+    // is what the sticky filter bar below needs to stay pinned correctly.
     <div className="flex flex-col bg-background">
 
-      {/* Light grey wash — subtle enough not to draw the eye, just enough to
-          read as its own "filters" region distinct from the white product
-          grid below. Sticky (2026-08-24, same treatment as /orders and
-          /invoices) — pins to the top of #main-content once the grid
-          scrolls past it, and releases back to its normal spot the instant
-          you scroll back to the top (native position:sticky behavior, no
-          scroll-position JS needed). bg-muted/60 → bg-muted (full opacity,
-          not translucent) — a see-through bar would let product cards
-          scrolling underneath show faintly through it once pinned, which
-          orders/invoices' sticky bars avoid the same way. */}
-      {/* z-20, not z-10 (2026-08-24 fix): ProductCard's wishlist heart is
-          `absolute ... z-10` too, and neither the card nor this bar creates
-          its own stacking context — with equal z-index the tie breaks on
-          DOM order, and the grid (painted after this bar) won, so a card's
-          heart icon showed through on TOP of the pinned filter bar as it
-          scrolled underneath. z-20 keeps this bar above anything at the
-          card level regardless of that ordering. */}
+      {/* Sticky filter bar (same treatment as /orders and /invoices) — pins
+          to the top of #main-content on scroll. Full-opacity bg-muted, not
+          translucent, so cards don't show through once pinned. z-20 (not
+          z-10) because ProductCard's wishlist heart is also `absolute z-10`
+          with no stacking context of its own — equal z-index would let it
+          show through the bar on tie-break. */}
       <div className="sticky top-0 z-20 px-4 pt-4 pb-3 md:px-6 md:pt-5 bg-muted border-b border-border">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
           {/* Search — left, grows on wide screens but caps out so it doesn't
@@ -629,12 +489,6 @@ function CatalogScreen() {
           </p>
         )}
 
-        {/* flex-1/overflow-y-auto removed (2026-08-24) — inert: this div's
-            parent (just above) is a plain block element, not a flex
-            container, so flex-1 never did anything, and with no bounded
-            height overflow-y-auto had nothing to ever actually clip/scroll.
-            #main-content was always the real scroller — see the root div's
-            own comment above. */}
         <div className="py-2">
           <ProductGrid
             products={sortedDisplayProducts}
@@ -649,15 +503,9 @@ function CatalogScreen() {
           />
         </div>
 
-        {/* "Available at other stores" — only once this store's own catalog
-            has genuinely run out (never during search: a name/SKU search is
-            scoped to the store being searched, not a browse-everything
-            action) and only once the primary grid has settled (isLoading
-            false), so this doesn't flash in ahead of the primary results on
-            first paint, when hasMore briefly reads false before data
-            arrives. Keyed by effectiveStoreId + category + OOS so a filter
-            change fully remounts every section instead of carrying over
-            stale pagination state from the previous store/filter combo. */}
+        {/* Only shown once this store's catalog has genuinely run out (never
+            during search) and the primary grid has settled, so it doesn't
+            flash in ahead of real results on first paint. */}
         {!isSearchMode && !isLoading && !hasMore && otherStores.length > 0 && (
           <div className="flex flex-col gap-5 pt-2">
             <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">

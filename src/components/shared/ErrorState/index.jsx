@@ -2,24 +2,10 @@ import { AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
-/**
- * ErrorState
- *
- * Reusable error display — mirrors EmptyState's card/spacing convention
- * (src/components/shared/EmptyState) with a destructive tint and a
- * built-in Retry button, since every current error state in the app is
- * "message + Retry".
- *
- * Props:
- *   icon      {React.ElementType}  — Lucide icon component (default: AlertCircle)
- *   title     {string}             — Primary message (required)
- *   description {string}           — Supporting detail (optional)
- *   onRetry   {() => void}         — Optional; renders a "Retry" button when present
- *   className {string}             — Extra classes on the root element
- *
- * Usage:
- *   <ErrorState title="Failed to load orders." onRetry={refetch} />
- */
+// Reusable error display — mirrors EmptyState's card/spacing convention
+// with a destructive tint and a built-in Retry button.
+//
+// @param {{ icon?: React.ElementType, title: string, description?: string, onRetry?: () => void, className?: string }} props
 export default function ErrorState({
   icon: Icon = AlertCircle,
   title,

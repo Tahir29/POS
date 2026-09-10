@@ -1,10 +1,8 @@
 'use client';
 
-// Restyled to icon-on-top tiles matching the new checkout design. The
-// mode SET itself remains fully data-driven from usePaymentModes (real
-// PaymentReceiptMode/List data) — only the icon per tile is a cosmetic
-// lookup by mode_code, with a generic fallback for anything unmapped so
-// no mode is ever hidden just because it isn't in this icon map.
+// Icon-on-top payment mode tiles. The mode set is fully data-driven from
+// usePaymentModes; the icon is a cosmetic lookup by mode_code with a
+// generic fallback, so an unmapped mode is never hidden.
 
 import { Loader2, CreditCard, Check, Smartphone, Banknote, Landmark, Wallet, Calculator } from 'lucide-react';
 

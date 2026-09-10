@@ -1,49 +1,31 @@
 // src/lib/analytics/productAttributes.js
 //
 // Single source of truth for "everything we know about a product" as
-// analytics attributes. Before this, every product-related tracker.track()
-// call site (AddToCartButton, the product detail page's view_item, ...)
-// independently re-read a different SUBSET of fields straight off raw
-// product/pricing objects — confirmed by audit 2026-09-08: the product
-// page's view_item event sent ~30 fields, AddToCartButton's add_to_cart
-// sent about a dozen DIFFERENT ones (no gemstone, no price breakup), and
-// neither agreed on field names. Enriching one call site never touched the
-// others. Call buildProductAttributes() once per event site instead of
-// hand-picking fields again — one place to add a field everyone gets it.
+// analytics attributes, so every product-related tracker.track() call site
+// (AddToCartButton, product detail view_item, ...) reports the same field
+// set with the same names instead of each hand-picking its own subset.
 //
-// SOURCES, most-specific first — pass whichever you have; anything ahead
-// in this list, when present, wins for the fields it can answer:
+// SOURCES, most-specific first — pass whichever you have; earlier ones win
+// for the fields they can answer:
 //   pricedItem — a live-priced SetSalesItems row (real sub_total/net_amount/
-//     per-component money amounts, the only source with a genuine per-piece
-//     sku). Wins for anything money- or weight-component-shaped.
+//     per-component amounts, the only source with a genuine per-piece sku)
 //   activeItem — the specific variant/customization currently selected
-//     (from useDesignVariants/CustomizeSheet), when the shopper has
-//     customized away from the base product.
-//   product    — the item master (Items/Retrieve or ProductCatalogRow) —
-//     the fallback for everything else (identity, classification, hsn).
+//   product    — the item master (Items/Retrieve or ProductCatalogRow),
+//     fallback for identity/classification/hsn
 //
-// GEMSTONE DETAIL comes from item_components/components (the BOM array),
-// NOT a flat field on any of the three sources above — filtered to
-// item_group_id === 113 / item_group_name === 'Color Stone' (the same
-// filter ProductSpecifications.jsx already uses for its own Gemstone
-// card) and flattened into gemstone_type/shape/color/size below, parsed
-// from the row's composite `attribute` string
-// ("{Shape}/{Color}/{Metal}/{Size}/{Quality}", e.g. "PR/RED/NA/4.5*4.5/NA")
-// when the row's own resolved shape_name/stone_color_name are missing —
-// confirmed live: a SetSalesItems-priced component row often only carries
-// the composite string, not resolved names.
+// GEMSTONE DETAIL comes from item_components/components (the BOM array,
+// filtered to item_group_id === 113 / 'Color Stone' — same filter
+// ProductSpecifications.jsx uses), parsed from the row's composite
+// `attribute` string ("{Shape}/{Color}/{Metal}/{Size}/{Quality}", e.g.
+// "PR/RED/NA/4.5*4.5/NA") when resolved shape_name/stone_color_name are
+// missing — a priced component row often only carries the composite string.
 //
-// EVERY field defaults to null, never omitted. A consistent, predictable
-// schema is the whole point — a caller checking event.diamond_weight for
-// "was there a diamond" can rely on it being null (not undefined, not
-// simply absent) when there wasn't one, on every event, not just the ones
-// someone happened to remember to add it to.
+// EVERY field defaults to null, never omitted — a caller checking
+// event.diamond_weight for "was there a diamond" can rely on null (not
+// undefined/absent) meaning no.
 //
-// PII-SAFE. Nothing here is customer data — every field is either
-// GA4-safe already or becomes so once wrapped in the caller's own
-// properties/webengageExtra split (see tracker.js's own jsdoc); this
-// module has no opinion on which destination gets which field, that
-// split still belongs to each call site.
+// PII-SAFE — nothing here is customer data; the GA4/WebEngage PII split
+// still belongs to each call site (see tracker.js's jsdoc).
 
 import { resolveMetalColorName } from '@/lib/metalColor';
 
@@ -58,10 +40,8 @@ function firstGemstoneComponent(components) {
 }
 
 // Parses "{Shape}/{Color}/{Metal}/{Size}/{Quality}" — see this file's own
-// header for why this exists. "NA" segments (confirmed live — OrnaVerse's
-// own placeholder for "not applicable") resolve to null, same as every
-// other "NA" field this app already treats that way (see e.g. the
-// product page's own `na()` helper).
+// header. "NA" segments (OrnaVerse's placeholder for "not applicable")
+// resolve to null, same as every other "NA" field this app treats that way.
 function parseGemstoneAttribute(attribute) {
   if (!attribute || typeof attribute !== 'string') return {};
   const [shape, color, , size] = attribute.split('/');
@@ -122,16 +102,9 @@ export function buildProductAttributes({
     // Metal
     metal:       item.metal_name ?? null,
     karat:       item.karat_name ?? null,
-    // FIXED 2026-09-09 — was `item.metal_color_name ?? null`. ProductCatalogRow
-    // (a catalog-listed `product`) only ever carries the short code
-    // (metal_color_code: "YG"/"WG"/"RG"), not the full name — see
-    // resolveMetalColorName's own header (ProductCard already uses it for
-    // exactly this reason). The add-to-cart path today always passes a full
-    // Items/Retrieve `product` (which does carry metal_color_name), so this
-    // rarely bit in practice — but it's the same field this app already
-    // treats as unreliable everywhere else, so resolving it the same
-    // defensive way here too rather than assuming today's one caller always
-    // will.
+    // Use resolveMetalColorName rather than a bare item.metal_color_name —
+    // ProductCatalogRow only carries the short code (metal_color_code), not
+    // the full name (see resolveMetalColorName's own header).
     metal_color: resolveMetalColorName(item) ?? null,
 
     // Size
@@ -167,8 +140,7 @@ export function buildProductAttributes({
 
     // Price breakup — LIVE-priced entity only. The item master's own price
     // fields (item_rate/sale_price/price/mrp/rate/compare_price) are never
-    // used as a fallback — see pricingService.js/catalogService.js's own
-    // headers for why those are stale and can understate a piece by 2-3x.
+    // used as a fallback — they're stale and can understate a piece by 2-3x.
     price_metal_amount:       priced.metal_amount       ?? null,
     price_diamond_amount:     priced.diamond_amount      ?? null,
     price_stone_amount:       priced.stone_amount        ?? null,

@@ -1,10 +1,8 @@
-// Paginated list hooks for the 3-stage repair workflow: RepairIn (intake) →
-// RepairOut (to craftsman) → RepairInvoice (billing).
-//
-// Confirmed 2026-07-16 via real API data: all 3 share the same header shape
-// as every other POS transaction (transaction_id, document_no, document_date,
-// party_name, net_amount, line_items[]) — same pattern as
-// useTransactionLists.js, so this mirrors that file directly.
+// Paginated list hooks for the 3-stage repair workflow: RepairIn (intake) ->
+// RepairOut (to craftsman) -> RepairInvoice (billing). All 3 share the same
+// header shape as every other POS transaction (transaction_id, document_no,
+// document_date, party_name, net_amount, line_items[]) — mirrors
+// useTransactionLists.js directly.
 
 import { useQuery }      from '@tanstack/react-query';
 import { useSelector }   from 'react-redux';
@@ -50,23 +48,19 @@ function makeRepairListHook({ queryKeyFn, fetchFn }) {
       queryFn:  async () => {
         const data     = await fetchFn({ company_id: storeId, take, skip });
         const entities = data?.Entities ?? [];
-        // Client-side backstop (2026-08-27) — confirmed live that
-        // RepairOut/List silently ignores its own company_id filter (RepairIn
-        // and RepairInvoice DO filter correctly server-side; applied to all
-        // three uniformly anyway — a no-op where the server already scoped
-        // it, and fail-closed where it didn't, same reasoning as
-        // useDailyClosing.js for the identical gap on DailyClosing/List).
+        // Client-side backstop: RepairOut/List ignores its own company_id
+        // filter server-side (RepairIn/RepairInvoice do filter correctly).
+        // Applied to all three uniformly — a no-op where already scoped,
+        // fail-closed where not.
         const items = entities
           .map(normalizeRepairRecord)
           .filter(Boolean)
           .filter((r) => r.companyId === storeId);
         return {
           items,
-          // TotalCount comes straight from the unfiltered server response,
-          // so it can overstate the count when the backstop above actually
-          // had something to filter out — acceptable here since the repair
-          // list pages already treat this as an approximate page-count
-          // hint, not a displayed "N results" figure.
+          // TotalCount is from the unfiltered response, so it can overstate
+          // when the backstop above filtered something out — acceptable
+          // since it's only used as an approximate page-count hint here.
           totalCount: data?.TotalCount ?? entities.length,
         };
       },

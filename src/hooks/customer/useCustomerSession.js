@@ -1,8 +1,8 @@
-// Analytics for attach/detach is handled centrally by
-// src/store/analyticsMiddleware.js (keyed off the cart/attachCustomer and
-// cart/detachCustomer action types) rather than here — useCart.js dispatches
-// the same two actions directly, bypassing this hook entirely, so tracking
-// it at the action level is the only way to catch both call paths.
+// src/hooks/customer/useCustomerSession.js
+// Attach/detach the customer bound to the active cart session.
+// Attach/detach analytics is tracked centrally in store/analyticsMiddleware.js
+// (keyed off these action types), not here, since useCart.js also dispatches
+// them directly and bypasses this hook.
 
 import { useDispatch, useSelector } from 'react-redux';
 import { toast } from 'react-toastify';

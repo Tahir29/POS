@@ -67,10 +67,8 @@ function OrderContent({ raw, status }) {
         </div>
       )}
 
-      {/* sub_total / net_amount confirmed 2026-07-16 via real Order/List
-          data — sub_total is the pre-tax amount, net_amount is the actual
-          final total. gross_amount doesn't exist anywhere on OrderRow —
-          this row previously always rendered blank because of it. */}
+      {/* sub_total is the pre-tax amount, net_amount the final total —
+          gross_amount does not exist on OrderRow. */}
       <Row label="Subtotal"   value={formatCurrency(raw.sub_total)} border />
       <Row label="Discount"   value={raw.discount ? `– ${formatCurrency(raw.discount)}` : null} />
       <Row label="CGST (1.5%)" value={gst && formatCurrency(gst.cgst)} />
@@ -141,20 +139,17 @@ export default function OrderDetailSheet({ order, isOpen, onClose }) {
     onClose();
   };
 
-  // Only show cancel for orders with an outstanding balance. Guarded to the
-  // 'order' document type: this action calls POS/Order/Cancel specifically,
-  // and this sheet now also renders Invoice-origin rows (see useAllOrders,
-  // which merges both since checkout can raise either) — cancelling one of
-  // those against the Order endpoint would target the wrong document type.
+  // Only show cancel for orders with an outstanding balance, and only for
+  // the 'order' document type — this sheet also renders Invoice-origin rows
+  // (see useAllOrders), which must not be cancelled via the Order endpoint.
   const isCancellable = !!(
     raw && order?.documentType !== 'invoice' &&
     (raw.balance_amount ?? 0) > 0 && raw.transaction_id
   );
 
-  // Fulfillment doesn't require an outstanding balance the way Cancel does —
-  // an order can be fully paid up front and still be waiting on a
-  // made-to-order piece. Same document-type guard as Cancel: only ever
-  // meaningful for an Order (53), never an Invoice (54) row.
+  // Fulfillment doesn't require an outstanding balance (an order can be
+  // fully paid and still await a made-to-order piece); same document-type
+  // guard as Cancel.
   const isFulfillable = !!(raw && order?.documentType !== 'invoice' && raw.transaction_id);
 
   const handleConfirmCancel = async () => {
@@ -164,13 +159,7 @@ export default function OrderDetailSheet({ order, isOpen, onClose }) {
     handleClose();
   };
 
-  // Same document, either document type — 'invoice' rows print through 54,
-  // 'order' rows through 53. Confirmed live 2026-08-19: OrnaVerse's own ERP
-  // toolbar Print button on an invoice fires Administration/DocumentReports/
-  // List with exactly this document_id, offering the same three formats
-  // ("E Certificate", "New Invoice Format", "New Invoice Format WO Header")
-  // InvoiceReportButton already shows — same mechanism everywhere, not
-  // something specific to the post-checkout confirmation screen.
+  // 'invoice' rows print through document type 54, 'order' rows through 53.
   const printDocumentId = order?.documentType === 'invoice'
     ? APP_CONFIG.DOCUMENT_TYPES.POS_INVOICE
     : APP_CONFIG.DOCUMENT_TYPES.POS_ORDER;

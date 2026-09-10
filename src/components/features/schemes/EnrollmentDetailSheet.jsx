@@ -1,10 +1,7 @@
 'use client';
 
 // Per-enrollment detail: month-by-month payment schedule + payment
-// (receipt) history. Both sourced from confirmed-working read endpoints
-// (SchemeMonthlyDetails/List, SchemeReceipt/List) that existed in
-// schemeService.js but were never wired to any UI — see
-// useSchemeMonthlyDetails.js / useSchemeReceiptHistory.js.
+// (receipt) history, via useSchemeMonthlyDetails.js / useSchemeReceiptHistory.js.
 
 import { useState } from 'react';
 import { AlertCircle, CalendarClock, Receipt, Calculator } from 'lucide-react';
@@ -41,12 +38,9 @@ const CLOSURE_ACTIONS = [
   },
 ];
 
-// Response shape confirmed live 2026-08-01 against a fully-paid enrollment:
-//   { total_benefit, principal_paid, total_payout, ontime_rate, delayed_rate,
-//     grace_days, Installments: [{ due_date, paid_date, installment_amount,
-//       delay_days, days_held, applied_rate, benefit_amount, is_delayed }] }
 // Unknown keys still render (de-snake-cased) rather than being dropped, in
-// case foreclosure/cancellation return extra fields.
+// case foreclosure/cancellation return extra fields (see report for the
+// confirmed response shape).
 const BENEFIT_FIELDS = {
   principal_paid: { label: 'Principal Paid', format: 'money' },
   total_benefit:  { label: 'Benefit Earned', format: 'money' },
@@ -134,11 +128,8 @@ function ScheduleTab({ enrollmentId }) {
             className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card px-3 py-2.5"
           >
             <div className="min-w-0">
-              {/* FIXED 2026-09-08 — month_id is the calendar month (1-12,
-                  confirmed live — see useSchemeMonthlyDetails.js), not a
-                  sequential instalment count; showing the bare number read
-                  as "the 9th instalment" right next to a due date that's
-                  ALSO in month 9, which was the actual confusion. */}
+              {/* month_id is the calendar month (1-12), not a sequential
+                  instalment count — always display via formatMonthName. */}
               <p className="text-sm font-medium text-foreground">{formatMonthName(month.monthId)}</p>
               <p className="text-xs text-muted-foreground">
                 Due {formatDate(month.dueDate)}
@@ -161,10 +152,10 @@ function ScheduleTab({ enrollmentId }) {
   );
 }
 
-// Same calendar day, ignoring time-of-day — a receipt's document_date
-// carries a real timestamp ("2026-09-07T11:19:12.885Z"), a schedule row's
-// paid_on_date is stamped at midnight ("2026-09-07T00:00:00.000"); the two
-// never match to the millisecond, only to the day.
+// Compares by calendar day only, ignoring time-of-day — a receipt's
+// document_date carries a real timestamp while a schedule row's
+// paid_on_date is stamped at midnight, so the two never match to the
+// millisecond, only to the day.
 function isSameCalendarDay(a, b) {
   if (!a || !b) return false;
   const da = new Date(a), db = new Date(b);
@@ -173,32 +164,11 @@ function isSameCalendarDay(a, b) {
     && da.getDate() === db.getDate();
 }
 
-// Which schedule month(s) this receipt actually paid for.
-//
-// CONFIRMED LIVE 2026-09-08 against a real enrollment/receipt (id 158/437):
-// SchemeReceipt/List's own response carries NO month reference at all —
-// no month_id, no scheme_monthly_details_id, nothing — even though
-// SchemeReceipt/Create requires month_ids on the way in (see
-// schemeService.js's buildSchemeReceiptPayload header) and OrnaVerse's own
-// client refuses to save a receipt without it. It's write-only: accepted
-// on Create, never echoed back on List. So this can't be read directly off
-// the receipt — it has to be INFERRED by cross-referencing against the
-// Schedule (SchemeMonthlyDetails/List), matching each receipt to whichever
-// schedule row(s) share its paid_on_date (same calendar day — see
-// isSameCalendarDay). Confirmed live: enrollment 158's October instalment
-// (month_id 10) shows payment_made:true, paid_on_date "2026-09-07" —
-// this DOES NOT mean it was paid on time in September; the customer paid
-// the October instalment early, in September (a real, confirmed advance-
-// payment case, not a data error) — which is exactly why showing the
-// matched MONTH NAME here, not just the receipt's own date, is the
-// genuinely useful piece of information the receipt's own date can't
-// convey on its own.
-//
-// One receipt can cover more than one month (month_ids is an array on
-// Create), so this returns every match, not just the first — and returns
-// nothing rather than a guess when no schedule row shares that exact day
-// (e.g. the schedule hasn't loaded, or the two dates were recorded far
-// enough apart that this correlation genuinely can't tell).
+// Which schedule month(s) this receipt actually paid for. SchemeReceipt/List
+// carries no month reference (see report), so this is inferred by matching
+// each receipt to schedule row(s) that share its paid-on calendar day. A
+// receipt can cover more than one month, so this returns every match, or
+// nothing when no schedule row shares that exact day.
 function matchedMonthNames(receipt, months) {
   return months
     .filter((m) => m.isPaid && isSameCalendarDay(m.paidOnDate, receipt.documentDate))
@@ -207,9 +177,7 @@ function matchedMonthNames(receipt, months) {
 
 function PaymentsTab({ enrollmentId }) {
   const { data: receipts = [], isLoading: receiptsLoading, isError: receiptsError } = useSchemeReceiptHistory(enrollmentId);
-  // Fetched here too (already used by ScheduleTab) purely to resolve which
-  // month each receipt actually paid for — see matchedMonthNames above for
-  // why this can't come from the receipt row alone.
+  // Also fetched here (see matchedMonthNames) to resolve which month each receipt paid for.
   const { data: months = [], isLoading: monthsLoading } = useSchemeMonthlyDetails(enrollmentId);
 
   if (receiptsLoading) return <LoadingRow />;
@@ -247,11 +215,9 @@ function PaymentsTab({ enrollmentId }) {
   );
 }
 
-// Calculate a figure, then optionally record it on the enrollment — see
-// useCloseSchemeEnrollment / closeSchemeEnrollment's header for exactly
-// what "record" means (benifit_amount only; no dedicated close/mature/
-// foreclose/cancel endpoint exists anywhere in the API, and scheme_status
-// is deliberately left untouched pending confirmation of its enum values).
+// Calculate a figure, then optionally record it on the enrollment (benefit
+// amount only — see useCloseSchemeEnrollment for why scheme_status is left
+// untouched).
 function ClosureTab({ enrollmentId }) {
   const { calculate, kind, result, error, isLoading } = useSchemeBenefits(enrollmentId);
   const closeMutation = useCloseSchemeEnrollment();

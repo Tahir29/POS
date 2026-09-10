@@ -17,9 +17,7 @@ function getInitials(name) {
   return (first + last).toUpperCase();
 }
 
-// Relative "Today, h:mm AM/PM" vs plain date — no fabricated data, just a
-// nicer format of the order's own real orderDate (matches the reference's
-// row layout, which shows a timestamp alongside the customer).
+// Formats the order's own orderDate as "Today, h:mm AM/PM", or a plain date otherwise.
 function formatOrderTimestamp(iso) {
   if (!iso) return null;
   const d = new Date(iso);

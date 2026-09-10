@@ -1,21 +1,8 @@
 // src/validators/customerSchema.js
 // Zod schemas for customer create and update forms.
-//
-// POS.CustomerRow confirmed field names (v1.json):
-//   party_name   — full name (single field, not first/last split)
-//   mobile       — 10-digit mobile
-//   email        — optional
-//   pan_no       — optional PAN card (NOT pan)
-//   address      — address line 1
-//   address_1    — address line 2
-//   city_id      — numeric ID (from Cities/List)
-//   state_id     — numeric ID (from States/List)
-//   country_id   — numeric ID (from Countries/List)
-//   pin_code     — postal code string
-//   birth_date   — ISO datetime string
-//   anniversary  — ISO datetime string
-//   gender       — enum int
-//   marital_status — enum int
+// Field names match POS.CustomerRow (v1.json): party_name is a single full-name
+// field (no first/last split); pan_no (not pan); address/address_1 are line 1/2;
+// city_id/state_id/country_id are numeric master IDs; gender/marital_status are enums.
 
 import { z } from 'zod';
 
@@ -83,15 +70,10 @@ export const customerSchema = z.object({
 // All fields optional — only changed fields need to be present in the form
 // But buildCustomerUpdatePayload() merges with original raw before sending
 //
-// mobile is blank-able here (unlike create) — CustomerDetailSheet's
-// EditTab always pre-fills it with the real value now (confirmed live
-// 2026-09-08: OrnaVerse does NOT mask mobile/email/address on LIVE — see
-// that component's own header for the full finding and the masking-based
-// blanking logic this replaced), so blank here means the operator
-// genuinely cleared the field, not "couldn't be shown." EditTab's
-// onSubmit still falls back to the original raw value in that case —
-// Update requires the full record, and there's no UI affordance here for
-// actually removing a required field.
+// mobile is blank-able here (unlike create) — EditTab pre-fills it with the real
+// value (OrnaVerse does not mask mobile/email/address on LIVE, confirmed 2026-09-08),
+// so blank means the operator genuinely cleared it; onSubmit falls back to the
+// original raw value regardless, since Update requires the full record.
 export const updateCustomerSchema = z.object({
   party_name: z
     .string()

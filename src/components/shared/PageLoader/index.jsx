@@ -6,13 +6,8 @@ import { selectGlobalLoading } from '@/store/slices/uiSlice';
 import { cn } from '@/lib/utils';
 
 /**
- * PageLoader — full-screen loading overlay.
- *
- * Two usage modes:
- *   1. Controlled via Redux: reads globalLoading from uiSlice automatically.
- *   2. Forced via prop: pass force={true} to show regardless of Redux state.
- *      Used by AuthGuard and StoreGuard during their redirect checks.
- *
+ * Full-screen loading overlay. Reads globalLoading from uiSlice by default;
+ * pass force={true} to show regardless of Redux state (used by AuthGuard/StoreGuard).
  * @param {{ force?: boolean, label?: string }} props
  */
 export default function PageLoader({ force = false, label = 'Loading…' }) {

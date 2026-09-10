@@ -1,11 +1,7 @@
 'use client';
 
-// Photo banner (dashboard redesign) — uses the dedicated Today's Activity
-// banner asset (separate from the auth screens' login-banner.png).
-//
-// NOTE: A "Schemes" chip is intentionally NOT included — there's no
-// SchemeReceipt/List data source yet (Phase 23, still queued). Add it
-// here once that hook exists; don't fabricate a count in the meantime.
+// Photo banner for today's activity stats. No "Schemes" chip yet — there's
+// no data source wired up for it (see report); don't fabricate a count.
 
 import Image from 'next/image';
 import { RotateCcw, ArrowLeftRight, Gem, Coins } from 'lucide-react';

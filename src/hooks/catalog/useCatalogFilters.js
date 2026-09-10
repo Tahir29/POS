@@ -1,4 +1,3 @@
-// src/hooks/catalog/useCatalogFilters.js
 // Manages all catalog filter state, synced to URL query params.
 // Covers: category, search, sortBy, showOutOfStock, catalogStoreId.
 
@@ -8,14 +7,8 @@ import { useCallback, useMemo } from 'react';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 
 /**
- * Sort options available in the catalog.
- * Value is used in URL params and matched client-side.
- *
- * NOTE: 'price_asc'/'price_desc' used to mean weight (mislabeled — the
- * options read "Weight Low → High" but sorted by net_weight, not price).
- * Renamed to weight_asc/weight_desc and given real price_asc/price_desc
- * options now that ProductCatalogRow is enriched with a real price
- * (see catalogService.enrichWithPrice).
+ * Sort options available in the catalog. Value is used in URL params and
+ * matched client-side.
  */
 export const SORT_OPTIONS = [
   { value: 'name_asc',    label: 'Name A → Z' },
@@ -41,18 +34,11 @@ export function useCatalogFilters() {
     ? Number(params.get('store'))
     : null;
 
-  // FIXED 2026-09-09 — was building `next` from `params.toString()` (the
-  // useSearchParams() hook's own React-managed snapshot). That snapshot
-  // only updates on its own render schedule, so calling this again before
-  // React has actually re-rendered with the PREVIOUS update reflected — a
-  // quick clear right on the heels of a debounced search update landing,
-  // for instance — reads a baseline that doesn't yet include that previous
-  // change and can silently re-apply/restore a param this same call meant
-  // to remove. window.location.search is the actual browser URL, never
-  // stale, so building the "current" baseline from that instead makes each
-  // call correct regardless of whether React's own snapshot has caught up
-  // yet. Guarded for the (SSR/very-first-render) case where this runs
-  // before window exists, falling back to the hook's own snapshot then.
+  // Build the baseline from window.location.search rather than
+  // useSearchParams()'s React-managed snapshot, which only updates on its
+  // own render schedule — calling this again before a previous update has
+  // been reflected could otherwise silently re-apply/restore a param this
+  // call meant to remove. Falls back to the hook's snapshot pre-mount (SSR).
   const setParam = useCallback((updates) => {
     const currentSearch = typeof window !== 'undefined' ? window.location.search : `?${params.toString()}`;
     const next = new URLSearchParams(currentSearch);
@@ -86,10 +72,8 @@ export function useCatalogFilters() {
     }),
 
     clearFilters: () => {
-      // Same staleness fix as setParam above — read the store param from
-      // the real browser URL, not the potentially-lagging catalogStoreId
-      // closure, so a clear right after another update lands still
-      // preserves the TRUE current store scope instead of a stale one.
+      // Same reasoning as setParam above — read the store param from the
+      // real browser URL, not the potentially-lagging catalogStoreId closure.
       const currentSearch = typeof window !== 'undefined' ? window.location.search : '';
       const currentStore = new URLSearchParams(currentSearch).get('store');
       const next = new URLSearchParams();

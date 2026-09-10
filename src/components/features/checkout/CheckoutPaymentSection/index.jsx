@@ -1,18 +1,9 @@
 'use client';
 
-// Payment section at checkout — shows available customer balances first,
-// then standard payment mode selection with split payment support.
-//
-// RESTYLED: balance rows now use a toggle switch (matching the design)
-// instead of an "Apply" pill button — same underlying apply/un-apply
-// logic, just a different control. Added a "Balances applied / Collected
-// / Paid in full" summary line at the bottom, matching the design.
-//
-// INVOICE HELPERS (unchanged data source):
-//   Scheme, Exchange, Credit Note, Old Gold, Advances
-//
-// STANDARD PAYMENT MODES:
-//   Cash, Card, UPI, etc. — from PaymentReceiptMode/List, unchanged.
+// Payment section at checkout — shows available customer balances
+// (Scheme, Exchange, Credit Note, Old Gold, Advances, Other) first, then
+// standard payment mode selection (PaymentReceiptMode/List) with split
+// payment support.
 
 import { useEffect, useState } from 'react';
 import { Loader2, CheckCircle2 } from 'lucide-react';
@@ -38,22 +29,11 @@ function HelperBalanceRow({ label, amount, modeCode, rows, isApplied, onToggle, 
 
   const handleToggle = () => onToggle({ modeCode, label, amount, rows });
 
-  // role="switch" on a <div>, not a real <button> (2026-08-27) — the visual
-  // Switch rendered inside is ITSELF a real <button> under the hood (Radix's
-  // SwitchPrimitive.Root renders role="switch" as an actual <button>, see
-  // ui/switch.jsx), so this used to be a <button> containing another
-  // <button>. Same failure mode already fixed once in this codebase for
-  // ProductCard's wishlist heart (see that file's own comment): the
-  // browser's HTML parser auto-closes the OUTER button the instant it
-  // meets the nested one, silently detaching everything after that point
-  // from this row's real click target — confirmed live 2026-08-27, this is
-  // what a customer with an Exchange Credit balance (or any second helper
-  // balance row) hit at checkout: a React hydration error that broke the
-  // payment section, one repro away from an order that never actually
-  // reaches Create. tabIndex + onKeyDown reproduce real button/switch
-  // keyboard behaviour (Enter/Space), which a plain div gets neither of
-  // for free. The inner <Switch> stays purely decorative — already
-  // pointer-events-none/tabIndex=-1/aria-hidden, unchanged here.
+  // role="switch" on a <div>, not a <button> — the <Switch> rendered
+  // inside is itself a real <button> (Radix), so wrapping it in another
+  // button nests two interactive buttons and breaks the row's click
+  // target. tabIndex + onKeyDown reproduce button/switch keyboard
+  // behaviour; the inner <Switch> stays purely decorative.
   return (
     <div
       role="switch"

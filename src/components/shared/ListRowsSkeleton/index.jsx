@@ -1,11 +1,7 @@
 'use client';
 
-// src/components/shared/ListRowsSkeleton/index.jsx
-//
-// Shared "N bordered rows, each with a title/subtitle stack + trailing
-// amount bar" loading skeleton — was byte-identical across estimation,
-// repair, and transactions pages (ListSkeleton/RepairListSkeleton/
-// EstimationListSkeleton).
+// Shared loading skeleton: N bordered rows, each with a title/subtitle
+// stack and a trailing amount bar (estimation/repair/transactions lists).
 
 import { Skeleton } from '@/components/ui/skeleton';
 

@@ -1,38 +1,22 @@
 // src/hooks/checkout/usePromoValidation.js
-// Promo code validation — Phase 9b (Checkout).
+// Promo code validation for checkout. GetPromotion does not filter by code
+// server-side, so a typed code is validated by fetching every promotion and
+// matching promotion_code client-side (same as useActivePromotions).
 //
-// GetPromotion does NOT filter by code (confirmed 2026-07-15 — it returns
-// the same fixed record no matter what code is sent), so a typed code is
-// validated by fetching every promotion and matching promotion_code
-// client-side, same as the promo picker (useActivePromotions). On match:
-// checks the minimum order value, computes the discount using the real
-// field names (discount_percentage / discount_amount / minimum_sales_amount
-// — the previous discount_type/discount_value/min_order_value guesses never
-// matched the actual API response), and dispatches cart/applyPromo.
+// Multiple promos can be applied at once, but two of the same discount
+// mechanism (both %-off or both flat-off) cannot stack — grouped by discount
+// type, not exact code/name.
 //
-// MULTI-PROMO: more than one promo can be applied at once, but two
-// "similar" ones (same discount mechanism — both %-off or both flat-₹-off)
-// cannot stack. Confirmed with the user 2026-07-19: group by discount type,
-// not by exact code/name — one % promo + one flat promo can coexist, but a
-// second promo of a type already applied is blocked with a toast.
+// Eligibility is checked before applying: the candidate code is run through
+// the same server call checkout pricing uses (Helper/ApplyPromotions) against
+// the already-priced basket, and only reaches cart/applyPromo if that comes
+// back with a real discount row — avoids adding an ineligible promo and then
+// having to walk it back once pricing catches up.
 //
-// ELIGIBILITY CHECKED BEFORE APPLYING (2026-08-24). This used to add ANY
-// active code straight to the cart and let checkout's own live pricing
-// discover — a few seconds later — whether it actually gave anything,
-// showing "applied successfully" only to contradict itself right after.
-// Per product decision, an ineligible promo must never be added at all: the
-// SAME server call checkout pricing makes (Helper/ApplyPromotions, via
-// checkoutPricingService's applyPromotionsToLines) now runs here first, in
-// isolation for just the candidate code against the already-priced basket,
-// and the promo only reaches cart/applyPromo if that comes back with a real
-// discount row. One decisive toast either way, not apply-then-un-apply.
-//
-// MUTUAL EXCLUSIVITY WITH LUCIRA COINS (2026-09-08) — a promo and a Lucira
-// Coins redemption (cartSlice's redeemedCoins) can never both be active;
-// checked first, before even fetching promotions (see 'coins_active'
-// below). The reverse guard (blocking coins while a promo is applied) lives
-// in useCart.js's handleApplyLoyaltyCoins instead — no server call needed
-// there, so it doesn't need this hook's async mutation shape.
+// A promo and a Lucira Coins redemption (cartSlice's redeemedCoins) are
+// mutually exclusive; checked first, before fetching promotions. The reverse
+// guard (blocking coins while a promo is applied) lives in useCart.js's
+// handleApplyLoyaltyCoins instead, since it needs no server call.
 
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'react-toastify';
@@ -62,10 +46,8 @@ export function usePromoValidation(pricedLineItems, documentId) {
 
   const mutation = useMutation({
     mutationFn: async (promoCode) => {
-      // ADDED 2026-09-08 — mutual exclusivity with Lucira Coins (see
-      // cartSlice's redeemedCoins). Checked first, before even fetching
-      // promotions — a promo can't apply while coins are redeemed
-      // regardless of whether the code itself is valid.
+      // Mutual exclusivity with Lucira Coins — checked before fetching
+      // promotions at all, regardless of whether the code itself is valid.
       if (redeemedCoins > 0) return { status: 'coins_active' };
 
       const response = await listPromotions();
@@ -77,11 +59,9 @@ export function usePromoValidation(pricedLineItems, documentId) {
 
       if (!promotion) return { status: 'invalid' };
 
-      // NO local minimum-order gate. `minimum_sales_amount` is paired with
-      // `minimum_sales_amount_calc_on`, which selects which value it is
-      // measured against — the same component scoping that makes the
-      // discount itself unknowable client-side. Eligibility is entirely the
-      // server's call below.
+      // No local minimum-order gate — `minimum_sales_amount` is measured
+      // against a component chosen by `minimum_sales_amount_calc_on`, so
+      // eligibility is entirely the server call below.
       const incomingType = getPromotionDiscountType(promotion);
       const hasSimilar = appliedPromos.some(
         (p) => getPromotionDiscountType(p.promoDetails) === incomingType
@@ -90,12 +70,10 @@ export function usePromoValidation(pricedLineItems, documentId) {
 
       if (!pricedLineItems?.length) return { status: 'not_ready', promotion };
 
-      // Checked in isolation — just this one candidate against the base
-      // priced lines, not folded on top of whatever else is already
-      // applied. Good enough to catch the common case (a promo that's
-      // simply never going to apply to what's in the basket, like a
-      // bullion-excluded code on a gold coin) without trying to model every
-      // multi-promo stacking interaction here too.
+      // Checked in isolation against the base priced lines, not folded on
+      // top of whatever else is already applied — catches the common case
+      // (a promo that just doesn't apply to what's in the basket) without
+      // modeling every multi-promo stacking interaction.
       const { promotionDetails } = await applyPromotionsToLines({
         lineItems:     pricedLineItems,
         appliedPromos: [{ promoCode: promotion.promotion_code, promoDetails: promotion }],
@@ -106,14 +84,8 @@ export function usePromoValidation(pricedLineItems, documentId) {
       return { status: 'eligible', promotion };
     },
 
-    // ENRICHED 2026-09-04 — confirmed live: FOUR of these five outcomes
-    // ('invalid', 'not_ready', 'ineligible', and the mutation's own
-    // onError below) never fired ANY analytics event at all — not a
-    // missing-attribute gap, a genuinely silent one. EVENTS.PROMO_APPLIED
-    // and EVENTS.PROMO_FAILED existed in events.js already but had no
-    // caller anywhere in the app. Every outcome now tracks, with a
-    // `reason` distinguishing which one so PROMO_FAILED isn't a single
-    // undifferentiated bucket.
+    // Every outcome tracks an analytics event, with a `reason` distinguishing
+    // which one so PROMO_FAILED isn't an undifferentiated bucket.
     onSuccess: (result, promoCode) => {
       switch (result.status) {
         case 'coins_active':
@@ -150,20 +122,14 @@ export function usePromoValidation(pricedLineItems, documentId) {
           return;
 
         case 'eligible':
-          // No amount is attached here either — `promoDetails` is the full
-          // PromotionRow, which is what Helper/ApplyPromotions needs as
-          // input; the rupee value comes back from checkout's own pricing
-          // pass. See cartSlice.recalculateTotals.
+          // `promoDetails` is the full PromotionRow, which is what
+          // Helper/ApplyPromotions needs as input; the rupee value comes
+          // back from checkout's own pricing pass (cartSlice.recalculateTotals).
           //
-          // NOT tracked here directly — dispatching cart/applyPromo below
-          // is ALREADY caught by analyticsMiddleware.js's own
-          // 'cart/applyPromo' case, which fires EVENTS.PROMO_APPLIED once
-          // per dispatch regardless of which hook triggered it (same
-          // one-source-of-truth reasoning as attachCustomer/detachCustomer
-          // in that same file). A second tracker.track() call here used to
-          // double-fire this event on every successful promo apply —
-          // confirmed by tracing both call paths, not caught until reading
-          // analyticsMiddleware.js's own header comment.
+          // Not tracked here directly — dispatching cart/applyPromo below is
+          // already caught by analyticsMiddleware.js's 'cart/applyPromo' case,
+          // which fires EVENTS.PROMO_APPLIED once per dispatch. A second
+          // tracker.track() call here would double-fire the event.
           applyPromo({
             promoCode:    result.promotion.promotion_code,
             promoDetails: result.promotion,

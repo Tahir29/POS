@@ -18,13 +18,7 @@ import queryClient from '@/lib/queryClient';
 import { queryPersister, PERSIST_MAX_AGE, PERSIST_BUSTER, shouldPersistQuery } from '@/lib/queryPersister';
 import LoadingSpinner from '@/components/shared/LoadingSpinner';
 
-/**
- * Providers
- * Wraps the entire application with all required context providers.
- * Mount order: Redux → PersistGate → QueryClientProvider → Toast
- *
- * @param {{ children: React.ReactNode }} props
- */
+/** @param {{ children: React.ReactNode }} props */
 export default function Providers({ children }) {
   return (
     <Provider store={store}>
@@ -32,15 +26,9 @@ export default function Providers({ children }) {
         loading={<LoadingSpinner fullScreen />}
         persistor={persistor}
       >
-        {/* PersistQueryClientProvider (2026-08-23), not the plain
-            QueryClientProvider this used to be — restores a narrow,
-            explicitly-allow-listed slice of the cache (catalog list +
-            Shopify product images, see lib/queryPersister.js) from
-            IndexedDB on load, so a full page reload doesn't throw away
-            data that can take a while to fetch fresh. Every other query
-            (price, stock, cart, customer, orders, …) behaves exactly as
-            before — this only adds a restore step, it doesn't change
-            in-memory query behavior for anything not on that allow-list. */}
+        {/* Restores only an allow-listed slice of the query cache (catalog
+            list + Shopify product images, see lib/queryPersister.js) from
+            IndexedDB; all other queries behave as plain in-memory react-query. */}
         <PersistQueryClientProvider
           client={queryClient}
           persistOptions={{

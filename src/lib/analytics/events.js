@@ -1,35 +1,17 @@
 // src/lib/analytics/events.js
-// Centralised event name constants.
+// Centralised event name constants, shared by GA4 and WebEngage
+// deliberately — just name strings, no gtag/webengage calls, so both
+// destinations can never disagree about what an event is called.
 //
-// SHARED BY GA4 AND WEBENGAGE — DELIBERATELY. This file contains nothing
-// GA-specific or WebEngage-specific: no gtag calls, no webengage calls,
-// just name strings. tracker.js fires every one of these to BOTH
-// destinations from the same call, with the same properties object (see
-// tracker.js's header comment and docs/analytics-integration.md). That's
-// what guarantees the two can never disagree about what an event is
-// called or what it carries — and what makes dropping WebEngage later (if
-// that's ever wanted) a change to tracker.js only: delete the
-// sendToWebEngage() line there, or just unset
-// NEXT_PUBLIC_WEBENGAGE_LICENSE_CODE so it self-disables. Nothing in THIS
-// file, or in any of the ~90 tracker.track(EVENTS.X, {...}) call sites
-// across the app, needs to change either way.
+// RAW_EVENTS defines bare snake_case keys; the POS_ prefix is applied ONCE,
+// programmatically, when building the exported EVENTS object — add new
+// events here without typing "POS_" by hand.
 //
-// Every custom event must be identifiable as coming from the POS app once
-// it lands in GA4 — but nobody defining a new event below should have to
-// remember to type "POS_" by hand (easy to forget, easy to typo). So this
-// file defines bare event keys in RAW_EVENTS and the POS_ prefix is
-// applied ONCE, programmatically, when building the exported EVENTS
-// object. Add new events to RAW_EVENTS with a plain snake_case value —
-// the prefix is automatic.
-//
-// GA_ECOMMERCE_EVENTS (below) are the exception — these are GA4's own
-// RESERVED ecommerce event names (view_item, add_to_cart, begin_checkout,
-// purchase, ...). Never prefix these: GA4 only populates its automatic
-// Monetization/Ecommerce reports when it sees these exact, unprefixed
-// strings, and a new GA4 property (built directly against this data)
-// needs that default behavior intact. tracker.trackEcommerce() fires
-// both — the reserved name (for GA4's built-in reports) and the
-// POS_-prefixed equivalent (for custom Explore analysis) — see tracker.js.
+// GA_ECOMMERCE_EVENTS are the exception — GA4's own RESERVED ecommerce
+// event names (view_item, add_to_cart, purchase, ...). Never prefix these:
+// GA4 only populates its automatic Monetization/Ecommerce reports on these
+// exact unprefixed strings. tracker.trackEcommerce() fires both the
+// reserved name and the POS_-prefixed equivalent — see tracker.js.
 
 const PREFIX = 'POS_';
 
@@ -58,28 +40,22 @@ const RAW_EVENTS = {
   CART_ITEM_QTY_CHANGED: 'cart_item_qty_changed',
   CART_OPENED:           'cart_opened',
   CART_CLEARED:          'cart_cleared',
-  // ADDED 2026-09-08 — fires from abandonedCartMiddleware.js's own
-  // saveAbandonedCart(), the ONE function every "cart saved as abandoned"
-  // path already funnels through (attach-time re-save, detach, logout's
-  // session_reset, and the debounced default-mutation save) — so this
-  // fires exactly once per real save, matching what actually lands in
-  // Mongo (see lib/mongo/abandonedCart.js), not a separate guess at when
-  // a cart "counts" as abandoned.
+  // Fires from abandonedCartMiddleware.js's saveAbandonedCart() — the one
+  // function every "cart saved as abandoned" path funnels through — so
+  // this fires exactly once per real save (see lib/mongo/abandonedCart.js).
   CART_ABANDONED:        'cart_abandoned',
 
   CHECKOUT_STARTED:      'checkout_started',
   PAYMENT_SELECTED:      'payment_selected',
-  // ADDED 2026-09-07 — the payment-confirmation gate in checkout/page.jsx
-  // (see that file's header): fires when the agent answers "No" to "has
-  // the payment gone through on the terminal?" — no create/post call is
-  // ever attempted for this attempt, so ORDER_FAILED (a real API failure)
-  // would misrepresent it; this is its own distinct outcome.
+  // Fires when the agent answers "No" to checkout's payment-confirmation
+  // gate ("has the payment gone through on the terminal?") — distinct from
+  // ORDER_FAILED, which is a real API failure.
   PAYMENT_DECLINED:      'payment_declined',
   PROMO_APPLIED:         'promo_applied',
   PROMO_FAILED:          'promo_failed',
   PROMO_SIMILAR_BLOCKED: 'promo_similar_blocked',
-  // ADDED 2026-09-08 — Lucira Coins (Nector) redemption, mutually
-  // exclusive with promo codes. See cartSlice's redeemedCoins.
+  // Lucira Coins (Nector) redemption, mutually exclusive with promo codes.
+  // See cartSlice's redeemedCoins.
   COINS_APPLIED:         'loyalty_coins_applied',
   COINS_BLOCKED:         'loyalty_coins_blocked',
   ORDER_PLACED:          'order_placed',
@@ -156,10 +132,8 @@ const RAW_EVENTS = {
   CUSTOMER_SELECTED:     'customer_selected',
   CUSTOMER_CREATED:      'customer_created',
   CUSTOMER_DETACHED:     'customer_detached',
-  // ADDED 2026-09-08 — fires from useWalkInLookup.js the moment OrnaVerse
-  // itself reports a real walk-in match (found: true) — see that hook's
-  // own header and lib/mongo/walkins.js for why this app logs walk-ins
-  // itself (OrnaVerse has no listing endpoint for this data at all).
+  // Fires from useWalkInLookup.js the moment OrnaVerse reports a real
+  // walk-in match (found: true) — see lib/mongo/walkins.js.
   WALKIN_RECORDED:       'walkin_recorded',
 
   CLICK:                 'click',

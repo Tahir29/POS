@@ -1,12 +1,8 @@
 // src/hooks/customer/useCreateCustomer.js
 // Create a new customer via POS/Customer/Create.
-//
-// EXISTENCE CHECK: Before creating, checks if a customer with the same
-// mobile already exists via GetCustomer. If found, returns the existing
-// customer instead of creating a duplicate — matching the behavior of
-// CustomerSessionSheet which does lookup first.
-//
-// Response is SaveResponse: { EntityId, Error, CustomData }
+// Checks for an existing customer by mobile first (matches CustomerSessionSheet's
+// lookup-first behavior) to avoid duplicates; lookup failure fails open into create.
+// Response shape: SaveResponse { EntityId, Error, CustomData }.
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSelector } from 'react-redux';

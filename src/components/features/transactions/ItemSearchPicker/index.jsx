@@ -9,10 +9,6 @@ import { useState } from 'react';
 import { Search, X, Loader2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { useItemMasterSearch } from '@/hooks/transactions/useItemMasterSearch';
-// De-duplicated 2026-09-08 — was its own local copy (and, unlike every
-// other copy of this same formatter, missing the maximumFractionDigits: 2
-// cap, so a fractional-paise value could show 3 decimals here and 2
-// everywhere else) — see lib/priceUtils.js's formatAmountOrDash.
 import { formatAmountOrDash as formatINR } from '@/lib/priceUtils';
 
 /**

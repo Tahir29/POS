@@ -1,22 +1,15 @@
 'use client';
 
 // One "other store" lane, rendered below the primary catalog grid once the
-// selected store's own products run out (2026-08-24) — see catalog/page.jsx's
-// OTHER STORES section. An operator asked to browse past their current
-// store's stock rather than the scroll just stopping; per product decision,
-// Add to Cart on these stays a normal add (no store-switch prompt, no
-// disabling) — the operator is trusted to know they're picking up something
-// from elsewhere, same as the existing Cross-Store Stock panel on the
-// product detail page already assumes.
+// selected store's own products run out (see catalog/page.jsx's OTHER
+// STORES section). Add to Cart on these stays a normal add — no
+// store-switch prompt — same as the Cross-Store Stock panel elsewhere.
 //
-// Deliberately its OWN useCatalogProducts/useLiveCatalogPrices pair, scoped
-// to exactly ONE store — pagination, live pricing, and the "In Stock · CODE"
-// badge must all reflect THIS store, never the store the operator is
-// actually browsing/signed into (see useLiveCatalogPrices' own header for
-// the bug that taught us this the hard way). Renders nothing while still
-// loading and nothing once loaded if this store has no products matching
-// the current filters, so a store with zero matches doesn't leave a bare
-// heading sitting on the page.
+// Runs its own useCatalogProducts/useLiveCatalogPrices pair scoped to
+// exactly one store: pagination, live pricing, and the stock badge must
+// all reflect THIS store, never the operator's active store. Renders
+// nothing while loading or once loaded with no matches, so an empty store
+// doesn't leave a bare heading on the page.
 
 import { useState } from 'react';
 import { Store } from 'lucide-react';
@@ -48,22 +41,13 @@ export default function OtherStoreSection({ store, showOutOfStock, categoryId, s
 
   const rawProducts = data?.products ?? [];
 
-  // Same store this whole section is scoped to — never the page's own
-  // active/browsing store. See this file's header and useLiveCatalogPrices'.
+  // Same store this whole section is scoped to, never the operator's active store.
   const { priceById, settledIds } = useLiveCatalogPrices(rawProducts, store.company_id);
 
-  // FIXED 2026-09-09 — this used to be a plain sortProducts() re-run over
-  // the full accumulated list on every rawProducts/priceById change,
-  // reintroducing the "infinite scroll jump" bug catalog/page.jsx's own
-  // sortedDisplayProducts was rewritten to fix (see that file's header):
-  // re-sorting the whole list on every fetchNextPage()/price-settle tick
-  // interleaves a freshly-fetched page's rows among ones the operator is
-  // already scrolling past, snapping cards below the insertion point to a
-  // new position. stableSortProducts (catalogSort.js) keeps already-
-  // rendered rows frozen in place and only sorts/appends genuinely new
-  // ones — same idiom (and same reason for using guarded state-during-
-  // render instead of useMemo/a ref) as catalog/page.jsx's own
-  // sortedDisplayProducts.
+  // stableSortProducts keeps already-rendered rows frozen in place and only
+  // sorts/appends genuinely new ones, so a fetchNextPage()/price-settle
+  // tick doesn't reshuffle cards the operator is already scrolling past
+  // (see catalog/page.jsx's sortedDisplayProducts for the same idiom).
   const pricedProducts = rawProducts.map((p) => {
     const price = p.price ?? priceById.get(p.item_id) ?? null;
     return { ...p, price, is_pricing: price == null && !settledIds.has(p.item_id) };

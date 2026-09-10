@@ -1,50 +1,14 @@
 'use client';
 
-// SCHEMA: ProductCatalogRow doesn't return a usable price on this
-// environment. `price` here is filled in out-of-band by useLiveCatalogPrices
-// from Helpers/SetSalesItems — the same calculator checkout bills from, so
-// what's on the card is what the customer pays (plus GST). It is null until
-// that resolves, and stays null for anything that can't be priced; render
-// no price rather than a wrong one. See the PRICING note in
-// catalogService.js for why the stored item_rate is never used.
-//
-// Fields used: item_id, item_code, item_name, has_stock, weight, net_weight,
-// metal_id, karat_code, metal_color_code/metal_color_name, image/image_1,
-// price. metal_color_code vs. metal_color_name: two different upstream
-// endpoints spell this differently (short code on catalog rows, full name
-// on Items/Retrieve and Style/Retrieve) — see lib/metalColor.js for why
-// this card accepts either.
-//
-// NOT rendered — confirmed 2026-07-15 there's no backing data for any of
-// these anywhere in the API (checked directly, not assumed):
-//   - Slashed "original price" / % off badge — no compare_price, mrp, or
-//     any "original price" field exists on any item/catalog endpoint
-//   - Tags (e.g. "Fast Shipping") — no tags field exists at all
-//   - Similar products — the field exists (similar_items) but is empty on
-//     every product in this catalog
-//   - Video icon, variant colour swatches — by product decision, not a
-//     data gap
-//
-// WISHLIST (added 2026-08-23) — top-right heart, filled/outline from
-// wishlistSlice (see hooks/products/useWishlist.js). Requires a customer
-// to be attached, same rule recentlyViewed's recording follows: there's no
-// party_id to key a wishlist entry to otherwise. See
-// lib/mongo/wishlist.js for the Mongo side. The button itself now lives in
-// components/features/products/WishlistButton.jsx (extracted same day) so
-// the product detail page can render the identical heart inline instead of
-// floating over an image.
-//
-// Star ratings (added 2026-07-19, Nector integration) — ONLY shown for
-// products with a style_id. Nector indexes reviews by Shopify product ID,
-// which this app can only resolve via style_id → Style/Retrieve →
-// external_product_id; plain (non-variant) items have no such link and a
-// 100-item sample showed 0/100 carry a style_id at all, so most cards will
-// never show a rating badge at all — that's expected, not a bug. See
-// useStyleExternalProductId.js for why this doesn't add a second network
-// call when the product detail page has already resolved the same style.
-// MOVED 2026-09-07 — floats bottom-right over the image now (was inline in
-// the specs row, sharing space with the karat/weight/size line and
-// truncating it early) — see the rating badge's own comment further down.
+// Catalog product card: image, price, and stock/rating badges.
+// `price` is filled in out-of-band by useLiveCatalogPrices (the same
+// calculator checkout bills from) and is null until resolved, or
+// permanently for an item that can't be priced — render no price rather
+// than a wrong one. metal_color_code/metal_color_name: different upstream
+// endpoints spell this differently; see lib/metalColor.js.
+// Star rating only renders for products with a style_id (needed to
+// resolve Nector's external_product_id) — most catalog rows lack one, so
+// most cards simply show no rating badge.
 
 import { useState, memo }  from 'react';
 import Image               from 'next/image';
@@ -64,8 +28,7 @@ import { Badge } from '@/components/ui/badge';
 import { EASE_PREMIUM, DURATION } from '@/lib/motion';
 import { formatAmountOrNull as formatINR } from '@/lib/priceUtils';
 
-// Swatch colors are a presentation mapping (not fabricated data) — the
-// metal_id itself is real; this just gives each metal a recognizable dot.
+// Swatch colors are a presentational mapping only — metal_id itself is real data.
 const METAL_ID_TO_NAME = Object.fromEntries(
   Object.entries(APP_CONFIG.METAL_TYPES).map(([name, id]) => [
     id,
@@ -84,26 +47,8 @@ function formatWeight(grams) {
   return `${n.toFixed(3)} g`;
 }
 
-// FIXED 2026-09-08 — was maximumFractionDigits: 0 ("matching
-// lib/priceUtils.formatPrice on the product page"), but that page's own
-// formatPrice/formatINR were themselves rounding to a whole rupee while
-// PriceBreakdown right below them showed the exact API figure for the
-// SAME field — confirmed as one price disagreeing with itself, not two
-// different prices (see that fix's own header). Fixed there to 2 decimals;
-// fixed here to match, rather than continuing to mirror the rounding this
-// card's own comment was matching.
-//
-// DE-DUPLICATED 2026-09-08 — was its own local function, now imported
-// (aliased) from lib/priceUtils.js's formatAmountOrNull, which is exactly
-// this same "2 decimals, not 3" fix already generalized.
-
-// On-brand instead of a generic "broken image" glyph — a jewellery app's
-// missing-photo state shouldn't look like an error, since it isn't one
-// (most catalog rows genuinely have no photo asset yet, see header note).
-// Uses the same Logo component/asset as the sidebar mark (2026-08-23,
-// swapped from a generic lucide Gem icon) — a missing-photo state is exactly
-// the kind of empty space that's otherwise unbranded, so it doubles as a
-// small brand touch instead of a throwaway icon with no relation to Lucira.
+// On-brand placeholder instead of a generic "broken image" glyph — most
+// catalog rows genuinely have no photo asset yet, so this isn't an error state.
 function NoImagePlaceholder() {
   return (
     <div className="flex h-full w-full flex-col items-center justify-center gap-1.5 bg-muted">
@@ -119,21 +64,10 @@ function NoImagePlaceholder() {
   );
 }
 
-// Flag/tag shape flush to the card's left edge (square on the left, rounded
-// on the right) rather than a floating pill — reads as a tag stuck to the
-// corner of the card instead of a badge hovering over the photo.
-//
-// storeCode (2026-08-24): the catalog grid is always scoped to one active
-// store (see catalog/page.jsx's activeStoreId), so "In Stock" alone never
-// said WHICH store actually has the piece — only meaningful once an
-// associate is comparing this card against another store's, or recalling
-// it later from Recently Viewed/Wishlist. Shown only alongside "In Stock":
-// "Made to Order" already means not on this store's shelf, so tagging it
-// with a store code would read as a contradiction.
-//
-// storeCodes (2026-08-26) — plural now: a card backed by real cross-store
-// data (see realStock below) can be in stock at several stores at once, and
-// every one of them is worth showing, not just the first/active one.
+// Flag/tag shape flush to the card's left edge, not a floating pill.
+// storeCodes lists every store (plural — a card can be in stock at
+// several) the badge should credit; shown only alongside "In Stock",
+// never "Made to Order".
 function StockBadge({ inStock, storeCodes }) {
   return (
     <Badge
@@ -157,33 +91,21 @@ function StockBadge({ inStock, storeCodes }) {
  *   storeCode?: string,
  *   realStock?: { hasStock: boolean, storeCodes: string[] } | null,
  * }} props
- *   realStock (2026-08-26) — genuine cross-store stock for THIS exact
- *   item_id (== this exact customization — size/metal color/etc. are baked
- *   into item_id in this ERP model), from useCrossStoreStockCodes
- *   (GetStockByStoresBatch). Pass this from any context where `product`'s
- *   own has_stock can't be trusted as a live, correctly-scoped verdict —
- *   Recently Viewed (has_stock is a snapshot from whenever it was viewed,
- *   possibly at a different store) and Wishlist (has_stock is never set at
- *   all in the wishlist write path) are the two callers that need it. When
- *   provided, it overrides BOTH product.has_stock and the storeCode/
- *   activeStoreCode guess below — the badge shows every store that
- *   genuinely has this piece, never just the one the operator happens to
- *   be signed into right now. Omitted on the main catalog grid and
- *   OtherStoreSection, where has_stock already comes back correctly scoped
- *   to that grid's own store server-side (see catalogService.js's
- *   current_company_id) and re-fetching per card would be pure waste.
+ *   realStock - genuine cross-store stock for this exact item_id, from
+ *   useCrossStoreStockCodes. Pass it wherever product.has_stock can't be
+ *   trusted as a live, correctly-scoped verdict (Recently Viewed, Wishlist);
+ *   overrides both has_stock and storeCode when present. Omitted on the
+ *   main catalog grid/OtherStoreSection, where has_stock is already
+ *   correctly scoped server-side.
  */
 function ProductCard({ product, showStockBadge = false, storeCode: storeCodeOverride, realStock = null }) {
   const router = useRouter();
   const [imgError, setImgError] = useState(false);
   const reduceMotion = useReducedMotion();
   const activeStoreCode = useSelector(selectActiveStoreCode);
-  // storeCodeOverride (2026-08-24) — for a card rendered in the "Available
-  // at other stores" lane (see OtherStoreSection), whose "In Stock" badge
-  // must show THAT store's code, never the page's own active/browsing
-  // store. Omitted everywhere else, so the badge falls back to the active
-  // store as before. Ignored entirely once realStock is passed — that's
-  // already the real, possibly-multi-store answer.
+  // storeCodeOverride lets a card (e.g. in OtherStoreSection) show a
+  // different store's code than the operator's active store; ignored once
+  // realStock is passed, since that's already the real answer.
   const storeCode = storeCodeOverride ?? activeStoreCode;
 
   const {
@@ -205,9 +127,8 @@ function ProductCard({ product, showStockBadge = false, storeCode: storeCodeOver
     // opposed to having come back with no sellable price.
     is_pricing: isPricing = false,
     style_id,
-    // Only ever populated for a wishlisted item that was a CONFIRMED
-    // Customize selection (2026-08-24) — a plain catalog/recently-viewed
-    // row has no size concept, so this is undefined there, same as always.
+    // Only populated for a wishlisted item with a confirmed Customize
+    // selection; a plain catalog/recently-viewed row has no size concept.
     item_size_name,
   } = product;
 
@@ -223,15 +144,9 @@ function ProductCard({ product, showStockBadge = false, storeCode: storeCodeOver
   const karatLabel   = karat_code && karat_code !== 'NA' ? karat_code : null;
   const metalColorName = resolveMetalColorName({ metal_color_code, metal_color_name });
 
-  // Descriptive metal + karat label (fixed 2026-08-23 — was a terse
-  // "Gold 14", which reads like two unrelated numbers next to a metal name
-  // unless you already know "14" means karat; the weight next to it already
-  // spells out its unit ("3.080 g"), this should too). Gold specifically
-  // gets "{karat} Karat {Color} Gold" (e.g. "14 Karat Yellow Gold") when the
-  // color resolves, or "{karat} Karat Gold" when it doesn't (color code/name
-  // missing or unrecognized) — never a bare number. Other metals (Silver,
-  // Platinum, …) keep the plain "{Metal} {code}" form, e.g. "Silver 925":
-  // "Karat" isn't the right unit for a silver purity figure.
+  // Gold gets "{karat} Karat {Color} Gold" (falls back to "{karat} Karat
+  // Gold" if color doesn't resolve); other metals keep "{Metal} {code}"
+  // (e.g. "Silver 925") since "Karat" isn't the right unit for those.
   const metalKaratLabel = metalLabel === 'Gold' && karatLabel
     ? `${karatLabel} Karat ${metalColorName ?? 'Gold'}`
     : [metalLabel, karatLabel].filter(Boolean).join(' ') || null;
@@ -248,16 +163,11 @@ function ProductCard({ product, showStockBadge = false, storeCode: storeCodeOver
     router.push(`/products/${item_id}`);
   }
 
-  // role="button" on a <div>, not a real <button> (2026-08-23) — the
-  // wishlist heart added below is its OWN real <button>, and a <button>
-  // cannot validly contain another <button>. It used to be one; the
-  // browser's HTML parser auto-closes the outer button the instant it
-  // meets the nested one, which silently detaches everything after that
-  // point from the card's actual click target — confirmed live, the heart
-  // toggle didn't register at all (aria-pressed never became true) and
-  // React logged the exact "cannot contain a nested button" hydration
-  // error. tabIndex + onKeyDown reproduce a real button's keyboard
-  // behavior (Enter/Space) since a plain div gets neither for free.
+  // role="button" on a <div>, not a real <button> — WishlistButton below
+  // renders its own real <button>, and a <button> cannot contain another
+  // <button> (the outer one used to be real; the browser auto-closes it on
+  // the nested button, silently breaking the card's click target).
+  // tabIndex + onKeyDown reproduce Enter/Space behavior a div lacks.
   return (
     <motion.div
       role="button"
@@ -270,16 +180,10 @@ function ProductCard({ product, showStockBadge = false, storeCode: storeCodeOver
         }
       }}
       className={[
-        // h-full/w-full (2026-08-22): harmless on the catalog grid — a grid
-        // item already stretches to its row's height by default, so this
-        // just makes explicit what was already true there — but load-
-        // bearing inside RecentlyViewedCarousel's Swiper: a slide (flex
-        // item) stretches to match its row's tallest slide by default, but
-        // an ORDINARY block child of that slide (this button, with no
-        // height of its own) does not inherit that stretch — it only ever
-        // sizes to its own content. Without this, cards whose name wraps to
-        // one line vs. two ended up visibly different heights in the
-        // carousel despite sitting in equal-height slides.
+        // h-full/w-full: a no-op on the catalog grid, but load-bearing
+        // inside RecentlyViewedCarousel's Swiper — an ordinary block child
+        // doesn't inherit a flex slide's stretch on its own, so without
+        // this, cards with wrapping vs. non-wrapping names got uneven heights.
         'group relative flex h-full w-full flex-col overflow-hidden rounded-2xl border bg-card text-left',
         'shadow-sm transition-all duration-standard ease-premium',
         'hover:shadow-md hover:border-accent/40',
@@ -313,19 +217,11 @@ function ProductCard({ product, showStockBadge = false, storeCode: storeCodeOver
 
         <WishlistButton product={product} reduceMotion={reduceMotion} />
 
-        {/* Rating badge — MOVED here 2026-09-07 from the specs row below.
-            Sharing that row with the karat/weight/size line meant a long
-            spec line (the common case) got truncated early to make room
-            for the rating rather than the other way around — confirmed
-            from a real card ("14 Karat Rose G…" ellipsing while "★★★★★
-            (2)" sat fully visible next to it). Floated over the image
-            instead, bottom-right, mirroring WishlistButton's own top-right
-            placement (same bg-card/90 + shadow-sm + backdrop-blur-sm
-            treatment) — the specs row below now gets the card's full
-            width to itself. `compact` (StarRating) forces the single-star
-            + value + count form regardless of viewport — a small
-            fixed-width corner badge over a photo never has room for 5
-            full stars, unlike the row this replaced. */}
+        {/* Rating badge floats bottom-right over the image, mirroring
+            WishlistButton's top-right placement, so the specs row below
+            gets the card's full width instead of being truncated early.
+            `compact` forces the single-star + value + count form — a
+            small corner badge has no room for 5 full stars. */}
         {ratingCount > 0 && (
           <div className="absolute bottom-2 right-2 z-10 rounded-full bg-card/90 px-2 py-1 shadow-sm backdrop-blur-sm">
             <StarRating rating={ratingAverage} count={ratingCount} compact />
@@ -333,24 +229,17 @@ function ProductCard({ product, showStockBadge = false, storeCode: storeCodeOver
         )}
       </div>
 
-      {/* Divider between the photo and details — a deliberate seam rather
-          than the two areas just running together. */}
       <div className="flex flex-1 flex-col gap-1.5 border-t border-border p-3.5">
 
-        {/* Karat · Weight — now the row's only occupant (see the rating
-            badge moved onto the image above), so this has the card's full
-            width before truncating instead of sharing it. */}
         {infoLine && (
           <span className="truncate text-xs text-muted-foreground">
             {infoLine}
           </span>
         )}
 
-        {/* Price. Live-priced, so it arrives a moment after the card — say
-            what's happening instead of leaving a gap where a number belongs,
-            which reads as a broken card. A card that stays unpriced is a real
-            state, not a glitch: the server priced it at 0 and it cannot be
-            sold (currently every Silver925 item on this tenant). */}
+        {/* Price is live-priced and arrives after the card mounts — show
+            "Pricing…"/"Price unavailable" instead of a blank gap. Staying
+            unpriced is a real, sellable-at-0 state, not a glitch. */}
         {price != null ? (
           <p className="font-sans text-lg font-bold text-foreground">
             {formatINR(price)}
@@ -372,12 +261,8 @@ function ProductCard({ product, showStockBadge = false, storeCode: storeCodeOver
   );
 }
 
-// PERF (2026-09-08) — the catalog grid can hold 150+ mounted cards while
-// live pricing streams in via useLiveCatalogPrices (a chunk settling every
-// ~200ms). Without this, EVERY mounted card re-rendered on every chunk,
-// not just the 1-8 whose price just arrived. Only effective alongside
-// catalog/page.jsx's own fix: `product` must keep the SAME object reference
-// across renders when nothing about it actually changed, or this memo's
-// shallow prop comparison would still see a "new" object every time and
-// re-render anyway — see pricedDisplayProducts' merge cache there.
+// Memoized: the catalog grid can hold 150+ mounted cards while live pricing
+// streams in, and only the few cards with a new price should re-render.
+// Requires catalog/page.jsx to keep `product`'s object reference stable
+// across renders when nothing changed, or this shallow-compare memo re-renders anyway.
 export default memo(ProductCard);

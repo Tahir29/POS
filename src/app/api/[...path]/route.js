@@ -1,54 +1,21 @@
-// Server-side reverse proxy for every OrnaVerse API call.
+// Server-side reverse proxy for every OrnaVerse API call. Forwards each
+// method straight through; a filesystem route always wins over a
+// next.config.mjs rewrite for the same path. ACTIVE_ENV/UPSTREAM/
+// CLIENT_SECRET resolve from lib/ornaverse/upstream.js — switch
+// environments there, not here.
 //
-// Replaces the next.config.mjs rewrites()-based proxy that previously
-// handled '/api/:path*'. That mechanism was returning empty-body 400s
-// (bare nginx headers, Connection: close) from every business-data
-// endpoint (GetUserStores, Order/List, CheckMetalRateForToday, Return/List,
-// Exchange/List, BuyBack/List, ...) even with a freshly-issued, valid
-// bearer token — while a hand-rolled route handler (formerly
-// api/auth/token/route.js, deleted 2026-08-18 as unreferenced dead code
-// once this file replaced it) hitting the exact same upstream with the
-// exact same token succeeded every time. Confirmed 2026-07-15 by piping
-// one fresh token through both
-// mechanisms back to back in the same test: rewrite path failed, route
-// handler succeeded. Whatever Next's internal rewrite-proxy does
-// differently with headers on the way to nginx, doing the fetch here
-// ourselves avoids it entirely.
-//
-// A filesystem route always wins over next.config.mjs rewrites for the
-// same path, so this replaces that behavior outright — no config change
-// needed there beyond removing the now-dead rewrite entry.
-//
-// UAT switch (2026-07-29): to avoid repeating the accidental-write-on-LIVE
-// risk from testing transaction Create flows, UPSTREAM now points at
-// NEXT_PUBLIC_ORNAVERSE_BASE_URL_UAT. To switch back to LIVE, change
-// ACTIVE_ENV below — don't hardcode a second UPSTREAM/secret pair.
-//
-// The LIVE client is a confidential client: connect/token 401s with
-// "WWW-Authenticate: Basic error=invalid_client, Client authentication is
-// required for this application" unless the request carries HTTP Basic
-// Auth (client_id:client_secret). client_id itself isn't secret (it's
-// already in appConfig.js and in the request body from authService.js),
-// but a secret must never reach the browser — so it's injected here,
-// server-side only, from *_CLIENT_SECRET env vars (never NEXT_PUBLIC_).
-//
-// UAT, by contrast, is a PUBLIC client — confirmed 2026-07-29 from the UAT
-// admin panel's "Edit OAuth Client (api_access)" screen (OAuth Client Type:
-// Public, Grant Types: Password / Authorization Code / Refresh Token). A
-// public client has no secret by definition, so ORNAVERSE_UAT_CLIENT_SECRET
-// stays unset and the Basic Auth injection below is correctly skipped for
-// UAT. Don't go hunting for a UAT secret — there isn't one.
-
-// ACTIVE_ENV / UPSTREAM / CLIENT_SECRET now live in lib/ornaverse/upstream.js
-// so the report renderer (api/report/render) resolves the same environment.
-// Switch environments there, not here.
+// connect/token needs HTTP Basic Auth (client_id:client_secret) on LIVE's
+// confidential client; UAT's client is public and has no secret. Client
+// secret is server-only, injected below, never sent to the browser.
 import { UPSTREAM, CLIENT_SECRET } from '@/lib/ornaverse/upstream';
 import { checkRateLimit, getClientIp } from '@/lib/security/rateLimit';
+import { getCachedRead, setCachedRead, isCacheableReadPath } from '@/lib/security/proxyReadCache';
 
 async function proxy(request, { params }) {
   const { path } = await params;
-  const targetUrl = `${UPSTREAM}/${path.join('/')}${request.nextUrl.search}`;
-  const isTokenEndpoint = path.join('/') === 'connect/token';
+  const resolvedPath = path.join('/');
+  const targetUrl = `${UPSTREAM}/${resolvedPath}${request.nextUrl.search}`;
+  const isTokenEndpoint = resolvedPath === 'connect/token';
 
   const headers = new Headers();
   const contentType = request.headers.get('content-type');
@@ -59,35 +26,16 @@ async function proxy(request, { params }) {
   const hasBody = !['GET', 'HEAD'].includes(request.method);
   const body = hasBody ? await request.text() : undefined;
 
-  // SEC-004 hardening (confirmed live 2026-08-18): connect/token with
-  // grant_type=password is the ONLY unauthenticated, credential-guessing
-  // call this proxy forwards — every other endpoint already requires a
-  // bearer token issued by a prior successful login. LoginForm's 5-attempt
-  // lockout is component state, not a server control, so it protects
-  // nothing against a caller that skips the UI and scripts requests
-  // straight at this route — and on LIVE this same route attaches the
-  // app's confidential client secret to every one of those attempts (see
-  // the comment below). Throttle here, before that secret is ever spent.
-  //
-  // Deliberately NOT applied to grant_type=refresh_token — that fires
-  // automatically per active session on a timer (see useAuth.js /
-  // interceptors.js) and isn't a credential guess, so throttling it would
-  // just log real staff out mid-shift for no security benefit.
-  //
-  // Parsed once and reused below for the Basic Auth client_id lookup too —
-  // avoid re-parsing the same body twice.
+  // SEC-004: throttle password-grant login attempts before the client
+  // secret is ever attached (this is the one unauthenticated,
+  // credential-guessing call this proxy forwards). Not applied to
+  // refresh_token, which fires on its own timer and isn't a guess.
   const tokenParams = isTokenEndpoint && body ? new URLSearchParams(body) : null;
 
   if (tokenParams && tokenParams.get('grant_type') === 'password') {
     const ip = getClientIp(request);
     const username = (tokenParams.get('username') ?? '').trim().toLowerCase();
 
-    // Two buckets: a tight one on (ip, username) to stop repeated guesses
-    // against one account — sized to match LoginForm's own 5/5-min lockout
-    // so the two never disagree about when a login is "locked out" — and a
-    // looser one on (ip) alone to stop the same caller from working through
-    // many usernames from one address. Both count every attempt, not just
-    // failures, so this checks BEFORE the request is forwarded.
     const perAccount = checkRateLimit(`login:${ip}:${username}`, { limit: 5, windowMs: 5 * 60 * 1000 });
     const perIp = checkRateLimit(`login-ip:${ip}`, { limit: 20, windowMs: 5 * 60 * 1000 });
 
@@ -109,11 +57,6 @@ async function proxy(request, { params }) {
     }
   }
 
-  // connect/token needs client authentication for the live confidential
-  // client — add HTTP Basic Auth using the client_id already present in
-  // the form body (set client-side in appConfig.js, not secret) plus the
-  // server-only secret. Never overrides an explicit Authorization header
-  // the caller already set (e.g. a bearer token on other endpoints).
   if (tokenParams && CLIENT_SECRET && !headers.has('Authorization')) {
     const clientId = tokenParams.get('client_id');
     if (clientId) {
@@ -122,18 +65,22 @@ async function proxy(request, { params }) {
     }
   }
 
-  // FIXED 2026-09-09 — this fetch had no try/catch, unlike every sibling
-  // proxy route in this codebase (api/customers/sync, api/shopify/
-  // product-media, api/report/render all wrap their upstream fetch and
-  // return a clean JSON error). This one route carries 100% of the app's
-  // OrnaVerse traffic (axiosInstance's baseURL resolves here), so an
-  // unreachable upstream (DNS failure, connection refused, TLS error) threw
-  // out of this handler uncaught — Next's own generic error response isn't
-  // the `{Error:{Message}}"/`{message}` shape normalizeError/
-  // extractServerMessage (lib/axios/interceptors.js) expect, so every
-  // in-flight operation (submitting an invoice, looking up a customer, ...)
-  // surfaced as a garbled message instead of "Network error" or "Server
-  // error" the rest of the app is built to show cleanly.
+  // Short-TTL cache for a small allowlist of read-only, tenant-wide
+  // reference endpoints (payment modes, sales persons, document numbering,
+  // today's metal rate) — see lib/security/proxyReadCache.js. Keyed on
+  // path+body, not just path, since these are POST reads that vary by
+  // company_id in the body.
+  const cacheKey = isCacheableReadPath(resolvedPath) ? `${resolvedPath}::${body ?? ''}` : null;
+  if (cacheKey) {
+    const cached = getCachedRead(cacheKey);
+    if (cached) {
+      return new Response(cached.bytes, {
+        status: cached.status,
+        headers: { 'Content-Type': cached.contentType },
+      });
+    }
+  }
+
   let upstreamRes;
   try {
     upstreamRes = await fetch(targetUrl, {
@@ -144,10 +91,6 @@ async function proxy(request, { params }) {
     });
   } catch (err) {
     console.error('[api proxy] upstream fetch failed', targetUrl, err);
-    // `error_description` matches extractServerMessage's recognized fields
-    // (lib/axios/interceptors.js) and mirrors this same file's own 429
-    // response shape a few lines up — so this surfaces as a real, readable
-    // message instead of the generic 5xx fallback copy.
     return new Response(
       JSON.stringify({
         error: 'upstream_unreachable',
@@ -157,12 +100,20 @@ async function proxy(request, { params }) {
     );
   }
 
-  const responseBody = await upstreamRes.arrayBuffer();
-  return new Response(responseBody, {
+  const responseContentType = upstreamRes.headers.get('content-type') ?? 'application/json';
+
+  if (cacheKey && upstreamRes.ok) {
+    const bytes = await upstreamRes.arrayBuffer();
+    setCachedRead(cacheKey, { bytes, status: upstreamRes.status, contentType: responseContentType });
+    return new Response(bytes, { status: upstreamRes.status, headers: { 'Content-Type': responseContentType } });
+  }
+
+  // Streamed straight through (not buffered) for everything else, so a
+  // large response doesn't hold this invocation's memory/CPU active for
+  // the whole download.
+  return new Response(upstreamRes.body, {
     status: upstreamRes.status,
-    headers: {
-      'Content-Type': upstreamRes.headers.get('content-type') ?? 'application/json',
-    },
+    headers: { 'Content-Type': responseContentType },
   });
 }
 

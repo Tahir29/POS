@@ -1,45 +1,23 @@
-// src/hooks/catalog/useLiveCatalogPrices.js
-//
 // Background live-price fill-in for catalog products. Prices come from
-// Services/Helpers/SetSalesItems — confirmed live 2026-07-28 to take 6-7+
-// seconds per ~15-item batch — so catalogService's getProducts/getAllProducts
-// deliberately do NOT await it inline (see the PRICING note in
-// catalogService.js). This hook fills prices in out-of-band so pages render
-// immediately and prices arrive a moment later.
+// Services/Helpers/SetSalesItems, which is slow (~6-7s per ~15-item batch),
+// so catalogService's getProducts/getAllProducts don't await it inline —
+// this hook fills prices in out-of-band so pages render immediately.
 //
-// CACHING (2026-08-07). This used to hold every price in component-local
-// useState/useRef. That meant leaving /catalog destroyed the lot: coming back
-// remounted with an empty Map and re-ran the entire 6-7s pipeline for items
-// already priced seconds earlier. Prices now live in the TanStack cache under
-// one key per item, so a return visit paints from cache instantly and only
-// genuinely-new item_ids hit the network.
+// Prices are cached per item_id in the TanStack cache (survives navigating
+// away and back; a full reload starts empty) so a return visit paints
+// instantly. Correctness under caching relies on the pricing EPOCH (see
+// usePricingEpoch) baked into every query key here: while the epoch holds,
+// cached prices are known-correct and kept with `staleTime: Infinity`; when
+// it changes, every key changes with it and the catalog reprices. Saving a
+// metal rate in Settings also invalidates the epoch directly as a
+// convenience (see useAddMetalRate), since rates set in OrnaVerse's ERP
+// itself have no in-app invalidation path.
 //
-// STAYING CORRECT WHEN A PRICE ACTUALLY MOVES. Caching a price is only safe
-// if a changed price still reaches the screen. Two mechanisms, both needed:
-//
-//   1. The pricing EPOCH, which is part of every key here. It is a fingerprint
-//      of what a couple of canary items currently cost — see usePricingEpoch.
-//      While it holds, no input to any price has moved and every cached price
-//      is still correct, so prices are cached with `staleTime: Infinity` and
-//      re-read for free however long the operator has been away. When a canary
-//      moves, the epoch changes, every key below it changes with it, and the
-//      catalog reprices. Detection costs one small call; the 6-7s sweep only
-//      happens when a price genuinely changed.
-//   2. Explicit invalidation. Saving a metal rate in Settings invalidates the
-//      epoch so it re-checks at once (see useAddMetalRate) rather than waiting
-//      out its one-minute floor. This is a convenience, not the mechanism —
-//      rates are normally set in OrnaVerse's ERP, where no in-app invalidation
-//      can see them, and (1) is what covers that.
-//
-// SCOPE: this is an in-memory cache. It survives navigating away and back,
-// which is the reported problem; a full browser reload starts empty.
-//
-// BATCHING IS PRESERVED. Per-item cache keys must not become per-item network
-// calls. Each item's queryFn enqueues into a module-level batcher that
-// coalesces ids over a short window, then fetches them in chunks with limited
-// concurrency — one SetSalesItems call per CHUNK_SIZE items, exactly as
-// before. Every item's promise settles from its own chunk, so prices still
-// fill in progressively rather than a page at a time.
+// Per-item cache keys must not become per-item network calls: each item's
+// queryFn enqueues into a module-level batcher that coalesces ids over a
+// short window, then fetches them in chunks with limited concurrency (one
+// SetSalesItems call per CHUNK_SIZE items). Every item's promise settles
+// from its own chunk, so prices fill in progressively.
 
 import { useMemo } from 'react';
 import { useQueries } from '@tanstack/react-query';
@@ -50,11 +28,9 @@ import { QUERY_KEYS } from '@/constants/queryKeys';
 import { usePricingEpoch } from '@/hooks/catalog/usePricingEpoch';
 
 const DEBOUNCE_MS = 200;
-// Smaller than ProductCatalog/List's 24-row page on purpose: EVERY item needs
-// live pricing (the stored item_rate was retired — see the PRICING note in
-// catalogService.js), and SetSalesItems takes 6-7+ seconds per ~15 full master
-// records. Smaller batches return sooner, fail smaller, and let prices appear
-// progressively instead of a page at a time.
+// Smaller than ProductCatalog/List's 24-row page on purpose: SetSalesItems is
+// slow, so smaller batches return sooner, fail smaller, and let prices appear
+// progressively.
 const CHUNK_SIZE  = 8;
 const CONCURRENCY = 3;
 // An item is retried only if the server never answered for it (network/500).
@@ -62,29 +38,21 @@ const CONCURRENCY = 3;
 const MAX_ATTEMPTS = 3;
 
 // How long an unobserved price survives in memory. Leaving /catalog drops
-// every observer, so this — not staleTime, which is Infinity — is what decides
-// whether a return visit still finds its prices. Sized to outlast a shift: a
-// price is one number per item, so holding a catalog's worth costs nothing,
-// and expiring them early would reintroduce the exact 6-7s refetch-on-return
-// this hook exists to stop. Correctness does not depend on it; the epoch
-// handles that.
+// every observer, so this (not staleTime, which is Infinity) decides whether
+// a return visit still finds its prices. Correctness doesn't depend on it —
+// the epoch handles that — so it's sized generously to outlast a shift.
 const PRICE_GC_TIME = 12 * 60 * 60 * 1000; // 12h
 
-// Only used when the epoch is blind (see usePricingEpoch). Long enough to
-// still spare the operator the 6-7s sweep on ordinary navigation, short
-// enough that a store the detector cannot see into still self-corrects.
+// Fallback cache window used only when the epoch is blind (see
+// usePricingEpoch) — long enough to spare the slow sweep on ordinary
+// navigation, short enough to self-correct.
 const BLIND_FALLBACK_STALE = 60 * 60 * 1000; // 1h
 
-// Hard ceiling on how many items we will price at once.
-//
-// displayProducts is `searchResults` in search mode, and a name search can
-// match thousands of rows on a large store. Pricing all of them would open
-// thousands of query observers and hammer SetSalesItems for many minutes on
-// results nobody is reading — the previous implementation had that same
-// unbounded exposure via its pending set. Ten pages' worth covers any
-// realistic amount of scrolling; past that the operator should narrow the
-// search. Items beyond the window keep reading "Pricing…" rather than being
-// asserted unpriceable, because we genuinely have not asked.
+// Hard ceiling on how many items are priced at once. displayProducts can be
+// a name-search result matching thousands of rows on a large store; pricing
+// all of them would open thousands of query observers. Items beyond the
+// window keep reading "Pricing…" (we genuinely haven't asked) rather than
+// being asserted unpriceable.
 const PRICE_WINDOW = 240;
 
 // One bucket per store: the price of an item depends on which physical piece
@@ -174,19 +142,13 @@ async function flush(storeId) {
  * @param {object[]} products — current display list (ProductCatalogRow[]),
  *   `price` may be null for items still needing the live-pricing tier.
  * @param {number|null} [storeIdOverride] — price against THIS store instead
- *   of the Redux global active store. The catalog page's own store filter
- *   (catalogStoreId) lets an operator browse a store other than the one
- *   they're signed into, and pricing MUST follow that same store, not the
- *   signed-in one — a price is which physical piece a store actually holds
- *   (see getLivePricesForItems), so pricing against the wrong store silently
- *   quotes a DIFFERENT piece than the one on screen. Confirmed live
- *   2026-08-24: switching the catalog's store filter correctly re-fetched
- *   the product list from the new store, but every SetSalesItems call still
- *   carried the old (signed-in) store's company_id and priced its stock
- *   journal entries — e.g. "HO-TGI-11-25-77" — while browsing a completely
- *   different store's catalog. Callers without a filter of their own
+ *   of the Redux global active store. Pricing MUST follow the store actually
+ *   being browsed (catalogStoreId) rather than the signed-in one — a price
+ *   is which physical piece a store holds (see getLivePricesForItems), so
+ *   pricing against the wrong store silently quotes a different piece than
+ *   the one on screen. Callers without a filter of their own
  *   (RecentlyViewedCarousel, the customer profile's Wishlist tab) omit this
- *   and keep pricing against the signed-in store, same as before.
+ *   and keep pricing against the signed-in store.
  * @returns {{
  *   priceById:  Map<number, number>,  // item_id -> live price
  *   settledIds: Set<number>,          // server has given a verdict (priced or not)
@@ -211,8 +173,8 @@ export function useLiveCatalogPrices(products, storeIdOverride) {
   }, [products]);
 
   // Gates the queries below: until the first canary result lands there is no
-  // epoch to key against, and fetching now would cache every price under a
-  // key that is about to change — paying the 6-7s sweep twice on first load.
+  // epoch to key against, and fetching now would cache prices under a key
+  // that's about to change.
   const { epoch, isBlind } = usePricingEpoch(products, storeId);
 
   const results = useQueries({

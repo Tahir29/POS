@@ -6,17 +6,9 @@ import { useSelector } from 'react-redux';
 
 import { selectIsAuthenticated } from '@/store/slices/authSlice';
 
-/**
- * AuthGuard
- *
- * Wraps any client layout or page that requires authentication.
- * Reads isAuthenticated from Redux — if false, redirects to /login.
- * Renders nothing (null) while redirecting to prevent flash of protected content.
- *
- * Usage: wrap the (pos) layout children with this component.
- *
- * @param {{ children: React.ReactNode }} props
- */
+// Wraps a client layout/page that requires authentication. Redirects to
+// /login when Redux's isAuthenticated is false, rendering nothing in the
+// meantime to avoid a flash of protected content.
 export default function AuthGuard({ children }) {
   const router = useRouter();
   const isAuthenticated = useSelector(selectIsAuthenticated);

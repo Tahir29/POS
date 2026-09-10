@@ -1,17 +1,9 @@
 'use client';
 
-// Camera-based barcode scanner using @zxing/browser.
-// Works with:
-//   - Tablet/phone back camera (default)
-//   - Tablet/phone front camera
-//   - External USB/Bluetooth webcams
-//   - Any camera the browser exposes via getUserMedia
-//
-// Flow:
-//   1. Modal opens → lists available cameras → starts scanning on first back cam
-//   2. Successful decode → calls onDetected(code) → modal closes automatically
-//   3. Flip button cycles through available cameras
-//   4. Close button stops stream and closes modal
+// Camera-based barcode scanner using @zxing/browser. Lists available
+// cameras (any device exposed via getUserMedia), starts scanning on the
+// back camera by default, and lets the operator flip between cameras.
+// Calls onDetected(code) on a successful decode.
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { BrowserMultiFormatReader } from '@zxing/browser';
@@ -32,18 +24,9 @@ export default function BarcodeScannerModal({ isOpen, onDetected, onClose }) {
   const [cameraIndex,   setCameraIndex]   = useState(0);
   const [error,         setError]         = useState(null);
   const [scanning,      setScanning]      = useState(false);
-  // Debounce bookkeeping only — never rendered, so a ref, not state. It used
-  // to be useState, with onDetected(code) called from INSIDE the setter's
-  // updater function. That's what triggered "Cannot update a component
-  // (ProductSearchBar) while rendering a different component
-  // (BarcodeScannerModal)" — onDetected calls ProductSearchBar's setState,
-  // and doing that from inside this component's own state-updater function
-  // runs it during this component's render, which is exactly what the
-  // warning flags. React can then drop/misorder the resulting updates, which
-  // is why a scan could register here but the product lookup at the end of
-  // the onDetected chain wouldn't reliably fire. A ref removes the updater
-  // function (and the bug) entirely — mutating it is a plain side effect
-  // inside an ordinary callback, not a computation React is mid-render on.
+  // Debounce bookkeeping only — must stay a ref, not state: calling
+  // onDetected (which triggers a parent setState) from inside a state
+  // updater function runs it mid-render, which React flags/can misorder.
   const lastScannedRef = useRef(null);
 
   const stopStream = useCallback(() => {

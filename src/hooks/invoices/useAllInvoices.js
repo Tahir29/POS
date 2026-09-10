@@ -11,16 +11,14 @@ import { selectActiveStoreId } from '@/store/slices/storeSlice';
 import { QUERY_KEYS } from '@/constants/queryKeys';
 import APP_CONFIG from '@/constants/appConfig';
 
-// PERF (2026-09-08) — `enabled` (default true, unchanged for any other
-// caller) lets /invoices gate this Take:0 full-dataset fetch on the operator
-// actually having touched a filter, instead of paying for it on every visit
-// including ones that only ever page through the browse list.
+// `enabled` lets /invoices gate this Take:0 full-dataset fetch on the
+// operator actually having touched a filter, rather than paying for it on
+// every visit.
 export function useAllInvoices({ enabled = true } = {}) {
   const isAuthenticated = useSelector(selectIsAuthenticated);
   const activeStoreId   = useSelector(selectActiveStoreId);
 
   const query = useQuery({
-    // Fixed: was QUERY_KEYS.ORDERS.INVOICE_LIST — moved to INVOICES.ALL
     queryKey: QUERY_KEYS.INVOICES.ALL(activeStoreId),
     queryFn: async () => {
       const data     = await getInvoiceList({ take: 0, skip: 0, company_id: activeStoreId });

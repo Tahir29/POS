@@ -1,57 +1,23 @@
 // Mutation hooks for all 6 POS transaction types.
 //
-// PATTERNS:
-//   Standard flow  (Returns, Credit Notes, Exchange, Buyback, URD):
-//     useCreate[Type] — calls service.create[Type], returns { EntityId }
-//     usePost[Type]   — calls service.post[Type] with EntityId, commits the draft
-//     useCancel[Type] — calls service.cancel[Type] with EntityId, voids the draft
+// Standard flow (Returns, Credit Notes, Exchange, Buyback, URD):
+//   useCreate[Type] -> useMutation calling service.create[Type], returns { EntityId }
+//   usePost[Type]   -> commits the draft via service.post[Type](EntityId)
+//   useCancel[Type] -> voids the draft via service.cancel[Type](EntityId)
 //
-//   Refund flow (different — no Post step):
-//     useCreateRefund — ONE call; settles credit raised by Return/Exchange/BuyBack
-//                       (detail + receipt rows nest INTO it — see refundService)
-//     useDeleteRefund — voids the refund
+// Refund flow is different (no Post step): useCreateRefund is one call that
+// settles credit raised by a Return/Exchange/Buyback (detail + receipt rows
+// nest into it — see refundService); useDeleteRefund voids it.
 //
-// CACHE INVALIDATION:
-//   Every onSuccess invalidates the matching LIST key so the tab re-fetches.
-//   The LIST key prefix is used (no params) to bust all pages at once.
+// Every onSuccess invalidates the matching LIST query key (prefix only, to
+// bust all pages). Every onError toasts via getErrorMessage(), which prefers
+// the server's own reason and falls back to a per-type TOAST.*_FAILED
+// message; the raw error is also returned for field-level handling.
 //
-// ERROR HANDLING:
-//   onError fires toast via react-toastify. getErrorMessage() prefers
-//   OrnaVerse's own server reason (most specific — e.g. "Not enough stock of
-//   X can not Save") when there is one; the SECOND argument is what shows
-//   instead ONLY when the server gave back nothing usable (network error, a
-//   non-standard error shape) — see fix below. Every call site used to fall
-//   through to the same bare 'Something went wrong.' there regardless of
-//   which of the six transaction types failed, silently ignoring the
-//   TOAST.{RETURNS,REFUNDS,CREDIT_NOTES,EXCHANGE,BUYBACK,URD_PURCHASE}
-//   .*_FAILED constants this file's own header already claimed it sourced
-//   messages from — those constants existed but nothing ever read them.
-//   The raw error is also returned so calling components can surface
-//   field-level feedback if needed.
-//
-// TOAST MESSAGES:
-//   Sourced from TOAST.{RETURNS,REFUNDS,CREDIT_NOTES,EXCHANGE,BUYBACK,URD_PURCHASE}.
-//
-// ANALYTICS: every mutation here also fires a tracker.track() — see events.js.
-// ENRICHED 2026-09-04 — every event used to carry ONLY the transaction id
-// (success) or a bare error string (failure), nothing that actually
-// identifies WHO the transaction was for, WHICH store, or WHAT it was worth
-// — a "return_created" told you a return happened, never for whom or for
-// how much, which is useless for any real WebEngage segmentation or GA
-// funnel analysis. Two additions, applied uniformly across all 6 types:
-//   1. customer_id/store_id on every event (create/post/cancel/failed alike)
-//      — sourced from the live session (useCustomerSession/activeStoreId),
-//      since post/cancel only ever receive a bare transactionId as their
-//      mutate variable and have nothing else to draw on. customer_id falls
-//      back to 'guest' when nothing is attached, same convention as
-//      tracker.js's own session-derived default — an unattached-customer
-//      transaction should never be impossible to tell apart from one whose
-//      id merely failed to reach this call.
-//   2. On CREATE specifically — the full header/line-item payload IS
-//      available (it's the mutate variable itself, the same object just
-//      posted to OrnaVerse) — party_id, net_amount, pieces, weight,
-//      net_weight, and how many line items, none of which cost an extra
-//      call to attach.
+// Every mutation also fires tracker.track() (see events.js) with
+// customer_id/store_id from the live session on every event, and — on
+// CREATE only — party_id, net_amount, pieces, weight, net_weight and line
+// item count read from the create payload itself.
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast }                       from 'react-toastify';
@@ -71,11 +37,6 @@ import TOAST                           from '@/constants/toastMessages';
 import tracker                         from '@/lib/analytics/tracker';
 import EVENTS                          from '@/lib/analytics/events';
 
-// FIXED 2026-08-27: `fallback` is new — every call site below now passes
-// the TOAST.<TYPE>.<STAGE>_FAILED matching its own transaction type/stage,
-// instead of every failure across all 6 transaction types collapsing onto
-// the same generic 'Something went wrong.' the moment the server didn't
-// send back a usable reason.
 function getErrorMessage(error, fallback = 'Something went wrong.') {
   return (
     error?.response?.data?.Message ??
@@ -85,15 +46,9 @@ function getErrorMessage(error, fallback = 'Something went wrong.') {
   );
 }
 
-// useSessionTrackingContext moved 2026-09-04 to
-// hooks/analytics/useSessionTrackingContext.js — see this file's header
-// (ANALYTICS, point 1) and that file's own header for why it's now shared
-// across every mutation hook that tracks, not just this file's six types.
-
-// See this file's header (ANALYTICS, point 2). `payload` is the exact
-// object passed to createX.mutate()/mutateAsync() — the same Entity fields
-// buildTransactionHeaderFields() produced, spread with line_items — so
-// nothing here is re-derived or guessed at, only read back.
+// `payload` is the exact object passed to createX.mutate()/mutateAsync() —
+// the same Entity fields buildTransactionHeaderFields() produced, spread
+// with line_items — so nothing here is re-derived, only read back.
 function creationDetails(payload) {
   return {
     party_id:        payload?.party_id,
@@ -179,10 +134,8 @@ export function useCreateRefund({ onSuccess } = {}) {
     onSuccess: (data, payload) => {
       queryClient.invalidateQueries({ queryKey: ['refunds'] });
       toast.success(TOAST.REFUNDS.CREATED);
-      // Refund has no line_items of its own (see refundService's header) —
-      // party_id/amount/credits knocked off ARE its equivalent of "what was
-      // this transaction worth, and to whom", read straight off the same
-      // object createRefund() was called with.
+      // Refund has no line_items of its own — party_id/amount/credits
+      // settled stand in for it, read off the createRefund() payload.
       tracker.track(EVENTS.REFUND_CREATED, {
         transactionId:   data?.EntityId,
         ...sessionCtx,
@@ -206,12 +159,6 @@ export function useCreateRefund({ onSuccess } = {}) {
   });
 }
 
-// useAddRefundDetail / useAddRefundReceipt removed 2026-07-31. They drove
-// RefundDetails/Create + RefundReceipts/Create as separate follow-up calls,
-// but the rows they posted linked to no credit document, so the refund
-// settled nothing. Refund/Create now takes details[] and receipts[] nested
-// in a single call — see services/refundService.js.
-
 export function useDeleteRefund({ onSuccess } = {}) {
   const queryClient = useQueryClient();
   const sessionCtx = useSessionTrackingContext();
@@ -225,9 +172,7 @@ export function useDeleteRefund({ onSuccess } = {}) {
       onSuccess?.(data);
     },
     onError: (error) => {
-      // No REFUNDS.DELETE_FAILED constant exists (only CREATE_FAILED/
-      // LOAD_FAILED) — the generic default fallback stays here rather than
-      // inventing a message toastMessages.js doesn't actually define.
+      // No REFUNDS.DELETE_FAILED constant exists — falls back to the generic default.
       const message = getErrorMessage(error);
       toast.error(message);
       tracker.track(EVENTS.REFUND_FAILED, { stage: 'delete', error: message, ...sessionCtx });

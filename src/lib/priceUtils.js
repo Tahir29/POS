@@ -14,32 +14,15 @@ export function formatPrice(amount) {
   return new Intl.NumberFormat('en-IN', {
     style:                'currency',
     currency:             APP_CONFIG.CURRENCY.INR_CODE ?? 'INR',
-    // FIXED 2026-09-08 — was maximumFractionDigits: 0, silently rounding
-    // this to a whole rupee (e.g. ₹52,758.61 → ₹52,759) while
-    // PriceBreakdown right below it on the same page shows the exact
-    // figure (₹52,758.61) for the SAME field (livePricing.sub_total) —
-    // confirmed by tracing both back to one source, not two different
-    // prices. Unlike checkout/CartSummary's Total, there's no OrnaVerse
-    // document being finalized here that needs a whole-rupee round_off
-    // adjustment (see that fix's own header) — this is just a display
-    // figure, so it now shows the same precision everywhere else in the
-    // app already uses (maximumFractionDigits: 2), matching the
-    // breakdown instead of silently disagreeing with it.
+    // Keep at 2 — this is a display figure only (no document round_off
+    // involved), and must match the precision PriceBreakdown shows for the
+    // same underlying field elsewhere on the page.
     maximumFractionDigits: 2,
   }).format(num);
 }
 
-// ADDED 2026-09-08 — de-duplication pass: an audit of the whole codebase
-// found ~15 files independently hand-rolling their own
-// `₹${Number(n).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`
-// (or a close variant), each as a local, unexported function named
-// `money`/`formatCurrency`/`formatINR`/`fmt` — same formatting, three
-// slightly different behaviors for a missing amount depending which copy
-// you happened to be reading. These three cover every behavior actually
-// found in use, so every one of those local copies can redirect to
-// whichever of these already matches what it did — see each duplicate
-// site's own comment for which one and why, rather than guessing a single
-// one-size-fits-all replacement.
+// Shared INR amount formatters — three missing-value behaviors, matching
+// every pattern found duplicated across the app (see each function's doc).
 
 /**
  * Always shows a real amount — missing/NaN default to 0, never null/'—'.

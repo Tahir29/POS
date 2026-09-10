@@ -27,18 +27,16 @@ import { NAV_ITEMS, BOTTOM_ITEMS } from '@/constants/navItems';
 import { cn } from '@/lib/utils';
 import { EASE_PREMIUM, DURATION } from '@/lib/motion';
 
-// Derives the header title from the SAME NAV_ITEMS/BOTTOM_ITEMS the
-// Sidebar uses — no second hardcoded label list to keep in sync.
-// Routes not present in nav config (e.g. detail/sub-pages) fall back
-// to a capitalized version of the last path segment.
+// Derives the header title from the same NAV_ITEMS/BOTTOM_ITEMS the Sidebar
+// uses, so there's no second label list to keep in sync. Routes not present
+// in nav config fall back to a capitalized version of the last path segment.
 
 const ALL_NAV_ITEMS = [...NAV_ITEMS, ...BOTTOM_ITEMS];
 
 function usePageTitle() {
   const pathname = usePathname();
 
-  // Dynamic routes not covered by NAV_ITEMS — checked before the generic
-  // fallback so we don't show a raw numeric ID as the page title.
+  // Checked before the generic fallback so a raw numeric ID isn't shown as the title.
   if (pathname.startsWith('/products/')) return 'Product Detail';
 
   const match = ALL_NAV_ITEMS.find(
@@ -110,14 +108,8 @@ function StoreIndicator({ onOpen }) {
       )}
     >
       <Store size={15} aria-hidden="true" className="shrink-0 text-muted-foreground" />
-      {/* Text hidden below 1200px (2026-08-23) — icon-only at tablet width,
-          where this sits alongside HeaderCustomerControl/CartBadge/UserMenu
-          in a fixed-width row that doesn't have room for the full store
-          name; was previously just `sm:inline` (640px), wide enough that
-          the header's action cluster still overflowed on real tablet
-          viewports. min-[1200px] is an arbitrary Tailwind breakpoint, not
-          one of the named sm/md/lg/xl ones — chosen to match this specific
-          overflow point, not a new app-wide breakpoint. */}
+      {/* Icon-only below 1200px — the action cluster (customer control, cart,
+          user menu) overflows real tablet viewports before that point. */}
       <span className="hidden min-[1200px]:inline truncate max-w-[140px]">
         {activeStoreName ?? '—'}
       </span>
@@ -127,10 +119,6 @@ function StoreIndicator({ onOpen }) {
     </button>
   );
 }
-
-// Trigger shows a circular initials avatar (matches the dashboard redesign
-// reference) instead of a generic person icon — still the same DropdownMenu
-// underneath, sign-out functionality unchanged.
 
 function getInitial(name) {
   return name?.trim()?.[0]?.toUpperCase() ?? '?';

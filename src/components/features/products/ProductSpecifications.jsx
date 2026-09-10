@@ -1,15 +1,10 @@
 'use client';
 
-// Card-based product specifications layout — light-grey boxes, 2 per row,
-// matching the reference design (2026-07-26 revamp). Empty sections hidden
-// entirely.
-//
-// Each card's "i" button opens a bottom sheet (side sheet on tablet+, same
-// BottomSheet primitive used elsewhere on this page — reviews, etc.) with
-// static explainer content for that section. Only "Metal" has real content
-// so far (confirmed content + Shopify-hosted reference images); the other
-// three cards fall back to a generic placeholder until their content is
-// supplied — see SPEC_INFO_CONTENT below to add more.
+// Card-based product specifications layout, 2 cards per row. Empty sections
+// are hidden entirely. Each card's "i" button opens a BottomSheet with
+// static explainer content — only "Metal" has real content so far; the
+// others fall back to a placeholder until content is supplied (see
+// SPEC_INFO_CONTENT below).
 
 import { useState } from 'react';
 import Image from 'next/image';
@@ -45,23 +40,20 @@ function formatDimension(value) {
   return `${num} mm`;
 }
 
-// Gemstone (a.k.a. "Colour Stone" in OrnaVerse's own vocabulary — item_group_id
-// 113) details live one level down, on the BOM row for that component, not as
-// a top-level field the way karat/metal_color do. Both the master record
-// (`item_components` on Items/Retrieve, `components` on Style/Retrieve) and
-// the live-priced SetSalesItems entity carry one BOM row per material —
-// filter to the colour-stone group to find it.
+// Gemstone ("Colour Stone" in OrnaVerse's vocabulary, item_group_id 113)
+// details live one level down, on the BOM row for that component, not as a
+// top-level field — filter the master/live-priced item_components list to
+// this group to find it.
 function getColorStoneComponents(list) {
   return (list ?? []).filter(
     (c) => c.item_group_id === 113 || c.item_group_name === 'Color Stone'
   );
 }
 
-// shape_id -> shape_name, built from every component on the product's OWN
-// master BOM (never a hardcoded/guessed table) — diamond and colour-stone
-// rows share the same shape vocabulary (shape_id 4 is "Princess" whether
-// it's cut into a diamond or a gemstone), so this can resolve a friendly
-// name for a live-priced colour-stone row that only carries the raw id.
+// shape_id -> shape_name map, built from the product's own master BOM
+// (never a hardcoded table) — diamond and colour-stone rows share the same
+// shape vocabulary, so this resolves a friendly name for a live-priced
+// colour-stone row that only carries the raw id.
 function buildShapeNameMap(components) {
   const map = new Map();
   (components ?? []).forEach((c) => {
@@ -72,19 +64,16 @@ function buildShapeNameMap(components) {
 }
 
 // `attribute` on every BOM row is "{ShapeCode}/{ColorCode}/{MetalCode}/
-// {Size}/{QualityCode}" (e.g. "PR/RED/NA/4.5*4.5/NA") — confirmed live
-// 2026-08-26 against item 61679's colour-stone row on both the master
-// record and SetSalesItems. Used as a fallback when a row has no resolved
-// _name field for that piece (the live-priced row never does for shape/
-// colour), since the codes themselves (colour especially — "RED", "PINK")
-// are already human-readable without a lookup table.
+// {Size}/{QualityCode}" (e.g. "PR/RED/NA/4.5*4.5/NA") — used as a fallback
+// when a row has no resolved _name field, since the codes are already
+// human-readable without a lookup table.
 function parseAttribute(attribute) {
   const parts = typeof attribute === 'string' ? attribute.split('/') : [];
   return { shapeCode: parts[0], colorCode: parts[1], sizeCode: parts[3] };
 }
 
-// Static/educational, not per-product — same convention as ProductTrustSection.
-// Add new keys here (matching a SpecCard's `title`) as content is supplied.
+// Static/educational content, not per-product. Add new keys here (matching
+// a SpecCard's `title`) as content is supplied.
 
 const SPEC_INFO_CONTENT = {
   Metal: {
@@ -106,8 +95,7 @@ const SPEC_INFO_CONTENT = {
     ],
   },
   Dimension: {
-    // Side-by-side columns (Height / Width) rather than full-width stacked
-    // sections — matches the reference layout, unlike Metal's Karat/Color.
+    // Side-by-side columns (Height / Width), unlike Metal's stacked sections.
     columns: [
       {
         heading: 'HEIGHT',
@@ -318,16 +306,11 @@ const GemstoneIcon = () => <SpecIcon src={ICON_URLS.gemstone} alt="Gemstone" />;
 
 /**
  * @param {{ product: object, pricedItem?: object|null }} props
- *   product — the master record (Items/Retrieve/Style/Retrieve), source for
- *   every card except the gemstone one, which prefers `pricedItem` when it's
- *   resolved.
- *   pricedItem — the live-priced SetSalesItems entity (useVariantPricing's
- *   `data`), same object PriceBreakdown renders. The master's colour-stone
- *   BOM row is only a per-DESIGN default; the physical piece actually being
- *   priced/sold can carry a different colour stone (confirmed live 2026-08-26
- *   on item 61679: master default "Ruby/RED", live-priced piece "Pink
- *   Sapphire/PINK") — so the gemstone card prefers this over `product` and
- *   only falls back to the master row before pricing has resolved.
+ *   product — the master record, source for every card except the gemstone
+ *   one, which prefers `pricedItem` (the live-priced SetSalesItems entity)
+ *   when resolved: the master's colour-stone BOM row is only a per-design
+ *   default, and the physical piece actually being sold can carry a
+ *   different colour stone.
  */
 export default function ProductSpecifications({ product, pricedItem = null }) {
   const [infoTitle, setInfoTitle] = useState(null);
@@ -395,11 +378,9 @@ export default function ProductSpecifications({ product, pricedItem = null }) {
   const baseItem    = val(product.base_item);
   const hsn         = val(product.hsn);
   const itemCode    = val(product.item_code)
-  // product.sku (the master/catalog record) is always an empty string —
-  // confirmed live 2026-08-26 — a catalog item has no serialized piece
-  // attached to it. Only pricedItem (SetSalesItems, resolved against a real
-  // StockJournal row) ever carries a genuine per-piece sku, and only once
-  // pricing found a piece to price against.
+  // product.sku (the master/catalog record) is always empty — a catalog item
+  // has no serialized piece attached. Only pricedItem carries a real
+  // per-piece sku, once pricing has resolved an actual piece.
   const sku         = val(pricedItem?.sku) ?? val(product.sku);
 
   return (
@@ -447,9 +428,8 @@ export default function ProductSpecifications({ product, pricedItem = null }) {
           ]}
         />
 
-        {/* Colour stone / gemstone details — only ever present on a
-            "Gemstone" design (e.g. LJ-PR0329-14RGLGD-12), self-hidden
-            everywhere else via SpecCard's own hasAny check. */}
+        {/* Only ever present on a "Gemstone" design; self-hidden elsewhere
+            via SpecCard's own hasAny check. */}
         <SpecCard
           icon={<GemstoneIcon />}
           title="Gemstone"
@@ -487,9 +467,7 @@ export default function ProductSpecifications({ product, pricedItem = null }) {
       <BottomSheet
         isOpen={!!infoTitle}
         onClose={() => setInfoTitle(null)}
-        // BottomSheet now uppercases its own title (2026-08-23) — this used
-        // to do it manually here since this was the one sheet that needed
-        // it; passing the real-case string now so aria-label reads normally.
+        // BottomSheet uppercases its own title — pass the real-case string.
         title={infoTitle}
       >
         <SpecInfoSheetBody title={infoTitle} />

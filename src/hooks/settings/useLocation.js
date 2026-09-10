@@ -1,10 +1,6 @@
-// Cascading location dropdowns: Countries → States → Cities.
-// Each level enabled only when parent selection is made.
-// Cached for STALE_TIME.STATIC (30 min).
-//
-// FIX: Added isAuthenticated guard — without it, queries fired before
-// the token was ready, got a 401, errored silently, and never retried
-// due to the 30-min staleTime. Dropdowns appeared empty forever.
+// Cascading location dropdowns: Countries -> States -> Cities, each level
+// enabled only once its parent is selected. Gated on isAuthenticated so
+// queries don't fire (and 401) before the auth token is ready.
 
 import { useQuery } from '@tanstack/react-query';
 import { useSelector } from 'react-redux';

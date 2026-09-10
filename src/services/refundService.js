@@ -6,26 +6,23 @@
 //   getCustomerCredits()          → that customer's OUTSTANDING credits
 //   createRefund()                → knocks one off and pays it out
 //
-// Confirmed 2026-07-31 by capturing the ERP's own Refund dialog. There is
-// no Refund screen in their POS UI — only the ERP (/POS/Refund) has one.
+// There is no Refund screen in OrnaVerse's own POS UI — only the ERP
+// (/POS/Refund) has one.
 
 import axiosInstance from '@/lib/axios/axiosInstance';
 import API from '@/constants/apiEndpoints';
 
 /**
  * Credits this customer still has outstanding — i.e. what a refund can pay
- * out. Already-settled credits are filtered out server-side (verified: a
- * customer whose only credit was settled returns an empty list).
+ * out. Already-settled credits are filtered out server-side.
  *
  * Each row is a Return/Exchange/Buy Back document:
  *   { transaction_id, document_id, document_no, document_date, document_name,
  *     amount, ledger_id, document_ledger_id, mode_id, mode_code, mode_type }
  *
- * BUG FIX 2026-09-03: companyId was never sent, even though this endpoint
- * genuinely honours it — confirmed live against UAT (party_id 2221):
- * unscoped/company_id:1 both returned 9→7 HO-only credits vs company_id:4
- * returning exactly the other 2. Without it, the Refund picker showed a
- * customer's credit from EVERY store regardless of which one was active.
+ * companyId must be passed and forwarded — without it the picker shows a
+ * customer's credit from every store regardless of which one is active,
+ * since this endpoint genuinely scopes by it.
  * @param {{ partyId: number, companyId?: number }} params
  * @returns {Promise<object[]>}
  */
@@ -41,14 +38,13 @@ export async function getCustomerCredits({ partyId, companyId }) {
 /**
  * Maps an outstanding-credit row into the receipt entry a refund needs.
  *
- * CRITICAL: `transaction_id` is what actually links the refund to the
- * credit. Omitting it (while still sending document_no/document_id) is why
- * two earlier hand-built refunds saved cleanly but settled nothing — the
- * credit stayed outstanding. Confirmed against the ERP's own payload.
+ * `transaction_id` is what actually links the refund to the credit —
+ * omitting it (while still sending document_no/document_id) saves cleanly
+ * but settles nothing; the credit stays outstanding.
  *
- * `ref_document_no` is the REFUND's own document number. The ERP knows it
- * because its dialog pre-assigns one; we let the server assign instead, so
- * we leave it out and let the server fill it in.
+ * `ref_document_no` (the refund's own document number) is deliberately not
+ * set here — the server assigns it; see stampRefDocumentNo below for why we
+ * don't predict it.
  *
  * @param {object} credit — a row from getCustomerCredits()
  * @param {number} amount — how much of it to settle (allow_partial is true)
@@ -85,41 +81,29 @@ async function retrieveRefund(transactionId) {
 /**
  * Second pass intended to make the credit actually settle.
  *
- * WHY THIS EXISTS: settlement is keyed on `receipts[].ref_document_no`
- * matching the refund's OWN document_no. OrnaVerse's ERP dialog fills that
- * in client-side from DocumentNumbering — but on a tenant whose counter has
- * drifted, the number it predicts is NOT the number the server assigns, the
- * two disagree, and nothing settles. Verified 2026-07-31: a refund created
- * through OrnaVerse's own ERP UI (HO-RFD-07-26-5) predicted "-4", was stored
- * as "-5", and left its credit outstanding.
+ * Settlement is keyed on `receipts[].ref_document_no` matching the refund's
+ * OWN document_no. Predicting that number client-side (as OrnaVerse's ERP
+ * dialog does, from DocumentNumbering) can disagree with what the server
+ * actually assigns on a tenant whose counter has drifted, so nothing
+ * settles. This creates first, reads back the real assigned number, and
+ * stamps it into the receipts instead — drift-proof by construction.
  *
- * So we don't predict. We create, read back the number that was actually
- * assigned, and stamp it into the receipts. Drift-proof by construction.
- *
- * STILL DOESN'T ACTUALLY SETTLE THE CREDIT — confirmed live 2026-08-14 end
- * to end against a real customer (Tahir Kutty, party_id 2221): created a
- * Return (transaction_id 147, ₹1,07,840 credit), then a Refund for ₹10,000
- * against it, ran this exact stamp step, and the Return's own
- * balance_amount/receipt_amount were UNCHANGED afterward (still 107840/
- * 107840 via both Return/Retrieve directly and POSReceiptsSelect/List) —
- * the money-out side works, the knock-off does not, at least via this
- * mechanism. Two things worth knowing for whoever picks this up:
- *   1. Retrieve's own echo of what was just sent already corrupts the
- *      linkage: `receipts[].transaction_id` comes back as the REFUND's own
- *      transaction_id (50), not the original credit's (147) that Create was
- *      sent — so `entity.receipts` here is not safe to round-trip verbatim
- *      even before considering whether ref_document_no stamping does
- *      anything. Preserving the original transaction_id through the patch
- *      didn't change the outcome either.
- *   2. Manually setting the ORIGINAL Return's own balance_amount/
- *      receipt_amount via Return/Update DID succeed mechanically (200,
- *      tested then reverted) — suggesting settlement may need to touch the
- *      credit DOCUMENT directly rather than only the refund's receipts.
- *      NOT implemented here: this was a one-off hypothesis test, not
- *      confirmed against a real capture of OrnaVerse's own client actually
- *      settling a refund, and guessing wrong here risks corrupting real
- *      balance data. Needs a live capture (network tab, their own UI,
- *      completing a real Refund end-to-end) before coding a fix.
+ * KNOWN LIMITATION: this stamping step alone has not been confirmed to
+ * actually settle the credit end-to-end — a live test showed the original
+ * Return's balance_amount/receipt_amount unchanged after a refund + stamp
+ * against it, even though the money-out side worked. Two things worth
+ * knowing for whoever revisits this:
+ *   1. Retrieve's own echo of what was sent corrupts the linkage —
+ *      `receipts[].transaction_id` comes back as the REFUND's own
+ *      transaction_id, not the original credit's — so `entity.receipts`
+ *      is not safe to round-trip verbatim.
+ *   2. Manually setting the ORIGINAL credit document's own balance_amount/
+ *      receipt_amount via its own Update DID succeed mechanically in a
+ *      one-off test (not implemented here) — suggesting settlement may need
+ *      to touch the credit DOCUMENT directly rather than only the refund's
+ *      receipts. Needs a live capture of OrnaVerse's own client completing a
+ *      real Refund end-to-end before coding a fix — guessing wrong here
+ *      risks corrupting real balance data.
  */
 async function stampRefDocumentNo(transactionId) {
   const entity = await retrieveRefund(transactionId);
@@ -148,7 +132,8 @@ async function stampRefDocumentNo(transactionId) {
  *
  * Create carries details[] and receipts[] nested (one call — there is no
  * Post step for document 126). A follow-up Update then stamps the assigned
- * document number into the receipts, which is what knocks the credit off.
+ * document number into the receipts, which is what knocks the credit off
+ * (see stampRefDocumentNo's own header for its known limitation).
  *
  * @param {{
  *   partyId: number, partyName: string, activeStoreId: number,
@@ -205,8 +190,7 @@ export async function createRefund({
     }],
     // WHICH credits are knocked off
     receipts: credits.map(({ credit, amount }) => toRefundReceipt(credit, amount)),
-    // document_no deliberately omitted — the server assigns it (verified:
-    // refunds created without it came back as HO-RFD-07-26-1 / -2).
+    // document_no deliberately omitted — the server assigns it.
   };
 
   const response = await axiosInstance.post(API.REFUNDS.CREATE, { Entity: entity });

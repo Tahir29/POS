@@ -1,13 +1,8 @@
 'use client';
 
-// Header-level "Customer" control — shows attached customer or
-// "Add Customer" prompt, opens CustomerSessionSheet.
-// Available on every POS screen, independent of cart/checkout.
-//
-// Attached state restyled as a pill (initials avatar + name + mobile +
-// detach) to match the new dashboard header design. Reuses the existing
-// --status-in-stock green token rather than introducing a new color.
-// Unattached state is unchanged from the original ghost-button treatment.
+// Header-level "Customer" control — shows the attached customer or an
+// "Add Customer" prompt, opens CustomerSessionSheet. Available on every POS
+// screen, independent of cart/checkout.
 
 import { useState } from 'react';
 import { useSelector } from 'react-redux';
@@ -30,14 +25,10 @@ function getInitials(name) {
 export default function HeaderCustomerControl() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const { isAttached, customerName, customerMobile, detach } = useCustomerSession();
-  // FIXED 2026-09-09 — CONFIRMED real risk: this control is reachable from
-  // every screen, checkout included, with no guard of its own. Detaching or
-  // switching customers while a payment confirmation is in flight
-  // (checkout/page.jsx's handlePaymentConfirmed) could redirect checkout
-  // away before it ever saw the sale complete — the sale still goes
-  // through server-side, but the operator never gets the confirmation
-  // screen and could re-submit, risking a duplicate charge. See
-  // uiSlice.js's setCheckoutInProgress for the full mechanism.
+  // Guards against detaching/switching customers while a payment confirmation
+  // is in flight (see checkout/page.jsx's handlePaymentConfirmed and
+  // uiSlice.js's setCheckoutInProgress) — that could redirect checkout away
+  // before the operator sees the sale complete, risking a duplicate charge.
   const checkoutInProgress = useSelector(selectCheckoutInProgress);
 
   const guardedSheetOpen = () => {
@@ -63,13 +54,6 @@ export default function HeaderCustomerControl() {
           type="button"
           variant="outline"
           onClick={guardedSheetOpen}
-          // rounded-full removed 2026-08-23 — was overriding the base
-          // Button's own corner radius with a pill shape; every other
-          // rectangular control in the app was flattened to the small
-          // brand-consistent radius (see globals.css's --radius scale
-          // comment), and this button isn't a circle/pill by function the
-          // way an avatar or icon-only button is, so it shouldn't look like
-          // one either. Falls back to the Button component's default.
           className="flex items-center gap-2 min-h-[44px] px-4"
           aria-label="Add customer"
         >
@@ -89,11 +73,6 @@ export default function HeaderCustomerControl() {
     <>
       <div
         className={cn(
-          // Pill shape removed 2026-08-23 — this chip and the inner name
-          // button below both keep only the avatar (a genuine circle) and
-          // the detach "X" (a genuine icon-only circular button) rounded;
-          // the chip itself is a rectangular container, same treatment as
-          // every other card/panel in the app now.
           'flex items-center gap-2 rounded-sm pl-1.5 pr-2 py-1.5 min-h-[40px]',
           'border border-status-in-stock/20 bg-status-in-stock/10'
         )}

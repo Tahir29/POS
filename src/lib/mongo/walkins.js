@@ -1,25 +1,15 @@
 // src/lib/mongo/walkins.js
 //
-// Our OWN log of walk-in events, one document PER VISIT (not one doc per
-// customer, unlike abandonedCart.js/recentlyViewed.js/wishlist.js) — this
-// exists specifically to answer "who walked into store X between these two
-// dates", which is a list-many-across-customers query none of those other
-// modules need. See this file's own header history: OrnaVerse's
-// Services/POS/WalkIn/Lookup and /Register (see apiEndpoints.js's WALKIN
-// block) are BOTH single-customer, mobile-keyed calls with no listing
-// mode at all — confirmed live 2026-09-08 (LIVE: sending anything other
-// than `{ mobile }` alone, including a bare `company_id` or a date range,
-// returns a flat 500) and confirmed again straight from OrnaVerse's own
-// request schemas for both endpoints (Lookup and Register take the exact
-// same shape — mobile + optional profile fields, no company_id/date
-// params on either). OrnaVerse has nowhere to list this data back out, so
-// this app keeps its own record of every walk-in it observes, specifically
-// so retargeting/marketing can query it later.
+// Our OWN log of walk-in events, one document PER VISIT (not per customer)
+// — answers "who walked into store X between these dates", a query
+// OrnaVerse can't answer itself: its WalkIn Lookup/Register endpoints are
+// both single-customer, mobile-keyed calls with no listing mode (sending
+// anything besides `{ mobile }` alone returns a 500). This app keeps its
+// own record of every walk-in it observes so retargeting/marketing can
+// query it later.
 //
-// WRITTEN FROM: useWalkInLookup.js's mutation, the moment OrnaVerse itself
-// reports WalkInRecorded:true for a real match — see that hook's own
-// comment for why "recorded" is defined the same way OrnaVerse defines it,
-// not on every keystroke/search attempt.
+// Written from useWalkInLookup.js's mutation, the moment OrnaVerse reports
+// a real WalkInRecorded:true match — not on every keystroke/search attempt.
 
 import { getDb } from './client';
 

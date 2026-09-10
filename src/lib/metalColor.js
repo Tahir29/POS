@@ -1,20 +1,14 @@
 // src/lib/metalColor.js
 //
-// OrnaVerse represents metal color two different ways depending on which
-// endpoint an item came from: ProductCatalogRow (catalog list — confirmed
-// live 2026-08-23) only carries a short code (metal_color_code: "YG"/"WG"/
-// "RG"/"SL"), while Items/Retrieve (product detail) and Style/Retrieve
-// (design variants) carry the full human name directly (metal_color_name:
-// "Yellow Gold", confirmed against a real Style/Retrieve response the same
-// day). Every ProductCard-consuming snapshot — the catalog row itself,
-// recentlyViewed's and wishlist's Mongo-stored items — is built from
-// whichever of the two the source endpoint actually had, so this resolves
-// either shape to the same descriptive name rather than making ProductCard
-// (or every snapshot builder) know which source it came from.
+// OrnaVerse represents metal color two different ways depending on the
+// source endpoint: ProductCatalogRow (catalog list) only carries a short
+// code (metal_color_code: "YG"/"WG"/"RG"/"SL"), while Items/Retrieve and
+// Style/Retrieve carry the full name directly (metal_color_name: "Yellow
+// Gold"). This resolves either shape to the same descriptive name so
+// consumers don't need to know which source an item came from.
 //
-// Codes seen live on this tenant: YG, WG, RG (gold colors) and SL (silver —
-// redundant with metal_id, not a real "color", so deliberately NOT mapped;
-// getMetalLabel already says "Silver" and karat_code already carries "925").
+// "SL" (silver) is deliberately NOT mapped — it's redundant with metal_id,
+// not a real "color" (getMetalLabel already says "Silver").
 const METAL_COLOR_CODE_TO_NAME = {
   YG: 'Yellow Gold',
   WG: 'White Gold',

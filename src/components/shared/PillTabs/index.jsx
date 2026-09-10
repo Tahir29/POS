@@ -1,66 +1,25 @@
 'use client';
 
-// src/components/shared/PillTabs/index.jsx
+// Shared horizontal tab strip built on shadcn/Radix Tabs, in two variants:
+//   'pill' — segmented control with a shared bg-muted track and a raised
+//            active segment (matches lucirajewelry.com's toggle style).
+//   'chip' — rounded-lg, optional icon, horizontally scrollable nav strip
+//            (kept as separate rounded chips on purpose — not a toggle).
 //
-// Shared horizontal tab strip built on shadcn/Radix Tabs — replaces the
-// hand-rolled "TABS.map + button + activeTab === key ternary" pattern that
-// was independently copy-pasted across ~10 pages (schemes, returns,
-// daily-closing, exchange, urd-purchase, buyback, transactions, repair,
-// customers/[customerId], CustomerDetailSheet), plus a byte-identical local
-// `TabBar` duplicated in both transactions/page.jsx and repair/page.jsx.
-//
-// Two visual variants match the two designs already in use:
-//   'pill' (default) — segmented control: one shared bg-muted "track", the
-//                       active tab a raised bg-primary segment inset inside
-//                       it. Restyled 2026-08-24 to match lucirajewelry.com's
-//                       own tab design (e.g. its "Price Breakup / Price
-//                       Comparison" toggle) — this used to be two entirely
-//                       separate rounded-full chips with a gap between them
-//                       (still visible in 'chip' below, which keeps that
-//                       look on purpose — see its own note).
-//   'chip'            — rounded-lg, optional leading icon, horizontally
-//                        scrollable (the transactions/repair TabBar look).
-//                        Left AS-IS: it's a scrollable icon+label nav strip,
-//                        not a 2-3-option toggle, and the site has nothing
-//                        resembling it to match against.
-//
-// `tabs` accepts either an array of plain keys (with getLabel resolving
-// display text, e.g. from a TAB_LABELS map) or an array of richer objects —
+// `tabs` accepts plain keys (paired with getLabel) or richer objects —
 // getKey/getLabel/getIcon default to the {key,label,icon} shape.
 
 import {
   Tabs, TabsList, TabsTrigger,
 } from '@/components/ui/tabs';
 
-// PREMIUM REVAMP (2026-07-22): 'pill' used to hardcode stone-100/stone-500/
-// stone-200 for its inactive state (the same drift found in ListItemCard) —
-// now routes through the same bg-muted/text-muted-foreground tokens the
-// 'chip' variant already used correctly. Both variants also pick up the
-// new premium timing tokens.
-//
-// rounded-md, not rounded-full (2026-08-24, 'pill' only) — matches the
-// small, flattened corner radius the rest of the app now uses everywhere
-// (see globals.css's --radius scale comment); the website's own tabs use
-// the same small-radius language, not a full pill either.
-// flex-1 + text-center, 'pill' only (2026-08-24) — the segmented track now
-// spans the full width available (see VARIANT_LIST_WIDTH below) instead of
-// hugging its content, so each segment has to grow to fill and share that
-// width evenly rather than sitting shrink-0/left-aligned with dead space
-// after it. 'chip' stays shrink-0: it's a scrollable strip that's supposed
-// to hug its own content width, not stretch.
-//
-// Explicit h-8/h-9 (2026-08-24) — shadcn's base TabsTrigger (ui/tabs.jsx)
-// sizes itself to `h-[calc(100%-1px)]`, a PERCENTAGE of TabsList's height.
-// That only resolves correctly against a parent with a definite height, and
-// TabsList here is `h-auto` (has been since before today's redesign) — so
-// the percentage has nothing definite to resolve against and every trigger
-// fell back to its own small content-driven height instead. Invisible on
-// the OLD design (both states rendered at that same short height, so
-// nothing looked mismatched), but glaring on the new segmented-track look:
-// live-verified on the customer detail sheet, the active "Profile" segment
-// rendered at 19px inside a 36px track, leaving a visible sliver of the
-// unfilled bg-muted track showing above it. A fixed height sidesteps the
-// percentage-resolution problem entirely rather than fighting it.
+// NOTE: h-8/h-9 below are explicit, not incidental — shadcn's base
+// TabsTrigger sizes itself to h-[calc(100%-1px)] of TabsList's height,
+// which only resolves against a parent with a definite height. TabsList
+// here is h-auto, so without a fixed trigger height every tab silently
+// falls back to its own content-driven height instead of filling the
+// segmented track (visible as a sliver of unfilled track above the active
+// pill). Don't remove these without giving TabsList a definite height.
 const VARIANT_TRIGGER = {
   pill: 'h-8 flex-1 rounded-md px-4 py-1.5 text-xs font-medium text-center transition-colors duration-standard ease-premium '
     + 'data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:font-semibold data-[state=active]:shadow-sm '
@@ -70,42 +29,19 @@ const VARIANT_TRIGGER = {
     + 'data-[state=inactive]:bg-muted/40 data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:bg-muted/70',
 };
 
-// The shared "track" background — only 'pill' gets one; 'chip' stays
-// transparent (each chip already carries its own background/gap, and a
-// shared track behind a horizontally-scrolling icon strip wouldn't read as
-// one grouped control the way a 2-3-option toggle does).
+// Shared "track" background — 'pill' only; 'chip' stays transparent since
+// each chip carries its own background.
 const VARIANT_LIST = {
   pill: 'gap-1 rounded-md bg-muted p-1',
   chip: 'gap-1 bg-transparent p-0',
 };
 
-// 'pill' spans the full width offered by its container (2026-08-24) instead
-// of sizing to its own content — matches the site's own toggle, which reads
-// as a section-width control, not a small content-hugging chip row.
-//
-// 'chip' FIXED 2026-09-07 — was 'w-fit', which is exactly backwards for a
-// row that's supposed to SCROLL instead of overflow the page. shadcn's own
-// base TabsList is `inline-flex w-fit` (ui/tabs.jsx), sized to hug however
-// wide ALL its children need — with `flex-nowrap` (see `scrollable` below)
-// and enough tabs to not fit a viewport (confirmed live: 6 tabs on the
-// customer profile page — Profile/Edit/Schemes/Points/360/Wishlist —
-// wider than the screen), that box just grows past the viewport instead of
-// clipping, and since nothing ever gets narrower than its own content,
-// `overflow-x-auto` right next to it never actually triggers — there's
-// nothing to scroll from the box's OWN point of view, so the PAGE scrolls
-// horizontally instead. `w-full` makes the list actually respect its
-// container's width (so `overflow-x-auto` has something to clip against
-// once children exceed it) — `min-w-0` on top of that because `<Tabs>`
-// itself (ui/tabs.jsx) is a flex column and TabsList, as a flex item
-// inside it, defaults to `min-width: auto` (effectively "never narrower
-// than my content") unless told otherwise; without overriding that, the
-// `w-full` above still can't shrink the box below its content's intrinsic
-// width, and the scroll containment silently doesn't work — the single
-// most common gotcha behind "overflow-x-auto isn't scrolling, it's just
-// overflowing" in a flex layout. Applies at every screen size, not just
-// mobile — a desktop viewport narrower than the tab row's full content
-// width (more tabs added later, a narrower column layout, ...) hits the
-// exact same failure mode without this.
+// NOTE: 'chip' needs min-w-0 alongside w-full, not w-full alone. shadcn's
+// base TabsList is `inline-flex w-fit` inside a flex column, so without
+// min-w-0 it never shrinks below its content's intrinsic width —
+// overflow-x-auto then has nothing to clip against and the page scrolls
+// horizontally instead of the tab row. Applies whenever tabs overflow the
+// viewport (e.g. the customer profile page's 6 tabs), not just on mobile.
 const VARIANT_LIST_WIDTH = {
   pill: 'w-full',
   chip: 'w-full min-w-0',

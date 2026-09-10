@@ -1,16 +1,8 @@
-// ADDED 2026-08-21: also mirrors the found record into Mongo (see
-// api/customers/sync/route.js) — the first wire-up point for the
-// personalization/retargeting data layer discussed separately. Fire-and-
-// forget: never blocks this lookup, never surfaces an error to the
-// operator. If Mongo is briefly down, this customer's profile just doesn't
-// get refreshed this time; nothing else about the sale is affected.
-//
-// SECURITY FIX 2026-08-21: the sync route now requires the caller's own
-// bearer token (it re-fetches the authoritative record from OrnaVerse
-// itself rather than trusting a client-submitted profile — see the route's
-// own header) — so this has to send one. Read lazily from the store, same
-// pattern axios/interceptors.js already uses, rather than turning this into
-// a hook-shaped dependency for one fire-and-forget call.
+// src/hooks/customer/useCustomerLookup.js
+// Looks up a customer by mobile; on a hit, also fires a fire-and-forget sync
+// to Mongo (api/customers/sync) for the personalization/retargeting data layer.
+// The sync call requires a bearer token — read lazily from the store rather
+// than adding a hook-level dependency for one background call.
 
 import { useQuery } from '@tanstack/react-query';
 import { getCustomer } from '@/services/customerService';
@@ -21,7 +13,7 @@ import APP_CONFIG from '@/constants/appConfig';
 function syncCustomerProfile(partyId) {
   const { store } = require('@/store');
   const accessToken = store.getState().auth.accessToken;
-  if (!accessToken) return; // not signed in (shouldn't happen here) — nothing to sync with
+  if (!accessToken) return; // no token — nothing to sync with
 
   fetch('/api/customers/sync', {
     method: 'POST',

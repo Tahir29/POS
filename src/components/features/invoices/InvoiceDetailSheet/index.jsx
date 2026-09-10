@@ -1,25 +1,10 @@
 'use client';
 
 // Uses the full record already returned by Invoice/List (passed in as
-// `invoice.raw`) — no second Invoice/Retrieve call needed.
-//
-// PRINT: via InvoiceReportButton — OrnaVerse's own report-render pipeline,
-// not window.print(). Confirmed live 2026-08-19: their own ERP toolbar
-// Print button on this exact document type fires the same
-// Administration/DocumentReports/List call and offers the same three
-// formats. The old window.print()-based PrintInvoiceButton (and the
-// #invoice-print-area portal + @media print CSS it depended on) is gone —
-// see globals.css.
-//
-// ADDED (2026-08-14) — Collect Payment and Cancel Invoice. Both
-// createInvoiceReceipt()/cancelInvoice() existed fully implemented in
-// orderService.js from the start with zero UI callers: every Partial/Due
-// invoice showed an actionable-looking status badge with no way to
-// actually collect the rest, and Orders had a working Cancel action this
-// screen never got. Cancel mirrors OrderDetailSheet's exactly (same
-// document family). Collect Payment is new — see useAddInvoiceReceipt's
-// header for its "unverified live" caveat (Invoice/Create's embedded
-// receipt_details[] is proven; this standalone post-creation call is not).
+// `invoice.raw`) — no second Invoice/Retrieve call needed. Printing goes
+// through InvoiceReportButton (OrnaVerse's own report-render pipeline, not
+// window.print()). Collect Payment and Cancel Invoice mirror
+// OrderDetailSheet's equivalents — see report for background.
 
 import { useState } from 'react';
 import { useSelector } from 'react-redux';
@@ -80,10 +65,8 @@ function InvoiceContent({ raw }) {
         </div>
       )}
 
-      {/* sub_total / net_amount confirmed 2026-07-16 via real Invoice/List
-          data — sub_total is the pre-tax amount, net_amount is the actual
-          final total. gross_amount doesn't exist anywhere on InvoiceRow —
-          this row previously always rendered blank because of it. */}
+      {/* sub_total is the pre-tax amount, net_amount the final total —
+          gross_amount does not exist on InvoiceRow. */}
       <Row label="Subtotal" value={formatCurrency(raw.sub_total)} border />
       <Row label="Discount" value={raw.discount ? `– ${formatCurrency(raw.discount)}` : null} />
       <Row label="CGST (1.5%)" value={gst && formatCurrency(gst.cgst)} />

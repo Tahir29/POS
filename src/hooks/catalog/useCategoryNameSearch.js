@@ -1,24 +1,13 @@
-// src/hooks/catalog/useCategoryNameSearch.js
 // Fast, live category-name search — the interim/complementary result set
 // while useAllCatalog's full background fetch is still loading, same role
 // as useSkuSearch but for "rings", "earrings", etc. instead of a SKU.
-//
-// BUG FIXED 2026-07-28: searching a whole category name (e.g. "Rings") on a
-// store where matching products' item_name doesn't literally contain the
-// word "Ring" (item_name === item_code on many rows — confirmed live) came
-// back "No products found" until the full-catalog background index
-// finished, because the pre-index fallback path only had useSkuSearch's
-// SKU-only server search to fall back on — it has no concept of category
-// names at all. Categories themselves (useCategories) load fast and
-// independently of the slow full-catalog scan, so once the query resolves
-// to a real category via getMatchingTypeIds, this fires the SAME
-// server-side type_ids-filtered ProductCatalog/List query the category
-// filter CHIP already uses (proven fast — see useCatalogProducts), instead
-// of waiting on a client-side scan of possibly thousands of rows.
-//
-// One page only (not paginated) — this is explicitly an interim result set;
-// applySearchFilters takes over with the complete, correctly-sorted result
-// once useAllCatalog's allReady flips true.
+// Many rows have item_name === item_code, so a category name like "Rings"
+// won't literally match item_name — this instead resolves the query to a
+// real category (via getMatchingTypeIds) and fires the same server-side
+// type_ids-filtered ProductCatalog/List query the category filter chip
+// uses, rather than scanning the client-side index. One page only — this is
+// an interim result set; applySearchFilters takes over once useAllCatalog's
+// allReady flips true.
 
 import { useQuery } from '@tanstack/react-query';
 import { getProducts } from '@/services/catalogService';

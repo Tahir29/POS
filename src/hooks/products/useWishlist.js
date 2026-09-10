@@ -1,33 +1,15 @@
 // Two hooks:
-//
 //   useIsWishlisted(itemId, itemSizeId?) — O(1) read for a single
-//   ProductCard, backed by wishlistSlice's memoized Set selector (see that
-//   slice's own comment on why it has to be memoized). itemSizeId matters
-//   on the product detail page — see this function's own comment below.
-//
-//   useToggleWishlist() — returns a function ProductCard's heart button
-//   calls on tap. Requires a customer to be attached, same rule
-//   useRecentlyViewed.js's recording follows: there's no party_id to key a
-//   wishlist entry to otherwise, and "wishlisted by nobody" isn't the
-//   feature that was asked for. Dispatches the LOCAL add/remove
-//   immediately (so the heart fills/empties with zero perceived latency)
-//   — the actual Mongo write happens in store/wishlistMiddleware.js.
-//
-//   It ALSO patches the customer profile page's react-query cache
+//   ProductCard, backed by wishlistSlice's memoized Set selector.
+//   useToggleWishlist() — the function ProductCard's heart button calls on
+//   tap. Requires a customer to be attached (no party_id otherwise).
+//   Dispatches the local add/remove immediately for zero perceived latency;
+//   the actual Mongo write happens in store/wishlistMiddleware.js. Also
+//   patches the customer profile page's react-query cache
 //   (useCustomerWishlist's QUERY_KEYS.CUSTOMERS.WISHLIST(customerId) entry)
-//   for the same customer, in the same tick. Without this, toggling a heart
-//   updates wishlistSlice (instant) but leaves that other, independent
-//   query cache untouched — the card only disappeared from the profile's
-//   Wishlist tab once react-query's own 60s staleTime happened to elapse
-//   and something (refocus, remount) triggered a refetch, so a removed
-//   item visibly lingered for a while after its heart had already emptied.
-//   Fixed 2026-08-23.
-//
-//   Toasts on add/remove (2026-08-24) — the heart's own fill/empty state
-//   already confirms the toggle on the card itself, but nothing said so
-//   anywhere else on screen, unlike cart add/remove which already toast
-//   (see AddToCartButton / useCart.handleRemoveItem). Matches that
-//   convention for consistency across the two "save this item" actions.
+//   in the same tick so a removed item doesn't linger in the profile's
+//   Wishlist tab until that query's own staleTime elapses. Toasts on
+//   add/remove to match the cart add/remove convention.
 
 import { useDispatch, useSelector } from 'react-redux';
 import { useQueryClient } from '@tanstack/react-query';
@@ -42,12 +24,8 @@ import { useCustomerSession } from '@/hooks/customer/useCustomerSession';
 import { QUERY_KEYS } from '@/constants/queryKeys';
 import TOAST from '@/constants/toastMessages';
 
-// itemSizeId (2026-08-24) — a heart's filled/outline state must match the
-// EXACT (item_id, size) combination on screen, not just the item_id. Without
-// it, wishlisting a product's bare base design (no size) then confirming ANY
-// customization of that same item_id in Customize — even a size never
-// actually hearted — read as already wishlisted, because the two were
-// indistinguishable by item_id alone. See wishlistSlice's wishlistKey.
+// A heart's filled/outline state must match the exact (item_id, size)
+// combination on screen, not just item_id — see wishlistSlice's wishlistKey.
 export function useIsWishlisted(itemId, itemSizeId = null) {
   const wishlistedIds = useSelector(selectWishlistedItemIds);
   return itemId != null && wishlistedIds.has(wishlistKey(itemId, itemSizeId));
@@ -72,12 +50,9 @@ export function useToggleWishlist() {
       return;
     }
 
-    // useCustomerWishlist keys its query off Number(partyId) — match that
-    // exactly here, or a string/number mismatch means this patches a
-    // different cache entry than the one the profile page actually reads.
+    // useCustomerWishlist keys its query off Number(partyId) — match exactly.
     const wishlistQueryKey = QUERY_KEYS.CUSTOMERS.WISHLIST(Number(customerId));
 
-    // (item_id, item_size_id) is the real identity here — see wishlistKey.
     const sizeId = product.item_size_id ?? null;
 
     if (wishlistedIds.has(wishlistKey(product.item_id, sizeId))) {
@@ -98,19 +73,15 @@ export function useToggleWishlist() {
         image_1:    product.image_1    ?? null,
         metal_id:   product.metal_id   ?? null,
         karat_code: product.karat_code ?? null,
-        // One or the other, never both, depending on which surface the
-        // heart was tapped from (catalog card → code, PDP → name) — see
-        // lib/metalColor.js.
+        // Code from a catalog card, name from PDP — see lib/metalColor.js.
         metal_color_code: product.metal_color_code ?? null,
         metal_color_name: product.metal_color_name ?? null,
         has_stock:  product.has_stock  ?? null,
         net_weight: product.net_weight ?? null,
         weight:     product.weight     ?? null,
         style_id:   product.style_id   ?? null,
-        // A CONFIRMED customization (Customize → pick a size → heart), not
-        // just the bare design — see the product detail page's
-        // wishlistProduct comment. Catalog cards never have a size to
-        // confirm, so this is null there, same as always.
+        // A confirmed customization, not just the bare design; catalog cards
+        // never have a size, so this stays null there.
         item_size_id:   product.item_size_id   ?? null,
         item_size_name: product.item_size_name ?? null,
       };

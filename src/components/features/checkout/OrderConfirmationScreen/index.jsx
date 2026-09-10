@@ -1,16 +1,11 @@
 'use client';
 
-// CONFIRMED InvoiceRow / OrderRow field names (v1.json — the two rows share
-// them, see orderService.js):
-//   document_no  — invoice/order number (NOT invoice_no)
-//   party_name   — customer name (NOT customer_name)
-//   net_amount   — total (NOT total_amount)
-//   document_date — document date
-//
-// TWO DOCUMENT TYPES. Checkout can raise either an Invoice (54, paid in full)
-// or an Order (53, an advance against a booking), so nothing here may assume
-// "invoice": a balance outstanding is a defect on one and the entire point of
-// the other, and it reads back from a different Retrieve endpoint.
+// Order/invoice confirmation screen. InvoiceRow/OrderRow field names don't
+// match the obvious guess: document_no (not invoice_no), party_name (not
+// customer_name), net_amount (not total_amount). Checkout can raise either
+// an Invoice (paid in full) or an Order (a partial advance), so nothing
+// here may assume "invoice" — a balance outstanding is a defect on one and
+// the entire point of the other.
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -30,9 +25,8 @@ import { formatDateNumeric as fmtDate } from '@/lib/dateUtils';
  *   transactionId: number,   — EntityId returned from createInvoice/createOrder
  *   invoiceNo?:    string,   — document_no if already known (optional)
  *   documentType?: 'invoice'|'order',
- *   coinsRedeemed?: number,  — Lucira Coins applied on this sale (2026-09-08,
- *     see this component's own doc comments below for why it's a prop, not
- *     read off the document).
+ *   coinsRedeemed?: number,  — Lucira Coins applied on this sale (not
+ *     something OrnaVerse's own document knows about, so it's passed in).
  * }} props
  */
 export default function OrderConfirmationScreen({
@@ -41,12 +35,8 @@ export default function OrderConfirmationScreen({
   const router = useRouter();
   const isOrder = documentType === 'order';
 
-  // This screen only ever mounts right after a real order/invoice was just
-  // placed (see checkout/page.jsx's isConfirmed gate) — never on an ordinary
-  // re-render of it — so firing once per mount IS "once per successful
-  // order." showConfetti removes it from the tree once the burst finishes
-  // rather than leaving an inert (if invisible) overlay mounted for the
-  // rest of the time the operator spends on this screen.
+  // Mounts only right after a fresh order/invoice (checkout/page.jsx's
+  // isConfirmed gate), so firing once per mount is once per sale.
   const [showConfetti, setShowConfetti] = useState(true);
 
   // Only the relevant Retrieve fires — the other is disabled by a null id
@@ -64,49 +54,25 @@ export default function OrderConfirmationScreen({
   const totalAmount = invoice?.net_amount   ?? null;     // net_amount, NOT total_amount
   const invoiceDate = invoice?.document_date ?? null;
   const receiptAmt  = invoice?.receipt_amount ?? null;
-  // FIXED 2026-09-08 — OrnaVerse's own balance_amount has no idea Lucira
-  // Coins covered part of net_amount: the document's receipt_details only
-  // ever carry the REAL payment modes collected (see checkout/page.jsx's
-  // finalPayableTotal — that's the amount actually asked for on the
-  // terminal), so a sale genuinely paid in full (coins + cash together)
-  // still comes back from OrnaVerse showing balance_amount === the coins
-  // portion, as if it were still owed. Subtracting coinsRedeemed here is
-  // what actually reconciles "fully paid" back to reading as fully paid,
-  // rather than a real invoice/order showing a phantom balance due for
-  // money that WAS accounted for, just not through OrnaVerse's own ledger.
+  // OrnaVerse's balance_amount doesn't know Lucira Coins covered part of
+  // net_amount (receipt_details only carry real payment modes collected),
+  // so a sale paid in full via coins + cash still comes back showing a
+  // balance owed. Subtracting coinsRedeemed reconciles that back to zero.
   const balanceAmt  = invoice?.balance_amount != null
     ? Math.max(0, invoice.balance_amount - coinsRedeemed)
     : null;
-  // ADDED 2026-09-08 — discount was never shown on this screen at all,
-  // even when a promo genuinely reduced the sale. Read straight off the
-  // retrieved document (same `discount` field buildOrderEntity/
-  // buildInvoiceEntity submit at Create — see transactionHeaderService.js),
-  // not re-derived from the promo state client-side, so this always
-  // reflects what the server actually applied, matching every other figure
-  // on this screen.
-  //
-  // Merged with coinsRedeemed for display (2026-09-08, same product
-  // decision as CartSummary's own "Discount" line) — a promo and Lucira
-  // Coins are mutually exclusive (see cartSlice's appliedPromos/
-  // redeemedCoins), so only one of these two is ever really non-zero.
-  // discountAmt itself IS an OrnaVerse-recognized reduction (net_amount
-  // above already reflects it); coinsRedeemed is NOT (coins aren't an
-  // OrnaVerse concept at all — see redeemLoyaltyCoins's own header) — see
-  // realBalanceAmt below for why that distinction still matters even
-  // though the two look identical in this one combined line.
+  // Read straight off the retrieved document's own `discount` field
+  // (matches what Create submitted) rather than re-derived from client
+  // promo state. Merged with coinsRedeemed for display — a promo and
+  // Lucira Coins are mutually exclusive, so only one is ever non-zero.
   const discountAmt = (invoice?.discount ?? 0) + coinsRedeemed || null;
-  // Server-computed GST — see useCreateInvoice.js header (not calculated
-  // client-side; read back whatever the server computed per line item).
-  // Bifurcated into CGST+SGST for display — see lib/gst.js.
+  // Server-computed GST, read back per line item and split into CGST+SGST
+  // for display (lib/gst.js) — not calculated client-side.
   const taxAmount   = invoice?.tax_amount ?? null;
   const gst         = splitGst(taxAmount);
-  // ADDED 2026-09-08 — same round_off field useCreateInvoice.js/
-  // useCreateOrder.js already submit at Create (roundedNet - netAmount),
-  // read back off the real document here rather than recomputed — this
-  // screen never showed it, so Discount + CGST + SGST could look like it
-  // didn't quite add up to Total by a few paise (the same mismatch fixed
-  // on CartSummary's breakdown, for the same reason: net_amount is the
-  // WHOLE-rupee figure actually billed, everything above it is exact).
+  // Same round_off figure submitted at Create (roundedNet - netAmount),
+  // read back rather than recomputed, so Discount + CGST + SGST lines add
+  // up to Total instead of being off by a few paise.
   const roundOffAmt = invoice?.round_off ?? null;
 
   const handleNewSale = () => {
@@ -208,10 +174,8 @@ export default function OrderConfirmationScreen({
         )}
       </div>
 
-      {/* Actions — the invoice formats OrnaVerse itself offers for this
-          document type. The old "Download Invoice PDF" button is gone:
-          Services/POS/Invoice/GeneratePDF returns 500 on UAT, so it never
-          worked. See InvoiceReportButton. */}
+      {/* The old "Download Invoice PDF" button is gone — OrnaVerse's
+          GeneratePDF endpoint 500s and never worked. See InvoiceReportButton. */}
       <div className="flex w-full max-w-md flex-col gap-2">
         <InvoiceReportButton
           transactionId={transactionId}

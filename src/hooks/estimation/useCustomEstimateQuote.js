@@ -38,13 +38,11 @@ export function useCustomEstimateQuote() {
 
     setIsLoading(true); setError(null); setResult(null);
     try {
-      // Re-weigh the template's own BOM component(s) to the customer's
-      // requested weight — confirmed live that Items/List rows already
-      // carry the full item_components[] (same shape as Items/Retrieve),
-      // so no extra fetch is needed here. purity is per-component (a
-      // multi-metal BOM could exist even though today's one custom item
-      // has just one), so each component scales independently rather than
-      // assuming a single flat purity for the whole item.
+      // Re-weigh the template's own BOM component(s) to the requested
+      // weight. Items/List rows already carry item_components[] (same
+      // shape as Items/Retrieve), so no extra fetch is needed. purity is
+      // per-component so a multi-metal BOM scales correctly even though
+      // today's one custom item has just one component.
       const reweighed = {
         ...item,
         weight,

@@ -1,20 +1,9 @@
 'use client';
-// src/components/shared/RehydrationGuard/index.jsx
-//
-// Mounts once at the root of the app (inside <Providers>, therefore inside Redux).
-// Runs two security checks on every page load:
-//
-//   SEC-002 — Token expiry on rehydration
-//             Redux Persist can restore a token that expired while the tab was
-//             closed. We check tokenExpiry immediately after mount and dispatch
-//             clearAuth() if it has already passed.
-//
-//   SEC-006 — Idle timeout
-//             After a customer is attached to the cart, a 15-minute inactivity
-//             timer runs. On expiry the customer is detached (detachCustomer)
-//             and the agent is redirected to /dashboard. Agent is NOT logged out.
-//
-// This component renders nothing — it is a pure side-effect mount.
+// Mounts once at the root of the app (inside <Providers>). Pure side-effect
+// component, renders nothing. Runs two security checks:
+//   SEC-002 — clears auth if Redux Persist restored an already-expired token.
+//   SEC-006 — after 15 min idle with a customer attached, detaches the
+//             customer and redirects to /dashboard (does not log out the agent).
 
 import { useEffect, useRef, useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';

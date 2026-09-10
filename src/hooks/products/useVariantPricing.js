@@ -1,15 +1,9 @@
 // Live price for a single item/variant — THE figure the customer is quoted.
-//
-// Called for EVERY item, not just item_rate === 0 ones. The stored item_rate
-// is not a usable price — it understates the piece by 2-3x where it's set at
-// all (see the PRICING note in catalogService.js).
-//
-// This result becomes the cart's unitPrice, which is persisted in Redux and
-// shown in the mini cart, so it MUST be the same number checkout collects.
-// It used to price the item master while checkout priced the physical piece,
-// which is exactly how the same bracelet came to read ₹30,877.20 in the mini
-// cart and ₹23,507.56 at checkout. priceItemAsSold closes that: the piece
-// when the shelf has one, the master only for made-to-order.
+// Called for every item, never the stored item_rate (unreliable — see the
+// PRICING note in catalogService.js). This result becomes the cart's
+// unitPrice, so it must match what checkout collects: priceItemAsSold prices
+// the physical piece when the shelf has one, the master only for
+// made-to-order, keeping the two paths consistent.
 
 import { useQuery } from '@tanstack/react-query';
 import { useSelector } from 'react-redux';
@@ -29,9 +23,7 @@ export function useVariantPricing(item) {
     queryKey: QUERY_KEYS.ITEMS.PRICING(item?.item_id, activeStoreId),
     queryFn: () => priceItemAsSold({ item, companyId: activeStoreId }),
     enabled: !!item?.item_id,
-    // Metal rates are typically set once a day (see settingsService's
-    // addMetalRate) but can change same-day — STOCK's short window matches
-    // that "live, don't cache long" expectation.
+    // Metal rates can change same-day — STOCK's short window keeps this live.
     staleTime: APP_CONFIG.STALE_TIME.STOCK,
   });
 }

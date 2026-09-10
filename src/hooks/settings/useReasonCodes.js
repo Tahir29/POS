@@ -1,7 +1,6 @@
 // Reason codes (returns/cancellations/exchanges) — read-only reference.
-// CONFIRMED BROKEN server-side as of 2026-08-14 — see getReasonCodes'
-// header in settingsService.js. isError will be true unconditionally on
-// this tenant right now; that's the server, not this hook.
+// isError is currently true unconditionally on this tenant; that's a
+// server-side issue, not this hook — see getReasonCodes() in settingsService.js.
 
 import { useQuery } from '@tanstack/react-query';
 import { getReasonCodes } from '@/services/settingsService';

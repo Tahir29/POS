@@ -14,48 +14,32 @@ const initialState = {
   customerMobile:      null,
   customerAddress:     null,  // { address, address1, city, state, country, zip } — used as
                                // shipping_address/billing_address at order creation
-  appliedPromos:       [],    // { promoCode, promoDetails, discountAmount }[] — multiple
-                               // promos can stack; "similar" (same discount type) ones are
-                               // blocked before dispatch, see usePromoValidation.
-                               // discountAmount here is DERIVED (see recalculateTotals),
-                               // display-only, and against the CART subtotal.
+  appliedPromos:       [],    // { promoCode, promoDetails, discountAmount }[] — multiple promos
+                               // can stack; discountAmount is derived (see recalculateTotals)
   discountAmount:      0,     // derived from appliedPromos against the current subtotal
-  // ADDED 2026-09-08 — "Lucira Coins" (Nector's loyalty program) redemption,
-  // mutually exclusive with appliedPromos: a sale can be discounted by a
-  // promo code OR by coins, never both (product decision). Holds the
-  // customer's REQUESTED redemption amount, in rupees (1 Coin = 1 Rupee) —
-  // NOT pre-clamped to the order total, since the order total moves as
-  // pricing/promos resolve. Consumers (CartSummary, checkout) always derive
-  // the actually-applicable amount as min(redeemedCoins, payableTotal) at
-  // render/submit time, same reasoning as appliedPromos.discountAmount
-  // staying a derived, never-trusted-stale figure below.
+  // "Lucira Coins" (Nector loyalty) redemption — mutually exclusive with appliedPromos.
+  // Requested amount in rupees (1 Coin = 1 Rupee), not clamped to the order total since
+  // that moves as pricing/promos resolve; consumers derive min(redeemedCoins, payableTotal).
   redeemedCoins:       0,
   subtotal:            0,
-  taxAmount:           0,     // 3% GST on the taxable value (subtotal - discount)
+  taxAmount:           0,     // GST on the taxable value (subtotal - discount), rate from APP_CONFIG
   total:               0,
-  // Set only when this cart was loaded via "Fulfill from order" (see
-  // useOrderFulfillment.js / hydrateFromOrder below) — carried through to
-  // Invoice/Create as a best-effort reference back to the source order.
-  // UNVERIFIED whether OrnaVerse's backend actually uses these to close the
-  // order out; see the header comment on API.ORDER_FULFILLMENT.
+  // Set only when loaded via "Fulfill from order" (see useOrderFulfillment.js /
+  // hydrateFromOrder) — carried through to Invoice/Create as a reference back to
+  // the source order. Whether OrnaVerse's backend actually closes the order out
+  // from this is unverified — see API.ORDER_FULFILLMENT.
   fulfillmentOrderId:  null,
   fulfillmentOrderNo:  null,
 };
 
 // Recalculates subtotal, tax and total after any cart mutation.
 //
-// THE CART DOES NOT KNOW WHAT A PROMOTION IS WORTH, and no longer pretends
-// to. Captured from OrnaVerse's own counter 2026-08-05: a promotion's
-// percentage applies to a COMPONENT of the item chosen by `discount_calc_on`
-// — the diamond value, the making charges, or the whole value. "20% Off
-// Diamond" on a ₹1,04,699 piece is 20% of its ₹60,888 of diamond, not of the
-// subtotal. Only Helper/ApplyPromotions, over server-priced line items, can
-// work that out, and it re-taxes the line afterwards.
-//
-// So `discountAmount` stays 0 here and the cart shows the promo as applied
-// without a rupee figure. The real number appears at checkout, from the
-// server (see useCheckoutPricing). Inventing one here produced a saving the
-// customer was then not given — worse than showing none.
+// The cart deliberately does not price promotions: a promotion's percentage
+// applies to a component of the item chosen by `discount_calc_on` (diamond
+// value, making charges, or whole value), which only server-side
+// Helper/ApplyPromotions can resolve correctly over priced line items. So
+// discountAmount stays 0 here — the promo shows as applied with no rupee
+// figure until checkout computes the real number (see useCheckoutPricing).
 const recalculateTotals = (state) => {
   state.subtotal = state.items.reduce(
     (sum, item) => sum + item.unitPrice * item.quantity,
@@ -100,28 +84,14 @@ const cartSlice = createSlice({
           sizeName:   incoming.sizeName ?? null,
           attributes: incoming.attributes ?? {},
           image:      incoming.image    ?? incoming.imageUrl ?? null,
-          // ADDED 2026-09-08 — for analytics/communication (WebEngage
-          // retargeting, abandoned-cart reminders): a stable link back to
-          // this exact item, derived here so EVERY add-to-cart path gets
-          // one for free rather than requiring each caller to pass it.
-          // Points at this app's own product page — there is no Shopify
-          // storefront product HANDLE resolved anywhere in this codebase
-          // (only the numeric external_product_id, which isn't a valid
-          // public product path on its own), so this is the staff-facing
-          // POS route, not a public customer-facing storefront link. See
-          // AddToCartButton.jsx's own tracker call for where this
-          // travels into analytics.
+          // Stable link back to this item for analytics (WebEngage retargeting,
+          // abandoned-cart reminders). This is the staff-facing POS route, not a
+          // public storefront link — no Shopify product handle is resolved
+          // anywhere in this codebase, only the numeric external_product_id.
           productUrl: incoming.productUrl ?? (incoming.itemId != null ? `/products/${incoming.itemId}` : null),
-          // Whether THIS product is normally shelf stock or made-to-order
-          // (2026-08-24) — same has_stock signal ProductCard/the product
-          // detail page already show, carried onto the cart line so the
-          // Cart page, mini cart drawer, and Checkout's Order Items summary
-          // (all three render via CartItemRow) can show it too, without
-          // waiting on checkout's own live per-piece pricing. null for any
-          // pre-existing cart line added before this field existed, or via
-          // a path that doesn't pass it (order fulfillment/abandoned-cart
-          // restore) — StockStatusBadge renders nothing for null, so this
-          // degrades to "no badge," never a wrong one.
+          // Shelf-stock vs made-to-order signal (mirrors ProductCard). null for
+          // lines added before this field existed or via a path that doesn't
+          // pass it — StockStatusBadge renders nothing for null (no badge, never a wrong one).
           hasStock:   incoming.hasStock ?? null,
         });
       }
@@ -141,12 +111,8 @@ const cartSlice = createSlice({
 
     updateQuantity: (state, action) => {
       const { itemId, sizeId, styleId, quantity } = action.payload;
-      // DEFENSIVE (2026-09-09) — this reducer used to trust every caller to
-      // pre-validate quantity > 0; only useCart.js's handleUpdateQuantity
-      // actually did (redirecting <= 0 to removeItem instead of dispatching
-      // this). A caller that skipped that check would silently set a
-      // zero/negative quantity here. Mirrors that same redirect-to-remove
-      // behavior directly in the reducer so it can't be bypassed again.
+      // Defensive: redirect a non-positive quantity to a remove, rather than
+      // trusting every caller to pre-validate (not all of them do).
       if (quantity <= 0) {
         state.items = state.items.filter(
           (i) => !(i.itemId === itemId && i.sizeId === sizeId && i.styleId === styleId)
@@ -169,18 +135,11 @@ const cartSlice = createSlice({
 
     attachCustomer: (state, action) => {
       const { customerId, customerName, customerMobile, customerAddress } = action.payload;
-      // DEFENSIVE (2026-09-09) — LAST-RESORT guard, not a replacement for
-      // detaching first. Every call site should still dispatch
-      // detachCustomer() before attaching a DIFFERENT customer over an
-      // existing one with items — that's the ONLY place
-      // (abandonedCartMiddleware's 'cart/detachCustomer' case) that
-      // snapshots the OUTGOING customer's cart to Mongo before it's gone;
-      // this reducer has no way to trigger that save. This only stops the
-      // worse outcome of a caller that forgets: items/promos/coins ending
-      // up silently misattributed to the wrong customer's identity. This
-      // gap was confirmed real, not theoretical — see useCart.js's
-      // handleLoadFromOrder fix, the one call site that had actually
-      // slipped through it.
+      // Last-resort guard, not a replacement for detaching first: every call site
+      // should dispatch detachCustomer() before attaching a different customer over
+      // one with items, since only that path snapshots the outgoing cart to Mongo.
+      // This just stops the worse outcome — items silently misattributed to the
+      // wrong customer — if a caller forgets (see useCart.js's handleLoadFromOrder).
       if (state.customerId && state.customerId !== customerId && state.items.length > 0) {
         state.items              = [];
         state.appliedPromos      = [];
@@ -198,27 +157,18 @@ const cartSlice = createSlice({
       state.customerAddress = customerAddress ?? null;
     },
 
-    // Full reset, not just the customer fields (2026-08-24) — a detach means
-    // this customer's session with the POS is over. Whatever was in the cart
-    // is exactly what abandonedCartMiddleware's own 'cart/detachCustomer'
-    // case just snapshotted to Mongo under this customer (it reads
-    // PRE-action state, so it already captured the items by the time this
-    // runs) — so nothing is lost, and leaving them sitting in a now-
-    // customerless cart would only mean stale items silently carrying into
-    // whatever uses this cart next (a new guest sale, a different
-    // customer). Re-attaching this same customer later restores them from
-    // that Mongo snapshot (see the middleware's 'cart/attachCustomer' case).
+    // Full reset, not just the customer fields — a detach ends this customer's
+    // session. abandonedCartMiddleware already snapshotted the pre-detach cart to
+    // Mongo, so nothing is lost; re-attaching later restores from that snapshot.
     detachCustomer: () => {
       return initialState;
     },
 
-    // Apply a validated promo code and its discount — appends to the list.
-    // "Similar" (same discount-type) conflicts are checked before dispatch
-    // (see usePromoValidation); this only guards against the exact same
-    // code being added twice.
-    // The payload's discountAmount is deliberately ignored — recalculateTotals
-    // derives it from promoDetails against the live subtotal. It stays on the
-    // action only because the analytics middleware reports it.
+    // Appends a validated promo. "Similar" (same discount-type) conflicts are
+    // checked before dispatch (see usePromoValidation); this only guards the
+    // exact same code being added twice. payload.discountAmount is ignored —
+    // recalculateTotals derives it from promoDetails; it's kept on the action
+    // only because analyticsMiddleware reports it.
     applyPromo: (state, action) => {
       const { promoCode, promoDetails } = action.payload;
       const alreadyApplied = state.appliedPromos.some((p) => p.promoCode === promoCode);
@@ -234,14 +184,8 @@ const cartSlice = createSlice({
       recalculateTotals(state);
     },
 
-    // Mutual exclusivity with appliedPromos is enforced by the CALLER
-    // (useCart.js's handleApplyLoyaltyCoins checks appliedPromos.length,
-    // usePromoValidation's mutationFn checks redeemedCoins) — same
-    // validate-before-dispatch split already used for the promo "similar
-    // type" conflict (see usePromoValidation's own header). The reducer
-    // itself just sets the requested amount; it doesn't re-derive anything
-    // else, since nothing else in cart state depends on it (unlike a promo,
-    // which recalculateTotals folds appliedPromos through).
+    // Mutual exclusivity with appliedPromos is enforced by the caller
+    // (useCart.js, usePromoValidation), not here — this just sets the requested amount.
     applyLoyaltyCoins: (state, action) => {
       state.redeemedCoins = action.payload;
     },
@@ -250,27 +194,14 @@ const cartSlice = createSlice({
       state.redeemedCoins = 0;
     },
 
-    // REMOVED 2026-09-08 — applyGiftCard/applyGiftVoucher reducers (and the
-    // appliedGiftCard/appliedGiftVoucher state fields they set) had zero
-    // callers/readers anywhere (confirmed via a dead-code audit) — the gift
-    // card/voucher payment path was never wired up beyond these reducers
-    // themselves (see promotionService.js's own comment on the matching
-    // dead endpoints). API.CRM.GIFT_VOUCHER_* stay untouched in
-    // apiEndpoints.js in case this payment method gets built out later.
-
     // Clear the entire cart — called after successful order creation
     clearCart: (state) => {
       return initialState;
     },
 
-    // ADDED 2026-09-07 — same "clear the sale, not the session" idea as
-    // checkout/page.jsx's own comment on why it calls THIS instead of plain
-    // clearCart() once an order/invoice is placed. Explicit product
-    // decision: completing a sale must not silently detach the customer —
-    // only a manual "Remove" (detachCustomer) or the agent's own logout
-    // should end that. Resets everything a plain clearCart() does EXCEPT
-    // the four customer fields, which are copied forward from the current
-    // state instead of coming from initialState.
+    // Used instead of clearCart() once an order/invoice is placed — completing a
+    // sale must not silently detach the customer; only an explicit "Remove" or
+    // logout should. Resets everything clearCart() does except the customer fields.
     clearCartKeepCustomer: (state) => {
       return {
         ...initialState,
@@ -281,33 +212,18 @@ const cartSlice = createSlice({
       };
     },
 
-    // Restores a previously-abandoned cart (see store/abandonedCartMiddleware.js)
-    // once a customer with one attaches to an empty cart. Deliberately only
-    // touches items + totals — customerId/Name/Mobile are already correct
-    // from the attach that triggered this, and there's no fulfillment
-    // reference to carry (unlike hydrateFromOrder, this isn't tied to a
-    // specific OrnaVerse order). unitPrice on these items is whatever was
-    // last shown in the cart, same "display estimate, re-priced live at
-    // checkout" caveat every other cart item already carries — nothing
-    // about a restored item bypasses that.
+    // Restores a previously-abandoned cart (see abandonedCartMiddleware.js) once a
+    // customer with one attaches to an empty cart. Only touches items + totals —
+    // customerId/Name/Mobile are already correct from the attach that triggered this.
     restoreCart: (state, action) => {
       state.items = action.payload.items ?? [];
       recalculateTotals(state);
     },
 
-    // "Fulfill from order" — replaces the ENTIRE cart wholesale (not a merge;
-    // any in-progress cart for a different customer would make no sense
-    // mixed with a fulfillment) with the order's own customer + selected
-    // ready-to-invoice line(s), tagged with fulfillmentOrderId/OrderNo so
-    // useCreateInvoice can reference the source order at submission time.
-    // See useOrderFulfillment.js and the header comment on
-    // API.ORDER_FULFILLMENT for what's confirmed vs. still unverified about
-    // that reference actually closing the order out server-side.
-    //
-    // unitPrice on these items is a DISPLAY ESTIMATE ONLY (net_amount / pieces
-    // from the order line) — buildPricedLineItems re-prices and re-claims a
-    // physical stock piece against TODAY's rates at submission, exactly as
-    // it does for any other cart item; nothing about this bypasses that.
+    // "Fulfill from order" — replaces the entire cart (not a merge) with the order's
+    // customer + selected line(s), tagged with fulfillmentOrderId/OrderNo so
+    // useCreateInvoice can reference the source order. unitPrice here is a display
+    // estimate only; buildPricedLineItems re-prices against today's rates at submission.
     hydrateFromOrder: (state, action) => {
       const { items, customerId, customerName, customerMobile, fulfillmentOrderId, fulfillmentOrderNo } = action.payload;
       const next = {
@@ -323,18 +239,10 @@ const cartSlice = createSlice({
   },
 
   // Redux Persist rehydration migration: a cart persisted before multi-promo
-  // support existed has appliedPromoCode/appliedPromoDetails (singular) and
-  // no appliedPromos array at all — without this, the first push()/reduce()
-  // call on the missing array would throw. Migrates the old single promo
-  // into the new array shape so an in-progress cart isn't lost on upgrade.
-  //
-  // MUST return the whole slice, not mutate one field. The previous version
-  // only assigned state.appliedPromos, and the rest of the persisted cart —
-  // items and the attached customer — never made it back. Symptom: a hard
-  // refresh mid-sale emptied the basket and dropped the customer, then wrote
-  // the empty cart back over the good one. Verified 2026-08-01: auth and
-  // store rehydrated fine; cart was the only slice with a REHYDRATE handler,
-  // and the only one that lost its state.
+  // support has appliedPromoCode/appliedPromoDetails (singular), not an
+  // appliedPromos array — migrate it so an in-progress cart isn't lost on upgrade.
+  // Must return the whole slice, not mutate one field, or the rest of the
+  // persisted cart (items, customer) is silently dropped.
   extraReducers: (builder) => {
     builder.addCase(REHYDRATE, (state, action) => {
       const persistedCart = action.payload?.cart;
@@ -353,18 +261,9 @@ const cartSlice = createSlice({
         appliedPromos = [];
       }
 
-      // FIXED 2026-09-09 — `items` had no equivalent guard: recalculateTotals
-      // below does `state.items.reduce(...)` unconditionally, so a
-      // persisted `items` value that's ever anything other than a real
-      // array (a corrupted/partial write, or a future schema change) would
-      // throw `TypeError: items.reduce is not a function` INSIDE this
-      // REHYDRATE reducer — i.e. on every single app load, before the
-      // operator can do anything, since redux-persist dispatches REHYDRATE
-      // on init. Individual malformed line items (missing unitPrice/
-      // quantity) are dropped too, rather than silently producing NaN
-      // subtotal/tax/total that would render as literal "NaN" in the cart —
-      // same "don't trust persisted state blindly" reasoning as
-      // appliedPromos just above.
+      // Guard against a non-array or malformed persisted `items` — recalculateTotals's
+      // reduce() would otherwise throw on every app load. Malformed individual lines
+      // (missing unitPrice/quantity) are dropped too, to avoid a NaN subtotal/tax/total.
       const items = Array.isArray(persistedCart.items)
         ? persistedCart.items.filter((item) =>
             item &&
@@ -374,11 +273,8 @@ const cartSlice = createSlice({
           )
         : [];
 
-      // Recompute rather than trust the persisted subtotal/discount/total. A
-      // cart persisted before the discount became derived carries a frozen
-      // figure costed against whatever the subtotal was when the promo was
-      // typed in; restoring it verbatim would put a stale discount straight
-      // back into a live basket.
+      // Recompute rather than trust the persisted subtotal/discount/total — a cart
+      // persisted before discount became derived carries a stale frozen figure.
       const rehydrated = { ...state, ...persistedCart, appliedPromos, items };
       recalculateTotals(rehydrated);
       return rehydrated;

@@ -1,13 +1,9 @@
 'use client';
 
-// Submits the sale via useCreateInvoice or useCreateOrder. Disabled until
-// checkoutSchema validation passes (customer attached, sales person picked).
-//
-// The button REPORTS the outcome, it does not offer a choice — there is no
-// mode selector on this screen any more (see checkout/page.jsx). It says what
-// is about to be raised and for how much money is changing hands right now:
-// on an order that is the advance being taken, not the order's value, because
-// the smaller figure is what the customer is actually handing over.
+// Submits the sale via useCreateInvoice or useCreateOrder; disabled until
+// checkoutSchema validation passes. Reports what's about to happen rather
+// than offering a choice — for an order, the label shows the advance being
+// collected right now, not the order's full value.
 
 import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';

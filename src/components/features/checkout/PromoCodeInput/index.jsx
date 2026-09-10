@@ -14,11 +14,9 @@ import { Button } from '@/components/ui/button';
  *   disabled?: boolean,
  *   disabledHint?: string,
  * }} props
- *   disabled/disabledHint (2026-08-24) — checkout can't check a code's real
- *   eligibility until this basket has finished pricing (see
- *   usePromoValidation), so the whole point of checking BEFORE applying
- *   falls apart if Apply is still clickable in that window. Disabled here,
- *   not just left to fail with a toast after the click.
+ *   disabled/disabledHint — kept disabled (rather than left to fail after
+ *   the click) while the basket hasn't finished pricing yet, since a
+ *   code's real eligibility can't be checked until then (usePromoValidation).
  */
 export default function PromoCodeInput({ onApply, isValidating, disabled = false, disabledHint }) {
   const [code, setCode] = useState('');

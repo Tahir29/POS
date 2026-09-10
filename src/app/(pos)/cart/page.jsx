@@ -1,14 +1,8 @@
 'use client';
 
-// Standalone cart page. Reuses the same components as CartDrawer
-// (CartItemRow, CartEmptyState, CartSummary, CartCustomerTag,
-// AppliedPromoTag, ProceedToCheckoutButton) in a full-page layout.
-//
-// Needed as a real navigation target: the checkout page redirects here
-// (router.replace('/cart')) when the cart is empty.
-//
-// Back button now lives in the global Header (see useSmartBack /
-// BACK_FALLBACKS: /cart → /catalog) — no local back button here anymore.
+// Standalone cart page — reuses CartDrawer's components in a full-page layout.
+// Also the navigation target checkout redirects to when the cart is empty.
+// Back navigation is handled by the global Header (useSmartBack / BACK_FALLBACKS).
 
 import { useMemo } from 'react';
 import CartItemRow from '@/components/features/cart/CartItemRow';
@@ -36,21 +30,17 @@ export default function CartPage() {
     detachCustomer,
   } = useCart();
 
-  // Same query DiscountSection itself fetches (keyed on cart contents +
-  // applied promo codes) — applying a code here shows up on checkout with
-  // zero extra requests, and this page gets the real per-line discount
-  // breakdown for free instead of the cart's own always-₹0 estimate (see
-  // cartSlice's recalculateTotals for why that stays 0 client-side).
+  // Same pricing query DiscountSection uses (keyed on cart contents + applied
+  // promo codes) — gives real per-line discounts instead of cartSlice's
+  // always-0 client-side estimate, with no extra requests on checkout.
   const { lineItems: pricedLineItems, totals: pricedTotals, isLoading: isPricing } = useCheckoutPricing();
   const pricedByCartIndex = useMemo(
     () => mapPricedLinesToCart(items, pricedLineItems),
     [items, pricedLineItems]
   );
 
-  // Clamped the same way LucraCoinsSection caps what can be APPLIED in the
-  // first place — re-derived here (not trusted from redeemedCoins as-is)
-  // in case the cart changed after coins were applied (see cartSlice's own
-  // comment on redeemedCoins never being pre-clamped).
+  // Re-clamp redeemedCoins against the current payable total (not trusted
+  // as-is) in case the cart changed after coins were applied.
   const payableTotal = pricedTotals ? Math.round(pricedTotals.netAmount) : 0;
   const coinsRedeemed = Math.max(0, Math.min(redeemedCoins, payableTotal));
 
@@ -61,12 +51,6 @@ export default function CartPage() {
         <CartEmptyState />
       ) : (
         <>
-          {/* FIXED: imported (and customerName/customerMobile/detachCustomer
-              already destructured above) but never actually rendered — this
-              standalone page showed no indication of which customer was
-              attached, and no way to detach them, unlike CartDrawer, which
-              renders this same component. Restoring it to match, per this
-              file's own header comment on what it's supposed to reuse. */}
           <CartCustomerTag
             customerName={customerName}
             customerMobile={customerMobile}
@@ -81,15 +65,9 @@ export default function CartPage() {
                 item={item}
                 onUpdateQuantity={updateQuantity}
                 onRemove={removeItem}
-                // Per-line discount bifurcation (2026-08-26) — see
-                // CartItemRow's own comment on the discount field. Same
-                // pricedByCartIndex checkout builds; empty until a promo
-                // actually gives something, so this is a no-op line-total
-                // change for a cart with no discount applied.
+                // Per-line discount breakdown, keyed by cart index (see CartItemRow).
                 priced={pricedByCartIndex.get(index) ?? null}
-                // Full price breakup requested on the cart page specifically
-                // (2026-08-26) — see CartItemRow's own JSDoc for why the
-                // mini cart drawer deliberately doesn't get this too.
+                // Full breakdown shown on this page only — mini cart drawer omits it.
                 showPriceBreakdown
               />
             ))}

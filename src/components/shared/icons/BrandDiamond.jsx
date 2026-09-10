@@ -1,26 +1,9 @@
-// src/components/shared/icons/BrandDiamond.jsx
-//
-// The small four-point diamond/sparkle mark from Lucira's OWN icon logo —
-// the accent dot over the "i" in the wordmark, and the standalone glyph in
-// the icon-only variant (see components/shared/Logo's LOGOS.icon SVGs,
-// served from Shopify CDN). Not lucide's generic gem/rhombus — this is the
-// brand's actual mark, traced from its own path data:
-//
-//   M314.295 818.8 C297.495 818.8 263.995 852.3 263.995 869.1
-//     C263.995 852.3 230.495 818.8 213.695 818.8
-//     C230.495 818.8 263.995 785.3 263.995 768.5
-//     C263.995 785.2 297.495 818.8 314.295 818.8 Z
-//
-// (four points at ~(264±50.3, 818.8) and (264, 818.8±50.3), each corner
-// pinched inward by a cubic curve back toward center — a proper 4-point
-// sparkle, not a straight-edged rhombus). Recentered to the origin and
-// scaled by 0.2 so it drops into a standard 24x24 icon viewBox at the same
-// proportions as the source mark, replacing every lucide Diamond/Sparkle
-// use in the auth screens with the actual brand shape.
-//
-// Filled, not stroked — the source mark has no outline, just a solid
-// shape — so `fill` (defaulting to currentColor, same convention as
-// lucide's `stroke` default) is what colors it, not `stroke`.
+// Lucira's own four-point diamond/sparkle mark (the accent over the "i" in
+// the wordmark, and the icon-only Logo variant's glyph) — not a generic
+// lucide gem/rhombus. Traced from the brand's source path data, recentered
+// and scaled by 0.2 into a standard 24x24 viewBox. Filled, not stroked: the
+// source mark has no outline, so `fill` (defaults to currentColor) is what
+// colors it.
 
 export default function BrandDiamond({ size = 24, className, fill = 'currentColor', ...props }) {
   return (

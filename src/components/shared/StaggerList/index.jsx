@@ -1,16 +1,9 @@
 'use client';
 
-// src/components/shared/StaggerList/index.jsx
-//
-// Cascading entrance for list/grid pages — pairs with ListItemCard, whose
-// `variants` prop uses these exact "hidden"/"show" keys so Motion
-// propagates the stagger down automatically with no per-item wiring.
-// Non-ListItemCard children just won't animate (no variants = inert),
-// so it's safe to wrap loading/error/empty states too.
-//
-// Kept fast (staggerChildren 0.04s) — this is an operational POS list,
-// not a landing page; the point is a light cascade staff barely notice
-// consciously, not a show.
+// Cascading entrance for list/grid pages. Pairs with ListItemCard, whose
+// `variants` prop uses the same "hidden"/"show" keys so Motion propagates
+// the stagger automatically; children without variants just don't animate,
+// so wrapping loading/error/empty states is safe.
 
 import { motion, useReducedMotion } from 'motion/react';
 

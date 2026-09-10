@@ -1,14 +1,8 @@
 'use client';
 
-// src/components/shared/LocationSelect/index.jsx
-//
-// Shared Country/State/City picker — a single shadcn Select-based
-// implementation replacing 3 independently hand-built DropdownMenu copies
-// (NewCustomerForm's inline blocks, and matching `LocationDropdown` helpers
-// duplicated in [customerId]/page.jsx and CustomerDetailSheet).
-//
-// Generic over any { [idKey]: number, [labelKey]: string } list so the same
-// component serves country/state/city cascades.
+// Shared Country/State/City picker (shadcn Select-based). Generic over any
+// { [idKey]: number, [labelKey]: string } list, so one component serves
+// country/state/city cascades.
 
 import { Controller } from 'react-hook-form';
 import {

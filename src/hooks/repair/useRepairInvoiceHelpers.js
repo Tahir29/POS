@@ -1,14 +1,9 @@
 // Available customer balances at REPAIR billing time — the repair-specific
-// counterpart of useInvoiceHelpers.js. Same 4 sources exist for repairs
-// (Advances/Scheme/CreditNote/Exchange — no OldGold or DailyCash equivalent
-// documented for this flow) and were fully implemented in the service layer
-// (repairService.js) but never called from anywhere — see repair/page.jsx's
-// RepairInvoiceNewForm, which used to take only a single flat payment mode.
-//
-// UNVERIFIED LIVE, same caveat as the rest of this session's Repair work —
-// these 4 endpoints have never been round-tripped against real UAT data
-// (unlike useInvoiceHelpers' endpoints, which have real traffic behind
-// them). Treat a failure here as "diagnose live," not "code is wrong."
+// counterpart of useInvoiceHelpers.js. Covers Advances/Scheme/CreditNote/
+// Exchange (no OldGold or DailyCash equivalent exists for this flow).
+// Note: these 4 endpoints are unverified against live UAT data (unlike
+// useInvoiceHelpers' endpoints) — treat a failure here as "diagnose live,"
+// not "code is wrong."
 
 import { useQuery } from '@tanstack/react-query';
 import {

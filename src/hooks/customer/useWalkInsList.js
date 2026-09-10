@@ -1,12 +1,8 @@
-// Reads this store's own walk-in log (lib/mongo/walkins.js) for the
-// Walk-ins listing page — see that file's own header for why this exists
-// instead of an OrnaVerse endpoint.
-//
-// Keyed on companyId (2026-09-08) — an admin switching stores clears the
-// entire React Query cache anyway (see useActiveStore.js's switchStore),
-// but the companyId is in the key regardless so this behaves correctly
-// even if that ever changes: a different store is a different query, not
-// a stale one.
+// src/hooks/customer/useWalkInsList.js
+// Reads this store's own walk-in log (lib/mongo/walkins.js) for the Walk-ins
+// listing page — see that file's header for why this exists instead of an
+// OrnaVerse endpoint. Keyed on companyId so a store switch is a different
+// query, not a stale one.
 
 import { useQuery } from '@tanstack/react-query';
 import { useSelector } from 'react-redux';

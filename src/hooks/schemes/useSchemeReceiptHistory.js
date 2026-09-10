@@ -1,9 +1,8 @@
 // Payment (receipt) history for a single scheme enrollment.
-//
-// Confirmed live 2026-07-22 — Services/POS/SchemeReceipt/List returns
-// { Entities: SchemeReceiptRow[] }, each row a payment header with mode/
-// ledger details nested under scheme_receipt_details[] (same nesting used
-// when creating a receipt — see schemeService.js createSchemeReceipt).
+// SchemeReceipt/List returns { Entities: SchemeReceiptRow[] }, each row a
+// payment header with mode/ledger details nested under
+// scheme_receipt_details[] (same nesting used when creating a receipt — see
+// schemeService.js createSchemeReceipt).
 
 import { useQuery } from '@tanstack/react-query';
 import { getSchemeReceipts } from '@/services/schemeService';

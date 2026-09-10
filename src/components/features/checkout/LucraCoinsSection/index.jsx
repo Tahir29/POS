@@ -1,41 +1,17 @@
 'use client';
 
-// Lucira Coins (Nector's loyalty program) redemption — the cart-wide
-// counterpart to DiscountSection, mutually exclusive with it (see
-// cartSlice's redeemedCoins / applyLoyaltyCoins, and useCart.js's
-// handleApplyLoyaltyCoins for the enforcement). Used identically in the
-// mini cart drawer, the full cart page, and checkout — same reuse pattern
-// DiscountSection itself already established.
+// Lucira Coins (Nector's loyalty program) redemption — cart-wide
+// counterpart to DiscountSection, mutually exclusive with it (enforced in
+// useCart.js's handleApplyLoyaltyCoins). Not editable: Apply always claims
+// the full claimable amount (min of wallet balance and payable total);
+// Remove clears it to zero.
 //
-// NOT EDITABLE (2026-09-08, product decision) — there's no amount input.
-// Apply Coins always claims the full maxClaimable figure shown right next
-// to it; Remove clears it back to zero. Nothing partial to type in.
-//
-// CLAIMABLE CAP: min(wallet balance, payable order total) — product
-// decision 2026-09-08. `payableTotal` is passed in by the caller (each of
-// the 3 screens already computes a live, server-priced total via
-// useCheckoutPricing) rather than fetched here, so this component never
-// disagrees with the CartSummary sitting right next to it.
-//
-// STUBBED DEBIT (2026-09-08) — applying coins here only sets the cart's
-// own redeemedCoins figure; nothing is actually debited from the
-// customer's Nector wallet yet. The real POST /wallettransactions call is
-// blocked on a genuine identifier gap: Nector's own docs say it needs the
-// lead's `_id` (or a merchant-assigned `customer_id`), but the
-// GET /leads/{id}?mobile=... lookup this app uses doesn't return either
-// field in its response body (confirmed live 2026-09-08 — see
-// nectorService.js's getCustomerLoyalty and the proxy route's own header).
-// checkout/page.jsx blocks completing a sale while coins are applied for
-// exactly this reason (see that file's own comment) — so this UI can be
-// tried end-to-end today (balance, apply, mutual exclusion, total
-// deduction) without risking an uncollected discount ever reaching a real
-// sale. Once the identifier gap is resolved, the debit call belongs in
-// checkout's handlePaymentConfirmed, alongside placeOrder/placeInvoice.
-//
-// customerMobile comes from the ATTACHED session customer
-// (useCustomerSession) — a cart/checkout screen only ever has one customer
-// in play, unlike the standalone profile page's LucraCoinsCard, which has
-// to guard against viewing a DIFFERENT customer than whoever's attached.
+// Debiting the Nector wallet is not wired up yet — applying coins here
+// only updates local cart state (cartSlice's redeemedCoins), pending a
+// merchant/lead identifier that the current Nector lookup doesn't return.
+// checkout/page.jsx blocks completing a sale while coins are applied
+// until that's resolved; the real debit call belongs in checkout's
+// handlePaymentConfirmed once it is.
 
 import { Coins } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -45,12 +21,10 @@ import { useNectorLoyaltyPoints } from '@/hooks/customer/useNectorLoyaltyPoints'
 
 /**
  * @param {{ payableTotal: number, isPricing?: boolean }} props
- *   payableTotal — this order's current payable amount (post-promo,
- *   pre-coins — e.g. useCheckoutPricing's amountDue).
- *   isPricing — distinguishes "cart is genuinely empty" from "still
- *   pricing, payableTotal just isn't real yet" (both read as
- *   maxClaimable <= 0 otherwise) — same two-reasons-two-hints split
- *   DiscountSection's own disabledHint already makes.
+ *   payableTotal — current payable amount (post-promo, pre-coins, e.g.
+ *   useCheckoutPricing's amountDue).
+ *   isPricing — distinguishes an empty cart from one still pricing (both
+ *   otherwise read as maxClaimable <= 0).
  */
 export default function LucraCoinsSection({ payableTotal, isPricing = false }) {
   const { customerMobile } = useCustomerSession();
@@ -63,8 +37,7 @@ export default function LucraCoinsSection({ payableTotal, isPricing = false }) {
   const hasPromoApplied = appliedPromos.length > 0;
   const isApplied = redeemedCoins > 0;
 
-  // No attached customer at all — nothing to redeem against (a guest sale
-  // has no Nector lead to look up).
+  // No attached customer — a guest sale has no Nector lead to look up.
   if (!customerMobile) return null;
 
   if (isLoading) {
@@ -82,9 +55,8 @@ export default function LucraCoinsSection({ payableTotal, isPricing = false }) {
     );
   }
 
-  // Not enrolled in Nector, or a real balance of zero — nothing to offer.
-  // Deliberately hidden rather than shown as "0 Coins available", same
-  // reasoning as the customer profile's own LucraCoinsCard for isFound.
+  // Not enrolled, or a real balance of zero — hidden rather than shown as
+  // "0 Coins available" (same as the profile page's LucraCoinsCard).
   if (!isFound || balance <= 0) return null;
 
   return (

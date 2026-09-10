@@ -1,21 +1,11 @@
 'use client';
 
-// "Fulfill from order" entry point, added to OrderDetailSheet — checks
-// whether any of THIS order's lines have cleared OrnaVerse's own
-// stock-allocation check, and if so, loads them into a fresh Invoice cart.
-//
-// See the header comment on API.ORDER_FULFILLMENT (apiEndpoints.js) and
-// orderFulfillmentService.js for the full contract — CONFIRMED LIVE
-// end-to-end 2026-09-08, including the actual Invoice/Create round trip:
-// the source order closes out automatically once checkout claims the exact
-// stock piece it reserved (no dedicated header field involved at all).
-//
-// "Not ready yet" is the NORMAL case, not an error — moving a line from
-// New to Ready happens entirely in OrnaVerse's ERP admin (Inventory →
-// Order Fulfilment: a warehouse/manufacturing pipeline with its own tools —
-// Work Order, Purchase Order, Allocate Stock, Shipment), never at the sales
-// counter. This component can only check and load; it can't make a line
-// ready.
+// "Fulfill from order" entry point on OrderDetailSheet — checks whether any
+// of this order's lines have cleared OrnaVerse's stock-allocation check,
+// and if so, loads them into a fresh Invoice cart. See
+// orderFulfillmentService.js for the full contract. "Not ready yet" is the
+// normal case: moving a line to Ready happens in OrnaVerse's ERP admin, not
+// at the sales counter — this component can only check and load.
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -43,9 +33,7 @@ export default function FulfillOrderAction({ raw }) {
 
   if (!raw?.transaction_id || !raw?.party_id) return null;
 
-  // Scope the party-wide ready/all-open lists down to THIS order — matches
-  // Ornaverse's own copy ("Select one or more lines from the same order"),
-  // just pre-filtered since this button lives on one specific order already.
+  // Scope the party-wide ready/all-open lists down to this order.
   const thisOrderReady = readyLines.filter((l) => l.document_no === raw.document_no);
   const thisOrderStatus = allOpenLines.find((l) => l.document_no === raw.document_no);
 

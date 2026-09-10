@@ -1,46 +1,16 @@
 'use client';
 
 // Mandatory PAN capture once the order total crosses the statutory
-// ₹2,00,000 threshold (Income Tax Rule 114B — not a store policy, see
-// APP_CONFIG.COMPLIANCE). The customer's latest record may already carry a
-// PAN from a past visit; if not, staff must enter and SAVE one here.
+// ₹2,00,000 threshold (Income Tax Rule 114B — see APP_CONFIG.COMPLIANCE).
 //
-// OrnaVerse's own Create validation wants BOTH a PAN number AND a document
-// on file ("Please upload PAN & its number", confirmed live 2026-08-14) —
-// but the document half is a genuine SERVER-SIDE BLOCKER, not a missing
-// client feature. Isolated by testing Customer/Update directly against UAT
-// with a real customer (party_id 1215, reverted after):
-//   - pan_no alone updates fine (200).
-//   - pan_document = '' (empty string) updates fine (200).
-//   - pan_document = ANY non-empty value — a short plain filename, a
-//     base64 blob, doesn't matter — returns a generic 500 "Exception".
-// There is also no dedicated document-upload endpoint anywhere in the
-// 4,091-endpoint API (only Master/ItemImageUpload, which is item-specific
-// and requires item_id/item_code) — so there is currently NO call shape
-// that persists a PAN document to OrnaVerse. Same class of bug as
-// dailyClosingService.js's own 500; flag to OrnaVerse's team with the
-// repro above rather than re-guessing encodings here. RE-CONFIRMED
-// 2026-09-07 against LIVE (party_id 1185, reverted after — nothing
-// changed, the 500 means nothing was ever saved): identical error on both
-// environments, so this is a genuine, permanent OrnaVerse gap, not a
-// UAT-only or temporary one.
+// Only the PAN NUMBER is ever saved to OrnaVerse and gates Place Order
+// (checkoutSchema.js). The document attach below is local-only, for the
+// operator's own reference — OrnaVerse has no working way to persist a
+// PAN document (Customer/Update 500s on any non-empty pan_document, and
+// there's no dedicated upload endpoint), so it is never sent anywhere.
 //
-// Given that, this component:
-//   - saves the PAN NUMBER for real (that part works and gates Place Order
-//     — see checkoutSchema.js; the document attach below is NOT part of
-//     that gate and was never intended to be — gating on a field that
-//     can't be saved would make checkout above the threshold permanently
-//     impossible, which is worse than today's honest "may still be
-//     rejected at submit").
-//   - lets staff attach the file so they have it in hand at the counter —
-//     purely a local aid for the operator, still never sent anywhere (see
-//     handleSave below, which only ever submits pan_no). The on-screen
-//     warning that used to spell this out was removed 2026-09-08 per
-//     explicit product decision; the underlying behavior is unchanged.
-//
-// Reusing useRetrieveCustomer/useUpdateCustomer (the same pair the customer
-// Edit tab uses) means the "on file" state updates itself for free once the
-// number save succeeds and its query invalidation refetches the customer.
+// Reuses useRetrieveCustomer/useUpdateCustomer (same pair as the customer
+// Edit tab) so the "on file" state refreshes for free after a save.
 
 import { useEffect, useRef, useState } from 'react';
 import { CheckCircle2, ShieldAlert, Paperclip, X } from 'lucide-react';
@@ -74,43 +44,26 @@ export default function CheckoutPanCapture({ totalAmount, onPanResolved }) {
   const [fileError, setFileError] = useState(null);
   const [attachedFile, setAttachedFile] = useState(null); // { name } — local-only, never sent
   const fileInputRef = useRef(null);
-  // Set the instant a Save succeeds THIS session — see the fix note below
-  // on why this can't just wait for the refetch to confirm it.
+  // Set the instant a Save succeeds this session — OrnaVerse masks pan_no
+  // on every read (see below), so the refetch can never confirm it.
   const [justSavedPan, setJustSavedPan] = useState(null);
 
-  // FIXED 2026-08-31 — confirmed live against UAT: OrnaVerse's own
-  // Party/Retrieve masks a previously-saved PAN on read ("**********",
-  // ten asterisks, not the real number — this is OrnaVerse's own response,
-  // not something our normalizer does; normalizeCustomer passes pan_no
-  // through verbatim). A masked value is truthy, so the OLD `!!panOnFile`
-  // check here treated any RETURNING customer's PAN as satisfied — but it
-  // fails PAN_REGEX, so checkoutSchema's superRefine kept rejecting it, and
-  // Place Order stayed silently disabled on every above-threshold sale for
-  // a customer whose PAN was saved in an earlier visit (this component's
-  // own UI showed a reassuring green "PAN on file ✓" the whole time, with
-  // no visible reason the button wouldn't enable — a repeat of the exact
-  // silent-Zod-failure class this file's header comment already documents
-  // once). Gating on PAN_REGEX instead of truthiness means a masked value
-  // is treated the same as "nothing on file": the entry form shows so
-  // staff can actually enter (or re-confirm) a real, checkable PAN.
+  // OrnaVerse's Party/Retrieve masks any saved PAN as "**********" rather
+  // than returning the real number. A masked value is truthy but fails
+  // PAN_REGEX, so gate on PAN_REGEX rather than truthiness — otherwise a
+  // returning customer's masked PAN reads as "on file" while checkoutSchema
+  // still silently rejects it and blocks Place Order.
   const rawPanOnFile = customer?.customerPan ?? null;
   const fetchedPanOnFile = rawPanOnFile && PAN_REGEX.test(rawPanOnFile) ? rawPanOnFile : null;
 
-  // FIXED 2026-08-31, second half — confirmed live: OrnaVerse's own
-  // Party/Retrieve masks pan_no UNCONDITIONALLY, including immediately
-  // after successfully saving one this same session (toast confirms the
-  // Update call genuinely succeeded server-side; the very next Retrieve
-  // still comes back "**********"). Waiting on the refetch to confirm a
-  // just-saved PAN therefore never resolves — that refetch can NEVER pass
-  // PAN_REGEX, masked on principle, not staleness. justSavedPan is the
-  // value handleSave already confirmed valid (Save is only enabled once
-  // PAN_REGEX.test(value) passes) and just had the server accept — no
-  // round trip needed to know it's good for THIS transaction.
+  // The mask above applies unconditionally, including immediately after a
+  // successful save — so fall back to the value handleSave already
+  // confirmed valid and the server accepted, rather than waiting on a
+  // refetch that can never pass PAN_REGEX.
   const panOnFile = fetchedPanOnFile ?? justSavedPan;
 
-  // Resolved on the NUMBER alone — see header note on why the document
-  // can't be part of this gate today. onPanResolved still only ever
-  // reports a SAVED value (fetched or just-saved-this-session), never the
+  // Resolved on the number alone — see header note on the document.
+  // Only ever reports a saved value (fetched or just-saved), never the
   // still-being-typed one.
   useEffect(() => {
     onPanResolved(panRequired ? panOnFile : null);
@@ -154,24 +107,8 @@ export default function CheckoutPanCapture({ totalAmount, onPanResolved }) {
     });
   };
 
-  // Document attach — same small block whether the number is already on
-  // file or still being entered, since OrnaVerse can't take it either way
-  // (see this file's header comment: no upload call shape exists at all).
-  // Purely local — handleSave above never sends this anywhere, and nothing
-  // in checkoutSchema/onPanResolved ever looks at it, so it was never part
-  // of the Place Order gate and still isn't; only the PAN NUMBER gates
-  // checkout. The warning label that used to sit under this (2026-09-08,
-  // removed per explicit product decision) is gone, but the underlying
-  // fact hasn't changed — a document attached here is for the operator's
-  // own reference only, this component still doesn't persist it anywhere.
-  //
-  // BUG FIX 2026-09-08 — this block was fully built (file input, attached-
-  // file chip, remove button, size/type error) but never actually rendered
-  // in either return branch below — a leftover from whenever this
-  // component was last restructured into the two panOnFile/entry-form
-  // branches. Now rendered in both, matching this comment's own stated
-  // intent above ("same small block whether... on file or still being
-  // entered").
+  // Rendered in both the "on file" and entry-form branches below — see
+  // header note: this is local-only and never persisted or sent anywhere.
   const documentBlock = (
     <div>
       <input

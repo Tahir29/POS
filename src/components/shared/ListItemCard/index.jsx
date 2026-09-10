@@ -1,27 +1,14 @@
 'use client';
 
-// src/components/shared/ListItemCard/index.jsx
+// Shared tappable list-item card shell (outer button, optional header +
+// dashed divider, meta-row container, optional footer) used by
+// OrderListItem, InvoiceListItem, and CustomerListItem — each caller still
+// owns its own row content.
 //
-// Shared tappable list-item card shell — the outer button, optional header +
-// dashed divider, meta-row container, and optional footer were byte-identical
-// (or near-identical) across OrderListItem, InvoiceListItem, and
-// CustomerListItem. Each caller still owns its own row content (different
-// fields, different icons) — this only extracts the structural wrapper.
-//
-// PREMIUM REVAMP (2026-07-22) — fixed two hardcoded Tailwind colors
-// (text-stone-800, border-stone-200) that had drifted from this app's own
-// semantic-token convention (every other shared component uses
-// text-foreground/border-border). Also added a real hover/tap lift via
-// Framer Motion — this is one of the most-repeated interactive surfaces in
-// the app (Orders/Invoices/Customers/Catalog lists), so it's a deliberate
-// Motion candidate per the phase-1 plan (unlike Button, which stays plain
-// CSS to avoid forcing a client boundary on every action in the app).
-//
-// `variants` uses the same "hidden"/"show" keys as StaggerList's container
-// variants — when a page wraps its list in <StaggerList>, every card here
-// cascades in automatically via Motion's variant propagation. Used
-// standalone (no StaggerList ancestor), variants are simply never
-// triggered — hover/tap keep working, no entrance animation, no crash.
+// `itemVariants` uses the same "hidden"/"show" keys as StaggerList's
+// container variants, so a card wrapped in <StaggerList> cascades in
+// automatically via Motion's variant propagation; used standalone, the
+// variants are simply never triggered (hover/tap still work).
 
 import { motion, useReducedMotion } from 'motion/react';
 import { EASE_PREMIUM, DURATION } from '@/lib/motion';

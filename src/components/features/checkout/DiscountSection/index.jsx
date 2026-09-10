@@ -1,28 +1,14 @@
 'use client';
 
-// Promo code entry + applied discount display — for the cart, wherever it's
-// shown. Was CheckoutDiscountSection, checkout-only (2026-08-24); renamed
-// and made self-contained (2026-08-26) so a customer can apply a code
-// without reaching checkout first. Currently used on the mini cart drawer
-// and the full cart page — deliberately NOT the product detail page
-// (removed same day per product decision: applying a promo there was
-// confusing before an item is even in the cart to price against). It's the
-// SAME cart-wide `appliedPromos` state everywhere it IS shown (a promo was
-// never product-scoped), so applying it on one screen and seeing it
-// reflected on another is exactly the same state, not a sync problem to
-// solve.
+// Promo code entry + applied discount display, shared by the mini cart
+// drawer and full cart page (not the product detail page — a promo there
+// would have nothing priced yet to apply against). Pricing is fetched
+// here via useCheckoutPricing, which reads the cart/store directly, so
+// every screen rendering this shares one cached, server-priced query.
 //
-// Pricing is fetched HERE, not passed down from the page — useCheckoutPricing
-// takes no arguments (reads the cart/store straight from Redux), so every
-// screen that renders this component shares ONE query, keyed on cart
-// contents + applied promo codes (see that hook). Applying a promo in the
-// mini cart and then opening the full cart page reads the exact same cached
-// result — no separate fetch, no chance of the two disagreeing.
-//
-// Multiple promos can be applied at once — each gets its own badge with an
-// independent remove action. The add-more input/picker stays visible even
-// once promos are applied. "Similar" (same discount-type) conflicts are
-// blocked with a toast in usePromoValidation, not here.
+// Multiple promos can be applied at once, each with its own remove
+// action. "Similar" (same discount-type) conflicts are blocked in
+// usePromoValidation, not here.
 
 import { useEffect } from 'react';
 import { useDispatch } from 'react-redux';
@@ -46,18 +32,13 @@ export default function DiscountSection() {
     isLoading: isPricing,
   } = useCheckoutPricing();
   const { validatePromo, isValidating } = usePromoValidation(pricedLineItems, documentId);
-  // Nothing to check eligibility against yet — same gate usePromoValidation
-  // itself falls back on (PROMO_NOT_READY), surfaced here too so the input
-  // is disabled rather than accepting a click it can only reject. Two
-  // distinct reasons, two distinct hints — an empty cart isn't "still
-  // pricing," and saying so on the product page (where the cart is often
-  // genuinely empty) would just be wrong.
+  // Disabled rather than left to fail after the click — mirrors
+  // usePromoValidation's own PROMO_NOT_READY fallback. Empty cart and
+  // still-pricing are surfaced as distinct hints below.
   const notReadyToCheck = !pricedLineItems?.length;
-  // ADDED 2026-09-08 — mutual exclusivity with Lucira Coins (see
-  // cartSlice's redeemedCoins / LucraCoinsSection). Disabled here too, not
-  // left to fail with a toast after the click — usePromoValidation's own
-  // 'coins_active' guard is the real enforcement, this just avoids an
-  // avoidable round trip through it.
+  // Mutually exclusive with Lucira Coins (cartSlice's redeemedCoins /
+  // LucraCoinsSection). usePromoValidation's 'coins_active' guard is the
+  // real enforcement; disabling here just avoids an avoidable round trip.
   const hasCoinsApplied = redeemedCoins > 0;
   const disabledHint = hasCoinsApplied
     ? 'Remove the applied Lucira Coins before adding a promo code.'
@@ -68,18 +49,11 @@ export default function DiscountSection() {
   const amountFor = (promoCode) =>
     promotionDetails.find((row) => row.promotion_code === promoCode)?.promotion_amount ?? null;
 
-  // Defensive backstop, not the primary gate (usePromoValidation checks
-  // eligibility BEFORE applying, so this shouldn't normally have anything to
-  // catch) — a promo genuinely eligible at apply-time can still stop
-  // applying if the CART changes afterward (an item added or removed), since
-  // nothing else revalidates an already-applied promo. Auto-removes it the
-  // moment live pricing confirms that, rather than leaving a stale "applied"
-  // tag for something no longer true. Only fires once pricing has genuinely
-  // settled (!isPricing) — otherwise a promo would get yanked mid-fetch,
-  // before promotionDetails has had a chance to include its row. Dispatches
-  // the RAW action, not useCart's wrapped removePromo — that one always
-  // toasts a generic "Promo code removed.", which would double up with the
-  // more specific message below for a removal the operator didn't ask for.
+  // Defensive backstop: a promo valid at apply-time can stop applying if
+  // the cart changes afterward, since nothing else revalidates an
+  // already-applied promo. Auto-removes it once pricing has settled
+  // (!isPricing avoids yanking it mid-fetch). Dispatches the raw action
+  // rather than useCart's removePromo to avoid a duplicate generic toast.
   useEffect(() => {
     if (isPricing) return;
     appliedPromos.forEach((promo) => {
@@ -95,12 +69,9 @@ export default function DiscountSection() {
     <section className="flex flex-col gap-3 rounded-xl border border-border bg-card p-5 shadow-sm">
       <h2 className="text-sm font-bold text-foreground">Discount</h2>
 
-      {/* "You saved ₹X" is the server's own promotion_amount, so the badge
-          cannot advertise one saving while the summary deducts another.
-          Muted styling (hasEffect=false) below is a defensive fallback for
-          the one render between pricing settling and the effect above
-          actually removing the promo — in practice imperceptible, but it
-          means even that brief instant never LOOKS like a win either. */}
+      {/* Muted styling (hasEffect=false) covers the one render between
+          pricing settling and the effect above removing a no-longer-valid
+          promo, so that instant never looks like a win. */}
       {appliedPromos.map((promo) => {
         const amount = amountFor(promo.promoCode);
         const declined = !isPricing && amount == null;
