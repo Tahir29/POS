@@ -3,10 +3,9 @@
 // Shared key-normalizer for the Mongo-backed per-customer features
 // (abandoned cart, recently viewed) — both used to be keyed purely by
 // party_id, which is assigned per OrnaVerse TENANT (UAT and LIVE are two
-// entirely separate tenants: different base URLs, different OAuth clients,
-// LIVE even authenticating as one fixed service identity rather than the
-// individual operator — see lib/ornaverse/authConfig.js's own header). The
-// same real customer gets a DIFFERENT party_id in each tenant (or none at
+// entirely separate tenants with different base URLs — see
+// lib/ornaverse/upstream.js). The same real customer gets a DIFFERENT party_id
+// in each tenant (or none at
 // all if they were only ever onboarded in one of the two) — so a record
 // saved while ACTIVE_ENV was 'UAT' silently stopped resolving the moment
 // the app switched to 'LIVE', not because of any fetch/API bug, but because

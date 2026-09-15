@@ -1,10 +1,10 @@
 // Records/reads a customer's recently-viewed products in Mongo. Same
-// bearer-auth requirement as api/customers/sync/route.js and for the same
-// reason: middleware.js excludes all /api paths from its auth matcher, so
-// without an explicit check here this would be an unauthenticated
-// read/write surface. Requiring the caller's own OrnaVerse bearer token
-// keeps the trust boundary identical to the rest of the app — only a
-// signed-in operator can call this, same as everything else in the POS.
+// signed-in-session requirement as api/customers/sync/route.js and for the
+// same reason: middleware.js excludes all /api paths from its auth matcher,
+// so without an explicit check here this would be an unauthenticated
+// read/write surface. Requiring the caller's own OrnaVerse session keeps
+// the trust boundary identical to the rest of the app — only a signed-in
+// operator can call this, same as everything else in the POS.
 //
 // Deliberately simpler than customers/sync: that route re-fetches the
 // customer PROFILE from OrnaVerse itself because trusting a client-
@@ -18,15 +18,11 @@
 
 import { recordViewSchema } from '@/validators/recentlyViewedSchema';
 import { upsertRecentlyViewedItem, getRecentlyViewedItems } from '@/lib/mongo/recentlyViewed';
-
-function requireBearerToken(request) {
-  const authHeader = request.headers.get('authorization');
-  return authHeader?.startsWith('Bearer ') ? authHeader : null;
-}
+import { getSessionFromRequest } from '@/lib/ornaverse/session';
 
 export async function POST(request) {
-  if (!requireBearerToken(request)) {
-    return Response.json({ error: 'Missing bearer token' }, { status: 401 });
+  if (!(await getSessionFromRequest(request))) {
+    return Response.json({ error: 'Not authenticated' }, { status: 401 });
   }
 
   let body;
@@ -52,8 +48,8 @@ export async function POST(request) {
 }
 
 export async function GET(request) {
-  if (!requireBearerToken(request)) {
-    return Response.json({ error: 'Missing bearer token' }, { status: 401 });
+  if (!(await getSessionFromRequest(request))) {
+    return Response.json({ error: 'Not authenticated' }, { status: 401 });
   }
 
   // FIXED 2026-09-09 — customer_mobile added alongside party_id, same fix

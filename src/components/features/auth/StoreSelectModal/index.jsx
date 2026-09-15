@@ -1,10 +1,12 @@
 'use client';
 
 import { useState } from 'react';
+import { toast } from 'react-toastify';
 import { Store, X, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useActiveStore } from '@/hooks/store/useActiveStore';
 import { useStoreSwitcher } from '@/hooks/store/useStoreSwitcher';
+import TOAST from '@/constants/toastMessages';
 
 /**
  * In-session store switcher, anchored to the StoreIndicator in the Header.
@@ -28,6 +30,11 @@ export default function StoreSelectModal({ isOpen, onClose }) {
       await handleSwitchStore(store);
       // handleSwitchStore redirects to /dashboard — onClose fires anyway
       onClose();
+    } catch {
+      // switchStore (inside handleSwitchStore) also switches OrnaVerse's own
+      // session company and can genuinely fail (network, session expired) —
+      // surface it rather than leaving the modal silently stuck open.
+      toast.error(TOAST.STORE.SWITCH_FAILED);
     } finally {
       setSwitching(false);
     }

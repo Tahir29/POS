@@ -29,6 +29,13 @@ const API = {
   AUTH: {
     GENERATE_TOKEN: 'connect/token',
     REFRESH_TOKEN:  'connect/token',
+    // Sets the SESSION's current company — a separate, server-tracked value
+    // from any `company_id` sent in a request body. Several endpoints
+    // (Order/List, Invoice/List, the InterstoreReturn workflow actions)
+    // scope themselves to THIS value, not to whatever the caller passes —
+    // confirmed live 2026-09-15 (see storeService.js's switchCompany).
+    // Same mechanism OrnaVerse's own header store-selector uses.
+    SWITCH_COMPANY: 'Account/SwitchCompany',
   },
 
   // ─────────────────────────────────────────────────────────────────────────

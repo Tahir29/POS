@@ -1,14 +1,19 @@
 'use client';
 // Mounts once at the root of the app (inside <Providers>). Pure side-effect
-// component, renders nothing. Runs two security checks:
-//   SEC-002 — clears auth if Redux Persist restored an already-expired token.
+// component, renders nothing. Runs one security check:
 //   SEC-006 — after 15 min idle with a customer attached, detaches the
 //             customer and redirects to /dashboard (does not log out the agent).
+//
+// Used to also run a SEC-002 check (clear auth if Redux Persist restored an
+// already-expired token) — that no longer applies since the 2026-09 auth
+// rewire: there's no token to expire client-side any more, just an httpOnly
+// session cookie the server itself rejects when it's gone (interceptors.js's
+// 401 handling covers that).
 
 import { useEffect, useRef, useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useRouter } from 'next/navigation';
-import { clearAuth, selectTokenExpiry, selectIsAuthenticated } from '@/store/slices/authSlice';
+import { selectIsAuthenticated } from '@/store/slices/authSlice';
 import { detachCustomer, selectCartCustomerId } from '@/store/slices/cartSlice';
 import APP_CONFIG from '@/constants/appConfig';
 
@@ -20,19 +25,8 @@ const IDLE_EVENTS = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'
 export default function RehydrationGuard() {
   const dispatch         = useDispatch();
   const router           = useRouter();
-  const tokenExpiry      = useSelector(selectTokenExpiry);
   const isAuthenticated  = useSelector(selectIsAuthenticated);
   const cartCustomerId   = useSelector(selectCartCustomerId);
-
-  // ── SEC-002: Token expiry check on rehydration ────────────────
-  // Runs once on mount. If persisted token is already expired, clear auth
-  // immediately so middleware redirects to /login before any page renders.
-  useEffect(() => {
-    if (isAuthenticated && tokenExpiry && Date.now() > tokenExpiry) {
-      dispatch(clearAuth());
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // intentionally empty — run once on mount only
 
   // ── SEC-006: Idle timeout ─────────────────────────────────────
   const timerRef = useRef(null);

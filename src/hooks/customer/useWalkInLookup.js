@@ -17,7 +17,6 @@ import { useMutation } from '@tanstack/react-query';
 import { useSelector } from 'react-redux';
 import { walkInLookup } from '@/services/customerService';
 import { normalizeWalkInCustomer } from '@/lib/normalizers/customer';
-import { selectAccessToken } from '@/store/slices/authSlice';
 import { selectActiveStoreId, selectActiveStoreName, selectActiveStoreCode } from '@/store/slices/storeSlice';
 import tracker from '@/lib/analytics/tracker';
 import EVENTS from '@/lib/analytics/events';
@@ -31,12 +30,12 @@ function maskMobile(mobile) {
   return `${'*'.repeat(digits.length - 4)}${digits.slice(-4)}`;
 }
 
-function logWalkIn({ mobile, customer, accessToken, companyId, companyName, companyCode, agentUsername }) {
-  if (!accessToken || !companyId) return; // nothing to scope this record to
+function logWalkIn({ mobile, customer, companyId, companyName, companyCode, agentUsername }) {
+  if (!companyId) return; // nothing to scope this record to
 
   fetch('/api/customers/walkins', {
     method:  'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       mobile,
       customerName:     customer.name,
@@ -67,7 +66,6 @@ function logWalkIn({ mobile, customer, accessToken, companyId, companyName, comp
 }
 
 export function useWalkInLookup() {
-  const accessToken = useSelector(selectAccessToken);
   const companyId    = useSelector(selectActiveStoreId);
   const companyName  = useSelector(selectActiveStoreName);
   const companyCode  = useSelector(selectActiveStoreCode);
@@ -84,7 +82,7 @@ export function useWalkInLookup() {
     },
     onSuccess: (result, mobile) => {
       if (result.found && result.customer) {
-        logWalkIn({ mobile, customer: result.customer, accessToken, companyId, companyName, companyCode, agentUsername });
+        logWalkIn({ mobile, customer: result.customer, companyId, companyName, companyCode, agentUsername });
       }
     },
   });

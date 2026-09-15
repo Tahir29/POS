@@ -1,9 +1,9 @@
-// Reads/writes a customer's wishlist in Mongo. Same bearer-auth requirement
-// as the other two customer-data routes (recently-viewed, abandoned-cart)
-// and for the same reason — middleware.js excludes all /api paths from its
-// auth matcher, so without this every one of these would be an
-// unauthenticated read/write surface. Only a signed-in operator can call
-// this, same trust boundary as the rest of the app.
+// Reads/writes a customer's wishlist in Mongo. Same signed-in-session
+// requirement as the other two customer-data routes (recently-viewed,
+// abandoned-cart) and for the same reason — middleware.js excludes all
+// /api paths from its auth matcher, so without this every one of these
+// would be an unauthenticated read/write surface. Only a signed-in
+// operator can call this, same trust boundary as the rest of the app.
 //
 // POST   — add one item to a customer's wishlist.
 // GET    — fetch the full wishlist (party_id + customer_mobile query params
@@ -19,11 +19,7 @@
 
 import { addWishlistItemSchema } from '@/validators/wishlistSchema';
 import { addWishlistItem, removeWishlistItem, getWishlist } from '@/lib/mongo/wishlist';
-
-function requireBearerToken(request) {
-  const authHeader = request.headers.get('authorization');
-  return authHeader?.startsWith('Bearer ') ? authHeader : null;
-}
+import { getSessionFromRequest } from '@/lib/ornaverse/session';
 
 function parseIntParam(url, name) {
   const value = Number(new URL(url).searchParams.get(name));
@@ -47,8 +43,8 @@ function parseOptionalIntParam(url, name) {
 }
 
 export async function POST(request) {
-  if (!requireBearerToken(request)) {
-    return Response.json({ error: 'Missing bearer token' }, { status: 401 });
+  if (!(await getSessionFromRequest(request))) {
+    return Response.json({ error: 'Not authenticated' }, { status: 401 });
   }
 
   let body;
@@ -73,8 +69,8 @@ export async function POST(request) {
 }
 
 export async function GET(request) {
-  if (!requireBearerToken(request)) {
-    return Response.json({ error: 'Missing bearer token' }, { status: 401 });
+  if (!(await getSessionFromRequest(request))) {
+    return Response.json({ error: 'Not authenticated' }, { status: 401 });
   }
 
   const partyId = parseIntParam(request.url, 'party_id');
@@ -93,8 +89,8 @@ export async function GET(request) {
 }
 
 export async function DELETE(request) {
-  if (!requireBearerToken(request)) {
-    return Response.json({ error: 'Missing bearer token' }, { status: 401 });
+  if (!(await getSessionFromRequest(request))) {
+    return Response.json({ error: 'Not authenticated' }, { status: 401 });
   }
 
   const partyId    = parseIntParam(request.url, 'party_id');

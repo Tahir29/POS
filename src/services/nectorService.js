@@ -150,18 +150,11 @@ export async function redeemLoyaltyCoins({ mobile, amount, title, description })
     const mid = lookupJson?.data?.item?.mid;
     if (!mid) return { ok: false, reason: 'no_lead_id' };
 
-    // Lazy require avoids turning this plain service module into a
-    // hook-shaped dependency just for one fire-and-forget authenticated call.
-    const { store } = require('@/store');
-    const accessToken = store.getState().auth?.accessToken;
-    if (!accessToken) return { ok: false, reason: 'not_authenticated' };
-
+    // Same-origin call — the operator's session cookie rides along
+    // automatically; the route itself rejects with 401 if no one's signed in.
     const res = await fetch('/api/nector/wallettransactions', {
       method: 'POST',
-      headers: {
-        'Content-Type':  'application/json',
-        'Authorization': `Bearer ${accessToken}`,
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         lead_id:     mid,
         amount,
@@ -171,7 +164,7 @@ export async function redeemLoyaltyCoins({ mobile, amount, title, description })
       }),
     });
 
-    if (!res.ok) return { ok: false, reason: `http_${res.status}` };
+    if (!res.ok) return { ok: false, reason: res.status === 401 ? 'not_authenticated' : `http_${res.status}` };
     return { ok: true };
   } catch (err) {
     console.warn('[nectorService] redeemLoyaltyCoins failed:', err);

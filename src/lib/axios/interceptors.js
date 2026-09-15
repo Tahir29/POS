@@ -1,145 +1,40 @@
 // src/lib/axios/interceptors.js
-// Request and response interceptors for the Lucira POS Axios instance.
+// Response interceptor for the Lucira POS Axios instance.
 //
-// Request interceptor:
-//   — Attaches Authorization: Bearer {accessToken} to every request
-//   — Checks token expiry and proactively refreshes if within threshold
+// There is no request interceptor any more: every call authenticates via
+// the operator's own httpOnly session cookie (see lib/ornaverse/session.js),
+// which the browser attaches automatically to same-origin requests — there
+// is no bearer token to attach and no refresh token to coordinate.
 //
 // Response interceptor:
-//   — Catches 401 responses
-//   — Attempts token refresh once
-//   — Retries the original request with the new token
-//   — If refresh fails, clears auth state and redirects to login
-//
-// Source of truth: ARCHITECTURE.md Section 5 (Authentication Strategy)
-
-import axios from 'axios';
-import APP_CONFIG from '@/constants/appConfig';
-import API from '@/constants/apiEndpoints';
-
-// ONE in-flight refresh promise, shared by BOTH the request interceptor's
-// proactive refresh (token nearing expiry) and the response interceptor's
-// reactive refresh (401 came back). These used to be two independent code
-// paths — the reactive one had a lock (an isRefreshing flag + a pending
-// queue), the proactive one had none at all.
-//
-// That gap is exactly what caused a healthy session to get logged out right
-// after checkout: checkout is the one flow that reliably fires several
-// requests at once (useInvoiceHelpers' 6 balance calls on mount, then the
-// invalidateQueries(['invoices'|'orders']) burst the instant Create/Post
-// succeeds), and its own submit chain is slow enough (sequential stock
-// claims, multi-second SetSalesItems, ApplyPromotions, Create, Post) to let
-// the token age into its 5-minute refresh window by the time that second
-// burst lands. With no lock, every one of those concurrent requests
-// independently POSTed grant_type=refresh_token with the SAME refresh
-// token. OrnaVerse's refresh token is single-use: only the first of those
-// calls succeeds, the rest come back invalid_grant — and since each was
-// swallowed silently (see the old `catch {}` this replaced), the "losing"
-// requests sailed on with the stale access token, got a real 401, and the
-// response interceptor's own refresh attempt then ALSO failed (the refresh
-// token had already been rotated/consumed by the winning proactive call) —
-// which is what actually called handleLogout(). One coordinator for both
-// paths means at most one refresh call is ever in flight, so this race
-// cannot happen no matter how many requests need a refresh at once.
-let refreshPromise = null;
-
-/**
- * Returns the token from the currently in-flight refresh, starting one if
- * none is running. Every caller — proactive or reactive, however many fire
- * concurrently — awaits this SAME promise and gets the same outcome.
- */
-const getRefreshedToken = (instance, refreshToken, store) => {
-  if (!refreshPromise) {
-    refreshPromise = refreshAccessToken(instance, refreshToken, store)
-      .finally(() => { refreshPromise = null; });
-  }
-  return refreshPromise;
-};
+//   — Catches 401 responses (the session cookie is missing, expired, or
+//     OrnaVerse itself rejected it) and clears local auth state / redirects
+//     to login. There is nothing to silently refresh — the operator's
+//     password was never kept (see session.js's own header for why), so a
+//     rejected session surfaces "sign in again" rather than failing
+//     obscurely.
 
 // We import the store lazily (inside functions) to avoid circular
 // dependency issues between axiosInstance → interceptors → store.
 const getStore = () => require('@/store').store;
 
 /**
- * Attaches request and response interceptors to the provided Axios instance.
+ * Attaches the response interceptor to the provided Axios instance.
  * Called once during axiosInstance creation.
  *
  * @param {import('axios').AxiosInstance} instance
  */
 export const attachInterceptors = (instance) => {
 
-  instance.interceptors.request.use(
-    async (config) => {
-      const store = getStore();
-      const state = store.getState();
-
-      const accessToken  = state.auth.accessToken;
-      const tokenExpiry  = state.auth.tokenExpiry;
-      const refreshToken = state.auth.refreshToken;
-
-      const isAuthEndpoint = config.url?.includes('connect/token');
-      if (isAuthEndpoint) {
-        return config;
-      }
-
-      // Proactively refresh if token is within the threshold window. Routed
-      // through the shared coordinator (see getRefreshedToken above) — if
-      // another request already started this refresh, this one waits for
-      // and reuses that SAME call rather than firing its own with the same
-      // (single-use) refresh token.
-      if (
-        accessToken &&
-        tokenExpiry &&
-        refreshToken &&
-        Date.now() >= tokenExpiry - APP_CONFIG.AUTH.TOKEN_REFRESH_THRESHOLD_MS
-      ) {
-        try {
-          const newToken = await getRefreshedToken(instance, refreshToken, store);
-          config.headers['Authorization'] = `Bearer ${newToken}`;
-          return config;
-        } catch {
-          // Refresh failed — let the request proceed and handle 401 in response interceptor
-        }
-      }
-
-      if (accessToken) {
-        config.headers['Authorization'] = `Bearer ${accessToken}`;
-      }
-
-      return config;
-    },
-    (error) => Promise.reject(error)
-  );
-
   instance.interceptors.response.use(
     (response) => response,
 
     async (error) => {
-      const originalRequest = error.config;
-      const status          = error.response?.status;
-      const store           = getStore();
+      const status = error.response?.status;
+      const store  = getStore();
 
-      if (status === 401 && !originalRequest._retry) {
-        originalRequest._retry = true;
-
-        const refreshToken = store.getState().auth.refreshToken;
-
-        if (!refreshToken) {
-          handleLogout(store);
-          return Promise.reject(normalizeError(error));
-        }
-
-        // Shared coordinator — if a proactive refresh (or another request's
-        // reactive one) is already in flight, this awaits that SAME call
-        // instead of starting a second one with the same refresh token.
-        try {
-          const newToken = await getRefreshedToken(instance, refreshToken, store);
-          originalRequest.headers['Authorization'] = `Bearer ${newToken}`;
-          return instance(originalRequest);
-        } catch (refreshError) {
-          handleLogout(store);
-          return Promise.reject(normalizeError(refreshError));
-        }
+      if (status === 401) {
+        handleLogout(store);
       }
 
       return Promise.reject(normalizeError(error));
@@ -148,77 +43,26 @@ export const attachInterceptors = (instance) => {
 };
 
 /**
- * Calls the OrnaVerse refresh token endpoint and updates Redux auth state.
- * Returns the new access token string on success.
- * Throws on failure.
- *
- * @param {import('axios').AxiosInstance} instance
- * @param {string} refreshToken
- * @param {object} store - Redux store
- * @returns {Promise<string>} new access token
- */
-const refreshAccessToken = async (instance, refreshToken, store) => {
-  const params = new URLSearchParams();
-  params.append('grant_type',    APP_CONFIG.AUTH.GRANT_TYPE_REFRESH);
-  params.append('refresh_token', refreshToken);
-  params.append('client_id',     APP_CONFIG.AUTH.CLIENT_ID);
-
-  const response = await instance.post(API.AUTH.REFRESH_TOKEN, params, {
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-  });
-
-  const { access_token, refresh_token, expires_in } = response.data;
-
-  const { updateTokens } = require('@/store/slices/authSlice');
-  store.dispatch(updateTokens({
-    accessToken:  access_token,
-    refreshToken: refresh_token,
-    expiresIn:    expires_in,
-  }));
-
-  return access_token;
-};
-
-/**
  * Clears Redux auth/store/cart/recently-viewed/wishlist state, the query
  * cache, and the analytics tracker, then redirects to login. Called when
- * the refresh token is expired or missing — i.e. the session simply timed
- * out, not something an operator chose.
+ * the session cookie is missing, expired, or rejected server-side — i.e.
+ * the session simply ended, not something an operator chose.
  *
- * FIXED 2026-08-27: this used to only clear auth/store/cookies — a much
- * thinner cleanup than useAuth.js's manual logout(), which explicitly
- * clears cart, recentlyViewed, wishlist, purges the persistor, clears the
- * tracker, and clears the query client (see that function's own comments
- * for why each one matters on a SHARED terminal). A forced session-expiry
- * logout is exactly as much a "this operator's session is over" moment as
- * a manual one — arguably more so, since it can happen mid-shift with no
- * warning — so it needs the same cleanup, not a lighter one. Concretely:
- * `cart` IS in persistConfig's whitelist (unlike recentlyViewed/wishlist,
- * which reset for free on the reload below since they're in-memory-only),
- * so without dispatching clearCart here, a customer's in-progress cart
- * survived in localStorage straight through a forced logout and was still
- * there for whoever logged in next on the same terminal — confirmed by
- * reading persistConfig.js's whitelist, not assumed.
+ * This mirrors useAuth.js's manual logout() cleanup closely (cart,
+ * recentlyViewed, wishlist, persistor.purge(), tracker, query client — see
+ * that function's own comments for why each one matters on a SHARED
+ * terminal). A forced session-expiry logout is exactly as much a "this
+ * operator's session is over" moment as a manual one — arguably more so,
+ * since it can happen mid-shift with no warning.
  *
- * FIXED 2026-08-27 (second pass) — the reported bug: "once the order is
- * placed, the customer logs out automatically, which shouldn't happen at
- * all". Root cause traced end to end: checkout's Create→Post chain is
- * exactly the slow, sequential, multi-call flow the race-condition comment
- * on `refreshPromise` above already describes crossing into the token's
- * refresh window. When the reactive refresh on a mid-chain 401 ALSO fails
- * (refresh token already used/expired), this function used to redirect via
- * `window.location.href` in the SAME synchronous tick that the failed
- * request's promise rejects — before the rejection had even propagated
- * back to useCreateOrder/useCreateInvoice's onError, let alone before
- * React had a chance to paint that mutation's own toast.error(...). The
- * operator saw the screen just vanish to /login with no explanation, and —
- * worse — Create had usually already succeeded (a real transaction_id
- * exists server-side), so it read as data loss, not just an abrupt logout;
- * see TOAST.ORDERS/INVOICES.POST_FAILED for the other half of this fix
- * (naming that transaction_id so it's findable instead of just "failed").
+ * The reported bug this once fixed: "once the order is placed, the
+ * customer logs out automatically" — root cause was a synchronous redirect
+ * firing in the same tick a failed request's promise rejected, before a
+ * mutation's own onError toast (or this file's own) had a chance to render.
  * Fixed by explicitly showing a toast HERE and delaying the actual
- * navigation — long enough for both toasts (this one, and whatever
- * mutation's own onError just fired) to render before the page tears down.
+ * navigation — long enough for both toasts to render before the page tears
+ * down. That race can still happen under this simpler model (a 401 mid
+ * checkout's Create→Post chain), so the same delay is kept.
  *
  * @param {object} store - Redux store
  */
@@ -232,23 +76,17 @@ const handleLogout = (store) => {
   const { persistor } = require('@/store');
   const queryClient = require('@/lib/queryClient').default;
   const tracker = require('@/lib/analytics/tracker').default;
-  const { destroyReportSession } = require('@/services/authService');
+  const { logout: logoutFromOrnaverse } = require('@/services/authService');
   const { toast } = require('react-toastify');
 
   // Best-effort — a session that's already timed out server-side may well
   // reject this too; it must never block the local cleanup below.
-  destroyReportSession().catch(() => {});
+  logoutFromOrnaverse().catch(() => {});
 
-  // FIXED 2026-09-09 — this dispatch used to come AFTER clearAuth()/
-  // clearStore() below, same bug and same fix as useAuth.js's manual
-  // logout() (see that function's own comment for the full explanation):
-  // abandonedCartMiddleware's 'cart/clearCart' case needs a LIVE bearer
-  // token to actually save the cart to Mongo before it's wiped locally, but
-  // dispatch() is synchronous — clearAuth() had already wiped
-  // state.auth.accessToken to null by the time this action reached that
-  // middleware, so its token guard silently failed and nothing was ever
-  // saved. Moved ahead of clearAuth()/clearStore() so the token (and
-  // activeStoreId, for the same reason) are both still live when this fires.
+  // abandonedCartMiddleware's 'cart/clearCart' case needs the session to
+  // still be live to actually save the cart to Mongo before it's wiped
+  // locally — dispatch() is synchronous, so this must run BEFORE
+  // clearAuth()/clearStore() below, not after.
   //
   // reason: 'session_reset' — same as useAuth.js's manual logout: this is
   // the SESSION ending, not the customer's cart being resolved, so an
@@ -313,11 +151,10 @@ const extractServerMessage = (data) => {
   if (typeof data === 'string') {
     const trimmed = data.trim();
     if (!trimmed) return null;
-    // FIXED 2026-09-09 — an intermediary fronting the upstream (nginx/a
-    // load balancer/CDN) can return an HTML error page under load instead
-    // of OrnaVerse's own JSON body — this codebase's own history includes
-    // exactly that failure mode (see api/[...path]/route.js's header:
-    // "empty-body 400s (bare nginx headers...)"). Axios can't parse that as
+    // An intermediary fronting the upstream (nginx/a load balancer/CDN) can
+    // return an HTML error page under load instead of OrnaVerse's own JSON
+    // body — this codebase's own history includes exactly that failure
+    // mode (see api/[...path]/route.js's header). Axios can't parse that as
     // JSON, so it fell back to this raw string, which used to be shown
     // verbatim — a raw HTML page dumped into a toast instead of a sensible
     // message. A genuine OrnaVerse plain-text reason never looks like
@@ -328,7 +165,7 @@ const extractServerMessage = (data) => {
   }
   return (
     data.Error?.Message ??      // Serenity business rule / validation
-    data.error_description ??   // OAuth token endpoint
+    data.error_description ??   // this app's own auth/session routes
     data.Message ??             // bare ASP.NET fault
     data.message ??             // generic JSON API
     null
@@ -338,7 +175,6 @@ const extractServerMessage = (data) => {
 /**
  * Converts any Axios error into a consistent normalized shape.
  * Raw API errors never reach the UI — components receive this object.
- * Source of truth: ARCHITECTURE.md Section 24 (Error Handling)
  *
  * `serverMessage` carries OrnaVerse's own reason when it sent one, so callers
  * can show the actual cause instead of a generic retry prompt. `response` is
@@ -353,13 +189,11 @@ const extractServerMessage = (data) => {
 const normalizeError = (error) => {
   // DEV-ONLY DEBUG — logs the ACTUAL raw response body from OrnaVerse,
   // which normalizeError below normally discards in favor of a generic
-  // user-facing message. Was previously unconditional and shipped to
-  // production, where it printed full upstream response bodies (which can
-  // carry customer/invoice PII on business-data endpoints) to the browser
-  // console on every failed request — a real leak path if anyone screen-
-  // shares or screen-records a support session. Gated to development only
-  // (2026-08-18 security pass); keep this guard if the logging is ever
-  // needed again for a live issue.
+  // user-facing message. Gated to development only — production would print
+  // full upstream response bodies (which can carry customer/invoice PII on
+  // business-data endpoints) to the browser console on every failed
+  // request, a real leak path if anyone screen-shares or screen-records a
+  // support session.
   if (error.response && process.env.NODE_ENV !== 'production') {
     console.error(
       '[normalizeError] RAW error response:',

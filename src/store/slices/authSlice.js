@@ -1,14 +1,12 @@
 // src/store/slices/authSlice.js
-// Manages authentication state — tokens, expiry, login status.
-// Persisted via Redux Persist (survives page refresh).
-// API calls are NOT made here — TanStack Query handles that.
+// Tracks sign-in status only. The actual session — an httpOnly cookie on
+// our own origin, set by /api/auth/session — is invisible to JS by design
+// (see lib/ornaverse/session.js); nothing token-shaped lives here or in
+// localStorage. API calls are NOT made here — TanStack Query handles that.
 
 import { createSlice } from '@reduxjs/toolkit';
 
 const initialState = {
-  accessToken:  null,
-  refreshToken: null,
-  tokenExpiry:  null,   // timestamp in ms — Date.now() + expires_in * 1000
   isAuthenticated: false,
   user: null,           // { username } — populated after login
 };
@@ -18,29 +16,16 @@ const authSlice = createSlice({
   initialState,
   reducers: {
 
-    // Called after a successful login or token refresh
-    setTokens: (state, action) => {
-      const { accessToken, refreshToken, expiresIn, username } = action.payload;
-      state.accessToken     = accessToken;
-      state.refreshToken    = refreshToken;
-      state.tokenExpiry     = Date.now() + expiresIn * 1000;
+    // Called after a successful login
+    setAuthenticated: (state, action) => {
+      const { username } = action.payload;
       state.isAuthenticated = true;
       state.user            = { username };
     },
 
-    // Called when token is refreshed — updates tokens only
-    updateTokens: (state, action) => {
-      const { accessToken, refreshToken, expiresIn } = action.payload;
-      state.accessToken  = accessToken;
-      state.refreshToken = refreshToken;
-      state.tokenExpiry  = Date.now() + expiresIn * 1000;
-    },
-
-    // Called on logout or refresh token failure
+    // Called on logout, or when the server rejects the session (expired,
+    // OrnaVerse-side rejection, ...)
     clearAuth: (state) => {
-      state.accessToken     = null;
-      state.refreshToken    = null;
-      state.tokenExpiry     = null;
       state.isAuthenticated = false;
       state.user            = null;
     },
@@ -48,10 +33,8 @@ const authSlice = createSlice({
   },
 });
 
-export const { setTokens, updateTokens, clearAuth } = authSlice.actions;
+export const { setAuthenticated, clearAuth } = authSlice.actions;
 
-export const selectAccessToken     = (state) => state.auth.accessToken;
-export const selectTokenExpiry     = (state) => state.auth.tokenExpiry;
 export const selectIsAuthenticated = (state) => state.auth.isAuthenticated;
 export const selectAuthUser        = (state) => state.auth.user;
 

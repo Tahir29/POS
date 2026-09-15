@@ -40,7 +40,7 @@ export function useStoreSwitcher() {
     // shared-device POS model where store switches are deliberate actions.
     dispatch(clearCart());
 
-    switchStore(store);
+    await switchStore(store);
 
     await queryClient.invalidateQueries();
 

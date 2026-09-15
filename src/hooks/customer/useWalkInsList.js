@@ -6,17 +6,16 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { useSelector } from 'react-redux';
-import { selectAccessToken } from '@/store/slices/authSlice';
+import { selectIsAuthenticated } from '@/store/slices/authSlice';
 import { QUERY_KEYS } from '@/constants/queryKeys';
 
-async function fetchWalkIns({ companyId, fromDate, toDate, token }) {
+// Same-origin call — the operator's session cookie rides along automatically.
+async function fetchWalkIns({ companyId, fromDate, toDate }) {
   const params = new URLSearchParams({ company_id: String(companyId) });
   if (fromDate) params.set('from', fromDate);
   if (toDate)   params.set('to', toDate);
 
-  const res = await fetch(`/api/customers/walkins?${params}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const res = await fetch(`/api/customers/walkins?${params}`);
   if (!res.ok) throw new Error(`Walk-ins fetch failed: ${res.status}`);
   const data = await res.json();
   return Array.isArray(data?.items) ? data.items : [];
@@ -30,12 +29,12 @@ async function fetchWalkIns({ companyId, fromDate, toDate, token }) {
  *   that side of the range open.
  */
 export function useWalkInsList(companyId, { fromDate, toDate } = {}) {
-  const token = useSelector(selectAccessToken);
+  const isAuthenticated = useSelector(selectIsAuthenticated);
 
   const query = useQuery({
     queryKey: QUERY_KEYS.WALKINS.LIST(companyId, fromDate ?? null, toDate ?? null),
-    queryFn:  () => fetchWalkIns({ companyId, fromDate, toDate, token }),
-    enabled:  !!companyId && !!token,
+    queryFn:  () => fetchWalkIns({ companyId, fromDate, toDate }),
+    enabled:  !!companyId && isAuthenticated,
     staleTime: 60 * 1000,
   });
 

@@ -6,19 +6,18 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { useSelector } from 'react-redux';
-import { selectAccessToken } from '@/store/slices/authSlice';
+import { selectIsAuthenticated } from '@/store/slices/authSlice';
 import { QUERY_KEYS } from '@/constants/queryKeys';
 
 // Queries by customerMobile alongside party_id — party_id is assigned per
 // OrnaVerse tenant (UAT vs LIVE), so a party_id-only lookup can miss a
 // wishlist saved under a different tenant for the same real customer.
-async function fetchWishlist(partyId, customerMobile, token) {
+// Same-origin call — the operator's session cookie rides along automatically.
+async function fetchWishlist(partyId, customerMobile) {
   const params = new URLSearchParams();
   if (partyId != null) params.set('party_id', String(partyId));
   if (customerMobile) params.set('customer_mobile', customerMobile);
-  const res = await fetch(`/api/customers/wishlist?${params.toString()}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const res = await fetch(`/api/customers/wishlist?${params.toString()}`);
   if (!res.ok) throw new Error(`Wishlist fetch failed: ${res.status}`);
   const data = await res.json();
   return Array.isArray(data?.items) ? data.items : [];
@@ -30,13 +29,13 @@ async function fetchWishlist(partyId, customerMobile, token) {
  *   optional for backward compatibility — falls back to party_id-only lookup.
  */
 export function useCustomerWishlist(partyId, customerMobile = null) {
-  const token = useSelector(selectAccessToken);
+  const isAuthenticated = useSelector(selectIsAuthenticated);
   const id = partyId ? Number(partyId) : null;
 
   const query = useQuery({
     queryKey:  QUERY_KEYS.CUSTOMERS.WISHLIST(id),
-    queryFn:   () => fetchWishlist(id, customerMobile, token),
-    enabled:   !!id && !!token,
+    queryFn:   () => fetchWishlist(id, customerMobile),
+    enabled:   !!id && isAuthenticated,
     staleTime: 60 * 1000,
   });
 

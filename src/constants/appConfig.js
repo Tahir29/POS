@@ -10,8 +10,6 @@
 //   ADDED:   STALE_TIME.ANALYTICS
 //   ADDED:   REPAIR.STAGES, ESTIMATION.STATUSES for UI state tracking
 
-import { ORNAVERSE_AUTH } from '@/lib/ornaverse/authConfig';
-
 const APP_CONFIG = {
 
   // ── METAL TYPE IDs ────────────────────────────────────────────────────────
@@ -134,31 +132,6 @@ const APP_CONFIG = {
   // summaries) — a display-time bifurcation, not a second calculation.
   TAX: {
     GST_RATE: 0.03,
-  },
-
-  // ── AUTHENTICATION ────────────────────────────────────────────────────────
-  // CLIENT_ID / GRANT_TYPE_PASSWORD / SCOPE now come from ornaverse/authConfig.js,
-  // which derives them from the SAME ACTIVE_ENV flag upstream.js uses — flip
-  // ACTIVE_ENV in ornaverse/environment.js and the upstream URL, the
-  // server-injected secret, AND these three fields all switch together. See authConfig.js
-  // for the full per-environment values and why they differ (confidential
-  // vs public client, client_credentials vs password grant, offline_access
-  // support) — this used to be 3 values hand-copied here on every
-  // environment switch, which is exactly what caused the 2026-08-22 LIVE
-  // cutover to 401 on every request (upstream.js flipped to LIVE, this
-  // block didn't, so the browser kept sending UAT's client_id to LIVE's
-  // token endpoint — "invalid_client" on login, no valid bearer token
-  // after that for anything).
-  //
-  // GRANT_TYPE_REFRESH stays here (not env-derived): only UAT's
-  // password grant issues a refresh_token at all — see the SCOPE note in
-  // authConfig.js. On LIVE this constant is simply unused; interceptors.js's
-  // refresh branch requires a truthy refreshToken and one never exists
-  // there, so it re-authenticates via client_credentials instead.
-  AUTH: {
-    ...ORNAVERSE_AUTH,
-    GRANT_TYPE_REFRESH:        'refresh_token',
-    TOKEN_REFRESH_THRESHOLD_MS: 5 * 60 * 1000, // refresh proactively 5 min before expiry
   },
 
   // ── PAGINATION ────────────────────────────────────────────────────────────

@@ -23,6 +23,7 @@ import ProductBreadcrumb     from '@/components/features/products/ProductBreadcr
 import ProductDetailSkeleton from '@/components/features/products/ProductDetailSkeleton';
 import CrossStoreStockPanel  from '@/components/features/products/CrossStoreStockPanel';
 import ProductTrustBadge     from '@/components/features/products/ProductTrustBadge';
+import ProductStorySection   from '@/components/features/products/ProductStorySection';
 import CustomizeSheet        from '@/components/features/products/CustomizeSheet';
 import PriceBreakdown        from '@/components/features/products/PriceBreakdown';
 import ProductStickyActionBar from '@/components/features/products/ProductStickyActionBar';
@@ -30,6 +31,7 @@ import ProductTrustSection   from '@/components/features/products/ProductTrustSe
 import ProductReviewsList    from '@/components/features/products/ProductReviewsList';
 import ProductReviewSummaryLink from '@/components/features/products/ProductReviewSummaryLink';
 import RecentlyViewedCarousel from '@/components/features/products/RecentlyViewedCarousel';
+import SimilarProductsCarousel from '@/components/features/products/SimilarProductsCarousel';
 import WishlistButton         from '@/components/features/products/WishlistButton';
 import { useRecordProductView } from '@/hooks/products/useRecentlyViewed';
 import { deriveKaratCode } from '@/lib/karat';
@@ -557,12 +559,24 @@ function ProductDetailScreen() {
 
         <ProductTrustBadge />
 
+        <ProductStorySection />
+
         <ProductSpecifications product={activeItem} pricedItem={livePricing} />
 
         <ProductTrustSection />
 
         {/* Reuses externalProductId already resolved for Shopify images — no extra OrnaVerse calls. */}
         <ProductReviewsList shopifyProductId={externalProductId} />
+
+        {/* OrnaVerse-only match (type_id/item_group_id) — see
+            useSimilarProducts.js. Always the BASE product, not activeItem —
+            a customization (selectedVariant) changes karat/colour/size, not
+            what broad category this item belongs to, and the variant row
+            isn't guaranteed to carry item_group_id the way the full
+            Items/Retrieve product always does. Placed ahead of Recently
+            Viewed: "similar to what you're looking at now" is more relevant
+            here than the customer's own browsing history. */}
+        <SimilarProductsCarousel product={product} activeStoreId={activeStoreId} />
 
         {/* Only ever populated for an attached customer — see useRecordProductView above. */}
         <RecentlyViewedCarousel excludeItemId={product.item_id} />

@@ -1,21 +1,18 @@
 // Records/lists walk-in events in our own Mongo — see lib/mongo/walkins.js
 // for why this collection exists (OrnaVerse's WalkIn/Lookup and /Register
-// are both single-customer, no listing mode). Requires a bearer token since
-// middleware.js excludes all /api paths from its auth matcher. The POST
-// payload is our own app-generated visit snapshot, not re-verified against
-// OrnaVerse — a bad payload only adds a junk row to this store's own log.
+// are both single-customer, no listing mode). Requires a signed-in session
+// since middleware.js excludes all /api paths from its auth matcher. The
+// POST payload is our own app-generated visit snapshot, not re-verified
+// against OrnaVerse — a bad payload only adds a junk row to this store's
+// own log.
 
 import { recordWalkInSchema } from '@/validators/walkInSchema';
 import { recordWalkIn, listWalkIns } from '@/lib/mongo/walkins';
-
-function requireBearerToken(request) {
-  const authHeader = request.headers.get('authorization');
-  return authHeader?.startsWith('Bearer ') ? authHeader : null;
-}
+import { getSessionFromRequest } from '@/lib/ornaverse/session';
 
 export async function POST(request) {
-  if (!requireBearerToken(request)) {
-    return Response.json({ error: 'Missing bearer token' }, { status: 401 });
+  if (!(await getSessionFromRequest(request))) {
+    return Response.json({ error: 'Not authenticated' }, { status: 401 });
   }
 
   let body;
@@ -42,8 +39,8 @@ export async function POST(request) {
 // GET ?company_id=&from=&to= — from/to are YYYY-MM-DD, padded to the
 // start/end of that calendar day so the range is inclusive of both ends.
 export async function GET(request) {
-  if (!requireBearerToken(request)) {
-    return Response.json({ error: 'Missing bearer token' }, { status: 401 });
+  if (!(await getSessionFromRequest(request))) {
+    return Response.json({ error: 'Not authenticated' }, { status: 401 });
   }
 
   const params = new URL(request.url).searchParams;

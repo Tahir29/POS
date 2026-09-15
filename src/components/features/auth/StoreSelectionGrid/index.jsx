@@ -42,7 +42,7 @@ export default function StoreSelectionGrid() {
     if (!selected || isSelecting) return;
     setIsSelecting(true);
     try {
-      switchStore(selected);
+      await switchStore(selected);
       toast.success(TOAST.STORE.SWITCHED(selected.mailing_name ?? 'store'));
       router.replace('/dashboard');
     } catch {

@@ -1,34 +1,29 @@
 // src/hooks/auth/useAuth.js
 // Authentication — login, logout, store selection post-login.
-//
-// CHANGED: getSettings() removed — AppSettings endpoint does not exist
-// in the new API spec. Replaced with checkMetalRateToday() which warns
-// the operator if metal rates haven't been set for the day.
 
 import { useDispatch, useSelector } from 'react-redux';
 import { useRouter } from 'next/navigation';
 import { useCallback } from 'react';
 import { toast } from 'react-toastify';
 
-import { generateToken, createReportSession, destroyReportSession } from '@/services/authService';
+import { login as loginToOrnaverse, logout as logoutFromOrnaverse } from '@/services/authService';
 import { getUserStores }       from '@/services/storeService';
 import { checkMetalRateToday } from '@/services/settingsService';
 
 import {
-  setTokens,
+  setAuthenticated,
   clearAuth,
   selectIsAuthenticated,
   selectAuthUser,
-  selectAccessToken,
 } from '@/store/slices/authSlice';
 
 import {
   setAvailableStores,
-  setActiveStore,
   clearStore,
   selectActiveStoreId,
   selectActiveStoreName,
 } from '@/store/slices/storeSlice';
+import { useActiveStore } from '@/hooks/store/useActiveStore';
 
 import { clearCart } from '@/store/slices/cartSlice';
 import { clearRecentlyViewed } from '@/store/slices/recentlyViewedSlice';
@@ -47,34 +42,19 @@ export function useAuth() {
 
   const isAuthenticated = useSelector(selectIsAuthenticated);
   const user            = useSelector(selectAuthUser);
-  const accessToken     = useSelector(selectAccessToken);
   const activeStoreId   = useSelector(selectActiveStoreId);
   const activeStoreName = useSelector(selectActiveStoreName);
+  const { switchStore } = useActiveStore();
 
   const login = useCallback(async (username, password) => {
-    const tokenData = await generateToken(username, password);
+    // Establishes the operator's real OrnaVerse session (see
+    // lib/ornaverse/session.js) — this one call now covers everything the
+    // old flow needed two for (an OAuth token, plus a separate cookie
+    // session for printing): there's only one session, and it's the real
+    // person's.
+    const { username: signedInAs } = await loginToOrnaverse(username, password);
 
-    // FIXED 2026-09-09 — this used to be fire-and-forget with its result
-    // never checked (see createReportSession's own comment for why that
-    // silently dropped print sessions on any one-off network blip, only
-    // discovered by the operator much later at print time). Kicked off here
-    // (not awaited yet) so it runs CONCURRENTLY with getUserStores() below
-    // rather than serially after it — printing readiness shouldn't add to
-    // the time before the dashboard appears. Awaited further down, once
-    // stores have resolved, so a genuine (non-transient, already-retried)
-    // failure can be surfaced to the operator instead of discovered cold at
-    // print time. Still cannot throw into the login flow — createReportSession
-    // itself never rejects, only resolves false.
-    const reportSessionPromise = createReportSession(username, password);
-
-    dispatch(
-      setTokens({
-        accessToken:  tokenData.access_token,
-        refreshToken: tokenData.refresh_token,
-        expiresIn:    tokenData.expires_in,
-        username,
-      })
-    );
+    dispatch(setAuthenticated({ username: signedInAs }));
 
     // Store context is session-specific — never trust a store id persisted
     // from a previous login. Without this, a stale activeStoreId survives
@@ -86,21 +66,14 @@ export function useAuth() {
     // from this login's GetUserStores response.
     dispatch(clearStore());
 
-    // FIXED 2026-09-07 — confirmed live: switching environment.js from UAT
-    // to LIVE and logging in fresh as admin showed a customer ALREADY
-    // attached in the header. Root cause is the exact same class of bug
-    // clearStore() above was already fixed for, just never applied to
-    // cart/recentlyViewed/wishlist — this file's logout() is thorough about
-    // clearing all of it on the way OUT, but nothing here ever did the same
-    // on the way IN. So any session that ends WITHOUT going through
-    // logout() (closing the tab, a crashed dev server, restarting the app
-    // after an env-file edit like this one, a token that simply expired
-    // with no API call ever firing to trigger the 401 auto-logout in
-    // interceptors.js) leaves cart.customerId — and, worse, whichever
-    // React Query cache entries happened to be warm — sitting in
-    // localStorage/memory, ready to silently reattach or serve stale data
-    // to whoever logs in next, regardless of which agent, which
-    // environment, or even which customer it actually belonged to.
+    // Defensive reset of whatever local state happened to survive a
+    // previous session that ended WITHOUT going through logout() (closing
+    // the tab, a crashed dev server, a session that simply expired with no
+    // API call ever firing to trigger the 401 auto-logout in
+    // interceptors.js) — otherwise cart.customerId and whichever React
+    // Query cache entries happened to be warm sit in localStorage/memory,
+    // ready to silently reattach or serve stale data to whoever logs in
+    // next, regardless of which agent this is.
     // reason: 'session_reset' — same flag logout() uses (see below) and for
     // the same reason: this is a defensive reset of whatever local state
     // happened to survive, NOT a resolved sale. A bare clearCart() tells
@@ -112,28 +85,24 @@ export function useAuth() {
     // local cart held, under that customer's own id, exactly like logout's
     // own comment describes. Also takes recentlyViewed/wishlist with it via
     // their own middlewares' 'cart/clearCart' case. queryClient.clear() on
-    // top of that specifically matters for an environment switch like this
-    // one: without it, cached UAT responses (payment modes, sales persons,
-    // catalog prices, ...) under the same query keys would still be served
-    // straight from memory to this brand-new LIVE session until they
-    // happened to expire on their own.
+    // top of that matters whenever the two most recent sessions on this
+    // terminal were different agents: without it, cached responses (payment
+    // modes, sales persons, catalog prices, ...) under the same query keys
+    // would still be served straight from memory to this brand-new session
+    // until they happened to expire on their own.
     dispatch(clearCart({ reason: 'session_reset' }));
     dispatch(clearRecentlyViewed());
     dispatch(clearWishlist());
     tracker.clear();
     queryClient.clear();
 
-    // FIXED 2026-09-09 — getUserStores() had no try/catch here, unlike
-    // checkMetalRateToday() a few lines below. dispatch(setTokens(...))
+    // getUserStores() had no try/catch here at one point — dispatch(setAuthenticated(...))
     // above already flipped isAuthenticated true — LoginForm's own
     // redirect-on-isAuthenticated effect and StoreGuard (bounces an
     // authenticated-but-store-less session to /store-selection's "No
     // stores are assigned to your account" screen) can both race ahead of
     // a transient failure here, since credentials were genuinely valid at
-    // this point — the token request already succeeded. Worse: the
-    // rejection below still reaches LoginForm's onSubmit catch block,
-    // which counted it as a FAILED LOGIN ATTEMPT toward the 5-try lockout,
-    // penalizing a correct password for a network blip. Roll back auth
+    // this point — the session was already established. Roll back auth
     // state so isAuthenticated goes back to false (self-corrects the
     // redirect races above), and flag the error so LoginForm's catch can
     // tell this apart from a real bad-credentials rejection.
@@ -165,29 +134,25 @@ export function useAuth() {
       // Network or auth issue — don't block login
     }
 
-    // Resolved AFTER stores/metal-rate above so it ran fully in the
-    // background this whole time (see the kick-off comment above) — by now
-    // its 3 retries (createReportSession) have almost certainly already
-    // finished, so this rarely adds any wait at all. Only warns on a
-    // genuine failure; the reconnect panel on InvoiceReportButton is the
-    // actual recovery path, not this toast.
-    const reportSessionReady = await reportSessionPromise;
-    if (!reportSessionReady) {
-      toast.warn(TOAST.AUTH.PRINT_SESSION_UNAVAILABLE);
-    }
-
     if (stores.length === 1) {
       const store = stores[0];
-      dispatch(
-        setActiveStore({
-          storeId:   store.company_id,
-          storeName: store.mailing_name,  // mailing_name — no company_name field
-          storeCode: store.company_code ?? null,
-        })
-      );
+      // Also switches OrnaVerse's own session company (see
+      // useActiveStore.js's switchStore) — a single-store account's
+      // session already defaults to its one company in practice, but going
+      // through the same shared path as every other store change means
+      // that's guaranteed rather than assumed.
+      try {
+        await switchStore(store);
+      } catch {
+        dispatch(clearAuth());
+        dispatch(clearStore());
+        const wrapped = new Error('Signed in, but could not set your store. Please try again.');
+        wrapped.isPostAuthFailure = true;
+        throw wrapped;
+      }
 
       tracker.trackAgent(EVENTS.AGENT_LOGIN, {
-        username,
+        username: signedInAs,
         storeId:   store.company_id,
         storeName: store.mailing_name,
         timestamp: new Date().toISOString(),
@@ -197,7 +162,7 @@ export function useAuth() {
       router.replace('/dashboard');
     } else {
       tracker.trackAgent(EVENTS.AGENT_LOGIN, {
-        username,
+        username: signedInAs,
         storeCount: stores.length,
         timestamp:  new Date().toISOString(),
       });
@@ -205,43 +170,30 @@ export function useAuth() {
       toast.success(TOAST.AUTH.LOGIN_SUCCESS);
       router.replace('/store-selection');
     }
-  }, [dispatch, router]);
+  }, [dispatch, router, switchStore]);
 
   const logout = useCallback(() => {
-    // Drop the operator's OrnaVerse cookie session server-side too, so
-    // signing out actually ends it rather than leaving it to age out.
-    destroyReportSession();
+    // Drop the operator's OrnaVerse session server-side too, so signing out
+    // actually ends it rather than leaving it to age out.
+    logoutFromOrnaverse();
 
     if (tracker.isSessionActive()) {
       tracker.endSession('agent_logout');
     }
 
-    // ENRICHED 2026-09-04 — this fired with no store context at all, unlike
-    // AGENT_LOGIN right above it in login() — trackAgent() (unlike track())
-    // has no session to auto-derive fields from, so a caller has to pass
-    // its own. Captured from the selectors above, BEFORE the
-    // dispatch(clearStore()) a few lines down wipes it.
+    // Captured from the selectors above, BEFORE the dispatch(clearStore())
+    // a few lines down wipes it — trackAgent() (unlike track()) has no
+    // session to auto-derive fields from, so a caller has to pass its own.
     tracker.trackAgent(EVENTS.AGENT_LOGOUT, {
       timestamp: new Date().toISOString(),
       storeId:   activeStoreId,
       storeName: activeStoreName,
     });
 
-    // FIXED 2026-09-09 — this dispatch used to come AFTER clearAuth()/
-    // clearStore() below. abandonedCartMiddleware's 'cart/clearCart' case
-    // (see its own comment) needs a LIVE bearer token to actually save the
-    // cart to Mongo before it's wiped locally — but dispatch() is
-    // synchronous, so by the time THIS action reached that middleware,
-    // clearAuth() had already fully run and wiped state.auth.accessToken to
-    // null. The middleware's own `if (preCart.customerId && token)` guard
-    // then silently failed (no error, no log — token is simply falsy) and
-    // saveAbandonedCart() was never called at all. Reported live 2026-09-09:
-    // "logged out after adding a product to the cart, logging back in never
-    // restored it" — root cause was exactly this: nothing was ever saved to
-    // Mongo to restore in the first place, not a restore-side bug. Moved
-    // ahead of clearAuth()/clearStore() so the token (and activeStoreId, for
-    // the same reason — the middleware's `company_id` tag) are both still
-    // live when this fires.
+    // abandonedCartMiddleware's 'cart/clearCart' case (see its own comment)
+    // needs the session to still be live to actually save the cart to Mongo
+    // before it's wiped locally — dispatch() is synchronous, so this must
+    // run BEFORE clearAuth()/clearStore() below, not after.
     //
     // reason: 'session_reset' — see abandonedCartMiddleware's cart/clearCart
     // case. This is the OPERATOR's session ending, not the customer's cart
@@ -251,24 +203,19 @@ export function useAuth() {
     dispatch(clearCart({ reason: 'session_reset' }));
     dispatch(clearAuth());
     dispatch(clearStore());
-    // FIXED 2026-08-22: recentlyViewed isn't in persistConfig's whitelist
-    // (see that slice's own header comment), so it was never written to
-    // localStorage — but it's still a live, in-memory Redux slice, and
-    // nothing was clearing IT on logout. clearCart() resets cart via the
-    // 'cart/clearCart' action type, which recentlyViewedMiddleware doesn't
-    // listen for (only 'cart/attachCustomer'/'cart/detachCustomer' do) — so
-    // on a shared terminal, a new agent signing in right after — without a
-    // full page reload — could see the PREVIOUS customer's recently-viewed
-    // carousel until a fresh attach/detach cycle overwrote it. Dispatched
-    // directly here rather than teaching the middleware about 'clearCart',
-    // since logout is a one-off case, not something every clearCart caller
-    // should imply.
+    // recentlyViewed isn't in persistConfig's whitelist (see that slice's
+    // own header comment), so it was never written to localStorage — but
+    // it's still a live, in-memory Redux slice, and nothing else clears it
+    // on logout. clearCart() resets cart via the 'cart/clearCart' action
+    // type, which recentlyViewedMiddleware doesn't listen for (only
+    // 'cart/attachCustomer'/'cart/detachCustomer' do) — so on a shared
+    // terminal, a new agent signing in right after — without a full page
+    // reload — could see the PREVIOUS customer's recently-viewed carousel
+    // until a fresh attach/detach cycle overwrote it.
     dispatch(clearRecentlyViewed());
     // Same reasoning as clearRecentlyViewed — wishlist isn't in
-    // persistConfig's whitelist either (see wishlistSlice's header
-    // comment), and wishlistMiddleware only listens for
-    // cart/attachCustomer/detachCustomer, not cart/clearCart, so nothing
-    // else resets this slice on logout.
+    // persistConfig's whitelist either, and wishlistMiddleware only listens
+    // for cart/attachCustomer/detachCustomer, not cart/clearCart.
     dispatch(clearWishlist());
     // No separate dispatch(clearAbandonedCartState()) needed here, unlike
     // recentlyViewed above — abandonedCartMiddleware's own cart/clearCart
@@ -277,36 +224,31 @@ export function useAuth() {
     // whether to SAVE or DELETE the Mongo record based on that reason; the
     // local Redux reset happens either way.
     // Any cookie the backend may have set (e.g. a load-balancer/session
-    // cookie) must not outlive the session it belongs to — previously only
-    // the dev-only "clear site data" button did this, so a stale cookie
-    // could persist across normal logins indefinitely.
+    // cookie) must not outlive the session it belongs to.
     clearAllCookies();
     // The dispatches above wipe Redux (and, for the persisted slices, their
     // localStorage mirror) by resetting each slice back to its initial
     // state — but that still WRITES an (empty) object to localStorage
-    // rather than removing the entry outright. persistor.purge() (2026-08-22)
-    // is redux-persist's own API for actually deleting the persisted entry,
+    // rather than removing the entry outright. persistor.purge() is
+    // redux-persist's own API for actually deleting the persisted entry,
     // which is what "cleared entirely" should mean on a full sign-out —
-    // belt-and-braces alongside the resets above, not a replacement for them
-    // (the resets still matter for the in-memory state other components are
-    // already subscribed to).
+    // belt-and-braces alongside the resets above, not a replacement for
+    // them (the resets still matter for the in-memory state other
+    // components are already subscribed to).
     persistor.purge();
-    // FIXED 2026-08-22: this used to run BEFORE the dispatches above —
     // dispatch(clearCart()) is caught by analyticsMiddleware's own
     // 'cart/clearCart' case, which calls tracker.track(EVENTS.CART_CLEARED),
-    // and track() unconditionally re-writes sessionStorage's events key. So
-    // clearing the tracker first just meant a fresh "cart cleared" event got
-    // written right back into it a moment later — sessionStorage was never
-    // actually empty after logout, confirmed live. Now the last thing to
-    // touch it, after every dispatch that could trigger a tracked event.
+    // and track() unconditionally re-writes sessionStorage's events key —
+    // so clearing the tracker AFTER every dispatch that could trigger a
+    // tracked event, not before, is what actually leaves it empty.
     tracker.clear();
     // TanStack Query's cache is a separate, module-level singleton (see
-    // lib/queryClient.js) that nothing above was ever clearing on logout.
-    // On a shared terminal, a different agent logging in right after —
-    // without a full page reload — would inherit every previously-cached
-    // query still sitting in memory: schemes list, payment modes, sales
-    // persons, financial year/document config, catalog prices, etc. Several
-    // of those aren't even keyed by store id, so they wouldn't self-correct
+    // lib/queryClient.js) that nothing above ever clears on logout. On a
+    // shared terminal, a different agent logging in right after — without
+    // a full page reload — would inherit every previously-cached query
+    // still sitting in memory: schemes list, payment modes, sales persons,
+    // financial year/document config, catalog prices, etc. Several of
+    // those aren't even keyed by store id, so they wouldn't self-correct
     // just because the new agent picks a different store. Clearing here
     // guarantees the next agent starts from a genuinely empty cache.
     queryClient.clear();
@@ -317,7 +259,6 @@ export function useAuth() {
   return {
     isAuthenticated,
     user,
-    accessToken,
     login,
     logout,
   };

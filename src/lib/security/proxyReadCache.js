@@ -5,7 +5,7 @@
 // session. Keyed on (path, body) rather than relying on Next's own
 // fetch/route caching, since these are POST reads whose body (company_id)
 // Next's cache key doesn't account for. Same "single warm process,
-// in-memory Map, lazy expiry" shape as rateLimit.js/reportSession.js —
+// in-memory Map, lazy expiry" shape as rateLimit.js —
 // resets on a cold start, fine for a short-lived performance cache.
 //
 // Never applied to anything that creates or mutates a document — only a

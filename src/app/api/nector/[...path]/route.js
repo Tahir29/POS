@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto';
+import { getSessionFromRequest } from '@/lib/ornaverse/session';
 
 // Server-side proxy for the Nector reviews + loyalty-points API.
 // NECTOR_API_KEY authenticates as this store's merchant account and must
@@ -38,8 +39,8 @@ const NECTOR_WORKSPACE = process.env.NECTOR_WORKSPACE_ID;
 // middleware.js excludes all /api paths from its auth matcher, so this
 // route has no session check of its own — ALLOWED_PATHS keeps it from
 // being a credentialed open proxy onto Nector's merchant namespace. Write
-// paths additionally require a bearer token from this app's own OrnaVerse
-// login (checked below) since a write moves a real customer's coin balance.
+// paths additionally require a signed-in operator session (checked below)
+// since a write moves a real customer's coin balance.
 const ALLOWED_PATHS = new Set(['reviews', 'reviews-count', 'leads', 'wallettransactions']);
 const WRITE_PATHS = new Set(['wallettransactions']);
 
@@ -61,7 +62,7 @@ async function proxy(request, { params }) {
     });
   }
 
-  if (WRITE_PATHS.has(path[0]) && !request.headers.get('authorization')) {
+  if (WRITE_PATHS.has(path[0]) && !(await getSessionFromRequest(request))) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), {
       status: 401,
       headers: { 'Content-Type': 'application/json' },

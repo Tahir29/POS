@@ -85,11 +85,11 @@ function buildQuery(partyId, customerMobile) {
   return params.toString();
 }
 
-async function fetchAbandonedCart(partyId, customerMobile, token) {
+// Same-origin calls throughout this file — the operator's session cookie
+// rides along automatically; the route itself rejects if no one's signed in.
+async function fetchAbandonedCart(partyId, customerMobile) {
   try {
-    const res = await fetch(`/api/customers/abandoned-cart?${buildQuery(partyId, customerMobile)}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const res = await fetch(`/api/customers/abandoned-cart?${buildQuery(partyId, customerMobile)}`);
     // FIXED 2026-09-09 — same blind spot as saveAbandonedCart's own comment:
     // a non-2xx response was silently treated as "nothing saved" with zero
     // trace of WHY. Now at least visible if it happens again.
@@ -105,7 +105,7 @@ async function fetchAbandonedCart(partyId, customerMobile, token) {
   }
 }
 
-function saveAbandonedCart(partyId, cart, token, companyId) {
+function saveAbandonedCart(partyId, cart, companyId) {
   // FIXED 2026-09-09 — this used to be .catch()-only, so a server-side
   // REJECTION (400/500 — a real HTTP response, not a network failure) was
   // completely silent: fetch() only rejects its promise on a network-level
@@ -123,7 +123,7 @@ function saveAbandonedCart(partyId, cart, token, companyId) {
   // function — the debounce timer's own guard, or this action never firing).
   fetch('/api/customers/abandoned-cart', {
     method:  'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       party_id:       partyId,
       customerName:   cart.customerName,
@@ -178,10 +178,9 @@ function saveAbandonedCart(partyId, cart, token, companyId) {
   });
 }
 
-function deleteAbandonedCart(partyId, customerMobile, token) {
+function deleteAbandonedCart(partyId, customerMobile) {
   fetch(`/api/customers/abandoned-cart?${buildQuery(partyId, customerMobile)}`, {
     method:  'DELETE',
-    headers: { Authorization: `Bearer ${token}` },
   }).catch((err) => console.warn('[abandonedCartMiddleware] delete failed', err));
 }
 
@@ -195,7 +194,7 @@ export const abandonedCartMiddleware = (store) => (next) => (action) => {
   const result = next(action);
 
   const state = store.getState();
-  const token = state.auth?.accessToken;
+  const isAuthenticated = state.auth?.isAuthenticated;
   const companyId = state.store?.activeStoreId;
 
   switch (action.type) {
@@ -210,9 +209,9 @@ export const abandonedCartMiddleware = (store) => (next) => (action) => {
       saveTimer = null;
 
       const { customerId, customerMobile } = action.payload;
-      if (!customerId || !token) break;
+      if (!customerId || !isAuthenticated) break;
 
-      fetchAbandonedCart(customerId, customerMobile, token).then((record) => {
+      fetchAbandonedCart(customerId, customerMobile).then((record) => {
         const hasSaved = record && Array.isArray(record.items) && record.items.length > 0;
         store.dispatch(setAbandonedCart(hasSaved ? record : null));
 
@@ -226,7 +225,7 @@ export const abandonedCartMiddleware = (store) => (next) => (action) => {
           // already attached and had items (re-attach, not a switch: a
           // switch always detaches first — see 'cart/detachCustomer' —
           // so the cart is empty by the time a DIFFERENT customer attaches).
-          saveAbandonedCart(customerId, freshCart, token, store.getState().store?.activeStoreId);
+          saveAbandonedCart(customerId, freshCart, store.getState().store?.activeStoreId);
         } else if (hasSaved) {
           store.dispatch(restoreCart({ items: record.items }));
           toast.success(
@@ -252,8 +251,8 @@ export const abandonedCartMiddleware = (store) => (next) => (action) => {
       clearTimeout(saveTimer);
       saveTimer = null;
 
-      if (preCart.customerId && preCart.items.length > 0 && token) {
-        saveAbandonedCart(preCart.customerId, preCart, token, companyId);
+      if (preCart.customerId && preCart.items.length > 0 && isAuthenticated) {
+        saveAbandonedCart(preCart.customerId, preCart, companyId);
       }
       store.dispatch(clearAbandonedCartState());
       break;
@@ -277,11 +276,11 @@ export const abandonedCartMiddleware = (store) => (next) => (action) => {
       // cart really is resolved, so the default (no reason) behavior stays
       // "delete". (A completed sale in checkout/page.jsx dispatches
       // 'cart/clearCartKeepCustomer' instead, below — not this action.)
-      if (preCart.customerId && token) {
+      if (preCart.customerId && isAuthenticated) {
         if (action.payload?.reason === 'session_reset') {
-          if (preCart.items.length > 0) saveAbandonedCart(preCart.customerId, preCart, token, companyId);
+          if (preCart.items.length > 0) saveAbandonedCart(preCart.customerId, preCart, companyId);
         } else {
-          deleteAbandonedCart(preCart.customerId, preCart.customerMobile, token);
+          deleteAbandonedCart(preCart.customerId, preCart.customerMobile);
         }
       }
       store.dispatch(clearAbandonedCartState());
@@ -307,7 +306,7 @@ export const abandonedCartMiddleware = (store) => (next) => (action) => {
       clearTimeout(saveTimer);
       saveTimer = null;
 
-      if (preCart.customerId && token) deleteAbandonedCart(preCart.customerId, preCart.customerMobile, token);
+      if (preCart.customerId && isAuthenticated) deleteAbandonedCart(preCart.customerId, preCart.customerMobile);
       store.dispatch(clearAbandonedCartState());
       break;
     }
@@ -315,16 +314,16 @@ export const abandonedCartMiddleware = (store) => (next) => (action) => {
     default: {
       if (MUTATING_TYPES.has(action.type)) {
         const { customerId, customerMobile } = state.cart;
-        if (!customerId || !token) break;
+        if (!customerId || !isAuthenticated) break;
 
         clearTimeout(saveTimer);
         saveTimer = setTimeout(() => {
           const latestCart = store.getState().cart;
           if (latestCart.customerId !== customerId) return; // attached customer changed mid-debounce
           if (latestCart.items.length === 0) {
-            deleteAbandonedCart(customerId, customerMobile, token);
+            deleteAbandonedCart(customerId, customerMobile);
           } else {
-            saveAbandonedCart(customerId, latestCart, token, store.getState().store?.activeStoreId);
+            saveAbandonedCart(customerId, latestCart, store.getState().store?.activeStoreId);
           }
         }, SAVE_DEBOUNCE_MS);
       }

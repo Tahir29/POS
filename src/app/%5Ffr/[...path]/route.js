@@ -24,12 +24,11 @@
 // and all of them share this same shape.
 
 import { UPSTREAM } from '@/lib/ornaverse/upstream';
-import { getReportSession, REPORT_SESSION_COOKIE } from '@/lib/ornaverse/reportSession';
+import { getSessionFromRequest } from '@/lib/ornaverse/session';
 
 async function proxy(request, { params }) {
   const { path } = await params;
-  const sessionId = request.cookies?.get?.(REPORT_SESSION_COOKIE)?.value;
-  const session = getReportSession(sessionId);
+  const session = await getSessionFromRequest(request);
 
   // No session to attach — same as the render route, can't silently
   // re-login. This is an invisible, embedded call, so the viewer's own JS

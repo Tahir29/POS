@@ -35,11 +35,11 @@ function buildQuery(partyId, customerMobile) {
   return params;
 }
 
-async function fetchWishlist(partyId, customerMobile, token) {
+// Same-origin calls throughout this file — the operator's session cookie
+// rides along automatically; the route itself rejects if no one's signed in.
+async function fetchWishlist(partyId, customerMobile) {
   try {
-    const res = await fetch(`/api/customers/wishlist?${buildQuery(partyId, customerMobile)}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const res = await fetch(`/api/customers/wishlist?${buildQuery(partyId, customerMobile)}`);
     if (!res.ok) return [];
     const data = await res.json();
     return Array.isArray(data?.items) ? data.items : [];
@@ -49,10 +49,10 @@ async function fetchWishlist(partyId, customerMobile, token) {
   }
 }
 
-function addToWishlist(partyId, customerName, customerMobile, item, token) {
+function addToWishlist(partyId, customerName, customerMobile, item) {
   fetch('/api/customers/wishlist', {
     method:  'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ party_id: partyId, customerName, customerMobile, item }),
   }).catch((err) => console.warn('[wishlistMiddleware] add failed', err));
 }
@@ -61,13 +61,12 @@ function addToWishlist(partyId, customerName, customerMobile, item, token) {
 // by item_id alone there and remove every size variant of this item_id
 // instead of just the one that was actually un-hearted. See
 // lib/mongo/wishlist.js's removeWishlistItem.
-function removeFromWishlist(partyId, customerMobile, itemId, itemSizeId, token) {
+function removeFromWishlist(partyId, customerMobile, itemId, itemSizeId) {
   const params = buildQuery(partyId, customerMobile);
   params.set('item_id', String(itemId));
   if (itemSizeId != null) params.set('item_size_id', itemSizeId);
   fetch(`/api/customers/wishlist?${params.toString()}`, {
     method:  'DELETE',
-    headers: { Authorization: `Bearer ${token}` },
   }).catch((err) => console.warn('[wishlistMiddleware] remove failed', err));
 }
 
@@ -80,10 +79,10 @@ export const wishlistMiddleware = (store) => (next) => (action) => {
       const persistedAuth = action.payload?.auth;
       const customerId = persistedCart?.customerId;
       const customerMobile = persistedCart?.customerMobile;
-      const token       = persistedAuth?.accessToken;
-      if (!customerId || !token) break;
+      const isAuthenticated = persistedAuth?.isAuthenticated;
+      if (!customerId || !isAuthenticated) break;
 
-      fetchWishlist(customerId, customerMobile, token).then((items) => {
+      fetchWishlist(customerId, customerMobile).then((items) => {
         store.dispatch(hydrateWishlist(items));
       });
       break;
@@ -91,10 +90,10 @@ export const wishlistMiddleware = (store) => (next) => (action) => {
 
     case 'cart/attachCustomer': {
       const { customerId, customerMobile } = action.payload;
-      const token = store.getState().auth?.accessToken;
-      if (!customerId || !token) break;
+      const isAuthenticated = store.getState().auth?.isAuthenticated;
+      if (!customerId || !isAuthenticated) break;
 
-      fetchWishlist(customerId, customerMobile, token).then((items) => {
+      fetchWishlist(customerId, customerMobile).then((items) => {
         store.dispatch(hydrateWishlist(items));
       });
       break;
@@ -108,21 +107,21 @@ export const wishlistMiddleware = (store) => (next) => (action) => {
     case 'wishlist/addWishlistItemLocal': {
       const state = store.getState();
       const { customerId, customerName, customerMobile } = state.cart;
-      const token = state.auth?.accessToken;
-      if (!customerId || !token) break; // shouldn't happen — useToggleWishlist already checks isAttached
+      const isAuthenticated = state.auth?.isAuthenticated;
+      if (!customerId || !isAuthenticated) break; // shouldn't happen — useToggleWishlist already checks isAttached
 
-      addToWishlist(customerId, customerName, customerMobile, action.payload, token);
+      addToWishlist(customerId, customerName, customerMobile, action.payload);
       break;
     }
 
     case 'wishlist/removeWishlistItemLocal': {
       const state = store.getState();
       const { customerId, customerMobile } = state.cart;
-      const token = state.auth?.accessToken;
-      if (!customerId || !token) break;
+      const isAuthenticated = state.auth?.isAuthenticated;
+      if (!customerId || !isAuthenticated) break;
 
       const { item_id, item_size_id } = action.payload;
-      removeFromWishlist(customerId, customerMobile, item_id, item_size_id, token);
+      removeFromWishlist(customerId, customerMobile, item_id, item_size_id);
       break;
     }
 

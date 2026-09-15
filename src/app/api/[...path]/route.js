@@ -1,69 +1,55 @@
 // Server-side reverse proxy for every OrnaVerse API call. Forwards each
 // method straight through; a filesystem route always wins over a
-// next.config.mjs rewrite for the same path. ACTIVE_ENV/UPSTREAM/
-// CLIENT_SECRET resolve from lib/ornaverse/upstream.js — switch
-// environments there, not here.
+// next.config.mjs rewrite for the same path. UPSTREAM resolves from
+// lib/ornaverse/upstream.js — switch environments there, not here.
 //
-// connect/token needs HTTP Basic Auth (client_id:client_secret) on LIVE's
-// confidential client; UAT's client is public and has no secret. Client
-// secret is server-only, injected below, never sent to the browser.
-import { UPSTREAM, CLIENT_SECRET } from '@/lib/ornaverse/upstream';
-import { checkRateLimit, getClientIp } from '@/lib/security/rateLimit';
+// Authenticates with the operator's own OrnaVerse cookie session (see
+// lib/ornaverse/session.js) rather than an OAuth bearer token — this is
+// the exact mechanism OrnaVerse's own client uses for its users, adopted
+// here after the 2026-09 auth rewire.
+//
+// EXCEPTION — `upload/*`: OrnaVerse serves uploaded product images from
+// this path with NO authentication of its own (confirmed live: a bare,
+// cookie-less request to `${UPSTREAM}/upload/...` returns the image
+// directly). Every <Image src="/api/upload/...">'s resolveImageSrc()
+// output goes through here, and Next's own image optimizer fetches that
+// URL SERVER-SIDE (not from the browser) whenever there's no custom
+// `loader` — a request that can never carry the operator's session
+// cookie, since it isn't the browser making it. Requiring a session for
+// this path the same way Services/* needs one made every such image
+// 401 and fall back to "No image available" — confirmed live, and fixed
+// here by matching OrnaVerse's own public access for exactly this prefix,
+// nothing else.
+import { UPSTREAM } from '@/lib/ornaverse/upstream';
+import { getSessionFromRequest } from '@/lib/ornaverse/session';
 import { getCachedRead, setCachedRead, isCacheableReadPath } from '@/lib/security/proxyReadCache';
+
+const PUBLIC_PATH_PREFIXES = ['upload/'];
 
 async function proxy(request, { params }) {
   const { path } = await params;
   const resolvedPath = path.join('/');
   const targetUrl = `${UPSTREAM}/${resolvedPath}${request.nextUrl.search}`;
-  const isTokenEndpoint = resolvedPath === 'connect/token';
+  const isPublicPath = PUBLIC_PATH_PREFIXES.some((prefix) => resolvedPath.startsWith(prefix));
 
   const headers = new Headers();
   const contentType = request.headers.get('content-type');
   if (contentType) headers.set('Content-Type', contentType);
-  const authorization = request.headers.get('authorization');
-  if (authorization) headers.set('Authorization', authorization);
+
+  if (!isPublicPath) {
+    const session = await getSessionFromRequest(request);
+    if (!session) {
+      return new Response(
+        JSON.stringify({ error: 'not_authenticated', error_description: 'Sign in again.' }),
+        { status: 401, headers: { 'Content-Type': 'application/json' } },
+      );
+    }
+    headers.set('Cookie', session.cookie);
+    if (session.csrf) headers.set('X-CSRF-TOKEN', session.csrf);
+  }
 
   const hasBody = !['GET', 'HEAD'].includes(request.method);
   const body = hasBody ? await request.text() : undefined;
-
-  // SEC-004: throttle password-grant login attempts before the client
-  // secret is ever attached (this is the one unauthenticated,
-  // credential-guessing call this proxy forwards). Not applied to
-  // refresh_token, which fires on its own timer and isn't a guess.
-  const tokenParams = isTokenEndpoint && body ? new URLSearchParams(body) : null;
-
-  if (tokenParams && tokenParams.get('grant_type') === 'password') {
-    const ip = getClientIp(request);
-    const username = (tokenParams.get('username') ?? '').trim().toLowerCase();
-
-    const perAccount = checkRateLimit(`login:${ip}:${username}`, { limit: 5, windowMs: 5 * 60 * 1000 });
-    const perIp = checkRateLimit(`login-ip:${ip}`, { limit: 20, windowMs: 5 * 60 * 1000 });
-
-    if (!perAccount.allowed || !perIp.allowed) {
-      const retryAfterSeconds = Math.max(perAccount.retryAfterSeconds, perIp.retryAfterSeconds);
-      return new Response(
-        JSON.stringify({
-          error: 'too_many_attempts',
-          error_description: 'Too many login attempts. Please try again later.',
-        }),
-        {
-          status: 429,
-          headers: {
-            'Content-Type': 'application/json',
-            'Retry-After': String(retryAfterSeconds),
-          },
-        },
-      );
-    }
-  }
-
-  if (tokenParams && CLIENT_SECRET && !headers.has('Authorization')) {
-    const clientId = tokenParams.get('client_id');
-    if (clientId) {
-      const basic = Buffer.from(`${clientId}:${CLIENT_SECRET}`).toString('base64');
-      headers.set('Authorization', `Basic ${basic}`);
-    }
-  }
 
   // Short-TTL cache for a small allowlist of read-only, tenant-wide
   // reference endpoints (payment modes, sales persons, document numbering,

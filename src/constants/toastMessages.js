@@ -34,8 +34,9 @@ const TOAST = {
   },
 
   STORE: {
-    SWITCHED:    (storeName) => `Switched to ${storeName}.`,
-    LOAD_FAILED: 'Failed to load store list. Please try again.',
+    SWITCHED:      (storeName) => `Switched to ${storeName}.`,
+    LOAD_FAILED:   'Failed to load store list. Please try again.',
+    SWITCH_FAILED: 'Could not switch stores. Please try again.',
   },
 
   WISHLIST: {

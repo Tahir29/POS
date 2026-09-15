@@ -1,15 +1,16 @@
 // src/lib/ornaverse/upstream.js
 // SERVER-ONLY. Which OrnaVerse environment this deployment talks to.
 //
-// Extracted so the API proxy (app/api/[...path]/route.js) and the report
-// renderer (app/api/report/render/route.js) resolve the same upstream from
-// one place — two copies of this would silently drift the day someone
-// switches environments.
+// Extracted so every server-side call into OrnaVerse (the Services/* proxy,
+// the report renderer, session.js's login dance) resolves the same
+// upstream from one place — two copies of this would silently drift the
+// day someone switches environments.
 //
-// To switch environments, change ACTIVE_ENV in environment.js (not here —
-// that file is also imported by client-safe authConfig.js, so the flag
-// lives in one place both sides can reach). See route.js for why the LIVE
-// client needs a secret and UAT (a public OAuth client) does not.
+// To switch environments, change ACTIVE_ENV in environment.js. Since the
+// 2026-09 auth rewire (see lib/ornaverse/session.js), there is no OAuth
+// client per environment any more — both UAT and LIVE authenticate the
+// exact same way, a real per-operator cookie session — so this file no
+// longer needs to hand out a client secret alongside the URL.
 
 import { ACTIVE_ENV } from './environment';
 
@@ -20,9 +21,3 @@ export const UPSTREAM = (
     ? process.env.NEXT_PUBLIC_ORNAVERSE_BASE_URL_LIVE
     : process.env.NEXT_PUBLIC_ORNAVERSE_BASE_URL_UAT) || ''
 ).replace(/\/+$/, '');
-
-export const CLIENT_SECRET = (
-  ACTIVE_ENV === 'LIVE'
-    ? process.env.ORNAVERSE_LIVE_CLIENT_SECRET
-    : process.env.ORNAVERSE_UAT_CLIENT_SECRET
-) || '';

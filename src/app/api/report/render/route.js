@@ -1,20 +1,19 @@
 // Renders an OrnaVerse document report (invoice, e-certificate, ...) and
 // returns its HTML so the POS can show it inline.
 //
-// The generic proxy at api/[...path] can't do this: it forwards the caller's
-// bearer token, but /Print/Render is cookie-authenticated and answers a
-// bearer request with the login page. This route uses a server-held
-// session instead — see lib/ornaverse/reportSession.js.
+// /Print/Render is cookie-authenticated, same as every other Services/* call
+// since the 2026-09 auth rewire — see lib/ornaverse/session.js for why this
+// is now the app's one and only session mechanism, not a side channel.
 //
 // Request  (JSON): { reportKey, opt, reportFile, reportFolder, reportSubFolder? }
 // Response: text/html on success, JSON { error } otherwise.
 
 import { UPSTREAM } from '@/lib/ornaverse/upstream';
 import {
-  getReportSession,
-  destroyReportSession,
-  REPORT_SESSION_COOKIE,
-} from '@/lib/ornaverse/reportSession';
+  getSessionFromRequest,
+  destroyOrnaverseSession,
+  SESSION_COOKIE,
+} from '@/lib/ornaverse/session';
 
 /** Their login page comes back as HTML with this title when auth is refused. */
 function isLoginPage(html) {
@@ -67,14 +66,13 @@ export async function POST(request) {
     reportSubFolder: reportSubFolder ?? '',
   };
 
-  const sessionId = request.cookies?.get?.(REPORT_SESSION_COOKIE)?.value;
-  const session = getReportSession(sessionId);
+  const session = await getSessionFromRequest(request);
 
   // The password is never kept, so a missing session can't be silently
   // re-established — tell the operator to sign in again.
   if (!session) {
     return Response.json(
-      { error: 'Your OrnaVerse print session has expired. Sign out and back in to print invoices.' },
+      { error: 'Your OrnaVerse session has expired. Sign out and back in to print invoices.' },
       { status: 401 },
     );
   }
@@ -84,7 +82,8 @@ export async function POST(request) {
 
     // A rejected cookie doesn't 401 — it renders the login page with a 200.
     if (isLoginPage(result.html)) {
-      destroyReportSession(sessionId);
+      const sessionId = request.cookies?.get?.(SESSION_COOKIE)?.value;
+      destroyOrnaverseSession(sessionId);
       return Response.json(
         { error: 'Your OrnaVerse print session is no longer valid. Sign out and back in to print invoices.' },
         { status: 401 },

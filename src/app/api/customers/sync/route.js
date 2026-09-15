@@ -2,21 +2,22 @@
 // see lib/mongo/customerProfile.js for what does (and does not) get stored.
 //
 // Only party_id is accepted from the client — the profile itself is always
-// re-fetched server-side from OrnaVerse using the caller's own bearer token
+// re-fetched server-side from OrnaVerse using the caller's own session
 // (Services/POS/Customer/Retrieve), never trusted from the request body.
-// This also doubles as auth: an invalid/expired token is rejected by
+// This also doubles as auth: an invalid/expired session is rejected by
 // OrnaVerse itself before Mongo is touched.
 
 import { customerProfileSchema } from '@/validators/customerProfileSchema';
 import { upsertCustomerProfile } from '@/lib/mongo/customerProfile';
 import { UPSTREAM } from '@/lib/ornaverse/upstream';
+import { getSessionFromRequest } from '@/lib/ornaverse/session';
 
 const requestSchema = customerProfileSchema.pick({ party_id: true });
 
 export async function POST(request) {
-  const authHeader = request.headers.get('authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return Response.json({ error: 'Missing bearer token' }, { status: 401 });
+  const session = await getSessionFromRequest(request);
+  if (!session) {
+    return Response.json({ error: 'Not authenticated' }, { status: 401 });
   }
 
   let body;
@@ -34,9 +35,11 @@ export async function POST(request) {
 
   let retrieveRes;
   try {
+    const headers = { 'Content-Type': 'application/json', Cookie: session.cookie };
+    if (session.csrf) headers['X-CSRF-TOKEN'] = session.csrf;
     retrieveRes = await fetch(`${UPSTREAM}/Services/POS/Customer/Retrieve`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: authHeader },
+      headers,
       body: JSON.stringify({ EntityId: party_id }),
       cache: 'no-store',
     });

@@ -40,11 +40,11 @@ function buildQuery(partyId, customerMobile) {
   return params.toString();
 }
 
-async function fetchRecentlyViewed(partyId, customerMobile, token) {
+// Same-origin calls throughout this file — the operator's session cookie
+// rides along automatically; the route itself rejects if no one's signed in.
+async function fetchRecentlyViewed(partyId, customerMobile) {
   try {
-    const res = await fetch(`/api/customers/recently-viewed?${buildQuery(partyId, customerMobile)}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const res = await fetch(`/api/customers/recently-viewed?${buildQuery(partyId, customerMobile)}`);
     if (!res.ok) return [];
     const data = await res.json();
     return Array.isArray(data?.items) ? data.items : [];
@@ -54,10 +54,10 @@ async function fetchRecentlyViewed(partyId, customerMobile, token) {
   }
 }
 
-function recordView(partyId, customerName, customerMobile, item, token) {
+function recordView(partyId, customerName, customerMobile, item) {
   fetch('/api/customers/recently-viewed', {
     method:  'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    headers: { 'Content-Type': 'application/json' },
     body:    JSON.stringify({ party_id: partyId, customerName, customerMobile, item }),
   }).catch((err) => console.warn('[recentlyViewedMiddleware] record view failed', err));
 }
@@ -71,10 +71,10 @@ export const recentlyViewedMiddleware = (store) => (next) => (action) => {
       const persistedAuth = action.payload?.auth;
       const customerId = persistedCart?.customerId;
       const customerMobile = persistedCart?.customerMobile;
-      const token       = persistedAuth?.accessToken;
-      if (!customerId || !token) break;
+      const isAuthenticated = persistedAuth?.isAuthenticated;
+      if (!customerId || !isAuthenticated) break;
 
-      fetchRecentlyViewed(customerId, customerMobile, token).then((items) => {
+      fetchRecentlyViewed(customerId, customerMobile).then((items) => {
         store.dispatch(hydrateRecentlyViewed(items));
       });
       break;
@@ -82,10 +82,10 @@ export const recentlyViewedMiddleware = (store) => (next) => (action) => {
 
     case 'cart/attachCustomer': {
       const { customerId, customerMobile } = action.payload;
-      const token = store.getState().auth?.accessToken;
-      if (!customerId || !token) break;
+      const isAuthenticated = store.getState().auth?.isAuthenticated;
+      if (!customerId || !isAuthenticated) break;
 
-      fetchRecentlyViewed(customerId, customerMobile, token).then((items) => {
+      fetchRecentlyViewed(customerId, customerMobile).then((items) => {
         store.dispatch(hydrateRecentlyViewed(items));
       });
       break;
@@ -99,10 +99,10 @@ export const recentlyViewedMiddleware = (store) => (next) => (action) => {
     case 'recentlyViewed/addRecentlyViewedItem': {
       const state = store.getState();
       const { customerId, customerName, customerMobile } = state.cart;
-      const token = state.auth?.accessToken;
-      if (!customerId || !token) break; // shouldn't happen — the hook that dispatches this already checks isAttached
+      const isAuthenticated = state.auth?.isAuthenticated;
+      if (!customerId || !isAuthenticated) break; // shouldn't happen — the hook that dispatches this already checks isAttached
 
-      recordView(customerId, customerName, customerMobile, action.payload, token);
+      recordView(customerId, customerName, customerMobile, action.payload);
       break;
     }
 

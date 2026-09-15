@@ -1,8 +1,8 @@
 // src/hooks/customer/useCustomerLookup.js
 // Looks up a customer by mobile; on a hit, also fires a fire-and-forget sync
 // to Mongo (api/customers/sync) for the personalization/retargeting data layer.
-// The sync call requires a bearer token — read lazily from the store rather
-// than adding a hook-level dependency for one background call.
+// The sync call is same-origin, so the operator's session cookie rides
+// along automatically — the route itself rejects if no one's signed in.
 
 import { useQuery } from '@tanstack/react-query';
 import { getCustomer } from '@/services/customerService';
@@ -11,13 +11,9 @@ import { QUERY_KEYS } from '@/constants/queryKeys';
 import APP_CONFIG from '@/constants/appConfig';
 
 function syncCustomerProfile(partyId) {
-  const { store } = require('@/store');
-  const accessToken = store.getState().auth.accessToken;
-  if (!accessToken) return; // no token — nothing to sync with
-
   fetch('/api/customers/sync', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ party_id: partyId }),
   }).catch((err) => console.warn('[syncCustomerProfile] failed', err));
 }

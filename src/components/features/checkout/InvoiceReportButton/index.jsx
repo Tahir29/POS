@@ -4,19 +4,20 @@
 // their POS: DocumentReports/List gets the formats configured for this
 // document type, then POST /Print/Render returns an HTML document shown
 // here in an iframe. Proxied through our own /api/report/render, which
-// holds a server-side OrnaVerse cookie session — /Print/Render is
-// cookie-authenticated and ignores the bearer token the rest of the app
-// uses (see lib/ornaverse/reportSession.js).
+// resolves the operator's OrnaVerse cookie session server-side — the same
+// session every other call in this app authenticates with (see
+// lib/ornaverse/session.js).
 //
 // Replaces two buttons that never worked: "Download Invoice PDF" (called
 // GeneratePDF, which 500s on UAT) and "Print Invoice" (window.print(),
 // which printed the confirmation screen, not the invoice).
 //
-// The print-session cookie lives in server memory and can expire (401)
-// independently of the operator's signed-in session. Rather than forcing
-// a full sign-out (which would also drop the attached customer/cart),
-// reconnect below re-enters just the password to re-establish the print
-// session and retries the report that failed.
+// The session can expire (401) mid-shift. Rather than forcing a full
+// sign-out (which would also drop the attached customer/cart), reconnect
+// below re-enters just the password to re-establish it — since this is now
+// the SAME session everything else in the app uses (see session.js), this
+// also transparently fixes any other call that would otherwise be failing,
+// not just printing — then retries the report that failed.
 
 import { useState, useRef } from 'react';
 import { useSelector } from 'react-redux';
@@ -25,7 +26,7 @@ import { Printer, Loader2, X, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { getDocumentReports } from '@/services/documentConfigService';
-import { createReportSession } from '@/services/authService';
+import { login as loginToOrnaverse } from '@/services/authService';
 import { selectAuthUser } from '@/store/slices/authSlice';
 import APP_CONFIG from '@/constants/appConfig';
 
@@ -103,16 +104,14 @@ export default function InvoiceReportButton({
     setIsReconnecting(true);
     setReconnectError(null);
     try {
-      const ok = await createReportSession(authUser?.username, reconnectPassword);
-      if (!ok) {
-        setReconnectError('Incorrect password, or OrnaVerse could not be reached. Please try again.');
-        return;
-      }
+      await loginToOrnaverse(authUser?.username, reconnectPassword);
       setReconnectPassword('');
       setNeedsReconnect(false);
       // Retry the report that just failed, rather than making the
       // operator pick a format again after proving their password.
       if (lastReportRef.current) await openReport(lastReportRef.current);
+    } catch (err) {
+      setReconnectError(err?.message ?? 'Incorrect password, or OrnaVerse could not be reached. Please try again.');
     } finally {
       setIsReconnecting(false);
     }
