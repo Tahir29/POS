@@ -12,6 +12,7 @@
 // pipeline — so the two shelves behave identically to the operator and
 // there's exactly one carousel pattern to maintain, not two.
 
+import { useEffect, useRef } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Swiper, SwiperSlide } from 'swiper/react';
 import { FreeMode, Navigation, Mousewheel } from 'swiper/modules';
@@ -22,6 +23,9 @@ import ProductCard from '@/components/features/catalog/ProductCard';
 import { useLiveCatalogPrices } from '@/hooks/catalog/useLiveCatalogPrices';
 import { useCrossStoreStockCodes } from '@/hooks/catalog/useCrossStoreStockCodes';
 import { useSimilarProducts } from '@/hooks/products/useSimilarProducts';
+import tracker from '@/lib/analytics/tracker';
+import EVENTS from '@/lib/analytics/events';
+import { buildProductAttributes } from '@/lib/analytics/productAttributes';
 
 function NavButton({ direction }) {
   const isPrev = direction === 'prev';
@@ -56,6 +60,25 @@ export default function SimilarProductsCarousel({ product, activeStoreId }) {
   const itemIds = items.map((i) => i.item_id);
   const { stockByItemId, isLoading: stockLoading } = useCrossStoreStockCodes(itemIds);
 
+  // SIMILAR_PRODUCTS_VIEWED — fires once per base product, the moment this
+  // shelf actually has something to show (mirrors the render gate right
+  // below). Ref-gated on item_id rather than a plain "fire on mount" so
+  // navigating PDP-to-PDP (same component instance, new product via the
+  // App Router) fires again for the new product instead of staying silent
+  // — same idiom as page.jsx's own trackedItemIdRef for PRODUCT_VIEWED.
+  const trackedItemIdRef = useRef(null);
+  useEffect(() => {
+    if (!product?.item_id || items.length === 0) return;
+    if (trackedItemIdRef.current === product.item_id) return;
+    trackedItemIdRef.current = product.item_id;
+
+    tracker.track(EVENTS.SIMILAR_PRODUCTS_VIEWED, {
+      surface: 'pdp_carousel',
+      item_count: items.length,
+      ...buildProductAttributes({ product }),
+    });
+  }, [product, items.length]);
+
   // Covers both "nothing to show yet" (cold catalog cache still sweeping)
   // and "nothing to show ever" (no match at all, e.g. a one-of-a-kind
   // item_group_id) — no empty shelf, no "loading" flash for a shelf the
@@ -89,6 +112,7 @@ export default function SimilarProductsCarousel({ product, activeStoreId }) {
                   product={{ ...item, price, is_pricing: isPricing }}
                   showStockBadge={!stockLoading}
                   realStock={stockByItemId.get(item.item_id) ?? null}
+                  similarProductsSurface="pdp_carousel"
                 />
               </SwiperSlide>
             );

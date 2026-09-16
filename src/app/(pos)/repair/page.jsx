@@ -230,7 +230,7 @@ function RepairInNewForm({ onDone }) {
   };
 
   const onSubmit = async (data) => {
-    if (!customerId) return toast.error('Attach a customer to the session before submitting.');
+    if (!customerId) return toast.error('Assign a customer to the session before submitting.');
     if (!headerConfig.isReady) {
       if (headerConfig.isError) headerConfig.refetch();
       return toast.error(
@@ -344,7 +344,7 @@ function RepairInNewForm({ onDone }) {
       <FormField label="Items for Repair" required error={errors.item_keys}>
         {!customerId ? (
           <p className="text-xs text-muted-foreground">
-            Attach a customer to see what they&apos;ve bought.
+            Assign a customer to see what they&apos;ve bought.
           </p>
         ) : itemsLoading ? (
           <InlineLoader label="Loading their purchases…" />

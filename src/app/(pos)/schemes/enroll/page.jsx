@@ -14,6 +14,7 @@ import { useSelector } from 'react-redux';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { toast } from 'react-toastify';
 import { ChevronLeft } from 'lucide-react';
 
 import { useSchemes }        from '@/hooks/schemes/useSchemes';
@@ -127,6 +128,22 @@ function EnrollScreen() {
     // (isBelowMinimumAmount above); this just guards the same rule at the
     // actual submit path too, in case the two ever fall out of sync.
     if (isBelowMinimumAmount) return;
+
+    // FIXED 2026-09-16 — mirrors ReceiptSheet.prepareSubmit's own gate
+    // (schemes/page.jsx). Without this, submitting while the financial-year
+    // lookup was still loading (or had genuinely failed) sent
+    // financial_year_id: undefined with no warning at all.
+    if (!headerConfig.isReady) {
+      if (headerConfig.isError) headerConfig.refetch();
+      toast.error(
+        headerConfig.isConfigMissing
+          ? "This document type isn't set up for your store yet — contact OrnaVerse support."
+          : headerConfig.isError
+            ? 'Store configuration failed to load — retrying now, try again in a moment.'
+            : 'Store configuration is still loading — try again in a moment.'
+      );
+      return;
+    }
 
     const schemeAmount = Number(data.scheme_amount);
     const tenure        = Number(data.tenure);

@@ -104,7 +104,7 @@ function EstimationNewForm({ onDone }) {
   };
 
   const onSubmit = async (data) => {
-    if (!customerId) return toast.error('Attach a customer to the session before submitting.');
+    if (!customerId) return toast.error('Assign a customer to the session before submitting.');
     if (!headerConfig.isReady) {
       if (headerConfig.isError) headerConfig.refetch();
       return toast.error(

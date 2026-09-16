@@ -8,7 +8,12 @@ import { Badge } from '@/components/ui/badge';
  */
 export default function SchemeCard({ scheme }) {
   const {
-    scheme_name,
+    // FIXED 2026-09-16 — this row's real name field is scheme_display_name
+    // (scheme_name doesn't exist on it), same as everywhere else this
+    // entity is read (enroll/page.jsx, useSchemeEnrollments.js,
+    // useCustomerEnrollments.js) — was silently rendering "—" for every
+    // real scheme.
+    scheme_display_name,
     scheme_code,
     scheme_type,
     tenure,
@@ -26,7 +31,7 @@ export default function SchemeCard({ scheme }) {
       <div className="flex items-start justify-between gap-3">
         <div>
           <h3 className="text-base font-semibold text-foreground leading-tight">
-            {scheme_name ?? '—'}
+            {scheme_display_name ?? scheme_code ?? '—'}
           </h3>
           <p className="text-xs text-muted-foreground mt-0.5">{scheme_code ?? '—'}</p>
         </div>

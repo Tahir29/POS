@@ -1,7 +1,7 @@
-// Server-side proxy for Shopify product media (images + video).
-// SHOPIFY_ADMIN_TOKEN is a secret with full store access and must never
-// reach the browser; this route fetches from Shopify and returns only
-// normalized data to the client.
+// Server-side proxy for Shopify product media (images + video) AND the
+// product's own description — SHOPIFY_ADMIN_TOKEN is a secret with full
+// store access and must never reach the browser; this route fetches from
+// Shopify and returns only normalized data to the client.
 //
 // Uses GraphQL rather than the REST /images.json endpoint because REST's
 // Product resource only exposes `images` — video/3D only exist on Shopify's
@@ -10,6 +10,15 @@
 // This store does have real video assets on some products (a 360° rotation
 // clip) that the old REST route could never have surfaced.
 //
+// `description` (added 2026-09-16) powers ProductStorySection's "Story
+// Behind The Product" copy — confirmed live against this store's own real
+// products (via the Shopify Admin GraphQL API directly) that `descriptionHtml`
+// IS genuinely per-product marketing copy, not boilerplate: two unrelated
+// products' descriptions came back completely different, and one of them
+// matched a reference screenshot word-for-word. Riding along on this same
+// request (not a second round trip) since the PDP already calls this route
+// for images/videos on every product view.
+//
 // REQUEST:
 //   GET /api/shopify/product-media/{externalProductId}
 //
@@ -17,10 +26,11 @@
 //   {
 //     images: [{ id, src, alt, width, height, position }],
 //     videos: [{ id, alt, position, poster, sources: [{ url, format }] }],
+//     description: string | null,
 //   }
 //
 // RESPONSE (error):
-//   { images: [], videos: [], error: string }
+//   { images: [], videos: [], description: null, error: string }
 
 import { NextResponse } from 'next/server';
 
@@ -31,6 +41,7 @@ const API_VERSION   = '2025-10';
 const MEDIA_QUERY = `
   query ProductMedia($id: ID!) {
     product(id: $id) {
+      descriptionHtml
       media(first: 50) {
         edges {
           node {
@@ -50,6 +61,28 @@ const MEDIA_QUERY = `
     }
   }
 `;
+
+// Shopify's descriptionHtml is simple merchant-authored markup (a handful of
+// <p>/<br>/<strong> tags in practice, confirmed against this store's real
+// products) — not rich enough to warrant a full HTML parser, and rendered
+// here as plain text (ProductStorySection uses a bare <p>, no
+// dangerouslySetInnerHTML) so there's no markup-injection surface at all.
+// Block-level tags become a paragraph break; everything else is stripped.
+function htmlToPlainText(html) {
+  if (!html) return null;
+  const text = html
+    .replace(/<\/(p|div|li)>/gi, '\n\n')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, '\'')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+  return text || null;
+}
 // NOTE: Video's poster/thumbnail field is `preview { image { url } }`, not
 // `previewImage` — the latter doesn't exist on this API version's Video
 // type and 400s the whole query.
@@ -60,14 +93,14 @@ export async function GET(request, { params }) {
   if (!SHOPIFY_STORE || !SHOPIFY_TOKEN) {
     console.error('[Shopify] Missing SHOPIFY_STORE or SHOPIFY_ADMIN_TOKEN env vars');
     return NextResponse.json(
-      { images: [], videos: [], error: 'Shopify not configured' },
+      { images: [], videos: [], description: null, error: 'Shopify not configured' },
       { status: 500 }
     );
   }
 
   if (!productId || !/^\d+$/.test(productId)) {
     return NextResponse.json(
-      { images: [], videos: [], error: 'Invalid product ID' },
+      { images: [], videos: [], description: null, error: 'Invalid product ID' },
       { status: 400 }
     );
   }
@@ -92,18 +125,20 @@ export async function GET(request, { params }) {
     if (!res.ok) {
       console.error(`[Shopify] media fetch failed: ${res.status} for product ${productId}`);
       return NextResponse.json(
-        { images: [], videos: [], error: `Shopify returned ${res.status}` },
+        { images: [], videos: [], description: null, error: `Shopify returned ${res.status}` },
         { status: res.status }
       );
     }
 
     const data = await res.json();
-    const edges = data?.data?.product?.media?.edges ?? [];
+    const product = data?.data?.product;
+    const edges = product?.media?.edges ?? [];
+    const description = htmlToPlainText(product?.descriptionHtml);
 
     if (data.errors) {
       console.error('[Shopify] media GraphQL errors:', data.errors);
       return NextResponse.json(
-        { images: [], videos: [], error: 'Shopify GraphQL error' },
+        { images: [], videos: [], description: null, error: 'Shopify GraphQL error' },
         { status: 502 }
       );
     }
@@ -139,12 +174,12 @@ export async function GET(request, { params }) {
       // Model3d / ExternalVideo intentionally not handled — unused so far.
     });
 
-    return NextResponse.json({ images, videos });
+    return NextResponse.json({ images, videos, description });
 
   } catch (err) {
     console.error('[Shopify] media fetch error:', err);
     return NextResponse.json(
-      { images: [], videos: [], error: 'Failed to fetch media' },
+      { images: [], videos: [], description: null, error: 'Failed to fetch media' },
       { status: 500 }
     );
   }

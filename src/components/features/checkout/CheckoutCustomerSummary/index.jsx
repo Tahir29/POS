@@ -44,7 +44,7 @@ export default function CheckoutCustomerSummary() {
         >
           <AlertCircle size={18} className="text-status-made-order shrink-0" aria-hidden="true" />
           <span className="text-sm text-status-made-order">
-            No customer attached. Tap to attach a customer before placing the order.
+            No customer assigned. Tap to assign a customer before placing the order.
           </span>
         </button>
       )}

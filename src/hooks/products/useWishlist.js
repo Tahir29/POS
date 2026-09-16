@@ -46,7 +46,7 @@ export function useToggleWishlist() {
     if (!product?.item_id) return;
 
     if (!isAttached) {
-      toast.info('Attach a customer to save items to their wishlist');
+      toast.info('Assign a customer to save items to their wishlist');
       return;
     }
 

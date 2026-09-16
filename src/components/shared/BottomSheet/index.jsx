@@ -5,9 +5,25 @@
 // (AnimatePresence), sliding on whichever axis matches the active layout.
 //
 // Props: isOpen, onClose, title, children, footer? (sticky footer node),
-// maxWidth? (Tailwind max-w class for the side sheet, default 'max-w-md').
+// maxWidth? (Tailwind max-w class for the side sheet, default 'max-w-md'),
+// alwaysBottom? (default false — when true, keeps the bottom-sheet
+// presentation at every width instead of switching to the md+ side drawer;
+// added for ProductCard's "View Similar" sheet, which is explicitly a
+// bottom sheet on desktop/tablet/mobile alike, not a side panel).
+//
+// PORTALED TO document.body (2026-09-16) — `position: fixed` is positioned
+// relative to the nearest ancestor with its OWN CSS `transform`, not the
+// viewport, the instant one exists. A card that triggers this sheet from
+// inside a Swiper carousel (RecentlyViewedCarousel, SimilarProductsCarousel)
+// sits under Swiper's own `.swiper-wrapper`, which always carries
+// `transform: translate3d(...)` — without the portal, the sheet opened
+// clipped/mispositioned inside that narrow slide instead of over the whole
+// screen (reported as "View Similar doesn't work properly" on the product
+// detail page). Rendering into document.body sidesteps every ancestor's
+// transform, no matter where the trigger lives in the tree.
 
 import { useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { X } from 'lucide-react';
 import { useMediaQuery } from '@/hooks/ui/useMediaQuery';
@@ -21,9 +37,10 @@ export default function BottomSheet({
   children,
   footer,
   maxWidth = 'max-w-md',
+  alwaysBottom = false,
 }) {
   const sheetRef = useRef(null);
-  const isDesktop = useMediaQuery('(min-width: 768px)'); // keep in sync with the md: breakpoint below
+  const isDesktop = useMediaQuery('(min-width: 768px)') && !alwaysBottom; // keep in sync with the md: breakpoint below
   const reduceMotion = useReducedMotion();
 
   useBodyScrollLock(isOpen); // prevents layout shift on open/close — see hook's own header
@@ -48,7 +65,13 @@ export default function BottomSheet({
         exit: { opacity: 0, ...offAxis },
       };
 
-  return (
+  // document doesn't exist during SSR — isOpen is always false on the
+  // server (a sheet only ever opens from a later user action), so this
+  // never hides an already-open sheet; matches ProductImageZoomModal's
+  // identical guard for the same reason.
+  if (typeof document === 'undefined') return null;
+
+  return createPortal(
     <AnimatePresence>
       {isOpen && (
         <>
@@ -72,14 +95,16 @@ export default function BottomSheet({
               fixed z-50 shadow-2xl flex flex-col outline-none
               bg-card
 
-              /* Mobile — bottom sheet */
+              /* Mobile — bottom sheet (and every width, when alwaysBottom) */
               bottom-0 left-0 right-0
               rounded-t-2xl max-h-[85vh]
 
-              /* Tablet — side sheet */
-              md:bottom-0 md:top-0 md:left-auto md:right-0
-              md:rounded-none md:rounded-l-2xl
-              md:h-full md:max-h-full md:w-full ${maxWidth}
+              /* Tablet — side sheet, unless alwaysBottom keeps this a bottom sheet */
+              ${alwaysBottom ? '' : `
+                md:bottom-0 md:top-0 md:left-auto md:right-0
+                md:rounded-none md:rounded-l-2xl
+                md:h-full md:max-h-full md:w-full ${maxWidth}
+              `}
             `}
             {...panelMotion}
             transition={{ duration: DURATION.panel, ease: EASE_PREMIUM }}
@@ -116,6 +141,7 @@ export default function BottomSheet({
           </motion.div>
         </>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   );
 }

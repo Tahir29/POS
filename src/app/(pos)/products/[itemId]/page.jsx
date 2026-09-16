@@ -26,6 +26,7 @@ import ProductTrustBadge     from '@/components/features/products/ProductTrustBa
 import ProductStorySection   from '@/components/features/products/ProductStorySection';
 import CustomizeSheet        from '@/components/features/products/CustomizeSheet';
 import PriceBreakdown        from '@/components/features/products/PriceBreakdown';
+import TodaysRateStrip       from '@/components/features/products/TodaysRateStrip';
 import ProductStickyActionBar from '@/components/features/products/ProductStickyActionBar';
 import ProductTrustSection   from '@/components/features/products/ProductTrustSection';
 import ProductReviewsList    from '@/components/features/products/ProductReviewsList';
@@ -129,7 +130,10 @@ function ProductDetailScreen() {
   // ── Shopify images ────────────────────────────────────────────────────────
   // Raw `primaryImage` (images[0]) is deliberately unused here — it's
   // colour-agnostic; see activePrimaryImage below.
-  const { images: shopifyImages, videos: shopifyVideos, isLoading: shopifyImagesLoading } = useShopifyProductImages(externalProductId);
+  const {
+    images: shopifyImages, videos: shopifyVideos,
+    description: shopifyDescription, isLoading: shopifyImagesLoading,
+  } = useShopifyProductImages(externalProductId);
 
   // Combines both loading flags so the gallery doesn't flash "no image"
   // before variants (which resolve externalProductId) have settled.
@@ -551,6 +555,11 @@ function ProductDetailScreen() {
               />
             )}
 
+            {/* Above PriceBreakdown — "here's today's live market rate"
+                read first, then "here's what we charged you for this
+                piece" right below it. */}
+            <TodaysRateStrip />
+
             {/* Full-width, placed before the spec cards: cost first, then composition. */}
             {numericUnitPrice != null && <PriceBreakdown priced={livePricing} />}
 
@@ -559,11 +568,9 @@ function ProductDetailScreen() {
 
         <ProductTrustBadge />
 
-        <ProductStorySection />
+        <ProductStorySection body={shopifyDescription} isLoading={imagesLoading} product={product} />
 
         <ProductSpecifications product={activeItem} pricedItem={livePricing} />
-
-        <ProductTrustSection />
 
         {/* Reuses externalProductId already resolved for Shopify images — no extra OrnaVerse calls. */}
         <ProductReviewsList shopifyProductId={externalProductId} />
@@ -577,6 +584,8 @@ function ProductDetailScreen() {
             Viewed: "similar to what you're looking at now" is more relevant
             here than the customer's own browsing history. */}
         <SimilarProductsCarousel product={product} activeStoreId={activeStoreId} />
+
+        <ProductTrustSection />        
 
         {/* Only ever populated for an attached customer — see useRecordProductView above. */}
         <RecentlyViewedCarousel excludeItemId={product.item_id} />

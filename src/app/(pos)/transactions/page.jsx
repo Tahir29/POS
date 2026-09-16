@@ -58,6 +58,7 @@ import {
   IndianRupee,
   AlertCircle,
   Check,
+  Ban,
 }                                          from 'lucide-react';
 
 import {
@@ -69,13 +70,14 @@ import {
   useURDPurchases,
 }                                          from '@/hooks/transactions/useTransactionLists';
 import {
-  useCreateReturn,     usePostReturn,
-  useCreateRefund,
-  useCreateCreditNote, usePostCreditNote,
-  useCreateExchange,   usePostExchange,
-  useCreateBuyback,    usePostBuyback,
-  useCreateURDPurchase,usePostURDPurchase,
+  useCreateReturn,     usePostReturn,     useCancelReturn,
+  useCreateRefund,                        useDeleteRefund,
+  useCreateCreditNote, usePostCreditNote, useCancelCreditNote,
+  useCreateExchange,   usePostExchange,   useCancelExchange,
+  useCreateBuyback,    usePostBuyback,    useCancelBuyback,
+  useCreateURDPurchase,usePostURDPurchase,useCancelURDPurchase,
 }                                          from '@/hooks/transactions/useTransactionMutations';
+import ConfirmDialog                      from '@/components/shared/ConfirmDialog';
 import { usePaymentModes }                from '@/hooks/checkout/usePaymentModes';
 import { useURDMasterItem }                from '@/hooks/transactions/useURDMasterItem';
 import { useSoldItems }                    from '@/hooks/transactions/useSoldItems';
@@ -263,7 +265,7 @@ function SoldItemFlowForm({ flow, onDone }) {
   };
 
   const onSubmit = async (data) => {
-    if (!customerId) return toast.error('Attach a customer to the session first.');
+    if (!customerId) return toast.error('Assign a customer to the session first.');
     if (!headerConfig.isReady) {
       // isError means the underlying queries already exhausted their
       // retries and are stuck — "try again in a moment" alone would never
@@ -587,7 +589,7 @@ function MetalLineItemForm({ type, onDone }) {
   };
 
   const onSubmit = async (data) => {
-    if (!customerId) return toast.error('Attach a customer to the session before submitting.');
+    if (!customerId) return toast.error('Assign a customer to the session before submitting.');
     if (config.pickerMode === 'fixed' && !urdItem) {
       return toast.error('URD Gold master item is still loading — try again in a moment.');
     }
@@ -789,7 +791,7 @@ function CreditNoteNewForm({ onDone }) {
   });
 
   const onSubmit = async (data) => {
-    if (!customerId) return toast.error('Attach a customer to the session before submitting.');
+    if (!customerId) return toast.error('Assign a customer to the session before submitting.');
     if (!headerConfig.isReady) {
       // isError means the underlying queries already exhausted their
       // retries and are stuck — "try again in a moment" alone would never
@@ -912,7 +914,7 @@ function RefundNewForm({ onDone }) {
   };
 
   const onSubmit = async (data) => {
-    if (!customerId) return toast.error('Attach a customer to the session before submitting.');
+    if (!customerId) return toast.error('Assign a customer to the session before submitting.');
     if (!headerConfig.isReady) {
       // isError means the underlying queries already exhausted their
       // retries and are stuck — "try again in a moment" alone would never
@@ -973,7 +975,7 @@ function RefundNewForm({ onDone }) {
 
         {!customerId ? (
           <p className="rounded-xl border border-dashed border-border px-3 py-6 text-center text-sm text-muted-foreground">
-            Attach a customer to see their credit.
+            Assign a customer to see their credit.
           </p>
         ) : creditsLoading ? (
           <InlineLoader className="py-6" label="Loading credit…" />
@@ -1054,9 +1056,56 @@ function RefundNewForm({ onDone }) {
   );
 }
 
-function TransactionDetailSheet({ transaction, onClose }) {
+// ADDED 2026-09-16 — Cancel/Delete was fully implemented at the mutation-hook
+// level for all 6 transaction types (useCancelReturn/useDeleteRefund/
+// useCancelCreditNote/useCancelExchange/useCancelBuyback/useCancelURDPurchase
+// in useTransactionMutations.js) but had ZERO call sites anywhere — this
+// sheet was view-only, so a created document could never be voided from
+// this app once it existed. Wired here, generically, keyed by the active
+// tab's `type` so one detail sheet serves all 6 without six near-duplicate
+// components.
+//
+// No confirmed "is this already cancelled/posted" status field exists on
+// any of these rows (see this file's own SCHEMA FACTS comment up top —
+// only transaction_id/document_no/document_date/party_id/party_name/
+// net_amount are confirmed) — so the action button is always shown rather
+// than guessed-hidden, and OrnaVerse's own API is the source of truth for
+// rejecting a document that's already in a state that can't be cancelled
+// (surfaced via the mutation's existing onError toast, same as every other
+// action in this file).
+const CANCEL_LABEL_BY_TYPE = {
+  returns:        'Cancel Return',
+  refunds:        'Delete Refund',
+  'credit-notes': 'Cancel Credit Note',
+  exchange:       'Cancel Exchange',
+  buyback:        'Cancel Buyback',
+  urd:            'Cancel URD Purchase',
+};
+
+function TransactionDetailSheet({ transaction, type, onClose }) {
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  // Every type's mutation hook is called unconditionally (Rules of Hooks —
+  // this component can't call just one based on `type`), then the right
+  // one is picked below. Each hook call is cheap: useMutation does nothing
+  // until .mutate() actually runs.
+  const cancelReturn     = useCancelReturn({ onSuccess: onClose });
+  const deleteRefund     = useDeleteRefund({ onSuccess: onClose });
+  const cancelCreditNote = useCancelCreditNote({ onSuccess: onClose });
+  const cancelExchange   = useCancelExchange({ onSuccess: onClose });
+  const cancelBuyback    = useCancelBuyback({ onSuccess: onClose });
+  const cancelURDPurchase = useCancelURDPurchase({ onSuccess: onClose });
+
+  const mutationByType = {
+    returns: cancelReturn, refunds: deleteRefund, 'credit-notes': cancelCreditNote,
+    exchange: cancelExchange, buyback: cancelBuyback, urd: cancelURDPurchase,
+  };
+
   if (!transaction) return null;
   const raw = transaction.raw ?? {};
+
+  const cancelLabel = CANCEL_LABEL_BY_TYPE[type];
+  const cancelMutation = mutationByType[type];
 
   const headerRows = [
     { icon: Hash,        label: 'Document No', value: transaction.documentNo ?? `#${transaction.transactionId}` },
@@ -1110,7 +1159,33 @@ function TransactionDetailSheet({ transaction, onClose }) {
             </div>
           )}
         </div>
+
+        {cancelLabel && (
+          <div className="border-t border-border p-4">
+            <Button
+              type="button"
+              variant="destructive"
+              className="w-full h-11 gap-1.5"
+              disabled={cancelMutation.isPending}
+              onClick={() => setConfirmOpen(true)}
+            >
+              <Ban className="w-4 h-4" />
+              {cancelMutation.isPending ? 'Working…' : cancelLabel}
+            </Button>
+          </div>
+        )}
       </div>
+
+      {cancelLabel && (
+        <ConfirmDialog
+          isOpen={confirmOpen}
+          onOpenChange={setConfirmOpen}
+          title={cancelLabel}
+          description={`This will permanently void ${transaction.documentNo ?? `#${transaction.transactionId}`} in OrnaVerse. This cannot be undone.`}
+          confirmLabel={cancelLabel}
+          onConfirm={() => cancelMutation.mutate(transaction.transactionId)}
+        />
+      )}
     </>
   );
 }
@@ -1132,7 +1207,7 @@ function TransactionRow({ item, onSelect }) {
 }
 
 
-function TransactionList({ hook: useHook, emptyMessage }) {
+function TransactionList({ hook: useHook, emptyMessage, type }) {
   const [skip, setSkip]         = useState(0);
   const [selected, setSelected] = useState(null);
 
@@ -1224,7 +1299,7 @@ function TransactionList({ hook: useHook, emptyMessage }) {
           )}
         </>
       )}
-      {selected && <TransactionDetailSheet transaction={selected} onClose={() => setSelected(null)} />}
+      {selected && <TransactionDetailSheet transaction={selected} type={type} onClose={() => setSelected(null)} />}
     </>
   );
 }
@@ -1290,7 +1365,7 @@ function TransactionsScreen() {
           />
 
           {view === 'list' && (
-            <TransactionList key={activeTab} hook={activeTabConfig.hook} emptyMessage={activeTabConfig.emptyMessage} />
+            <TransactionList key={activeTab} hook={activeTabConfig.hook} emptyMessage={activeTabConfig.emptyMessage} type={activeTab} />
           )}
 
           {view === 'new' && (

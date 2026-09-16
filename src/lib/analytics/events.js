@@ -35,6 +35,21 @@ const RAW_EVENTS = {
   BARCODE_SCANNED:       'barcode_scanned',
   BARCODE_SCAN_FAILED:   'barcode_scan_failed',
 
+  // Fires when the "View Similar" sheet opens (ProductCard icon) or the PDP's
+  // own Similar Products carousel renders a non-empty shelf — `surface` in
+  // the event properties tells the two apart ('sheet' | 'pdp_carousel').
+  // No impression/visibility tracking pattern exists elsewhere in this app
+  // (confirmed by audit) — this fires on the same action-triggered basis as
+  // every other event here (a real open/render), not on scroll-into-view.
+  SIMILAR_PRODUCTS_VIEWED: 'similar_products_viewed',
+  // Fires when a card inside that sheet/carousel is tapped to navigate —
+  // same `surface` values as above.
+  SIMILAR_PRODUCT_CLICKED: 'similar_product_clicked',
+  // Fires once the Story Behind The Product section actually has real
+  // Shopify description content to show (mirrors that section's own
+  // `!isLoading && body` render gate) — see ProductStorySection.jsx.
+  PRODUCT_STORY_VIEWED:    'product_story_viewed',
+
   CART_ITEM_ADDED:       'cart_item_added',
   CART_ITEM_REMOVED:     'cart_item_removed',
   CART_ITEM_QTY_CHANGED: 'cart_item_qty_changed',

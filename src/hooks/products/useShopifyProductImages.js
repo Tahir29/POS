@@ -22,6 +22,7 @@ const STALE_TIME = APP_CONFIG.STALE_TIME.MASTER_DATA;
  *   images:       Array<{ id, src, alt, width, height, position }>,
  *   videos:       Array<{ id, src, poster, alt, position }>,
  *   primaryImage: { id, src, alt, width, height, position } | null,
+ *   description:  string | null,
  *   isLoading:    boolean,
  *   isError:      boolean,
  *   hasImages:    boolean,
@@ -48,6 +49,11 @@ export function useShopifyProductImages(externalProductId) {
     images,
     videos,
     primaryImage: images[0] ?? null,
+    // ProductStorySection's real, per-product "Story Behind The Product"
+    // text — see product-media/route.js's own header for how this was
+    // confirmed to be genuine per-product copy, not boilerplate. Rides
+    // along on this same request; no separate fetch.
+    description:  query.data?.description ?? null,
     isLoading:    query.isLoading,
     isError:      query.isError,
     hasImages:    images.length > 0,

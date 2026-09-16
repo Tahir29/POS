@@ -96,7 +96,7 @@ export default function FulfillOrderAction({ raw }) {
         isOpen={showSwitchConfirm}
         onOpenChange={setShowSwitchConfirm}
         title="Replace current cart?"
-        description={`Loading this order will clear your current cart and attach ${raw.party_name ?? 'this order\'s customer'} instead.`}
+        description={`Loading this order will clear your current cart and assign ${raw.party_name ?? 'this order\'s customer'} instead.`}
         confirmLabel="Load Order"
         cancelLabel="Keep Current Cart"
         confirmVariant="default"

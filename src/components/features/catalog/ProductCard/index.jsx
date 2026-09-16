@@ -15,18 +15,24 @@ import Image               from 'next/image';
 import { useRouter }       from 'next/navigation';
 import { useSelector }     from 'react-redux';
 import { motion, useReducedMotion } from 'motion/react';
+import { PlayingCardsFan } from 'lucide-react';
 import { resolveImageSrc } from '@/lib/resolveImageSrc';
 import { resolveMetalColorName } from '@/lib/metalColor';
-import { selectActiveStoreCode } from '@/store/slices/storeSlice';
+import { selectActiveStoreCode, selectActiveStoreId } from '@/store/slices/storeSlice';
 import APP_CONFIG          from '@/constants/appConfig';
 import Logo                from '@/components/shared/Logo';
 import StarRating          from '@/components/shared/StarRating';
 import { useStyleExternalProductId } from '@/hooks/products/useStyleExternalProductId';
 import { useProductReviewSummary }   from '@/hooks/products/useProductReviewSummary';
+import { useSimilarProducts } from '@/hooks/products/useSimilarProducts';
 import WishlistButton       from '@/components/features/products/WishlistButton';
+import SimilarProductsSheet from '@/components/features/catalog/SimilarProductsSheet';
 import { Badge } from '@/components/ui/badge';
 import { EASE_PREMIUM, DURATION } from '@/lib/motion';
 import { formatAmountOrNull as formatINR } from '@/lib/priceUtils';
+import tracker from '@/lib/analytics/tracker';
+import EVENTS from '@/lib/analytics/events';
+import { buildProductAttributes } from '@/lib/analytics/productAttributes';
 
 // Swatch colors are a presentational mapping only — metal_id itself is real data.
 const METAL_ID_TO_NAME = Object.fromEntries(
@@ -68,7 +74,22 @@ function NoImagePlaceholder() {
 // storeCodes lists every store (plural — a card can be in stock at
 // several) the badge should credit; shown only alongside "In Stock",
 // never "Made to Order".
+//
+// Only the FIRST store code is named, with a "+N" for the rest (e.g.
+// "BO1 │ +3" for four in-stock stores) rather than listing every code —
+// this badge sits on a small image corner, and "PN1, BO1, CS1, N18" doesn't
+// fit there the way a single code + count does, and only gets worse as more
+// stores open. Card-local only, by design: CrossStoreStockPanel (the
+// product detail page's own "Stock Across Stores" list) still names every
+// store in full — that's the place an operator actually needs the complete
+// list, this badge is just a glance.
+//
+// The "+N" gets its own small pill rather than sitting as plain text right
+// after the code — run together ("BO1+3") they read as one garbled token;
+// a vertical divider plus a distinct chip makes it unambiguous at a glance
+// that N is a COUNT, not part of the store code itself.
 function StockBadge({ inStock, storeCodes }) {
+  const [firstCode, ...restCodes] = storeCodes ?? [];
   return (
     <Badge
       className={[
@@ -77,8 +98,18 @@ function StockBadge({ inStock, storeCodes }) {
       ].join(' ')}
     >
       {inStock ? 'In Stock' : 'Made to Order'}
-      {inStock && storeCodes?.length > 0 && (
-        <span className="ml-1 font-bold opacity-90">· {storeCodes.join(', ')}</span>
+      {inStock && firstCode && (
+        <span className="ml-1.5 inline-flex items-center gap-1.5 font-bold">
+          <span className="opacity-90">· {firstCode}</span>
+          {restCodes.length > 0 && (
+            <>
+              <span className="h-2.5 w-px bg-white/40" aria-hidden="true" />
+              <span className="rounded-full bg-white/20 px-1.5 py-0.5 text-[10px] leading-none">
+                +{restCodes.length}
+              </span>
+            </>
+          )}
+        </span>
       )}
     </Badge>
   );
@@ -90,6 +121,8 @@ function StockBadge({ inStock, storeCodes }) {
  *   showStockBadge?: boolean,
  *   storeCode?: string,
  *   realStock?: { hasStock: boolean, storeCodes: string[] } | null,
+ *   showSimilarIcon?: boolean,
+ *   similarProductsSurface?: 'sheet' | 'pdp_carousel' | null,
  * }} props
  *   realStock - genuine cross-store stock for this exact item_id, from
  *   useCrossStoreStockCodes. Pass it wherever product.has_stock can't be
@@ -97,12 +130,38 @@ function StockBadge({ inStock, storeCodes }) {
  *   overrides both has_stock and storeCode when present. Omitted on the
  *   main catalog grid/OtherStoreSection, where has_stock is already
  *   correctly scoped server-side.
+ *   showSimilarIcon (default true) - every card gets the "View Similar"
+ *   icon EXCEPT the ones rendered inside SimilarProductsSheet's own grid
+ *   (which explicitly passes `false`) — a "view similar of this similar
+ *   item" nested sheet-on-a-sheet is confusing on its own, independent of
+ *   anything technical. (An earlier version of this prop also disabled the
+ *   icon inside Swiper carousels, working around the sheet's
+ *   `position: fixed` breaking under Swiper's own `.swiper-wrapper`
+ *   transform — BottomSheet now portals to document.body instead, which
+ *   fixes that directly, so every carousel keeps the icon like any other
+ *   card.)
+ *   similarProductsSurface (default null) - set ONLY by SimilarProductsSheet
+ *   and SimilarProductsCarousel, identifying which "similar products" UI
+ *   this card lives inside. When set, tapping the card to navigate fires
+ *   EVENTS.SIMILAR_PRODUCT_CLICKED (see handleTap below) — every other
+ *   caller (catalog grid, Recently Viewed, Wishlist) leaves this null, so
+ *   an ordinary product view/tap is never mistaken for a similar-products
+ *   interaction.
  */
-function ProductCard({ product, showStockBadge = false, storeCode: storeCodeOverride, realStock = null }) {
+function ProductCard({
+  product,
+  showStockBadge = false,
+  storeCode: storeCodeOverride,
+  realStock = null,
+  showSimilarIcon = true,
+  similarProductsSurface = null,
+}) {
   const router = useRouter();
   const [imgError, setImgError] = useState(false);
+  const [isSimilarOpen, setIsSimilarOpen] = useState(false);
   const reduceMotion = useReducedMotion();
   const activeStoreCode = useSelector(selectActiveStoreCode);
+  const activeStoreId = useSelector(selectActiveStoreId);
   // storeCodeOverride lets a card (e.g. in OtherStoreSection) show a
   // different store's code than the operator's active store; ignored once
   // realStock is passed, since that's already the real answer.
@@ -135,6 +194,20 @@ function ProductCard({ product, showStockBadge = false, storeCode: storeCodeOver
   const { externalProductId } = useStyleExternalProductId(style_id ?? null);
   const { average: ratingAverage, count: ratingCount } = useProductReviewSummary(externalProductId);
 
+  // enabled: false — never force the tenant-wide catalog sweep just to
+  // decide whether THIS card's icon should show; read it passively off
+  // whatever's already warm (see useSimilarProducts's own header). The
+  // icon simply stays hidden until that cache warms some other way, then
+  // appears on its own once it does. product is null when showSimilarIcon
+  // is false — no reason to even run the match/sort when the icon (and
+  // the sheet it would open) can never show here at all.
+  const { items: similarItems } = useSimilarProducts(
+    showSimilarIcon ? product : null,
+    activeStoreId,
+    { enabled: false }
+  );
+  const hasSimilar = showSimilarIcon && similarItems.length > 0;
+
   const inStock      = realStock ? realStock.hasStock : has_stock === true;
   const badgeStoreCodes = realStock ? realStock.storeCodes : (storeCode ? [storeCode] : []);
   const metalLabel   = getMetalLabel(metal_id);
@@ -160,6 +233,12 @@ function ProductCard({ product, showStockBadge = false, storeCode: storeCodeOver
 
   function handleTap() {
     if (!item_id) return;
+    if (similarProductsSurface) {
+      tracker.track(EVENTS.SIMILAR_PRODUCT_CLICKED, {
+        surface: similarProductsSurface,
+        ...buildProductAttributes({ product }),
+      });
+    }
     router.push(`/products/${item_id}`);
   }
 
@@ -169,6 +248,7 @@ function ProductCard({ product, showStockBadge = false, storeCode: storeCodeOver
   // the nested button, silently breaking the card's click target).
   // tabIndex + onKeyDown reproduce Enter/Space behavior a div lacks.
   return (
+    <>
     <motion.div
       role="button"
       tabIndex={0}
@@ -217,25 +297,57 @@ function ProductCard({ product, showStockBadge = false, storeCode: storeCodeOver
 
         <WishlistButton product={product} reduceMotion={reduceMotion} />
 
-        {/* Rating badge floats bottom-right over the image, mirroring
-            WishlistButton's top-right placement, so the specs row below
-            gets the card's full width instead of being truncated early.
-            `compact` forces the single-star + value + count form — a
-            small corner badge has no room for 5 full stars. */}
+        {/* Rating badge floats bottom-LEFT over the image (moved from
+            bottom-right to make room for "View Similar" on the right —
+            see below). `compact` forces the single-star + value + count
+            form — a small corner badge has no room for 5 full stars. */}
         {ratingCount > 0 && (
-          <div className="absolute bottom-2 right-2 z-10 rounded-full bg-card/90 px-2 py-1 shadow-sm backdrop-blur-sm">
+          <div className="absolute bottom-2 left-2 z-10 rounded-full bg-card/90 px-2 py-1 shadow-sm backdrop-blur-sm">
             <StarRating rating={ratingAverage} count={ratingCount} compact />
           </div>
+        )}
+
+        {/* "View Similar" — bottom-right (top-left is StockBadge, top-right
+            WishlistButton, bottom-left the rating badge). stopPropagation:
+            this button sits inside the card's own role="button" click
+            target (navigate to the product), same reason WishlistButton's
+            own button needs it. Hidden entirely when there's genuinely
+            nothing to show — a curiosity-bait icon that opens an empty
+            sheet is worse than no icon at all. */}
+        {item_id && hasSimilar && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              tracker.track(EVENTS.SIMILAR_PRODUCTS_VIEWED, {
+                surface: 'sheet',
+                item_count: similarItems.length,
+                ...buildProductAttributes({ product }),
+              });
+              setIsSimilarOpen(true);
+            }}
+            aria-label="View similar products"
+            title="View similar products"
+            className="absolute bottom-2 right-2 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-card/90 text-muted-foreground shadow-sm backdrop-blur-sm transition-colors hover:bg-card"
+          >
+            <PlayingCardsFan size={16} aria-hidden="true" />
+          </button>
         )}
       </div>
 
       <div className="flex flex-1 flex-col gap-1.5 border-t border-border p-3.5">
 
-        {infoLine && (
-          <span className="truncate text-xs text-muted-foreground">
-            {infoLine}
-          </span>
-        )}
+        {/* Always rendered (min-h reserves its line even when infoLine is
+            null) — a card whose metal/weight data happens to be missing
+            must not sit shorter, or shift its price/name up, relative to
+            every other card in the same Swiper row/carousel. That was the
+            real cause of cards reading as "uneven size" even though the
+            outer card itself is already h-full/w-full stretched: two equal-
+            height cards can still look mismatched if their PRICE and NAME
+            land at different vertical positions inside them. */}
+        <span className="min-h-4 truncate text-xs text-muted-foreground">
+          {infoLine ?? ' '}
+        </span>
 
         {/* Price is live-priced and arrives after the card mounts — show
             "Pricing…"/"Price unavailable" instead of a blank gap. Staying
@@ -250,14 +362,24 @@ function ProductCard({ product, showStockBadge = false, storeCode: storeCodeOver
           </p>
         )}
 
-        {item_name && item_name !== item_code && (
-          <p className="line-clamp-2 text-sm font-semibold leading-snug text-foreground">
-            {item_name}
-          </p>
-        )}
+        {/* min-h-10 ≈ two lines at this text size — reserved even when a
+            row has no real item_name (item_name === item_code, a raw
+            unnamed catalog record), for the same reason as infoLine above. */}
+        <p className="line-clamp-2 min-h-10 text-sm font-semibold leading-snug text-foreground">
+          {item_name && item_name !== item_code ? item_name : ''}
+        </p>
 
       </div>
     </motion.div>
+
+    {hasSimilar && (
+      <SimilarProductsSheet
+        isOpen={isSimilarOpen}
+        onClose={() => setIsSimilarOpen(false)}
+        items={similarItems}
+      />
+    )}
+    </>
   );
 }
 
