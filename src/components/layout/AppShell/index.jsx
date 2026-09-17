@@ -1,6 +1,7 @@
 'use client'
 
 import { usePathname } from 'next/navigation';
+import { useSelector } from 'react-redux';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import Sidebar from '@/components/layout/Sidebar';
 import Header from '@/components/layout/Header';
@@ -8,6 +9,8 @@ import PageLoader from '@/components/shared/PageLoader';
 import PageTransition from '@/components/shared/PageTransition';
 import ScrollToTopButton from '@/components/shared/ScrollToTopButton';
 import { NavigationGuardProvider } from '@/contexts/NavigationGuardContext';
+import { useAllCatalog } from '@/hooks/catalog/useAllCatalog';
+import { selectActiveStoreId } from '@/store/slices/storeSlice';
 
 /**
  * AppShell — the root layout wrapper for all operational POS screens.
@@ -21,6 +24,26 @@ export default function AppShell({ children }) {
   // isVisible starts fresh, instead of needing an effect to reset stale
   // visibility carried over from the previous page.
   const pathname = usePathname();
+
+  // FIXED 2026-09-17 — reported: the "View Similar" icon didn't show on the
+  // catalog grid at all until AFTER visiting a product detail page once
+  // (whose own Similar Products carousel is what actually warmed
+  // useAllCatalog's shared tenant-wide sweep — see that hook's own header),
+  // and the PDP's own Similar Products shelf looked broken on a genuinely
+  // first-ever visit for the same reason: the sweep hadn't resolved yet.
+  // AppShell mounts once for the whole authenticated, store-selected
+  // session (StoreGuard, one level up, guarantees activeStoreId is already
+  // real by the time this renders) and never unmounts between page
+  // navigations — the one natural place to start this sweep proactively,
+  // in the background, the moment an operator lands anywhere in the app,
+  // rather than leaving it to whichever page happens to need it first.
+  // useAllCatalog's own staleTime means this fires the real network sweep
+  // only once per session (or per store switch) — every other caller
+  // (ProductCard's own passive check, SimilarProductsCarousel, the catalog
+  // page's own search) shares this exact same cache entry, so none of them
+  // pay for it twice.
+  const activeStoreId = useSelector(selectActiveStoreId);
+  useAllCatalog(activeStoreId);
 
   return (
     <TooltipProvider delayDuration={300}>

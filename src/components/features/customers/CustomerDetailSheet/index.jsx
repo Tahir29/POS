@@ -42,7 +42,7 @@ const TAB_LABELS = { profile: 'Profile', edit: 'Edit' };
 // Masking it again client-side just hid real data staff already have full
 // Retrieve access to, for no actual privacy benefit.
 function ProfileTab({ customer, onAttach, isAttached, onClose }) {
-  const { customerName, customerMobile, customerEmail, customerAddress, customerPan, raw } = customer;
+  const { customerName, customerMobile, customerEmail, customerAddress, customerPan, taxNo, raw } = customer;
   const partyCode = raw?.party_code && raw.party_code !== 'NA' ? raw.party_code : null;
   // ROLLED BACK 2026-09-08 — the full-profile links below used to build a
   // name-first slug (/customers/tahir-kutty-12345); reverted to the plain
@@ -81,6 +81,12 @@ function ProfileTab({ customer, onAttach, isAttached, onClose }) {
           <div className="flex items-center gap-2 text-muted-foreground">
             <CreditCard size={15} className="shrink-0 text-muted-foreground/70" />
             PAN: {customerPan}
+          </div>
+        )}
+        {taxNo && (
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <CreditCard size={15} className="shrink-0 text-muted-foreground/70" />
+            GSTIN: {taxNo}
           </div>
         )}
         {partyCode && (
@@ -176,11 +182,16 @@ function EditTab({ customer }) {
       mobile: customer.customerMobile ?? '',
       email: customer.customerEmail ?? '',
       pan_no: customer.customerPan ?? '',
+      tax_no: customer.taxNo ?? '',
+      passport_number: customer.passportNumber ?? '',
+      aadhaar_number: customer.aadhaarNumber ? String(customer.aadhaarNumber) : '',
+      dl_number: customer.dlNumber ?? '',
       address: customer.raw?.address ?? '',
       address_1: customer.raw?.address_1 ?? '',
       country_id: customer.raw?.country_id ?? null,
       state_id: customer.raw?.state_id ?? null,
       city_id: customer.raw?.city_id ?? null,
+      nationality_id: customer.nationalityId ?? null,
       pin_code: customer.raw?.pin_code ? String(customer.raw.pin_code) : '',
     },
   });
@@ -193,9 +204,14 @@ function EditTab({ customer }) {
       mobile: r.mobile ?? '',
       email: r.email && r.email !== 'NA' ? r.email : '',
       pan_no: r.pan_no && r.pan_no !== 'NA' ? r.pan_no : '',
+      tax_no: r.tax_no && r.tax_no !== 'NA' ? r.tax_no : '',
+      passport_number: r.passport_number && r.passport_number !== 'NA' ? r.passport_number : '',
+      aadhaar_number: r.aadhaar_number ? String(r.aadhaar_number) : '',
+      dl_number: r.dl_number && r.dl_number !== 'NA' ? r.dl_number : '',
       address: r.address ?? '',
       address_1: r.address_1 ?? '',
       country_id: r.country_id ?? null,
+      nationality_id: r.nationality_id ?? null,
       state_id: r.state_id ?? null,
       city_id: r.city_id ?? null,
       pin_code: r.pin_code ? String(r.pin_code) : '',
@@ -284,6 +300,30 @@ function EditTab({ customer }) {
         </div>
 
         <div className="flex flex-col gap-1.5">
+          <Label htmlFor="ds_tax_no">GSTIN <span className="text-muted-foreground text-xs">(optional)</span></Label>
+          <Input id="ds_tax_no" {...register('tax_no')} className="h-11" style={{ textTransform: 'uppercase' }} />
+          {errors.tax_no && <p className="text-sm text-destructive">{errors.tax_no.message}</p>}
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="ds_passport_number">Passport No <span className="text-muted-foreground text-xs">(optional)</span></Label>
+          <Input id="ds_passport_number" {...register('passport_number')} className="h-11" style={{ textTransform: 'uppercase' }} />
+          {errors.passport_number && <p className="text-sm text-destructive">{errors.passport_number.message}</p>}
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="ds_aadhaar_number">Aadhaar No <span className="text-muted-foreground text-xs">(optional)</span></Label>
+          <Input id="ds_aadhaar_number" type="text" inputMode="numeric" maxLength={12} {...register('aadhaar_number')} className="h-11" />
+          {errors.aadhaar_number && <p className="text-sm text-destructive">{errors.aadhaar_number.message}</p>}
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="ds_dl_number">Driving License <span className="text-muted-foreground text-xs">(optional)</span></Label>
+          <Input id="ds_dl_number" {...register('dl_number')} className="h-11" style={{ textTransform: 'uppercase' }} />
+          {errors.dl_number && <p className="text-sm text-destructive">{errors.dl_number.message}</p>}
+        </div>
+
+        <div className="flex flex-col gap-1.5">
           <Label>Address</Label>
           <Input
             {...register('address')} className="h-11" placeholder="Address line 1"
@@ -331,6 +371,17 @@ function EditTab({ customer }) {
             maxLength={6}
           />
           {errors.pin_code && <p className="text-sm text-destructive">{errors.pin_code.message}</p>}
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label>Nationality <span className="text-muted-foreground text-xs">(optional)</span></Label>
+          {/* nationality_id is a country_id (confirmed live) — reuses the
+              same Country list loaded above. */}
+          <LocationSelect
+            control={control}
+            name="nationality_id" items={countries} idKey="country_id" labelKey="country_name"
+            placeholder="Select nationality" isLoading={countriesLoading}
+          />
         </div>
 
         <Button

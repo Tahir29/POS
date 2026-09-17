@@ -611,35 +611,135 @@ function MetalLineItemForm({ type, onDone }) {
       );
     }
     try {
+      // FIXED 2026-09-17 — full line_items shape below is reverse-engineered
+      // from a REAL, successfully posted URD Purchase on LIVE (transaction_id
+      // 109, the same fixed "URD GOLD" item_id 46875 this form always uses),
+      // read via a read-only Retrieve (no document created/changed to get
+      // it), then verified end-to-end on UAT (Create → auto-posted →
+      // Retrieve → Cancel, all succeeded — transaction_id 224). The
+      // PREVIOUS version of this code sent only item_id/item_code/item_name/
+      // weight/purity/item_rate/amount — nowhere near what URDPurchase's
+      // real Create handler expects; it needs the item's full classification
+      // (karat/metal/type/tax template/etc.), the same way a BOM component
+      // row does elsewhere in this app, not a bare transaction line.
+      //
+      // Two real, counter-intuitive findings from that reference record:
+      //   - `item_cost` is genuinely 0 on a real row — the actual amount
+      //     lives in sub_total/net_amount/taxable_amount/base_* instead
+      //     (unlike every OTHER document type here, where the analogous
+      //     field carries the real amount).
+      //   - karat_id is 1022 ("OldGold") — a distinct classification from
+      //     whatever karat the same item_id resolves to elsewhere. This is
+      //     the piece that was actually missing before (not the amount
+      //     field naming) — supplying `taxable_amount` without also
+      //     supplying this real classification is what crashed Create.
       const line_items = data.line_items.map((i) => {
         const resolvedItem = config.pickerMode === 'fixed' ? urdItem : i.item;
         const amount = Number(i[config.amountField]);
+        const weight = Number(i.weight);
+        const purity = Number(i.purity);
         return {
           item_id:   resolvedItem.item_id,
           item_code: resolvedItem.item_code,
           item_name: resolvedItem.item_name,
-          weight:    Number(i.weight),
-          purity:    Number(i.purity),
+          party_id:   customerId,
+          company_id: storeId,
+          item_attribute_id: resolvedItem.item_attribute_id,
+          hsn:               resolvedItem.hsn,
+          tax_template_id:   resolvedItem.tax_template_id,
+          item_group_id:     resolvedItem.item_group_id,
+          base_item_id:      resolvedItem.base_item_id,
+          // Confirmed on the real reference record, not present (or not
+          // reliably present) on every Items/Retrieve shape — real, fixed
+          // values for this tenant's "URD GOLD" master item specifically.
+          karat_id:     resolvedItem.karat_id     ?? 1022,
+          metal_id:     resolvedItem.metal_id     ?? 0,
+          type_id:      resolvedItem.type_id      ?? 13,
+          sub_type_id:  resolvedItem.sub_type_id  ?? 0,
+          base_item:    resolvedItem.base_item    ?? 'METAL',
+          uom_id:       resolvedItem.uom_id       ?? 7,
+          uoc_id:       resolvedItem.uoc_id       ?? 4,
+          metal_color_id:  resolvedItem.metal_color_id  ?? 0,
+          stone_color_id:  resolvedItem.stone_color_id  ?? 0,
+          quality_id:      resolvedItem.quality_id      ?? 0,
+          shape_id:        resolvedItem.shape_id        ?? 0,
+          stone_size_id:   resolvedItem.stone_size_id   ?? 0,
+          sieve_id:        resolvedItem.sieve_id        ?? 0,
+          group_sieve_id:  resolvedItem.group_sieve_id  ?? 0,
+          sales_costing_id:    resolvedItem.sales_costing_id    ?? 9,
+          purchase_costing_id: resolvedItem.purchase_costing_id ?? 9,
+
+          weight, net_weight: weight,
+          purity,
+          pure_weight: +(weight * purity).toFixed(3),
           item_rate: Number(i.item_rate),
-          [config.amountField]: amount,
+          item_labour: 0,
+
+          // The real amount — item_cost genuinely stays 0 (see header note above).
+          item_cost: 0,
           sub_total: amount,
-          taxable_amount: amount,
           net_amount: amount,
+          base_sub_total: amount,
+          base_net_amount: amount,
+          taxable_amount: amount,
+          base_unit_cost: 0,
+          mf: 0,
+          mf_amount: 0,
+          tax_amount: 0,
+          base_tax_amount: 0,
+          metal_amount: 0, diamond_amount: 0, color_stone_amount: 0, stone_amount: 0, other_amount: 0,
+          diamond_pieces: 0, diamond_weight: 0, stone_pieces: 0, stone_weight: 0,
+          other_pieces: 0, other_weight: 0, color_stone_pieces: 0, color_stone_weight: 0,
+
+          location_id: 1, // "Finish Goods" — matches every real URD Purchase record on this tenant.
+          is_urd: true,
+          is_finished: false,
+          is_acknowledged: true,
+          is_tax_applicable: true, // line-level; the HEADER's own is_tax_applicable stays false (see below).
+          is_gift: false,
+          is_allocated: false,
+          stone_status_id: 1,
+          hallmark_state_id: 1,
+          bag_status_id: 0,
+          group_id: 0,
+          item_line_no: 0,
+          pieces: 0,
+          discount: 0,
+          discount_percent: 0,
+          pointer_weight: 0,
+          parts: 0,
+          export_pieces: 0,
+          stone_rate: 0,
+          other_rate: 0,
+          ref_transaction_item_id: 0, ref_document_id: 0, ref_transaction_id: 0,
+          bag_no: '', sku: '', lot_no: '', certificate_no: '', ref_no: '', huid: '',
+          image: '', narration: '', special_instructions: '', user_description: '',
+          type_of_document: 1,
         };
       });
       const totalWeight = line_items.reduce((s, i) => s + i.weight, 0);
 
+      const { mobile: _unusedMobile, receipt_amount: _unusedReceiptAmount, ...headerFields } = buildTransactionHeaderFields({
+        subTotal: total, taxableAmount: total, taxAmount: 0, netAmount: total,
+        pieces: line_items.length, weight: totalWeight, netWeight: totalWeight,
+        customerId, customerName, customerMobile,
+        activeStoreId: storeId,
+        headerConfig,
+        documentTypeId: config.documentTypeId,
+        receiptAmount: total,
+        documentDate: data.document_date,
+      });
+      // FIXED 2026-09-17, confirmed live on UAT: URDPurchaseRow has no
+      // `mobile` field (only `phone_code`, never populated by this Create
+      // call) and no `receipt_amount` field (only `balance_amount`) —
+      // buildTransactionHeaderFields's generic branch sends both
+      // unconditionally since Order/Invoice genuinely need them, but
+      // either one 500s URDPurchase/Create specifically. Stripped here
+      // rather than in the shared helper, since Order/Invoice (and likely
+      // Credit Note, once its own DocumentNumbering gets configured on
+      // this tenant — untestable until then) still need them.
       const payload = {
-        ...buildTransactionHeaderFields({
-          subTotal: total, taxableAmount: total, taxAmount: 0, netAmount: total,
-          pieces: line_items.length, weight: totalWeight, netWeight: totalWeight,
-          customerId, customerName, customerMobile,
-          activeStoreId: storeId,
-          headerConfig,
-          documentTypeId: config.documentTypeId,
-          receiptAmount: total,
-          documentDate: data.document_date,
-        }),
+        ...headerFields,
         line_items,
         // NO receipt_details. Confirmed live on UAT 2026-07-29 that the field
         // exists ONLY on Order/Invoice; on URDPurchase every real record has
@@ -1065,14 +1165,21 @@ function RefundNewForm({ onDone }) {
 // tab's `type` so one detail sheet serves all 6 without six near-duplicate
 // components.
 //
-// No confirmed "is this already cancelled/posted" status field exists on
-// any of these rows (see this file's own SCHEMA FACTS comment up top —
-// only transaction_id/document_no/document_date/party_id/party_name/
-// net_amount are confirmed) — so the action button is always shown rather
-// than guessed-hidden, and OrnaVerse's own API is the source of truth for
-// rejecting a document that's already in a state that can't be cancelled
-// (surfaced via the mutation's existing onError toast, same as every other
-// action in this file).
+// CORRECTED 2026-09-17 against a real live Services/POS/*/List capture on
+// every one of these 6 types (plus Repair In/Out/Invoice and Invoice
+// itself): a real `document_status` field DOES exist on every row (a
+// previous comment here claimed otherwise — that was wrong, not just
+// unconfirmed). It's now surfaced in this sheet's own headerRows below.
+// Its enum meaning per type is still NOT confirmed (only ever observed as
+// 1 on posted-looking rows and 0 on one real RepairIn row that nonetheless
+// already had posting_date/posted_by set, so a simple "0 = draft, 1 =
+// posted" reading doesn't hold cleanly across types) — shown as a neutral
+// raw number, same convention SchemeCard already uses for an unconfirmed
+// enum, rather than guessing a label. The action button is still always
+// shown rather than guessed-hidden for this same reason; OrnaVerse's own
+// API remains the source of truth for rejecting a document that's already
+// in a state that can't be cancelled (surfaced via the mutation's existing
+// onError toast, same as every other action in this file).
 const CANCEL_LABEL_BY_TYPE = {
   returns:        'Cancel Return',
   refunds:        'Delete Refund',
@@ -1112,9 +1219,15 @@ function TransactionDetailSheet({ transaction, type, onClose }) {
     { icon: Calendar,    label: 'Date',        value: formatDate(transaction.documentDate) },
     { icon: User,        label: 'Customer',    value: transaction.customerName ?? '—' },
     { icon: IndianRupee, label: 'Amount',      value: formatINR(transaction.amount) },
+    // Raw, unlabeled value — see this component's own header for why: the
+    // enum's meaning per document type isn't confirmed, so this shows what
+    // OrnaVerse reports rather than a guessed "Draft"/"Posted" string.
+    ...(raw.document_status != null
+      ? [{ icon: AlertCircle, label: 'Status', value: `${raw.document_status}${raw.posted_by_name ? ` · posted by ${raw.posted_by_name}` : ''}` }]
+      : []),
   ];
 
-  const skipKeys = new Set(['transaction_id', 'document_no', 'document_date', 'party_id', 'party_name', 'net_amount', 'company_id', 'current_company_id']);
+  const skipKeys = new Set(['transaction_id', 'document_no', 'document_date', 'party_id', 'party_name', 'net_amount', 'company_id', 'current_company_id', 'document_status', 'posted_by_name']);
 
   const extraRows = Object.entries(raw)
     .filter(([k, v]) => !skipKeys.has(k) && v !== null && v !== undefined && v !== 'NA' && v !== '' && typeof v !== 'object')

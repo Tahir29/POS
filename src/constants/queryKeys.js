@@ -210,6 +210,15 @@ export const QUERY_KEYS = {
     DETAIL: (transactionId)   => ['urd-purchase', 'detail', transactionId],
   },
 
+  // ── INTERSTORE RETURN (IRR) ────────────────────────────────────────────────
+  INTERSTORE_RETURN: {
+    LIST:       (params)       => ['interstore-return', 'list', params],
+    DETAIL:     (id)           => ['interstore-return', 'detail', id],
+    // Deliberately NOT keyed by companyId — cross-branch reach is the point,
+    // see getSoldItemsAcrossBranches's own header.
+    SOLD_ITEMS: (partyId)      => ['interstore-return', 'sold-items', partyId],
+  },
+
   REPAIR: {
     // Workshop repair orders (document 75) — the source an intake is raised
     // against. Distinct from the three POS repair documents below.

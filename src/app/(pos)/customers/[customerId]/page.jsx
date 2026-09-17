@@ -119,7 +119,7 @@ function TabEmpty({ icon, label }) {
 
 // ── Profile Tab ───────────────────────────────────────────────────────────────
 function ProfileTab({ customer }) {
-  const { customerName, customerMobile, customerEmail, customerPan, customerAddress, raw } = customer;
+  const { customerName, customerMobile, customerEmail, customerPan, taxNo, customerAddress, raw } = customer;
   const partyCode  = raw?.party_code && raw.party_code !== 'NA' ? raw.party_code : null;
   const birthDate  = raw?.birth_date  ? fmtDate(raw.birth_date)  : null;
   const anniversary= raw?.anniversary ? fmtDate(raw.anniversary) : null;
@@ -153,6 +153,12 @@ function ProfileTab({ customer }) {
           PAN: {customerPan}
         </div>
       )}
+      {taxNo && (
+        <div className="flex items-center gap-2 text-muted-foreground">
+          <CreditCard size={15} className="shrink-0 text-muted-foreground/70" />
+          GSTIN: {taxNo}
+        </div>
+      )}
       {partyCode && (
         <p className="text-xs text-muted-foreground/70">Customer code: {partyCode}</p>
       )}
@@ -181,11 +187,16 @@ function EditTab({ customer, onSaved }) {
       mobile:      raw?.mobile      ?? '',
       email:       raw?.email && raw.email !== 'NA' ? raw.email : '',
       pan_no:      raw?.pan_no && raw.pan_no !== 'NA' ? raw.pan_no : '',
+      tax_no:      raw?.tax_no && raw.tax_no !== 'NA' ? raw.tax_no : '',
+      passport_number: raw?.passport_number && raw.passport_number !== 'NA' ? raw.passport_number : '',
+      aadhaar_number:  raw?.aadhaar_number ? String(raw.aadhaar_number) : '',
+      dl_number:   raw?.dl_number && raw.dl_number !== 'NA' ? raw.dl_number : '',
       address:     raw?.address     ?? '',
       address_1:   raw?.address_1   ?? '',
       country_id:  raw?.country_id  ?? null,
       state_id:    raw?.state_id    ?? null,
       city_id:     raw?.city_id     ?? null,
+      nationality_id: raw?.nationality_id ?? null,
       pin_code:    raw?.pin_code ? String(raw.pin_code) : '',
     },
   });
@@ -197,11 +208,16 @@ function EditTab({ customer, onSaved }) {
       mobile:      raw?.mobile      ?? '',
       email:       raw?.email && raw.email !== 'NA' ? raw.email : '',
       pan_no:      raw?.pan_no && raw.pan_no !== 'NA' ? raw.pan_no : '',
+      tax_no:      raw?.tax_no && raw.tax_no !== 'NA' ? raw.tax_no : '',
+      passport_number: raw?.passport_number && raw.passport_number !== 'NA' ? raw.passport_number : '',
+      aadhaar_number:  raw?.aadhaar_number ? String(raw.aadhaar_number) : '',
+      dl_number:   raw?.dl_number && raw.dl_number !== 'NA' ? raw.dl_number : '',
       address:     raw?.address     ?? '',
       address_1:   raw?.address_1   ?? '',
       country_id:  raw?.country_id  ?? null,
       state_id:    raw?.state_id    ?? null,
       city_id:     raw?.city_id     ?? null,
+      nationality_id: raw?.nationality_id ?? null,
       pin_code:    raw?.pin_code ? String(raw.pin_code) : '',
     });
   }, [raw, reset]);
@@ -263,6 +279,30 @@ function EditTab({ customer, onSaved }) {
       </div>
 
       <div className="flex flex-col gap-1.5">
+        <Label htmlFor="ep_tax_no">GSTIN <span className="text-muted-foreground text-xs">(optional)</span></Label>
+        <Input id="ep_tax_no" {...register('tax_no')} className="h-11" style={{ textTransform: 'uppercase' }} />
+        {errors.tax_no && <p className="text-sm text-destructive">{errors.tax_no.message}</p>}
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="ep_passport_number">Passport No <span className="text-muted-foreground text-xs">(optional)</span></Label>
+        <Input id="ep_passport_number" {...register('passport_number')} className="h-11" style={{ textTransform: 'uppercase' }} />
+        {errors.passport_number && <p className="text-sm text-destructive">{errors.passport_number.message}</p>}
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="ep_aadhaar_number">Aadhaar No <span className="text-muted-foreground text-xs">(optional)</span></Label>
+        <Input id="ep_aadhaar_number" type="text" inputMode="numeric" maxLength={12} {...register('aadhaar_number')} className="h-11" />
+        {errors.aadhaar_number && <p className="text-sm text-destructive">{errors.aadhaar_number.message}</p>}
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="ep_dl_number">Driving License <span className="text-muted-foreground text-xs">(optional)</span></Label>
+        <Input id="ep_dl_number" {...register('dl_number')} className="h-11" style={{ textTransform: 'uppercase' }} />
+        {errors.dl_number && <p className="text-sm text-destructive">{errors.dl_number.message}</p>}
+      </div>
+
+      <div className="flex flex-col gap-1.5">
         <Label>Address</Label>
         <Input {...register('address')} className="h-11" placeholder="Address line 1" />
         <Input {...register('address_1')} className="h-11" placeholder="Address line 2 (optional)" />
@@ -301,6 +341,17 @@ function EditTab({ customer, onSaved }) {
         <Label htmlFor="ep_pin">PIN Code</Label>
         <Input id="ep_pin" type="text" inputMode="numeric" {...register('pin_code')} className="h-11" maxLength={6} />
         {errors.pin_code && <p className="text-sm text-destructive">{errors.pin_code.message}</p>}
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label>Nationality <span className="text-muted-foreground text-xs">(optional)</span></Label>
+        {/* nationality_id is a country_id (confirmed live) — reuses the
+            same Country list loaded above. */}
+        <LocationSelect
+          control={control}
+          name="nationality_id" items={countries} idKey="country_id" labelKey="country_name"
+          placeholder="Select nationality" isLoading={countriesLoading}
+        />
       </div>
 
       <Button type="submit" disabled={updateCustomer.isPending || !isDirty} className="h-11 mt-1">

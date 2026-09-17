@@ -88,22 +88,39 @@ async function retrieveRefund(transactionId) {
  * settles. This creates first, reads back the real assigned number, and
  * stamps it into the receipts instead — drift-proof by construction.
  *
- * KNOWN LIMITATION: this stamping step alone has not been confirmed to
- * actually settle the credit end-to-end — a live test showed the original
- * Return's balance_amount/receipt_amount unchanged after a refund + stamp
- * against it, even though the money-out side worked. Two things worth
- * knowing for whoever revisits this:
- *   1. Retrieve's own echo of what was sent corrupts the linkage —
+ * KNOWN LIMITATION, RE-CONFIRMED 2026-09-17 on UAT with a fresh real credit
+ * (Return transaction_id 153, Refund transaction_id 51) — this stamping
+ * step does NOT settle the credit. BOTH leads this comment previously
+ * raised have now been tried live and BOTH failed:
+ *   1. Stamping ref_document_no into the REFUND's own receipts[] (what this
+ *      function does) — Refund/Update returned 200, but
+ *      POSReceiptsSelect/List still showed the credit fully outstanding
+ *      (ref_document_no still "", balance_amount unchanged) afterward.
+ *   2. Directly Update-ing the ORIGINAL credit document's own
+ *      balance_amount/receipt_amount to 0/settled (the "one-off test"
+ *      mentioned in an earlier version of this comment) — ALSO tried live
+ *      this time: the Return's own Retrieve correctly showed
+ *      balance_amount:0 afterward, but POSReceiptsSelect/List (the actual
+ *      row getCustomerCredits() reads — see that function's own header)
+ *      was STILL unchanged, ref_document_no still "". So
+ *      POSReceiptsSelect/List is reading a genuinely separate
+ *      receipts/ledger record, not derived from the source document's own
+ *      balance_amount field the way Retrieve's echo of it might suggest.
+ *      (Reverted that test edit back to the credit's real balance
+ *      afterward, then cancelled both test documents — no lasting change
+ *      left on the tenant.)
+ *   3. Retrieve's own echo of what was sent corrupts the linkage —
  *      `receipts[].transaction_id` comes back as the REFUND's own
  *      transaction_id, not the original credit's — so `entity.receipts`
  *      is not safe to round-trip verbatim.
- *   2. Manually setting the ORIGINAL credit document's own balance_amount/
- *      receipt_amount via its own Update DID succeed mechanically in a
- *      one-off test (not implemented here) — suggesting settlement may need
- *      to touch the credit DOCUMENT directly rather than only the refund's
- *      receipts. Needs a live capture of OrnaVerse's own client completing a
- *      real Refund end-to-end before coding a fix — guessing wrong here
- *      risks corrupting real balance data.
+ * Net effect: money genuinely leaves (the `details[]` payout side works),
+ * but the credit it's meant to close never clears from
+ * POSReceiptsSelect/List by any mechanism tried so far. Whatever actually
+ * flips that row needs a live network capture of OrnaVerse's own ERP
+ * client (the only UI that has a real Refund screen — see this file's own
+ * top comment) completing a real Refund end-to-end; guessing further here
+ * risks touching real ledger/receipt state without understanding what
+ * update actually closes it.
  */
 async function stampRefDocumentNo(transactionId) {
   const entity = await retrieveRefund(transactionId);

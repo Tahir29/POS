@@ -23,9 +23,33 @@ import ProductCard from '@/components/features/catalog/ProductCard';
 import { useLiveCatalogPrices } from '@/hooks/catalog/useLiveCatalogPrices';
 import { useCrossStoreStockCodes } from '@/hooks/catalog/useCrossStoreStockCodes';
 import { useSimilarProducts } from '@/hooks/products/useSimilarProducts';
+import { Skeleton } from '@/components/ui/skeleton';
 import tracker from '@/lib/analytics/tracker';
 import EVENTS from '@/lib/analytics/events';
 import { buildProductAttributes } from '@/lib/analytics/productAttributes';
+
+// FIXED 2026-09-17 — reported: on a genuinely first-ever visit (the shared
+// tenant-wide catalog sweep useSimilarProducts relies on hadn't resolved
+// yet), this shelf silently rendered nothing at all — indistinguishable
+// from "this product has no similar items" — so it read as broken until
+// the operator navigated away and back once the sweep had quietly
+// finished elsewhere. AppShell now starts that sweep proactively the
+// moment the session starts (see its own header) so this is rare in
+// practice, but a real "still loading" state still needs to look
+// different from "nothing to show" the few times it isn't warm yet.
+function CarouselSkeleton() {
+  return (
+    <div className="flex gap-3 overflow-hidden sm:gap-4">
+      {Array.from({ length: 5 }).map((_, i) => (
+        <div key={i} className="flex w-32 shrink-0 flex-col gap-2 sm:w-40 md:w-44">
+          <Skeleton className="aspect-square w-full rounded-2xl" />
+          <Skeleton className="h-3 w-3/4" />
+          <Skeleton className="h-4 w-1/2" />
+        </div>
+      ))}
+    </div>
+  );
+}
 
 function NavButton({ direction }) {
   const isPrev = direction === 'prev';
@@ -53,7 +77,7 @@ function NavButton({ direction }) {
  *   drive the match); activeStoreId — same store useAllCatalog scopes to.
  */
 export default function SimilarProductsCarousel({ product, activeStoreId }) {
-  const { items } = useSimilarProducts(product, activeStoreId);
+  const { items, isLoading } = useSimilarProducts(product, activeStoreId);
 
   const { priceById, settledIds } = useLiveCatalogPrices(items);
 
@@ -79,11 +103,21 @@ export default function SimilarProductsCarousel({ product, activeStoreId }) {
     });
   }, [product, items.length]);
 
-  // Covers both "nothing to show yet" (cold catalog cache still sweeping)
-  // and "nothing to show ever" (no match at all, e.g. a one-of-a-kind
-  // item_group_id) — no empty shelf, no "loading" flash for a shelf the
-  // operator may not even scroll to.
-  if (items.length === 0) return null;
+  // "Nothing to show ever" (no match at all, e.g. a one-of-a-kind
+  // item_group_id) — no empty shelf for a shelf the operator may not even
+  // scroll to. "Nothing to show YET" (cache still sweeping) is handled
+  // separately below with a real skeleton — see this file's own header for
+  // why that distinction now matters.
+  if (!isLoading && items.length === 0) return null;
+
+  if (items.length === 0) {
+    return (
+      <section className="relative flex flex-col gap-4">
+        <h2 className="font-heading text-lg text-foreground">Similar Products</h2>
+        <CarouselSkeleton />
+      </section>
+    );
+  }
 
   return (
     <section className="relative flex flex-col gap-4">

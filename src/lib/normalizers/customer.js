@@ -97,6 +97,12 @@ function pickAddress(partyAddress) {
  *   customerEmail:   string|null,
  *   customerPan:     string|null,
  *   customerPanDocument: string|null,
+ *   customerOtherDocument: string|null,
+ *   taxNo:           string|null,
+ *   passportNumber:  string|null,
+ *   aadhaarNumber:   number|null,
+ *   dlNumber:        string|null,
+ *   nationalityId:   number|null,
  *   birthDate:       string|null,
  *   anniversary:     string|null,
  *   gender:          number|null,
@@ -138,6 +144,34 @@ export function normalizeCustomer(entity) {
     // number", not just the number, so this has to be resolved alongside
     // customerPan, not instead of it.
     customerPanDocument: entity.pan_document && entity.pan_document !== 'NA' ? entity.pan_document : null,
+    customerOtherDocument: entity.other_document && entity.other_document !== 'NA' ? entity.other_document : null,
+
+    // Added 2026-09-17 — for GST-registered business customers. Confirmed
+    // via a 200-row live sample that every existing customer already has
+    // tax_reg_type populated (server-defaulted to 4 regardless of creation
+    // path), but tax_no was never collected by either form — the field this
+    // app was actually missing for B2B customers. (business_name was also
+    // added in that same pass, then removed 2026-09-17 once the user
+    // checked OrnaVerse's own live create form and confirmed it doesn't
+    // show that field at all — only tax_no/GSTIN, under "Identity
+    // Documents" alongside PAN.)
+    taxNo: entity.tax_no && entity.tax_no !== 'NA' ? entity.tax_no : null,
+
+    // Added 2026-09-17 — the rest of OrnaVerse's "Identity Documents"
+    // section this app never collected. `phone` (separate landline field)
+    // was also added in this pass, then dropped per explicit direction —
+    // keep mobile as the only phone-type field, as before. Credit
+    // (allow_credit/credit_limit) and religion_id deliberately NOT added
+    // yet — held back per explicit direction pending real enum labels for
+    // religion_id (OrnaVerse's own docs render that enum's values
+    // client-side, not scrapeable) and a considered decision on credit.
+    passportNumber: entity.passport_number && entity.passport_number !== 'NA' ? entity.passport_number : null,
+    aadhaarNumber:  entity.aadhaar_number || null,
+    dlNumber:       entity.dl_number       && entity.dl_number       !== 'NA' ? entity.dl_number       : null,
+    // Confirmed live: nationality_id is a country_id (a real customer had
+    // country_id:101 and nationality_id:101, both "India") — resolved via
+    // the same Master/Countries/List this app already loads for Country.
+    nationalityId:  entity.nationality_id ?? null,
 
     birthDate:    entity.birth_date   ?? null,
     anniversary:  entity.anniversary  ?? null,
@@ -160,11 +194,16 @@ export function normalizeCustomer(entity) {
  *   mobile:       string,
  *   email?:       string,
  *   pan_no?:      string,
+ *   tax_no?:      string,
+ *   passport_number?: string,
+ *   aadhaar_number?:  string,
+ *   dl_number?:   string,
  *   address?:     string,
  *   address_1?:   string,
  *   city_id?:     number,
  *   state_id?:    number,
  *   country_id?:  number,
+ *   nationality_id?: number,
  *   pin_code?:    string,
  *   birth_date?:  string,
  *   anniversary?: string,
@@ -180,11 +219,18 @@ export function buildCustomerCreatePayload(formValues) {
     mobile:          formValues.mobile,
     email:           formValues.email          || undefined,
     pan_no:          formValues.pan_no         || undefined,
+    tax_no:          formValues.tax_no         || undefined,
+    passport_number: formValues.passport_number || undefined,
+    // aadhaar_number is numeric on POS.CustomerRow — the form collects it
+    // as a string (see customerSchema.js's aadhaarSchema comment).
+    aadhaar_number:  formValues.aadhaar_number ? Number(formValues.aadhaar_number) : undefined,
+    dl_number:       formValues.dl_number      || undefined,
     address:         formValues.address        || undefined,
     address_1:       formValues.address_1      || undefined,
     city_id:         formValues.city_id        ?? undefined,
     state_id:        formValues.state_id       ?? undefined,
     country_id:      formValues.country_id     ?? undefined,
+    nationality_id:  formValues.nationality_id ?? undefined,
     pin_code:        formValues.pin_code       || undefined,
     birth_date:      formValues.birth_date     || undefined,
     anniversary:     formValues.anniversary    || undefined,

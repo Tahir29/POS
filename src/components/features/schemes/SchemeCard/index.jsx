@@ -8,12 +8,19 @@ import { Badge } from '@/components/ui/badge';
  */
 export default function SchemeCard({ scheme }) {
   const {
-    // FIXED 2026-09-16 — this row's real name field is scheme_display_name
-    // (scheme_name doesn't exist on it), same as everywhere else this
-    // entity is read (enroll/page.jsx, useSchemeEnrollments.js,
-    // useCustomerEnrollments.js) — was silently rendering "—" for every
-    // real scheme.
-    scheme_display_name,
+    // FIXED 2026-09-16, then CONFIRMED 2026-09-17 against a real live
+    // Services/CRM/Schemes/List capture: this row (the scheme PRODUCT
+    // master — what an operator picks to enroll a customer into, not an
+    // enrollment instance) has NO name field beyond scheme_code at all —
+    // no scheme_name, no scheme_display_name. scheme_code IS the scheme's
+    // own human name here (e.g. "New year", "Vault of dream"), not a
+    // machine code. scheme_display_name is a REAL field, but only on
+    // SchemeEnrollment/List rows (confirmed live: a composite like
+    // "HO-SEN-08-26-8 | Vault of dream") — a different row shape, read
+    // correctly elsewhere (useSchemeEnrollments.js, useCustomerEnrollments.js).
+    // This component was originally reading a bare scheme_name (silently
+    // rendering "—" for every real scheme); reads scheme_code only now,
+    // not a defensive fallback against a field this row can never carry.
     scheme_code,
     scheme_type,
     tenure,
@@ -29,12 +36,13 @@ export default function SchemeCard({ scheme }) {
   return (
     <div className="bg-card border border-border rounded-xl p-5 flex flex-col gap-4">
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <h3 className="text-base font-semibold text-foreground leading-tight">
-            {scheme_display_name ?? scheme_code ?? '—'}
-          </h3>
-          <p className="text-xs text-muted-foreground mt-0.5">{scheme_code ?? '—'}</p>
-        </div>
+        {/* scheme_code IS the scheme's own name here (see destructuring
+            comment above) — a separate muted "code" subtitle used to sit
+            below this repeating the exact same value; dropped rather than
+            showing the same string twice. */}
+        <h3 className="text-base font-semibold text-foreground leading-tight">
+          {scheme_code ?? '—'}
+        </h3>
         {scheme_type != null && (
           <Badge variant="secondary" className="h-auto shrink-0 rounded-md px-2 py-1 text-xs">
             Type {scheme_type}

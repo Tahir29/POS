@@ -136,6 +136,25 @@ const TOAST = {
     LOAD_FAILED:  'Failed to load returns. Please try again.',
   },
 
+  INTERSTORE_RETURN: {
+    CREATED:          'Interstore return created.',
+    CREATE_FAILED:    'Failed to create interstore return. Please try again.',
+    IMAGES_SAVED:     'Photos attached.',
+    IMAGES_FAILED:    'Failed to attach photos. Please try again.',
+    SUBMITTED:        'Submitted for approval.',
+    SUBMIT_FAILED:    'Failed to submit for approval. Please try again.',
+    APPROVED:         'Approved — moved to settlement.',
+    APPROVE_FAILED:   'Failed to approve. Please try again.',
+    REJECTED:         'Rejected.',
+    REJECT_FAILED:    'Failed to reject. Please try again.',
+    RESUBMITTED:      'Resubmitted for approval.',
+    RESUBMIT_FAILED:  'Failed to resubmit. Please try again.',
+    RETURNED_TO_ORIGIN:      'Returned to origin store — closed.',
+    RETURN_TO_ORIGIN_FAILED: 'Failed to return to origin. Please try again.',
+    LOCALLY_ABSORBED:        'Locally absorbed — closed.',
+    LOCAL_ABSORPTION_FAILED: 'Failed to complete local absorption. Please try again.',
+  },
+
   REFUNDS: {
     CREATED:      'Refund recorded successfully.',
     CREATE_FAILED:'Failed to record refund. Please try again.',

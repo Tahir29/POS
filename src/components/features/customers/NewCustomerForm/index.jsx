@@ -46,11 +46,16 @@ export default function NewCustomerForm({ defaultMobile = '', defaultName = '', 
       mobile:         defaultMobile,
       email:          '',
       pan_no:         '',
+      tax_no:         '',
+      passport_number: '',
+      aadhaar_number:  '',
+      dl_number:       '',
       address:        '',
       address_1:      '',
       country_id:     null,
       state_id:       null,
       city_id:        null,
+      nationality_id: null,
       pin_code:       '',
       birth_date:     '',
       anniversary:    '',
@@ -155,6 +160,70 @@ export default function NewCustomerForm({ defaultMobile = '', defaultName = '', 
         />
         {errors.pan_no && (
           <p className="text-sm text-destructive">{errors.pan_no.message}</p>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="tax_no">
+          GSTIN <span className="text-muted-foreground text-xs">(optional)</span>
+        </Label>
+        <Input
+          id="tax_no"
+          {...register('tax_no')}
+          className="h-11"
+          placeholder="15-character GSTIN"
+          style={{ textTransform: 'uppercase' }}
+        />
+        {errors.tax_no && (
+          <p className="text-sm text-destructive">{errors.tax_no.message}</p>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="passport_number">
+          Passport No <span className="text-muted-foreground text-xs">(optional)</span>
+        </Label>
+        <Input
+          id="passport_number"
+          {...register('passport_number')}
+          className="h-11"
+          style={{ textTransform: 'uppercase' }}
+        />
+        {errors.passport_number && (
+          <p className="text-sm text-destructive">{errors.passport_number.message}</p>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="aadhaar_number">
+          Aadhaar No <span className="text-muted-foreground text-xs">(optional)</span>
+        </Label>
+        <Input
+          id="aadhaar_number"
+          type="text"
+          inputMode="numeric"
+          {...register('aadhaar_number')}
+          className="h-11"
+          placeholder="12-digit Aadhaar number"
+          maxLength={12}
+        />
+        {errors.aadhaar_number && (
+          <p className="text-sm text-destructive">{errors.aadhaar_number.message}</p>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="dl_number">
+          Driving License <span className="text-muted-foreground text-xs">(optional)</span>
+        </Label>
+        <Input
+          id="dl_number"
+          {...register('dl_number')}
+          className="h-11"
+          style={{ textTransform: 'uppercase' }}
+        />
+        {errors.dl_number && (
+          <p className="text-sm text-destructive">{errors.dl_number.message}</p>
         )}
       </div>
 
@@ -319,6 +388,23 @@ export default function NewCustomerForm({ defaultMobile = '', defaultName = '', 
         {errors.pin_code && (
           <p className="text-sm text-destructive">{errors.pin_code.message}</p>
         )}
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label>
+          Nationality <span className="text-muted-foreground text-xs">(optional)</span>
+        </Label>
+        {/* nationality_id is a country_id (confirmed live) — reuses the
+            same Country list already loaded above, not a separate master. */}
+        <LocationSelect
+          control={control}
+          name="nationality_id"
+          items={countries}
+          idKey="country_id"
+          labelKey="country_name"
+          placeholder="Select nationality"
+          isLoading={countriesLoading}
+        />
       </div>
 
       <Button type="submit" disabled={createCustomer.isPending} className="h-11 mt-1">

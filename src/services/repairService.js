@@ -105,9 +105,27 @@ export async function getRepairLocationId(companyId) {
  * "Inventory.Repair", 49 fields) — their Save button never fires a Create on
  * this tenant, so the payload could not be captured from live traffic.
  *
- * NOTE: Inventory/Repair/Create currently 500s server-side even for a bare
- * minimal payload, independent of anything this function builds. Needs
- * OrnaVerse's team.
+ * NARROWED 2026-09-17 (previous note here said "500s even for a bare
+ * minimal payload, needs OrnaVerse's team" — that was too broad, and
+ * turned out to be exactly the kind of assumption RepairIn's own fix this
+ * same day disproved for that sibling endpoint; re-tested properly rather
+ * than left as "not our bug"). Isolated live on UAT:
+ *   - `{document_id: 75}` alone → clean validation ("Date extends Number
+ *     of Backdated days") — the endpoint is reachable and validates
+ *     normally.
+ *   - `document_date` alone, or `party_id` alone → each individually
+ *     clean (different, sensible validation messages).
+ *   - `document_date` + `party_id` TOGETHER → the opaque 500, reproduced
+ *     with a real ISO date, `.toDateString()` format, `company_id` added
+ *     or not, and two different real party_ids — always the same crash.
+ * So the actual reachable minimal set here is genuinely narrower than
+ * "everything but document_id/party_id/document_date" — something in
+ * this specific pair's interaction (very possibly a customer-record date
+ * lookup, e.g. registration/DOB, given how specifically it needs BOTH a
+ * real date and a real party to trigger) breaks server-side. Line items
+ * were never reached in this testing since the header alone already
+ * fails with these three together. Flagging for OrnaVerse support with
+ * this exact reproduction, rather than the previous blanket dead-end.
  */
 export function buildRepairOrderPayload({
   partyId, partyName, phoneCode, address, stateName,
@@ -226,45 +244,50 @@ export async function getRepairOrderDetail(transactionId) {
   return response.data?.Entity ?? null;
 }
 
-// Identity the intake must NOT inherit from the order — the server assigns
-// its own, or the value becomes a back-reference instead.
-const ORDER_OWNED_LINE_FIELDS = [
-  'transaction_item_id', 'transaction_id',
-  'document_no', 'document_date', 'document_status',
-  'is_posted', 'posting_date', 'row_version',
-];
-
 /**
  * Projects a Repair Order line into the Repair In line the server expects.
  *
- * The line is passed through LARGELY INTACT — including nested
- * `item_components[]` — rather than rebuilt from a field whitelist. These
- * are server-computed objects; trimming them to a hand-picked subset breaks
- * Create.
+ * REWRITTEN 2026-09-17 — the previous version ("pass the line through
+ * LARGELY INTACT... trimming to a hand-picked subset breaks Create") was
+ * never actually verified live and turned out backwards: tested for real
+ * against a genuine existing repair order on UAT (order 130, party 2221),
+ * the full order line (even with item_components/item_operations/
+ * check_list stripped, ~182 remaining fields) crashes RepairIn/Create with
+ * an opaque 500 every time. A minimal, hand-picked line — item identity +
+ * the ref_* linkage back to the order + weight/net_weight/pieces +
+ * item_attribute_id/location_id — succeeded on 3 independent live Creates
+ * (transaction_id 43, 44, 46), each followed by a real Cancel to confirm
+ * the full lifecycle.
+ *
+ * Individually adding ANY ONE of karat_id/metal_id/item_group_id/type_id/
+ * sub_type_id/base_item_id/base_item/hsn/tax_template_id (9/9 tried) OR
+ * ANY of the financial fields (sub_total/net_amount/taxable_amount/
+ * item_cost/item_rate/purity/pure_weight/tax_amount, tried together)
+ * reproduced the same crash — a 100% failure rate across everything tried
+ * beyond the minimal set, not one specific poison field. That pattern
+ * suggests the server takes a genuinely different (and broken) code path
+ * once ANY of these richer fields is present, most likely revalidating the
+ * item's classification against master data rather than trusting item_id —
+ * not something worth guessing further at per-field. The classification
+ * OrnaVerse itself shows back on Retrieve/List for a real intake is very
+ * likely resolved server-side from item_id at read time regardless of what
+ * Create was given, the same way many denormalized display fields work
+ * elsewhere in this API — so omitting them here isn't expected to lose
+ * information, only to avoid the field set that's confirmed to crash.
  *
  * @param {object} orderLine — a line_items[] entry from getRepairOrderDetail()
  * @param {object} order     — the parent order entity
  */
 export function mapOrderLineToRepairInLine(orderLine, order) {
-  const line = { ...orderLine };
-  for (const field of ORDER_OWNED_LINE_FIELDS) delete line[field];
-
-  // Nested components carry the ORDER line's ids; drop them so the server
-  // re-keys them against the intake it is creating.
-  if (Array.isArray(orderLine.item_components)) {
-    line.item_components = orderLine.item_components.map((c) => {
-      const comp = { ...c };
-      delete comp.transaction_item_id;
-      delete comp.transaction_bom_id;
-      return comp;
-    });
-  }
-
-  // bag_no on the intake mirrors the order's new_bag_no when present.
-  if (!line.bag_no && orderLine.new_bag_no) line.bag_no = orderLine.new_bag_no;
-
   return {
-    ...line,
+    item_id:   orderLine.item_id,
+    item_code: orderLine.item_code,
+    item_name: orderLine.item_name,
+    item_attribute_id: orderLine.item_attribute_id,
+    location_id:       orderLine.location_id,
+    weight:     orderLine.weight,
+    net_weight: orderLine.net_weight,
+    pieces:     orderLine.pieces,
     document_id: APP_CONFIG.DOCUMENT_TYPES.REPAIR_IN,
     party_id:    order.party_id,
     company_id:  order.company_id,

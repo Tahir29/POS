@@ -554,6 +554,73 @@ const API = {
   },
 
   // ─────────────────────────────────────────────────────────────────────────
+  // INTERSTORE RETURN (IRR)
+  // A customer returns an item at a store OTHER than the one that sold it.
+  // document_id 128 (header), 129 (InterstoreConsignment), 130
+  // (CrossStoreCreditSettlement). Confirmed live 2026-09-11 on UAT (real
+  // record interstore_return_id 5, "CS1-PTC-09-26-1", full lifecycle
+  // Create→SubmitForApproval→Approve→PendingSettlement→LocalAbsorption→
+  // Closed) and confirmed 2026-09-17 read-only on LIVE (2 real
+  // store-created records, same field shape — UAT and LIVE map identically).
+  //
+  // Store-role gating is tied to the AUTHENTICATED ACCOUNT's own company,
+  // not any field in the request body: Approve requires the origin
+  // company to be "current" (see AUTH.SWITCH_COMPANY), while
+  // SubmitForApproval / LocalAbsorption / ReturnToOrigin require the
+  // receiving company. One admin account can act as both by switching
+  // company between actions — see storeService.switchCompany.
+  //
+  // Retrieve/Update/Delete use the generic Serenity { EntityId } key, NOT
+  // { interstore_return_id } — confirmed live (interstore_return_id in the
+  // body 500s; EntityId returns the record).
+  //
+  // Status enum: 0 Draft, 1 PendingApproval, 2 Approved, 3
+  // PendingSettlement, 4 Closed, 5 Rejected, 6 PermanentlyClosed, 7
+  // DeemedSupply.
+  //
+  // CREATE gotcha (confirmed live 2026-09-17, cost a long bisection):
+  // each line_items[] entry MUST include `line_no` (1-based) — it looks
+  // server-managed (comes back populated on every Retrieve, same as
+  // interstore_return_item_id) but omitting it throws a generic 500 for
+  // any genuinely NEW invoice-linked line. See
+  // interstoreReturnService.mapReturnLineToInterstoreReturnLine.
+  //
+  // Photo attach: AddItemImage's real contract, confirmed against
+  // OrnaVerse's own published API reference (ornaverse-advantage.apidog.io)
+  // 2026-09-17: flat `{ interstore_return_item_id, image_path }`, no
+  // Entity wrapper. Call it AFTER Create/once the line has a real
+  // interstore_return_item_id. (An earlier embed-base64-via-Update
+  // workaround is no longer needed now this is confirmed.)
+  //
+  // SOLD_ITEMS reuses POS/InvoiceItems/List (same endpoint Returns use),
+  // but the picker deliberately nulls company_id/financial_year_id
+  // server-side so it searches the customer's purchases across EVERY
+  // branch and year — that cross-branch reach is the whole point of this
+  // document type, not a bug to filter out client-side.
+  // ─────────────────────────────────────────────────────────────────────────
+  INTERSTORE_RETURN: {
+    CREATE:               'Services/POS/InterstoreReturn/Create',
+    UPDATE:               'Services/POS/InterstoreReturn/Update',
+    DELETE:               'Services/POS/InterstoreReturn/Delete',
+    RETRIEVE:             'Services/POS/InterstoreReturn/Retrieve',
+    LIST:                 'Services/POS/InterstoreReturn/List',
+    SUBMIT_FOR_APPROVAL:  'Services/POS/InterstoreReturn/SubmitForApproval',
+    APPROVE:              'Services/POS/InterstoreReturn/Approve',
+    REJECT:               'Services/POS/InterstoreReturn/Reject',
+    RESUBMIT:             'Services/POS/InterstoreReturn/Resubmit',
+    RETURN_TO_ORIGIN:     'Services/POS/InterstoreReturn/ReturnToOrigin',
+    LOCAL_ABSORPTION:     'Services/POS/InterstoreReturn/LocalAbsorption',
+    // Request shape confirmed 2026-09-17 against OrnaVerse's own published
+    // API reference: { interstore_return_item_id, image_path }. Endpoint
+    // itself still 500s live even with this exact shape — genuine
+    // server-side bug, not a contract guess. Use the Update-with-embedded-
+    // images path instead (see interstoreReturnService.js) until fixed.
+    ADD_ITEM_IMAGE:       'Services/POS/InterstoreReturn/AddItemImage',
+    REMOVE_ITEM_IMAGE:    'Services/POS/InterstoreReturn/RemoveItemImage',
+    SOLD_ITEMS:           'Services/POS/InvoiceItems/List',
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
   // ESTIMATION / QUOTATION
   // Generate price estimate before order — can be converted to invoice
   // Flow: Create → (optional Post to convert to order) | or Cancel

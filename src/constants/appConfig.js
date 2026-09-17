@@ -62,7 +62,13 @@ const APP_CONFIG = {
     //   • auto_posting: TRUE → Create also posts. Do NOT call CreditNote/Post
     //     after Create or it fails AlreadyPosted (same bug fixed on 5 flows).
     //   • is_tax_applicable: TRUE → the party MUST have a tax_reg_type set,
-    //     or OrnaVerse rejects it. See [[credit-notes-findings]].
+    //     or OrnaVerse rejects it. RE-CHECKED 2026-09-17: a 200-row live
+    //     Customer/List sample showed every existing party already has
+    //     tax_reg_type populated (server-defaults to 4 when Create omits
+    //     it, confirmed — this app's Customer/Create never sent it either),
+    //     so this specific risk looks moot in practice. tax_no (GSTIN) was
+    //     the field genuinely missing from this app's customer forms — see
+    //     src/validators/customerSchema.js.
     //   • ledger_id 129, number_of_backdated_days 60.
     CREDIT_NOTE:     123, // prefix "CRN"
     REFUND:          126, // prefix "RFD"
@@ -94,6 +100,45 @@ const APP_CONFIG = {
                            // already uses for the stateless SetSalesItems
                            // preview call, confirmed live via the full
                            // DocumentNumbering/List prefix dump 2026-07-28.
+    // Confirmed live both on UAT (2026-09-11, full Create→Closed lifecycle)
+    // and read-only on LIVE (2026-09-17, 2 real store-created records).
+    // 129 (InterstoreConsignment) and 130 (CrossStoreCreditSettlement) are
+    // server-managed side documents, never referenced directly by the POS.
+    INTERSTORE_RETURN: 128,
+  },
+
+  // ── INTERSTORE RETURN ──────────────────────────────────────────────────────
+  // See INTERSTORE_RETURN in apiEndpoints.js for the full endpoint contract
+  // and lifecycle notes. Enums confirmed live 2026-09-11/2026-09-17.
+  INTERSTORE_RETURN_STATUS: {
+    DRAFT:                 0,
+    PENDING_APPROVAL:      1,
+    APPROVED:              2,
+    PENDING_SETTLEMENT:    3,
+    CLOSED:                4,
+    REJECTED:              5,
+    PERMANENTLY_CLOSED:    6,
+    DEEMED_SUPPLY:         7,
+  },
+  // How the return travels between origin and receiving store — set
+  // server-side, never computed client-side. Starts at 1, not 0.
+  INTERSTORE_RETURN_PATHWAY: {
+    SAME_STORE:              1,
+    COCO_CROSS_STORE:        2,
+    FRANCHISEE_MEDIATED:     3,
+  },
+  // A DIFFERENT enum from the POS sold-item-picker TransactionType (1
+  // ISRETURN/2 BUYBACK/3 Repair/4 CreditNote/5 EXCHANGE) — easy to
+  // conflate, don't reuse one for the other.
+  INTERSTORE_RETURN_TRANSACTION_TYPE: {
+    RETURN:   1,
+    EXCHANGE: 2,
+    BUYBACK:  3,
+  },
+  INTERSTORE_RETURN_SOURCE_PROCUREMENT_TYPE: {
+    CONSIGNMENT_BASED: 1,
+    PURCHASE_BASED:    2,
+    PRE_ORNAVERSE:     3,
   },
 
   // ── COMPLIANCE ────────────────────────────────────────────────────────────

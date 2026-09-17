@@ -240,7 +240,12 @@ function EnrollScreen() {
                 <SelectContent className="max-h-56 overflow-y-auto">
                   {schemes.map((s) => (
                     <SelectItem key={s.scheme_id} value={String(s.scheme_id)}>
-                      {s.scheme_display_name ?? s.scheme_code}
+                      {/* CONFIRMED 2026-09-17 against a live Services/CRM/
+                          Schemes/List capture: this row (the scheme product
+                          master) has no scheme_display_name field at all —
+                          scheme_code is its only name. See SchemeCard's own
+                          header for the full finding. */}
+                      {s.scheme_code}
                     </SelectItem>
                   ))}
                 </SelectContent>

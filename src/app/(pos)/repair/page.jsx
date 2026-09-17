@@ -37,14 +37,26 @@
 // DocumentNumbering config instead of the order's own (document 75) — two
 // different document types, two different control ledgers.
 //
-// STILL BLOCKED SERVER-SIDE either way — confirmed live the same day:
-// Inventory/Repair/Create (the order, stage one) 500s even on a bare
-// 4-field payload, and POS/RepairIn/Create (stage two) 500s on a real line
-// item even once a correct existing order is referenced. See
-// repairService.js's buildRepairOrderPayload/createRepairIn headers for
-// the full repro. This wiring is the correct shape either way, so it'll
-// start working the moment OrnaVerse's side is fixed rather than needing
-// another round of changes here.
+// UPDATED 2026-09-17 — the note above (both stages "blocked server-side,
+// needs OrnaVerse") was wrong for stage two and has been fixed, not left
+// as a platform dead-end:
+//   - Stage two, POS/RepairIn/Create: NOT an OrnaVerse-side bug. Tested
+//     live on UAT against a real existing repair order — the previous
+//     mapOrderLineToRepairInLine() passed the order line through nearly
+//     whole (~182 fields), which crashes Create every time; a minimal,
+//     hand-picked line (identity + weight/pieces + the ref_* linkage back
+//     to the order) succeeds reliably — verified end-to-end
+//     (Create → Post → Cancel) 3 times. See repairService.js's own header
+//     on that function for the full isolation. So this stage now works
+//     once it's reached.
+//   - Stage one, Inventory/Repair/Create (the workshop order): still
+//     genuinely blocked, but narrowed rather than a blanket "any payload
+//     500s" — isolated live to specifically `document_date` + `party_id`
+//     present TOGETHER (reproduced with different real dates/parties);
+//     each is individually fine. This is what stops this form from ever
+//     reaching the now-fixed stage two, since both stages are submitted
+//     together below. See buildRepairOrderPayload's own header for the
+//     full repro to hand to OrnaVerse support.
 
 import { Suspense, useState } from 'react';
 import { useSelector }        from 'react-redux';

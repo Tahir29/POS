@@ -18,17 +18,16 @@
 // strip fires; both share the same query cache/keys, so a session that's
 // already visited the dashboard paints this instantly from cache.
 //
-// OrnaVerse's own raw codes: 24K gold is reported as '999' (99.9% purity),
-// not a literal '24' — see useMetalRates.js's KARAT_RATES. KARAT_LABELS
-// below maps the 4 codes this strip cares about to the "9K/18K/22K/24K"
-// labels a shopper actually expects. Only rates that have actually
-// resolved are shown (same as MetalRatesTicker) — no "—" placeholders for
-// a still-loading or failed karat.
+// KARAT_LABELS below maps the 4 codes this strip cares about — 9/14/18/22K
+// — to the labels a shopper actually expects; see useMetalRates.js's
+// KARAT_RATES for the full raw-code list this is drawn from. Only rates
+// that have actually resolved are shown (same as MetalRatesTicker) — no
+// "—" placeholders for a still-loading or failed karat.
 
 import { Coins } from 'lucide-react';
 import { useMetalRates } from '@/hooks/settings/useMetalRates';
 
-const KARAT_LABELS = { '09': '9K', '18': '18K', '22': '22K', '999': '24K' };
+const KARAT_LABELS = { '09': '9K', '14': '14K', '18': '18K', '22': '22K' };
 const RATE_CODES = Object.keys(KARAT_LABELS);
 
 const money = (n) => `₹${n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/g`;

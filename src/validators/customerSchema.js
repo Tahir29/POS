@@ -11,12 +11,48 @@ import { z } from 'zod';
 // format as the customer create/update forms, instead of a drifted copy.
 export const PAN_REGEX = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
 
+// ── GSTIN ────────────────────────────────────────────────────────────────────
+// Standard 15-character Indian GSTIN: 2-digit state code + 10-char PAN +
+// 1-digit entity code + 'Z' (fixed) + 1 checksum char. Added 2026-09-17 —
+// OrnaVerse's own POS.CustomerRow schema (tax_no) has always supported this;
+// this app's create/update forms never collected it, so a GST-registered
+// business customer had nowhere to record their GSTIN.
+export const GSTIN_REGEX = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+
 // ── Mobile ─────────────────────────────────────────────────────────────────────
 // 10-digit Indian mobile, must start with 6-9
 export const mobileSchema = z
   .string()
   .min(1, { message: 'Mobile number is required' })
   .regex(/^[6-9]\d{9}$/, { message: 'Enter a valid 10-digit mobile number' });
+
+// ── Identity documents ───────────────────────────────────────────────────────
+// Added 2026-09-17 to match OrnaVerse's own live Customer create form
+// ("Identity Documents" section) — Passport/Aadhaar/Driving License, plus
+// PAN/GSTIN which this app already collected. Loose formats deliberately —
+// unlike PAN/GSTIN, OrnaVerse doesn't appear to validate these client-side
+// either (a passport number format varies too much across countries to
+// usefully regex, and there's no confirmed live example of dl_number to
+// pattern-match against). aadhaar_number is numeric on POS.CustomerRow, but
+// collected as a string here and Number()'d at the payload boundary — an
+// <input> can't hold a 12-digit value as a JS number without precision or
+// leading-zero loss.
+export const aadhaarSchema = z
+  .string()
+  .regex(/^\d{12}$/, { message: 'Enter a 12-digit Aadhaar number' })
+  .optional()
+  .or(z.literal(''));
+
+// NOTE: `pan_document`/`other_document` (the two file-upload slots under
+// OrnaVerse's own "Identity Documents" section) are deliberately NOT
+// collected here. Confirmed live 2026-09-17 on UAT: sending a base64 data
+// URI into either field 500s on BOTH Create and Update. Real customers DO
+// have these populated (as OrnaVerse-side stored paths, e.g.
+// "Documents/00002/…jpeg") — so there's a genuine two-step upload mechanism
+// (upload the file somewhere first, get back a path, then set the field to
+// that path) that hasn't been found yet, not a dead field. Don't re-wire
+// these as a raw base64 string without finding that real upload endpoint
+// first — see [[ornaverse-apidog-reference]] for how to look one up.
 
 // ── Create Customer ────────────────────────────────────────────────────────────
 // Used by NewCustomerForm
@@ -40,6 +76,16 @@ export const customerSchema = z.object({
     .optional()
     .or(z.literal('')),
 
+  tax_no: z
+    .string()
+    .regex(GSTIN_REGEX, { message: 'Enter a valid 15-character GSTIN' })
+    .optional()
+    .or(z.literal('')),
+
+  passport_number: z.string().max(20, { message: 'Passport number is too long' }).optional().or(z.literal('')),
+  aadhaar_number:  aadhaarSchema,
+  dl_number:       z.string().max(30, { message: 'Driving license number is too long' }).optional().or(z.literal('')),
+
   address:   z.string().optional().or(z.literal('')),
   address_1: z.string().optional().or(z.literal('')),
 
@@ -48,6 +94,12 @@ export const customerSchema = z.object({
   country_id: z.number().int().positive().optional().nullable(),
   state_id:   z.number().int().positive().optional().nullable(),
   city_id:    z.number().int().positive().optional().nullable(),
+
+  // Confirmed live 2026-09-17: nationality_id is a country_id — a real
+  // customer had country_id:101 and nationality_id:101, both "India" —
+  // reuses the same Master/Countries/List this form already loads for
+  // Country, rather than a separate master.
+  nationality_id: z.number().int().positive().optional().nullable(),
 
   pin_code: z
     .string()
@@ -100,12 +152,23 @@ export const updateCustomerSchema = z.object({
     .optional()
     .or(z.literal('')),
 
+  tax_no: z
+    .string()
+    .regex(GSTIN_REGEX, { message: 'Enter a valid 15-character GSTIN' })
+    .optional()
+    .or(z.literal('')),
+
+  passport_number: z.string().max(20, { message: 'Passport number is too long' }).optional().or(z.literal('')),
+  aadhaar_number:  aadhaarSchema,
+  dl_number:       z.string().max(30, { message: 'Driving license number is too long' }).optional().or(z.literal('')),
+
   address:   z.string().optional().or(z.literal('')),
   address_1: z.string().optional().or(z.literal('')),
 
   country_id: z.number().int().positive().optional().nullable(),
   state_id:   z.number().int().positive().optional().nullable(),
   city_id:    z.number().int().positive().optional().nullable(),
+  nationality_id: z.number().int().positive().optional().nullable(),
 
   pin_code: z
     .string()
