@@ -39,3 +39,13 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Claude Code local config — accumulates real command history (including
+# credentials typed into live-testing curl commands) in its permission
+# allowlist. Never committed: a real OrnaVerse admin credential leaked into
+# git history via .claude/settings.json on 2026-08-06/10/12 before this
+# rule existed — scrubbed from history on 2026-09-18 via git-filter-repo.
+# settings.local.json is also covered by a global gitignore rule already,
+# but listed here too so this repo is safe regardless of whose
+# machine/global config it's cloned onto.
+.claude/
