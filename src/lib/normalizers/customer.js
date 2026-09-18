@@ -248,17 +248,38 @@ export function buildCustomerCreatePayload(formValues) {
  * IMPORTANT: Always call retrieveCustomer() first to get the latest raw record,
  * then pass it here as `originalRaw`. Never use stale data from the list response.
  *
+ * FIXED 2026-09-18 — confirmed live on UAT: sending gender/marital_status/
+ * religion_id back as `0` 500s Update, even with every other field
+ * unchanged (bisected field-by-field; each one alone reproduces it). `0` is
+ * OrnaVerse's own Retrieve default for "never explicitly set" on these
+ * three enums, not a real value any of them can hold — a customer created
+ * without picking a gender, for instance, always retrieves as `0`. Since
+ * this function unconditionally spreads the full raw record back in,
+ * EVERY customer who has never had these three set would 500 on their
+ * very next edit, regardless of what the operator actually changed.
+ * religion_id in particular flows through purely from the raw record —
+ * this app's own form doesn't even collect it (see customerSchema.js).
+ * Dropping the key (rather than sending 0) lets Update succeed the same
+ * way it already does when a field is simply absent.
+ *
  * @param {object} originalRaw    — raw POS.CustomerRow from Customer/Retrieve
  * @param {object} formChanges    — only the fields the user changed
  * @returns {object} Merged CustomerRow entity ready for { EntityId, Entity: ... } payload
  */
 export function buildCustomerUpdatePayload(originalRaw, formChanges) {
-  return {
+  const merged = {
     // Spread the full original record first (preserves all fields OrnaVerse requires)
     ...originalRaw,
     ...formChanges,
     // party_id must always be present (read-only in OrnaVerse but required in payload)
     party_id: originalRaw.party_id,
+  };
+
+  return {
+    ...merged,
+    gender:         merged.gender         === 0 ? undefined : merged.gender,
+    marital_status: merged.marital_status === 0 ? undefined : merged.marital_status,
+    religion_id:    merged.religion_id    === 0 ? undefined : merged.religion_id,
   };
 }
 

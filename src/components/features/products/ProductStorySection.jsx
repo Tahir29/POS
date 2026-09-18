@@ -141,6 +141,8 @@ export default function ProductStorySection({
           fill
           className="object-cover"
           unoptimized
+          loading="lazy"
+          fetchPriority="low"
         />
       </div>
     </div>

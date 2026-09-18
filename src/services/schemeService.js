@@ -130,6 +130,20 @@ export async function getSchemeReceipts({ scheme_enrollment_id, take = 0 } = {})
 }
 
 /**
+ * The configured benefit rules for one scheme — see API.SCHEMES.RULES_LIST's
+ * own comment for the confirmed live shape. Per-scheme, not shared/global.
+ * @param {number} schemeId
+ * @returns {Promise<object[]>} SchemeRulesRow[]
+ */
+export async function getSchemeRules(schemeId) {
+  const response = await axiosInstance.post(API.SCHEMES.RULES_LIST, {
+    scheme_id: schemeId,
+    Take:      0,
+  });
+  return response.data?.Entities ?? [];
+}
+
+/**
  * Builds the SchemeReceipt/Create Entity. This is NOT a sales document, so it
  * does not go through buildTransactionHeaderFields (no sub_total/
  * taxable_amount/tax_amount/net_amount/promotion_details) — it has its own
@@ -140,11 +154,11 @@ export async function getSchemeReceipts({ scheme_enrollment_id, take = 0 } = {})
  * instalment it pays, or the server has nothing to mark off.
  *
  * @param {{
- *   enrollmentId: number, schemeType?: number|string, schemeUniqueCode?: string,
+ *   enrollmentId: number, schemeType?: number, schemeUniqueCode?: string,
  *   partyId: number, partyName: string,
  *   mobile?: string, email?: string, phoneCode?: string, panNo?: string, address?: string,
  *   activeStoreId: number, financialYearId: number, ledgerId: number,
- *   documentDate: string, monthIds: (number|string)[], amount: number,
+ *   documentDate: string, monthIds: number[], amount: number,
  *   goldRate?: number, weight?: number,
  *   allowBackdatedEntry?: boolean, numberOfBackdatedDays?: number,
  *   isDocumentNumberEditable?: boolean,
@@ -175,7 +189,12 @@ export function buildSchemeReceiptPayload({
     pan_no:     panNo ?? '',
     address:    address ?? '',
     scheme_enrollment_id: enrollmentId,
-    month_ids: monthIds.map(String),   // ← the field that was missing
+    // CONFIRMED LIVE 2026-09-18 (real multi-month SchemeReceipt/Create
+    // payload from OrnaVerse's own client, e.g. month_ids:[9,10,11,12,1,2]):
+    // these are JSON numbers, not strings. Was `.map(String)` before —
+    // worked in practice (loose server-side coercion), but didn't match
+    // the real contract; fixed to remove the guess now that it's confirmed.
+    month_ids: monthIds.map(Number),
     amount,
     gold_rate: goldRate ?? 0,
     weight:    weight ?? 0,
@@ -200,7 +219,9 @@ export function buildSchemeReceiptPayload({
     is_document_number_editable: isDocumentNumberEditable ?? false,
     allow_backdated_entry:       allowBackdatedEntry ?? true,
     number_of_backdated_days:    numberOfBackdatedDays ?? 1000,
-    scheme_type:        schemeType != null ? String(schemeType) : '',
+    // CONFIRMED LIVE 2026-09-18 (same real capture as month_ids above):
+    // scheme_type:1, a number — was String(schemeType) before, also fixed.
+    scheme_type:        schemeType != null ? Number(schemeType) : null,
     scheme_unique_code: schemeUniqueCode ?? '',
   };
 }
@@ -295,23 +316,113 @@ export function canMatureEnrollment(enrollment) {
   return { allowed: rows.length > 0 && remaining === 0, remaining };
 }
 
+// rule_type 3 = the foreclosure eligibility window on a SchemeRulesRow —
+// CONFIRMED LIVE 2026-09-18: scheme_id 3 ("Vault of dream")'s own rule_type
+// 3 row has from_installment:6, matching that exact scheme's real rejection
+// message ("To foreclose you need to pay at least 6 installments") from
+// OrnaVerse's own client. This is genuinely PER-SCHEME, not a universal
+// constant — scheme_id 5 ("New year")'s rule_type 3 row has
+// from_installment:1 instead. GetSchemeForcloseBenefit itself doesn't
+// reject a too-early call server-side (confirmed separately: it happily
+// returns a real ₹0-benefit calculation for a 1-instalment enrollment on
+// scheme 3), so this is a real UI-level precondition, not derivable from
+// that endpoint's own behavior — canForecloseEnrollment needs this
+// scheme's real rules, not just the enrollment itself.
+const FORECLOSE_RULE_TYPE = 3;
+
 /**
- * Records a closure benefit against the enrollment.
+ * Mirrors OrnaVerse's own client-side gate on Calculate Foreclosure — see
+ * FORECLOSE_RULE_TYPE's own comment for how the real minimum is found.
+ *
+ * @param {object} enrollment — full entity (needs scheme_monthly_details)
+ * @param {object[]} schemeRules — this enrollment's scheme's rules, from
+ *   getSchemeRules(enrollment.scheme_id)
+ * @returns {{ allowed: boolean, paid: number, required: number }}
+ */
+export function canForecloseEnrollment(enrollment, schemeRules) {
+  const rows = enrollment?.scheme_monthly_details ?? [];
+  const paid = rows.filter((m) => m.payment_made).length;
+  const rule = (schemeRules ?? []).find((r) => r.rule_type === FORECLOSE_RULE_TYPE);
+  // No configured rule for this scheme — fail open (allow) rather than
+  // block a scheme that may simply not restrict foreclosure at all; the
+  // server itself is the final say either way.
+  const required = rule?.from_installment ?? 1;
+  return { allowed: paid >= required, paid, required };
+}
+
+// CONFIRMED LIVE 2026-09-18: captured the ACTUAL SchemeEnrollment/Update
+// request body OrnaVerse's own client sends on a real cancellation (Calculate
+// Cancellation → Cancel Scheme) — it explicitly sets scheme_status:0 and
+// benifit_amount:0 in that write (even though the real refund/payout was
+// ₹1,000 — see benefitAmountToRecord's own comment in EnrollmentDetailSheet.jsx).
+// This is the client's own real payload, not an inferred after-the-fact
+// read, so it's as confirmed as this gets without OrnaVerse's written docs.
+// Matches this file's own long-standing but previously-unconfirmed schema
+// guess ("0 cancelled/foreclosed-pending").
+//
+// maturity:2 CONFIRMED LIVE the same day, separately: paid all 9
+// instalments, ran Calculate Maturity, clicked Mature — a subsequent
+// Retrieve showed scheme_status:2 (plus benifit_amount/invested_amount/
+// total_payable and each scheme_monthly_details row's own benefit_amount
+// all populated for the first time). OrnaVerse's own client badge briefly
+// still read "Active" until the page was refreshed, then correctly showed
+// "Matured" — confirmed as a client-side staleness quirk on their end, not
+// a reason to doubt the value. Matches this file's own guess ("2
+// matured-pending") too.
+//
+// foreclose is still unconfirmed — a foreclosed enrollment's real
+// scheme_status was never separately captured, so it's deliberately absent
+// here rather than assumed to share maturity's or cancellation's value.
+const CONFIRMED_STATUS_BY_KIND = {
+  cancellation: 0,
+  maturity:     2,
+};
+
+/**
+ * Records a closure benefit (and, for confirmed kinds, the resulting
+ * status) against the enrollment.
  *
  * There is no dedicated close/mature/foreclose/cancel endpoint in the API —
- * SchemeEnrollment/Update is the only mutation available on this entity
- * (confirmed working via a no-op round trip). Only `benifit_amount` (see the
- * header note on the API's own typo) is written here — `scheme_status` (a
- * 4-value enum with no labels in the schema) is deliberately left untouched,
- * since which of 0/2/3 means Matured vs. Foreclosed vs. Cancelled is not
- * confirmed, and writing an enum value to a real customer's financial
- * record on a guess is worse than leaving it as-is. Confirm the status enum
- * with OrnaVerse before extending this to also transition scheme_status.
+ * SchemeEnrollment/Update is the only mutation available on this entity.
+ * Only `benifit_amount` (see the header note on the API's own typo) plus
+ * whatever CONFIRMED_STATUS_BY_KIND above already proves for `kind` are
+ * written — an unconfirmed kind leaves scheme_status untouched rather than
+ * guess at Matured vs. Foreclosed's real enum value.
  *
- * @param {{ enrollmentId: number, benefitAmount: number }} params
+ * @param {{ enrollmentId: number, benefitAmount: number, kind?: 'maturity'|'foreclose'|'cancellation' }} params
  * @returns {Promise<object>} SaveResponse { EntityId }
  */
-export async function closeSchemeEnrollment({ enrollmentId, benefitAmount }) {
+export async function closeSchemeEnrollment({ enrollmentId, benefitAmount, kind }) {
+  const enrollment = await getSchemeEnrollmentDetail(enrollmentId);
+  if (!enrollment) throw new Error('Could not load this enrollment.');
+
+  const confirmedStatus = kind ? CONFIRMED_STATUS_BY_KIND[kind] : undefined;
+
+  const response = await axiosInstance.post(API.SCHEMES.ENROLLMENT_UPDATE, {
+    EntityId: enrollmentId,
+    Entity: {
+      ...enrollment,
+      benifit_amount: benefitAmount,
+      ...(confirmedStatus !== undefined && { scheme_status: confirmedStatus }),
+    },
+  });
+  return response.data;
+}
+
+/**
+ * Redeems a MATURED enrollment (scheme_status:2 → 3) — CONFIRMED LIVE
+ * 2026-09-18 as a genuinely separate action from Mature, not a second call
+ * to closeSchemeEnrollment: the real captured Redeem Update carries every
+ * field over unchanged from the already-Matured entity (including
+ * benifit_amount/invested_amount/total_payable, all set at Mature time) —
+ * only scheme_status itself moves. So this deliberately does NOT touch
+ * benifit_amount at all, unlike closeSchemeEnrollment which always writes
+ * a freshly-calculated one.
+ *
+ * @param {number} enrollmentId
+ * @returns {Promise<object>} SaveResponse { EntityId }
+ */
+export async function redeemSchemeEnrollment(enrollmentId) {
   const enrollment = await getSchemeEnrollmentDetail(enrollmentId);
   if (!enrollment) throw new Error('Could not load this enrollment.');
 
@@ -319,7 +430,7 @@ export async function closeSchemeEnrollment({ enrollmentId, benefitAmount }) {
     EntityId: enrollmentId,
     Entity: {
       ...enrollment,
-      benifit_amount: benefitAmount,
+      scheme_status: 3,
     },
   });
   return response.data;

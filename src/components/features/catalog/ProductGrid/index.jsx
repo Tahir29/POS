@@ -1,16 +1,51 @@
 'use client';
 
-// Renders the product grid with automatic infinite scroll.
-// Uses IntersectionObserver on a sentinel div at the bottom —
-// when it enters the viewport, onLoadMore is called automatically.
-// No "Load More" button needed.
+// Renders the product grid, virtualized (react-virtuoso's VirtuosoGrid) with
+// automatic infinite scroll via its own endReached callback.
+//
+// Virtualization added 2026-09-18: this grid was previously a plain
+// products.map() rendering every loaded item's real DOM + hooks at once. At
+// 100 items/page (APP_CONFIG.PAGINATION.CATALOG_TAKE), that meant ~100
+// mounted ProductCards simultaneously firing their own per-card network
+// calls (style→Shopify-id lookup, then a Nector rating lookup) — see
+// useStyleExternalProductId/useProductReviewSummary's own comments for the
+// resulting multi-minute delay this caused. Those calls are now
+// concurrency-queued regardless, but virtualizing on top means only the
+// cards actually near the viewport ever mount at all, however far someone
+// has scrolled — the two fixes compound rather than compete.
+//
+// VirtuosoGrid (not a plain react-window FixedSizeGrid) specifically because
+// it works with an ordinary responsive CSS grid (listClassName below is the
+// same Tailwind grid-cols-* classes the old plain div used) instead of
+// requiring hardcoded pixel column widths/counts per breakpoint.
+//
+// customScrollParent, NOT useWindowScroll: the actual scroll container on
+// every page in this app (catalog included — see that page's own "#main-
+// content is the sole scroll container" comment) is AppShell's <main
+// id="main-content" class="overflow-y-auto">, not the browser window itself
+// (the window never scrolls; the sidebar+header shell is fixed-height). See
+// ScrollToTopButton for the same #main-content lookup pattern used elsewhere.
 
-import { useEffect, useRef } from 'react';
+import { useState } from 'react';
+import { VirtuosoGrid } from 'react-virtuoso';
 import { PackageSearch } from 'lucide-react';
 import ProductCard     from '@/components/features/catalog/ProductCard';
 import CatalogSkeleton from '@/components/features/catalog/CatalogSkeleton';
 import EmptyState      from '@/components/shared/EmptyState';
 import { Button }      from '@/components/ui/button';
+
+const GRID_CLASSNAME = 'grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5';
+// Pixels of extra rows kept mounted beyond the viewport in each direction —
+// enough to make fast scrolling feel seamless (no blank flash) without
+// re-inflating the mounted-card count back toward "the whole page".
+const OVERSCAN_PX = 400;
+// First row's worth of cards (widest breakpoint is xl:grid-cols-5, plus one
+// spare) get priority image loading — see ProductCard's own `priorityImage`
+// doc comment. Deliberately a flat count, not breakpoint-aware: overshooting
+// by a card or two on a narrower screen costs one extra eager fetch, not a
+// correctness bug — undershooting would just silently miss the real LCP
+// element on wider screens.
+const FIRST_ROW_PRIORITY_COUNT = 6;
 
 // Delegates to the shared EmptyState (same card/badge/icon convention used elsewhere).
 function CatalogEmptyState({ hasFilters, onClearFilters }) {
@@ -65,10 +100,16 @@ function FetchingSpinner() {
  *   storeCode:       string|null,
  *   onLoadMore:      () => void,
  *   onClearFilters:  () => void,
+ *   prioritizeFirstRow?: boolean,
  * }} props
  *   storeCode - overrides ProductCard's default "In Stock" store code
  *   (activeStoreCode) with the store this grid is actually showing, since
  *   that isn't always the signed-in store (see OtherStoreSection).
+ *   prioritizeFirstRow (default true) - false for OtherStoreSection, whose
+ *   grid only ever renders BELOW the primary one once it's scrolled into
+ *   view — its own "first row" is never actually above the fold, so it
+ *   should never claim the eager/high-fetch-priority treatment that's
+ *   meant for whatever the operator sees the instant the page paints.
  */
 export default function ProductGrid({
   products       = [],
@@ -80,25 +121,17 @@ export default function ProductGrid({
   storeCode,
   onLoadMore,
   onClearFilters,
+  prioritizeFirstRow = true,
 }) {
-  const sentinelRef = useRef(null);
-
-  useEffect(() => {
-    if (!hasMore || isFetchingMore) return;
-
-    const sentinel = sentinelRef.current;
-    if (!sentinel) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting) onLoadMore();
-      },
-      { rootMargin: '200px' },
-    );
-
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [hasMore, isFetchingMore, onLoadMore]);
+  // Lazy-initialized, not an effect: by the time this component's function
+  // body runs on the client (fresh mount or hydration), the browser has
+  // already parsed AppShell's <main id="main-content"> into the DOM — it's
+  // an ancestor node, not something this component or an effect needs to
+  // wait on. `document` is guarded only for the server render pass, where
+  // it's `undefined`; the value is unused there anyway (no scrolling happens
+  // server-side).
+  const [scrollParent] = useState(() =>
+    (typeof document !== 'undefined' ? document.getElementById('main-content') : null));
 
   if (isLoading) return <CatalogSkeleton />;
 
@@ -112,30 +145,37 @@ export default function ProductGrid({
   }
 
   return (
-    <div>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-        {products.map((product) => (
+    <VirtuosoGrid
+      customScrollParent={scrollParent ?? undefined}
+      totalCount={products.length}
+      overscan={OVERSCAN_PX}
+      listClassName={GRID_CLASSNAME}
+      endReached={() => {
+        if (hasMore && !isFetchingMore) onLoadMore();
+      }}
+      itemContent={(index) => {
+        const product = products[index];
+        return (
           <ProductCard
-            key={product.item_id ?? product.item_code}
             product={product}
             showStockBadge={showStockBadge}
             storeCode={storeCode}
+            priorityImage={prioritizeFirstRow && index < FIRST_ROW_PRIORITY_COUNT}
           />
-        ))}
-      </div>
-
-      {/* Sentinel — triggers next page load */}
-      {hasMore && (
-        <div ref={sentinelRef} className="h-1 w-full" aria-hidden="true" />
-      )}
-
-      {isFetchingMore && <FetchingSpinner />}
-
-      {!hasMore && products.length > 0 && (
-        <p className="py-6 text-center text-xs text-muted-foreground">
-          All {products.length} products loaded
-        </p>
-      )}
-    </div>
+        );
+      }}
+      components={{
+        Footer: () => (
+          <>
+            {isFetchingMore && <FetchingSpinner />}
+            {!hasMore && products.length > 0 && (
+              <p className="py-6 text-center text-xs text-muted-foreground">
+                All {products.length} products loaded
+              </p>
+            )}
+          </>
+        ),
+      }}
+    />
   );
 }

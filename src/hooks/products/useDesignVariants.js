@@ -7,7 +7,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { useMemo }  from 'react';
-import { getDesignVariants }    from '@/services/itemService';
+import { getDesignVariantsQueued } from '@/services/itemService';
 import { getStockByStoresBatch } from '@/services/catalogService';
 import { QUERY_KEYS } from '@/constants/queryKeys';
 import APP_CONFIG    from '@/constants/appConfig';
@@ -60,7 +60,7 @@ function isValid(value) {
 export function useDesignVariants(styleId, storeId) {
   const { data, isLoading: designLoading, isError } = useQuery({
     queryKey:  QUERY_KEYS.ITEMS.DESIGN_VARIANTS(styleId),
-    queryFn:   () => getDesignVariants(styleId),
+    queryFn:   () => getDesignVariantsQueued(styleId),
     enabled:   !!styleId,
     staleTime: APP_CONFIG.STALE_TIME.CATALOG,
     select:    selectStyleData,

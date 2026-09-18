@@ -172,6 +172,11 @@ function EnrollScreen() {
       financial_year_id: headerConfig.financialYearId ?? undefined,
       currency_id:       APP_CONFIG.CURRENCY.INR_ID,
       exchange_rate:     1,
+      // Present explicitly on OrnaVerse's own real Create capture
+      // (2026-09-18) — harmless either way (Create already worked without
+      // them), added purely to match the real payload exactly.
+      user_id: null,
+      is_document_number_editable: false,
       // Confirmed required on SchemeEnrollmentRow (v1.json) — picked from a
       // store-scoped list (see useSalesPersonOptions.js), mirroring the
       // vendor's own Scheme Enrollment screen.

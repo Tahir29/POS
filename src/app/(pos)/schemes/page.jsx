@@ -44,6 +44,14 @@ const STATUS_STYLES = {
   completed: 'bg-blue-50    text-blue-700',
   inactive:  'bg-muted  text-muted-foreground',
   matured:   'bg-blue-50    text-blue-700',
+  // ADDED 2026-09-18 — scheme_status:3 confirmed live to mean Redeemed, the
+  // terminal state after Matured — same blue tone as matured/completed
+  // (not negative like cancelled, just a different "done" state).
+  redeemed:  'bg-blue-50    text-blue-700',
+  // ADDED 2026-09-18 — scheme_status:0 confirmed live to mean Cancelled
+  // (see useSchemeEnrollments.js's normalizeEnrollment); same
+  // status-error token PaymentStatusBadge uses for its own negative states.
+  cancelled: 'bg-status-error/10 text-status-error',
   default:   'bg-muted  text-muted-foreground',
 };
 
@@ -441,7 +449,7 @@ function EnrollmentsTab() {
               >
                 View Details
               </Button>
-              {enrollment.hasPendingInstallment && (
+              {enrollment.hasPendingInstallment && enrollment.status !== 'cancelled' && (
                 <Button
                   variant="outline"
                   size="sm"

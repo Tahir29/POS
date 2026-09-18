@@ -1,6 +1,7 @@
 'use client'
 
 import { usePathname } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import Sidebar from '@/components/layout/Sidebar';
@@ -43,7 +44,24 @@ export default function AppShell({ children }) {
   // page's own search) shares this exact same cache entry, so none of them
   // pay for it twice.
   const activeStoreId = useSelector(selectActiveStoreId);
-  useAllCatalog(activeStoreId);
+
+  // STAGGERED (2026-09-18): the sweep above is a real ~2,699-item / ~28-round
+  // fetch (24 items/page, concurrency 4 — see fetchEntireStoreCatalog) that
+  // used to fire in the very same instant as whatever page the operator just
+  // landed on starts its OWN first-paint fetch (the catalog list, dashboard
+  // stats, etc.) — both competing for the same handful of real connections
+  // right when it matters most for perceived load time. A short delay here
+  // doesn't change WHEN the sweep starts relative to other pages (it's still
+  // fully automatic, no PDP visit required — preserving the 2026-09-17 fix
+  // above) — it just lets the landing page's own critical request get a
+  // head start before this background sweep starts contending for the pool.
+  const [sweepReady, setSweepReady] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setSweepReady(true), 1500);
+    return () => clearTimeout(timer);
+  }, []);
+
+  useAllCatalog(activeStoreId, { enabled: sweepReady });
 
   return (
     <TooltipProvider delayDuration={300}>

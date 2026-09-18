@@ -12,6 +12,7 @@ import { useSkuSearch }          from '@/hooks/catalog/useSkuSearch';
 import { useCategoryNameSearch } from '@/hooks/catalog/useCategoryNameSearch';
 import { useCategories }         from '@/hooks/catalog/useCategoryFilters';
 import { useLiveCatalogPrices }  from '@/hooks/catalog/useLiveCatalogPrices';
+import { useCrossStoreStockCodes } from '@/hooks/catalog/useCrossStoreStockCodes';
 import { getStockPieceBySku, createItemEnquiry } from '@/services/inventoryService';
 
 import CategoryFilter        from '@/components/features/catalog/CategoryFilter';
@@ -31,6 +32,10 @@ import TOAST from '@/constants/toastMessages';
 import { selectAvailableStores } from '@/store/slices/storeSlice';
 
 const { SEARCH } = APP_CONFIG;
+
+// See the live-stock-recheck comment further down for why this exists and
+// why it's capped the same way useLiveCatalogPrices' own window is.
+const STOCK_CHECK_WINDOW = 300;
 
 const selectActiveStoreId = (s) => s.store.activeStoreId;
 
@@ -274,13 +279,35 @@ function CatalogScreen() {
   // the catalog filter has on screen, not the signed-in store.
   const { priceById: livePriceById, settledIds } = useLiveCatalogPrices(displayProducts, effectiveStoreId);
 
-  // Reuses the same merged object for an item whose price/is_pricing hasn't
-  // changed since the last tick, instead of building a new one for every item
-  // on every settle-tick. ProductCard is React.memo'd so a card whose price
-  // hasn't moved skips re-rendering — but only if it keeps the same `product`
-  // object reference, hence this cache. "Adjust state during render" is used
-  // instead of a ref because this repo's lint (react-hooks/refs) forbids
-  // reading/writing a ref during render; same idiom as stableSort below.
+  // Live has_stock re-check — FIXED 2026-09-18 (reported: a sold-out SKU
+  // still showed "In Stock"). ProductCatalog/List's own has_stock is just a
+  // snapshot from whenever this page's cache was populated (up to 24h old —
+  // it's cached as "master data" alongside genuinely immutable fields like
+  // name/SKU/weight, see useCatalogProducts.js), so a real stock change
+  // between that fetch and now never reflected until the cache expired.
+  // getStockByStoresBatch is a real batch endpoint (one POST for many
+  // item_ids, unlike Style/Retrieve/Nector — no queue needed), short-TTL
+  // (STALE_TIME.STOCK, 1 min) — same mechanism Wishlist/Recently Viewed
+  // already rely on for a trustworthy badge, now extended to the main grid
+  // too. Capped to the first STOCK_CHECK_WINDOW ids for the same reason
+  // useLiveCatalogPrices caps its own window: a name search can match the
+  // store's entire catalog (thousands of rows via useAllCatalog), and this
+  // endpoint takes the whole id list in ONE request body — unbounded here
+  // means an unbounded single payload, not just "many requests".
+  const stockCheckItemIds = useMemo(
+    () => displayProducts.slice(0, STOCK_CHECK_WINDOW).map((p) => p.item_id).filter((id) => id != null),
+    [displayProducts]
+  );
+  const { stockByItemId: liveStockByItemId } = useCrossStoreStockCodes(stockCheckItemIds);
+
+  // Reuses the same merged object for an item whose price/is_pricing/has_stock
+  // hasn't changed since the last tick, instead of building a new one for
+  // every item on every settle-tick. ProductCard is React.memo'd so a card
+  // whose fields haven't moved skips re-rendering — but only if it keeps the
+  // same `product` object reference, hence this cache. "Adjust state during
+  // render" is used instead of a ref because this repo's lint
+  // (react-hooks/refs) forbids reading/writing a ref during render; same
+  // idiom as stableSort below.
   const [mergeCache, setMergeCache] = useState(() => new Map());
 
   const nextMergeCache = new Map();
@@ -289,24 +316,54 @@ function CatalogScreen() {
     // Distinguishes "still coming" from "there will never be a number".
     const isPricing = price == null && !settledIds.has(p.item_id);
 
-    // Compared on price/isPricing content only, not object reference —
-    // `products` from useCatalogProducts' select() can get a fresh reference
-    // on every render during the fetching/refetching transition right after a
-    // store switch, which previously caused an update-depth-exceeded loop
-    // (same class of bug useLiveCatalogPrices hit and fixed the same way).
-    // Trade-off: if a product's other fields (name/image) changed while
-    // price/isPricing didn't, the reused entry shows the old ones — accepted
-    // since those catalog fields are effectively immutable per item_id
-    // within a session.
+    // Falls back to the snapshot's own has_stock until the live check
+    // resolves for this id — exactly like price falls back to "Pricing…"
+    // rather than asserting a wrong number while unsettled. Scoped to
+    // effectiveStoreCode specifically (not liveStock.hasStock, which is an
+    // OR across every store the operator can access) — this grid shows one
+    // store's stock, not "in stock somewhere".
+    const liveStock = liveStockByItemId.get(p.item_id);
+    const has_stock = liveStock ? liveStock.storeCodes.includes(effectiveStoreCode) : p.has_stock;
+
+    // Compared on price/isPricing/has_stock content only, not object
+    // reference — `products` from useCatalogProducts' select() can get a
+    // fresh reference on every render during the fetching/refetching
+    // transition right after a store switch, which previously caused an
+    // update-depth-exceeded loop (same class of bug useLiveCatalogPrices hit
+    // and fixed the same way). Trade-off: if a product's other fields
+    // (name/image) changed while none of these three did, the reused entry
+    // shows the old ones — accepted since those catalog fields are
+    // effectively immutable per item_id within a session.
     const cached = mergeCache.get(p.item_id);
-    const entry = (cached && cached.price === price && cached.isPricing === isPricing)
+    const entry = (cached && cached.price === price && cached.isPricing === isPricing && cached.has_stock === has_stock)
       ? cached
-      : { raw: p, price, isPricing, merged: { ...p, price, is_pricing: isPricing } };
+      : { raw: p, price, isPricing, has_stock, merged: { ...p, price, is_pricing: isPricing, has_stock } };
 
     nextMergeCache.set(p.item_id, entry);
     return entry;
   });
   const pricedDisplayProducts = mergedEntries.map((entry) => entry.merged);
+
+  // FIX (2026-09-18, reported: "Made to Order products visible even with the
+  // out-of-stock toggle off"). There's no separate "Made to Order" flag
+  // anywhere in this data model — it's just the display label this app
+  // already uses for has_stock:false. Browse mode trusts OrnaVerse's own
+  // has_stock from ProductCatalog/List directly (no client recompute), and
+  // search mode's isInStock filter trusts that exact same flag — but
+  // OrnaVerse appears to mark a zero-physical-piece-but-orderable item's
+  // has_stock as true regardless of the show_out_of_stock param sent to it
+  // (that same param has other confirmed non-obvious behavior — see
+  // fetchEntireStoreCatalog's own note on it), so neither filter ever
+  // excludes these. The live has_stock correction above (real
+  // current_company_pieces via getStockByStoresBatch) is the one
+  // trustworthy signal available — enforcing the toggle against IT, once it
+  // resolves, is what actually removes these instead of just correcting
+  // their badge. Only takes effect within the live-checked window (see
+  // STOCK_CHECK_WINDOW); anything beyond it still relies on the
+  // (occasionally wrong) snapshot, same as before this fix.
+  const visibleDisplayProducts = showOutOfStock
+    ? pricedDisplayProducts
+    : pricedDisplayProducts.filter((p) => p.has_stock === true);
 
   // Compared after building both maps, in a plain loop rather than a flag
   // mutated inside the .map() callback above — this repo's lint
@@ -336,10 +393,14 @@ function CatalogScreen() {
   // `pricedDisplayProducts` by reference caused an update-depth-exceeded
   // crash right after a store switch, since useCatalogProducts' select() can
   // hand back a new array reference on every render during that transition
-  // (same bug class as useLiveCatalogPrices, fixed the same way).
+  // (same bug class as useLiveCatalogPrices, fixed the same way). Includes
+  // has_stock so a live stock correction (see above) actually reaches
+  // sortedDisplayProducts — without it here, a stock-only change (price
+  // unchanged) would never look different enough to escape the frozen
+  // stableSort.order carried over from the previous tick.
   const sortResetKey = `${sortBy}|${activeCategoryId ?? ''}|${showOutOfStock}|${effectiveStoreId ?? ''}|${isSearchMode}`;
-  const pricedSignature = pricedDisplayProducts
-    .map((p) => `${p.item_id}:${p.price ?? ''}`)
+  const pricedSignature = visibleDisplayProducts
+    .map((p) => `${p.item_id}:${p.price ?? ''}:${p.has_stock}`)
     .join('|');
 
   const [stableSort, setStableSort] = useState({ key: sortResetKey, signature: null, order: [] });
@@ -347,7 +408,7 @@ function CatalogScreen() {
   let sortedDisplayProducts = stableSort.order;
   if (stableSort.signature !== pricedSignature || stableSort.key !== sortResetKey) {
     const baseOrder = stableSort.key !== sortResetKey ? [] : stableSort.order;
-    sortedDisplayProducts = stableSortProducts(baseOrder, pricedDisplayProducts, sortBy);
+    sortedDisplayProducts = stableSortProducts(baseOrder, visibleDisplayProducts, sortBy);
     setStableSort({ key: sortResetKey, signature: pricedSignature, order: sortedDisplayProducts });
   }
 

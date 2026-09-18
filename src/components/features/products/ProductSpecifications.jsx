@@ -181,6 +181,8 @@ function SpecInfoColumn({ heading, image, imageAlt }) {
             width={375}
             height={317}
             className="h-auto w-full"
+            loading="lazy"
+            fetchPriority="low"
           />
         </div>
       ) : (
@@ -225,6 +227,8 @@ function SpecInfoSheetBody({ title }) {
                 width={768}
                 height={section.imageHeight ?? 240}
                 className="h-auto w-full"
+                loading="lazy"
+                fetchPriority="low"
               />
             </div>
           )}

@@ -49,9 +49,27 @@ function normalizeEnrollment(raw) {
     .filter((m) => m.payment_made)
     .reduce((sum, m) => sum + (Number(m.month_amount) || 0), 0);
 
-  // `status` is derived from scheme_monthly_details, NOT raw.scheme_status
-  // (a bare number with no documented enum mapping) — a month is either
-  // paid or it isn't, which is unambiguous.
+  // `status` was previously derived ONLY from scheme_monthly_details,
+  // deliberately ignoring raw.scheme_status as "a bare number with no
+  // documented enum mapping" — a month being paid or not is unambiguous,
+  // an opaque enum wasn't. CONFIRMED LIVE 2026-09-18 (captured OrnaVerse's
+  // own real client actions, full lifecycle): scheme_status:0 = Cancelled,
+  // :2 = Matured (after Calculate Maturity → Mature, once all instalments
+  // are paid — badge read stale "Active" until refreshed, a client-side
+  // staleness quirk on OrnaVerse's own end, not evidence of a different
+  // value), :3 = Redeemed (a SEPARATE subsequent action from Mature — its
+  // own real Update payload carried every other field, including
+  // benifit_amount, over unchanged from the Matured step, only
+  // scheme_status itself moved 2→3). All three checked before the
+  // installment-based heuristic, since none of their paid-ratios say
+  // anything about real lifecycle state on their own. Foreclosure's own
+  // status value remains unconfirmed (see schemeService.js's
+  // closeSchemeEnrollment) — a foreclosed enrollment still falls through
+  // to the installment-based heuristic below until that's captured the
+  // same way.
+  const isCancelled = raw.scheme_status === 0;
+  const isMatured   = raw.scheme_status === 2;
+  const isRedeemed  = raw.scheme_status === 3;
   const hasPendingInstallment = monthlyDetails.length > 0
     ? monthlyDetails.some((m) => !m.payment_made)
     : true; // no monthly schedule loaded yet — don't block payment on that
@@ -70,7 +88,7 @@ function normalizeEnrollment(raw) {
     // SchemeReceipt/Create.
     schemeType:        raw.scheme_type,
     schemeUniqueCode:  raw.scheme_unique_code ?? '',
-    status:            isFullyPaid ? 'completed' : 'active',
+    status:            isCancelled ? 'cancelled' : isRedeemed ? 'redeemed' : isMatured ? 'matured' : (isFullyPaid ? 'completed' : 'active'),
     hasPendingInstallment,
     documentDate:      raw.document_date,
     schemeAmount:      raw.scheme_amount    ?? 0,

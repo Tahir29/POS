@@ -285,25 +285,100 @@ export async function getLivePricesForItems(itemIds, companyId) {
  * @param {number[]}[params.type_ids]
  * @returns {Promise<object>} { Entities: ProductCatalogRow[], TotalCount }
  */
+// ProductCatalog/List's `current_company_id` does NOT scope the result set
+// at all — same confirmed-live quirk fetchEntireStoreCatalog documents for
+// the full-sweep path (see its own header below), reconfirmed live
+// 2026-09-18 for this normal PAGINATED browse call shape too: querying
+// company 2 (Chembur) with a category filter returned 24 raw rows, only 1
+// of which actually belonged to company 2 (the other 23 had zero stock
+// there and real company_ids pointing elsewhere entirely) — visible on
+// PAGE 1, not just once an operator scrolls past however many items the
+// store genuinely stocks, as an earlier comment here assumed. Also
+// reconfirmed the server hard-caps at 24 records per request regardless of
+// the Take sent (100 requested, 24 echoed back) — same as the full sweep.
+//
+// FIX: getProducts now backfills — it walks the raw tenant-wide pages
+// (fetched with concurrency, same idiom as fetchEntireStoreCatalog) and
+// only counts a row toward the caller's requested Take once
+// belongsToStore() confirms it's real for THIS store, continuing until
+// either Take real matches are found or the raw tenant-wide pool named by
+// this filter is exhausted. `Skip` is therefore no longer a simple
+// display-position offset — it's an opaque RAW cursor this function hands
+// back as `NextRawSkip`; callers (useCatalogProducts.js) must always pass
+// back exactly that value, never a locally-computed one.
+const RAW_PAGE_SIZE = 24; // server's real hard cap — see above and fetchEntireStoreCatalog's own note
+const BACKFILL_CONCURRENCY = 6;
+// Ceiling on raw pages walked per call (~1,440 raw rows) — bounds worst-case
+// latency for a store whose real stock is a small fraction of a large
+// unfiltered tenant pool. Coming up short of Take within this budget isn't
+// an error: the grid still has empty room on screen since nothing new
+// rendered, so its own infinite-scroll sentinel asks again immediately —
+// forward progress happens a few raw pages at a time rather than one giant
+// blocking wait.
+const BACKFILL_SAFETY_MAX_RAW_PAGES = 60;
+
 export async function getProducts(params) {
   const {
     current_company_id,
     Take              = APP_CONFIG.PAGINATION.CATALOG_TAKE,
-    Skip              = 0,
+    Skip: rawSkip     = 0,
     show_out_of_stock = false,
     ...rest
   } = params;
 
-  const response = await axiosInstance.post(API.CATALOG.GET_PRODUCTS, {
-    current_company_id,
-    Take,
-    Skip,
-    show_out_of_stock,
-    ...rest,
-  });
+  const matched = [];
+  const seenIds = new Set();
+  let skip = rawSkip;
+  let rawPagesFetched = 0;
+  let tenantTotalCount = Infinity; // unknown until the first response answers
+  let exhausted = false;
+
+  while (matched.length < Take && rawPagesFetched < BACKFILL_SAFETY_MAX_RAW_PAGES) {
+    const batchSkips = [];
+    for (let i = 0; i < BACKFILL_CONCURRENCY; i++) {
+      const s = skip + i * RAW_PAGE_SIZE;
+      if (s >= tenantTotalCount) break;
+      batchSkips.push(s);
+    }
+    if (batchSkips.length === 0) { exhausted = true; break; }
+
+    const responses = await Promise.all(
+      batchSkips.map((s) =>
+        axiosInstance
+          .post(API.CATALOG.GET_PRODUCTS, {
+            current_company_id, Take, Skip: s, show_out_of_stock, ...rest,
+          })
+          .then((res) => res.data)
+      )
+    );
+
+    let anyNonEmpty = false;
+    for (const data of responses) {
+      rawPagesFetched++;
+      tenantTotalCount = data?.TotalCount ?? tenantTotalCount;
+      const entities = data?.Entities ?? [];
+      if (entities.length > 0) anyNonEmpty = true;
+      for (const e of entities) {
+        if (e.item_id != null) {
+          if (seenIds.has(e.item_id)) continue;
+          seenIds.add(e.item_id);
+        }
+        if (belongsToStore(e, current_company_id)) matched.push(e);
+      }
+    }
+    skip += BACKFILL_CONCURRENCY * RAW_PAGE_SIZE;
+
+    if (!anyNonEmpty) { exhausted = true; break; }
+    if (skip >= tenantTotalCount) { exhausted = true; break; }
+  }
 
   // Entities pass through unpriced — see the PRICING note above.
-  return { ...response.data, Entities: response.data?.Entities ?? [] };
+  return {
+    Entities:     matched.slice(0, Take),
+    TotalCount:   tenantTotalCount === Infinity ? 0 : tenantTotalCount, // still tenant-wide — used only to detect exhaustion, never shown as this store's own count
+    NextRawSkip:  exhausted ? null : skip,
+    Exhausted:    exhausted,
+  };
 }
 
 /**
@@ -356,12 +431,11 @@ export async function getProducts(params) {
  * The cross-store leakage (real items belonging to OTHER stores, mixed into
  * this raw response) is NOT filtered here any more — see the 2026-09-09
  * SHARED-FETCH note below for why, and belongsToStore (exported) for the
- * per-store filter callers now apply themselves. NOTE: getProducts (normal
- * paginated browse, above) has this exact same cross-store-leakage exposure
- * once an operator scrolls past however many items THIS store genuinely
- * stocks — not fixed here, since that path pages incrementally (filtering
- * client-side there would produce short/uneven pages needing a backfill
- * redesign, not a one-line change).
+ * per-store filter callers now apply themselves. getProducts (normal
+ * paginated browse, above) now does its own backfill-based store filtering
+ * directly (fixed 2026-09-18 — see that function's own header) rather than
+ * relying on this sweep, since browse mode needs fast incremental pages
+ * long before a full tenant sweep would ever complete.
  *
  * SHARED FETCH (2026-09-09) — since `current_company_id` doesn't scope the
  * result set at all (confirmed above), this now returns the SAME raw
@@ -378,13 +452,24 @@ export async function getProducts(params) {
  * instead, so this sweep runs at most once per staleTime window, ever — not
  * once per store.
  *
- * CONCURRENCY lowered 8 -> 4 (2026-09-09) alongside the shared-fetch change
- * above: with the sweep now running far less often, trading a bit more of
- * its own wall-clock time for leaving more of the browser's per-origin
- * connection pool free for whatever ELSE the operator is doing while it
- * runs is the better trade — a saturated pool was part of why unrelated
+ * CONCURRENCY: 8 -> 4 (2026-09-09) alongside the shared-fetch change above —
+ * with the sweep now running far less often, trading a bit more of its own
+ * wall-clock time for leaving more of the browser's per-origin connection
+ * pool free for whatever ELSE the operator is doing while it runs was the
+ * better trade at the time; a saturated pool was part of why unrelated
  * requests (e.g. the normal browse view rendering after a search is
  * cleared) could appear to queue up behind this sweep.
+ *
+ * 4 -> 6 (2026-09-18): the original contention problem was compounded by
+ * this running PER STORE (an operator touching multiple stores could have
+ * several 8-way sweeps overlapping); it's now one shared sweep for the
+ * whole session, so a moderate increase is materially lower-risk than the
+ * original 8 was. This sweep is also now the confirmed long pole behind the
+ * catalog grid's "View Similar" icon and full-catalog search readiness
+ * (AppShell triggers it proactively — see that component's own comments) —
+ * fewer, larger rounds directly shortens both. Also now staggered ~1.5s
+ * behind whatever page the operator lands on, so it no longer competes with
+ * that page's own first-paint fetch regardless of this number.
  *
  * @param {number} seedCompanyId — a company_id to send with each request;
  *   does not restrict the result (see above), any real store's id works.
@@ -393,7 +478,7 @@ export async function getProducts(params) {
  */
 async function fetchEntireStoreCatalog(seedCompanyId, onProgress) {
   const PAGE_SIZE = 24; // the server's real hard cap, confirmed by direct testing
-  const CONCURRENCY = 4;
+  const CONCURRENCY = 6;
   const SAFETY_MAX_PAGES = 500; // ~12,000 items — generous ceiling against a runaway loop
 
   const all = [];

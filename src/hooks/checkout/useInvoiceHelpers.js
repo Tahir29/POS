@@ -19,8 +19,29 @@
 // `document_id` (APP_CONFIG.DOCUMENT_TYPES) — their own UI shows one
 // unified list instead, we keep the categorized display already built here.
 // Only RETURN (55) and EXCHANGE (56) rows were present on the real account
-// this was verified against; ADVANCE/OLD_GOLD/SCHEME buckets are wired the
-// same way but unverified against a live receipt of those types.
+// this was verified against; ADVANCE/OLD_GOLD buckets are wired the same
+// way but unverified against a live receipt of those types.
+//
+// SCHEME BUCKET: removed 2026-09-18, then RE-ADDED the same day once
+// further testing overturned that removal — worth recording both halves.
+//
+// First round: a raw instalment (SchemeReceipt/Create) never appeared
+// here, and neither did recording a foreclose-benefit calculation via
+// SchemeEnrollment/Update — checked under document_id 99 (SCHEME_RECEIPT),
+// which was the wrong key to look for entirely, not evidence the credit
+// doesn't exist.
+//
+// CONFIRMED LIVE, corrected: once an enrollment's scheme_status actually
+// moves off 1 (i.e. Cancelled, Matured, or Redeemed — see
+// schemeService.js's CONFIRMED_STATUS_BY_KIND for how those get written),
+// POSReceiptsSelect/List DOES return a row for it — keyed by document_id
+// 125 (SCHEME_ENROLLMENT, "scheme Enrollment"), not 99. Verified on a real
+// account with two such rows simultaneously: a Cancelled enrollment
+// (balance_amount:1000, matching its one paid instalment) and a Redeemed
+// one (balance_amount:9999.99, matching its total_payable). So the credit
+// genuinely exists — it just never appears for a scheme still sitting at
+// scheme_status:1 (untouched/mid-payment), which is the only state the
+// first round of testing happened to check.
 //
 // GAP FOUND + FIXED 2026-09-09 — a real customer (party 3372, Kavya
 // Yellapu) had a genuine ₹63,200 credit, visible on OrnaVerse's own
@@ -73,7 +94,12 @@ const BUCKET_BY_DOCUMENT_ID = {
   [DOCUMENT_TYPES.CREDIT_NOTE]:    'creditNote',
   [DOCUMENT_TYPES.EXCHANGE]:       'exchange',
   [DOCUMENT_TYPES.URD_PURCHASE]:   'oldGold',
-  [DOCUMENT_TYPES.SCHEME_RECEIPT]: 'scheme',
+  // Keyed by SCHEME_ENROLLMENT (125, "scheme Enrollment"), NOT
+  // SCHEME_RECEIPT (99) — see this file's own top comment for the live
+  // confirmation. Deliberately does not distinguish Cancelled from
+  // Matured/Redeemed here; both surface as real, spendable balance_amount
+  // on this same document_id, so both belong in the same bucket.
+  [DOCUMENT_TYPES.SCHEME_ENROLLMENT]: 'scheme',
   [DOCUMENT_TYPES.POS_ORDER]:      'advances',
   [DOCUMENT_TYPES.POS_INVOICE]:    'advances',
   // ADDED 2026-09-09 — see DOCUMENT_TYPES.POS_RECEIPT's own comment for the

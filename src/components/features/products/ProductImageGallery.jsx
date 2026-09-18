@@ -184,6 +184,8 @@ export default function ProductImageGallery({
               fill
               sizes="56px"
               className="object-cover"
+              loading="lazy"
+              fetchPriority="low"
               loader={isShopifyImageUrl(slide.poster) ? shopifyImageLoader : undefined}
             />
           ) : (
@@ -200,6 +202,8 @@ export default function ProductImageGallery({
           fill
           sizes="56px"
           className="object-cover"
+          loading="lazy"
+          fetchPriority="low"
           onError={() => handleImgError(i)}
           loader={isShopifyImageUrl(slide.src) ? shopifyImageLoader : undefined}
         />
@@ -263,6 +267,7 @@ export default function ProductImageGallery({
                 sizes="(max-width: 768px) 100vw, 50vw"
                 className="object-cover"
                 priority
+                fetchPriority="high"
                 onError={() => handleImgError(safeIndex)}
                 loader={isShopifyImageUrl(current.src) ? shopifyImageLoader : undefined}
               />

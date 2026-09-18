@@ -97,6 +97,8 @@ export default function CartItemRow({
               fill
               sizes="64px"
               className="object-cover"
+              loading="lazy"
+              fetchPriority="low"
               onError={() => setImgError(true)}
               loader={isShopifyImageUrl(imageSrc) ? shopifyImageLoader : undefined}
             />

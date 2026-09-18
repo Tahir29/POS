@@ -27,11 +27,27 @@ export function normalizeEnrollment(entity) {
     ? monthlyDetails.some((m) => !m.payment_made)
     : true;
 
+  // CONFIRMED LIVE 2026-09-18 (see useSchemeEnrollments.js's own comment for
+  // the full context): scheme_status:0 = Cancelled, :2 = Matured, :3 =
+  // Redeemed. Without this, these all read as plain "Active"/"Completed"
+  // here too — same bug, same fix, duplicated hook.
+  const isCancelled = entity.scheme_status === 0;
+  const isMatured   = entity.scheme_status === 2;
+  const isRedeemed  = entity.scheme_status === 3;
+  const status = isCancelled
+    ? 'cancelled'
+    : isRedeemed
+      ? 'redeemed'
+      : isMatured
+        ? 'matured'
+        : (hasPendingInstallment ? 'active' : 'completed');
+
   return {
     enrollmentId:    get('scheme_enrollment_id'),
     schemeName:      get('scheme_display_name') ?? get('scheme_code'),
     schemeCode:      get('scheme_code'),
     hasPendingInstallment,
+    status,
     enrolledDate:    get('document_date'),
     schemeAmount:    get('scheme_amount'),
     tenure:          get('tenure'),

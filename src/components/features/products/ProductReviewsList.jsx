@@ -10,6 +10,7 @@
 // no matter how many reviews a product has.
 
 import { useState } from 'react';
+import Image from 'next/image';
 import { BadgeCheck } from 'lucide-react';
 import StarRating from '@/components/shared/StarRating';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -19,8 +20,35 @@ import { useProductReviewSummary } from '@/hooks/products/useProductReviewSummar
 import { formatDateShort as formatDate } from '@/lib/dateUtils';
 
 const PREVIEW_COUNT = 3;
+// Small, fixed thumbnail box — same 64px convention as CartItemRow, kept
+// deliberately tiny so a review with several photos doesn't overwhelm the
+// text-first card layout. Capped at 4 so an unusually photo-heavy review
+// doesn't turn one card into a gallery.
+const MAX_REVIEW_IMAGES = 4;
+
+function ReviewImageThumb({ src, alt }) {
+  const [errored, setErrored] = useState(false);
+  if (errored) return null;
+
+  return (
+    <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-border bg-muted">
+      <Image
+        src={src}
+        alt={alt}
+        fill
+        sizes="56px"
+        className="object-cover"
+        loading="lazy"
+        fetchPriority="low"
+        onError={() => setErrored(true)}
+      />
+    </div>
+  );
+}
 
 function ReviewCard({ review }) {
+  const images = review.images?.slice(0, MAX_REVIEW_IMAGES) ?? [];
+
   return (
     <div className="flex flex-col gap-2 rounded-xl border border-border bg-card p-4">
       <div className="flex items-center justify-between gap-2">
@@ -40,6 +68,13 @@ function ReviewCard({ review }) {
       <StarRating rating={review.rating} size="sm" />
       {review.text && (
         <p className="text-sm text-muted-foreground leading-relaxed">{review.text}</p>
+      )}
+      {images.length > 0 && (
+        <div className="flex flex-wrap gap-2 pt-1">
+          {images.map((src, i) => (
+            <ReviewImageThumb key={src} src={src} alt={`${review.name}'s photo ${i + 1}`} />
+          ))}
+        </div>
       )}
     </div>
   );

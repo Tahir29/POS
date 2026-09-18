@@ -123,7 +123,15 @@ function StockBadge({ inStock, storeCodes }) {
  *   realStock?: { hasStock: boolean, storeCodes: string[] } | null,
  *   showSimilarIcon?: boolean,
  *   similarProductsSurface?: 'sheet' | 'pdp_carousel' | null,
+ *   priorityImage?: boolean,
  * }} props
+ *   priorityImage (default false) - set by ProductGrid for roughly the
+ *   first on-screen row only (see that component's FIRST_ROW_PRIORITY_COUNT).
+ *   That row is the likely LCP element on /catalog, so it skips lazy-loading
+ *   and gets a high fetch-priority hint instead of competing on equal
+ *   footing with the rest of a 100-item page. Every other card explicitly
+ *   marks itself low-priority + lazy — deliberate for a card whose image
+ *   isn't the page's main content, even before it scrolls into view.
  *   realStock - genuine cross-store stock for this exact item_id, from
  *   useCrossStoreStockCodes. Pass it wherever product.has_stock can't be
  *   trusted as a live, correctly-scoped verdict (Recently Viewed, Wishlist);
@@ -155,6 +163,7 @@ function ProductCard({
   realStock = null,
   showSimilarIcon = true,
   similarProductsSurface = null,
+  priorityImage = false,
 }) {
   const router = useRouter();
   const [imgError, setImgError] = useState(false);
@@ -194,19 +203,24 @@ function ProductCard({
   const { externalProductId } = useStyleExternalProductId(style_id ?? null);
   const { average: ratingAverage, count: ratingCount } = useProductReviewSummary(externalProductId);
 
-  // enabled: false — never force the tenant-wide catalog sweep just to
-  // decide whether THIS card's icon should show; read it passively off
-  // whatever's already warm (see useSimilarProducts's own header). The
-  // icon simply stays hidden until that cache warms some other way, then
-  // appears on its own once it does. product is null when showSimilarIcon
-  // is false — no reason to even run the match/sort when the icon (and
-  // the sheet it would open) can never show here at all.
-  const { items: similarItems } = useSimilarProducts(
+  // enabled: isSimilarOpen — FIXED 2026-09-18 (reported: "View Similar icon
+  // takes minutes to appear"). This used to run with enabled:false on every
+  // mounted card just to read whether the shared tenant-wide catalog sweep
+  // (useAllCatalog, ~2,699 items) had ALREADY resolved, so it could decide
+  // whether to show the icon at all — meaning the icon genuinely could not
+  // exist until that sweep finished, elsewhere in the app. Now the icon
+  // always shows immediately (SimilarProductsSheet's own empty state
+  // handles a genuine no-match case), and the match computation — which
+  // needs that sweep's data — only runs once the operator actually opens
+  // the sheet, not ahead of time on the chance they might. product is null
+  // when showSimilarIcon is false — no reason to even run the match/sort
+  // when the icon (and the sheet it would open) can never show here at all.
+  const { items: similarItems, isLoading: similarLoading } = useSimilarProducts(
     showSimilarIcon ? product : null,
     activeStoreId,
-    { enabled: false }
+    { enabled: showSimilarIcon && isSimilarOpen }
   );
-  const hasSimilar = showSimilarIcon && similarItems.length > 0;
+  const canShowSimilarIcon = showSimilarIcon && !!item_id;
 
   const inStock      = realStock ? realStock.hasStock : has_stock === true;
   const badgeStoreCodes = realStock ? realStock.storeCodes : (storeCode ? [storeCode] : []);
@@ -284,6 +298,9 @@ function ProductCard({
             sizes="(max-width: 640px) 50vw, (max-width: 1280px) 33vw, 25vw"
             className="object-cover transition-transform duration-300 group-hover:scale-105"
             onError={() => setImgError(true)}
+            {...(priorityImage
+              ? { priority: true, fetchPriority: 'high' }
+              : { loading: 'lazy', fetchPriority: 'low' })}
           />
         ) : (
           <NoImagePlaceholder />
@@ -311,10 +328,13 @@ function ProductCard({
             WishlistButton, bottom-left the rating badge). stopPropagation:
             this button sits inside the card's own role="button" click
             target (navigate to the product), same reason WishlistButton's
-            own button needs it. Hidden entirely when there's genuinely
-            nothing to show — a curiosity-bait icon that opens an empty
-            sheet is worse than no icon at all. */}
-        {item_id && hasSimilar && (
+            own button needs it. Always shown now (see canShowSimilarIcon's
+            own comment above) — the rare item with no real match just opens
+            to SimilarProductsSheet's empty state instead of not having an
+            icon at all; item_count in the tracked event below is whatever
+            similarItems currently holds, which is 0 until the sheet's own
+            fetch resolves. */}
+        {canShowSimilarIcon && (
           <button
             type="button"
             onClick={(e) => {
@@ -372,11 +392,12 @@ function ProductCard({
       </div>
     </motion.div>
 
-    {hasSimilar && (
+    {canShowSimilarIcon && (
       <SimilarProductsSheet
         isOpen={isSimilarOpen}
         onClose={() => setIsSimilarOpen(false)}
         items={similarItems}
+        isLoading={similarLoading}
       />
     )}
     </>

@@ -12,6 +12,7 @@ import { useSchemeMonthlyDetails } from '@/hooks/schemes/useSchemeMonthlyDetails
 import { useSchemeReceiptHistory } from '@/hooks/schemes/useSchemeReceiptHistory';
 import { useSchemeBenefits } from '@/hooks/schemes/useSchemeBenefits';
 import { useCloseSchemeEnrollment } from '@/hooks/schemes/useCloseSchemeEnrollment';
+import { useRedeemSchemeEnrollment } from '@/hooks/schemes/useRedeemSchemeEnrollment';
 import { formatCurrency, formatDate, formatMonthName } from '@/lib/schemeFormat';
 
 const TABS = [
@@ -215,12 +216,15 @@ function PaymentsTab({ enrollmentId }) {
   );
 }
 
-// Calculate a figure, then optionally record it on the enrollment (benefit
-// amount only — see useCloseSchemeEnrollment for why scheme_status is left
-// untouched).
-function ClosureTab({ enrollmentId }) {
+// Calculate a figure, then optionally record it on the enrollment.
+// scheme_status is now written for the two CONFIRMED kinds (cancellation,
+// maturity — see closeSchemeEnrollment's own CONFIRMED_STATUS_BY_KIND);
+// foreclose still leaves it untouched since that value was never
+// separately captured.
+function ClosureTab({ enrollmentId, enrollmentStatus }) {
   const { calculate, kind, result, error, isLoading } = useSchemeBenefits(enrollmentId);
   const closeMutation = useCloseSchemeEnrollment();
+  const redeemMutation = useRedeemSchemeEnrollment();
 
   const payload = result?.Entity ?? result;
   const rows = payload && typeof payload === 'object'
@@ -231,17 +235,57 @@ function ClosureTab({ enrollmentId }) {
   const installments = Array.isArray(payload?.Installments) ? payload.Installments : [];
   const delayedCount = installments.filter((i) => i.is_delayed).length;
   const payoutAmount = payload?.total_payout ?? payload?.total_benefit ?? null;
+  // CONFIRMED LIVE 2026-09-18, two separate real captures: cancellation
+  // writes benifit_amount:0 (real refund was ₹1,000 — "no benefit, refund
+  // only" is the literal field OrnaVerse writes, not just this app's
+  // paraphrase); maturity writes benifit_amount:999.99, matching that
+  // calculation's own total_benefit EXACTLY — not total_payout (9999.99,
+  // principal+benefit combined), which is what payoutAmount above resolves
+  // to first. So benifit_amount is always total_benefit specifically
+  // (0 for cancellation, since GetSchemeCancellation's own total_benefit is
+  // 0 by definition — no separate special-case needed); payoutAmount stays
+  // the right figure to SHOW staff (what the customer actually gets back).
+  const benefitAmountToRecord = payload?.total_benefit ?? 0;
 
   const handleRecord = () => {
     if (payoutAmount == null) return;
-    closeMutation.mutate({ enrollmentId, benefitAmount: payoutAmount });
+    closeMutation.mutate({ enrollmentId, benefitAmount: benefitAmountToRecord, kind });
+  };
+
+  const handleRedeem = () => {
+    redeemMutation.mutate(enrollmentId);
   };
 
   return (
     <div className="flex flex-col gap-3">
+      {enrollmentStatus === 'matured' && (
+        <div className="flex flex-col gap-1.5 rounded-xl border border-primary/30 bg-primary/5 p-3">
+          <p className="text-sm font-medium text-foreground">This enrollment is Matured.</p>
+          <p className="text-xs text-muted-foreground">
+            Redeem it to reach the final state — CONFIRMED LIVE 2026-09-18:
+            this is a genuinely separate step from Mature, doesn&apos;t
+            recalculate anything (the benefit already recorded at Mature
+            time carries over unchanged), and only moves the enrollment to
+            Redeemed.
+          </p>
+          <button
+            type="button"
+            onClick={handleRedeem}
+            disabled={redeemMutation.isPending}
+            className="flex min-h-10 items-center justify-center rounded-lg bg-primary px-3 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+          >
+            {redeemMutation.isPending ? 'Redeeming…' : 'Redeem'}
+          </button>
+        </div>
+      )}
+
       <p className="text-xs text-muted-foreground">
-        Calculate a figure, then record it on the enrollment. This does not
-        yet change the enrollment&apos;s status — see below.
+        Calculate a figure, then record it on the enrollment.
+        {kind === 'cancellation'
+          ? ' Recording a cancellation marks the enrollment cancelled.'
+          : kind === 'maturity'
+            ? ' Recording maturity marks the enrollment matured — redeem it separately afterward (see above once it is).'
+            : ' This does not yet change the enrollment’s status — see below.'}
       </p>
 
       <div className="flex flex-col gap-2">
@@ -328,11 +372,9 @@ function ClosureTab({ enrollmentId }) {
                 {closeMutation.isPending ? 'Recording…' : `Record ${formatCurrency(payoutAmount)} on this enrollment`}
               </button>
               <p className="text-xs text-muted-foreground">
-                Records the benefit amount only — does not change the
-                enrollment&apos;s status. No dedicated close/mature/foreclose/
-                cancel endpoint exists in the API; the status field&apos;s exact
-                meaning needs confirming with OrnaVerse before this can also
-                mark the enrollment closed.
+                {kind === 'cancellation' || kind === 'maturity'
+                  ? `Also marks the enrollment ${kind === 'cancellation' ? 'Cancelled' : 'Matured'}.`
+                  : 'Records the benefit amount only — foreclosure’s real status value hasn’t been confirmed yet, so this does not change the enrollment’s status.'}
               </p>
             </div>
           )}
@@ -363,7 +405,9 @@ export default function EnrollmentDetailSheet({ enrollment, isOpen, onClose }) {
 
         {activeTab === 'schedule' && <ScheduleTab enrollmentId={enrollment.enrollmentId} />}
         {activeTab === 'payments' && <PaymentsTab enrollmentId={enrollment.enrollmentId} />}
-        {activeTab === 'closure'  && <ClosureTab  enrollmentId={enrollment.enrollmentId} />}
+        {activeTab === 'closure'  && (
+          <ClosureTab enrollmentId={enrollment.enrollmentId} enrollmentStatus={enrollment.status} />
+        )}
       </div>
     </BottomSheet>
   );

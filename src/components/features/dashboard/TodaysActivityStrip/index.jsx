@@ -49,6 +49,10 @@ export default function TodaysActivityStrip({
         fill
         sizes="(max-width: 768px) 100vw, 1024px"
         className="object-cover"
+        // The largest above-the-fold element on /dashboard (likely its LCP
+        // candidate) — was rendering with no priority hint at all before.
+        priority
+        fetchPriority="high"
       />
       {/* Dual wash — bottom-up for text legibility, corner-tinted with the
           brand primary so the photo reads as "ours" rather than a stock cutout */}

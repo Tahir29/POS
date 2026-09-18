@@ -11,6 +11,8 @@ import {
   getSchemeForcloseBenefit,
   getSchemeCancellation,
   canMatureEnrollment,
+  canForecloseEnrollment,
+  getSchemeRules,
 } from '@/services/schemeService';
 
 const CALCULATORS = {
@@ -54,6 +56,22 @@ export function useSchemeBenefits(enrollmentId) {
           // a server error.
           throw new Error(
             `Maturity needs every instalment paid — ${remaining} still outstanding.`,
+          );
+        }
+      }
+
+      if (which === 'foreclose') {
+        // Per-scheme rule, not a fixed constant — see
+        // canForecloseEnrollment's own comment for why this needs a
+        // separate fetch keyed on THIS enrollment's scheme_id.
+        const schemeRules = await getSchemeRules(enrollment.scheme_id);
+        const { allowed, paid, required } = canForecloseEnrollment(enrollment, schemeRules);
+        if (!allowed) {
+          // Mirrors OrnaVerse's own gate (confirmed live — see
+          // canForecloseEnrollment's own comment), so staff get a sentence
+          // instead of getting this far and only then discovering the rule.
+          throw new Error(
+            `Foreclosure needs at least ${required} instalments paid — only ${paid} so far.`,
           );
         }
       }

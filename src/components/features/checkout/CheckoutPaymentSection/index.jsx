@@ -313,6 +313,11 @@ export default function CheckoutPaymentSection({ onChange, amountDue, allowParti
   const isBalanced = payments.length > 0 && remaining === 0;
 
   const helperItems = [
+    // 'Scheme Balance' removed 2026-09-18, then RE-ADDED the same day —
+    // see useInvoiceHelpers.js's own header for the full story. It only
+    // ever populates once a scheme is Cancelled/Matured/Redeemed, never
+    // while still active/mid-payment, which is what the removal was
+    // actually based on testing.
     { label: 'Scheme Balance',  code: 'Scheme',      data: helpers.scheme,     loading: helpers.scheme?.isLoading },
     { label: 'Exchange Credit', code: 'Exchange',    data: helpers.exchange,   loading: helpers.exchange?.isLoading },
     { label: 'Credit Note',     code: 'CreditNote',  data: helpers.creditNote, loading: helpers.creditNote?.isLoading },

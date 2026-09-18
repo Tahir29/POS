@@ -388,8 +388,16 @@ function SchemesTab({ customerId }) {
               </p>
             )}
           </div>
-          <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${e.hasPendingInstallment ? 'bg-status-in-stock/10 text-status-in-stock' : 'bg-muted text-muted-foreground'}`}>
-            {e.hasPendingInstallment ? 'Active' : 'Completed'}
+          <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium capitalize ${
+            e.status === 'cancelled'
+              ? 'bg-status-error/10 text-status-error'
+              : e.status === 'active'
+                ? 'bg-status-in-stock/10 text-status-in-stock'
+                : (e.status === 'matured' || e.status === 'redeemed')
+                  ? 'bg-blue-50 text-blue-700'
+                  : 'bg-muted text-muted-foreground'
+          }`}>
+            {e.status}
           </span>
         </div>
       ))}

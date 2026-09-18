@@ -1,7 +1,12 @@
 // Infinite-scroll product catalog hook — next page auto-loads when the
-// sentinel enters viewport. getProducts() returns response.data directly
-// (not the Axios wrapper), so lastPage shape is:
-// { Entities: [], TotalCount: number, Skip: number, Take: number }.
+// sentinel enters viewport. getProducts() returns
+// { Entities, TotalCount, NextRawSkip, Exhausted } — see that function's
+// own header (catalogService.js) for why: ProductCatalog/List's
+// current_company_id doesn't scope results at all, so getProducts backfills
+// across raw tenant-wide pages itself and hands back a real, store-filtered
+// Entities list. `pageParam` here is therefore an OPAQUE raw cursor, not a
+// display-position offset — always pass back exactly what the previous page
+// returned as NextRawSkip, never compute one locally.
 // storeId is an explicit param so the catalog page's local store selector
 // (catalogStoreId) can override the Redux global store.
 
@@ -37,17 +42,7 @@ export function useCatalogProducts(filters = {}) {
 
     initialPageParam: 0,
 
-    getNextPageParam: (lastPage) => {
-      const entities   = lastPage?.Entities   ?? [];
-      const totalCount = lastPage?.TotalCount  ?? 0;
-      const skip       = lastPage?.Skip        ?? 0;
-      const pageTake   = lastPage?.Take        ?? TAKE;
-
-      if (entities.length === 0) return undefined;
-      const nextSkip = skip + pageTake;
-      if (nextSkip >= totalCount) return undefined;
-      return nextSkip;
-    },
+    getNextPageParam: (lastPage) => lastPage?.Exhausted ? undefined : lastPage?.NextRawSkip ?? undefined,
 
     select: (data) => ({
       pages:    data.pages,

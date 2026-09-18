@@ -256,6 +256,8 @@ const TOAST = {
     LOAD_FAILED:     'Failed to load schemes. Please try again.',
     CLOSURE_RECORDED:'Benefit amount recorded on the enrollment.',
     CLOSURE_FAILED:  'Failed to record the benefit amount. Please try again.',
+    REDEEMED:        'Enrollment redeemed.',
+    REDEEM_FAILED:   'Failed to redeem the enrollment. Please try again.',
   },
 
   METAL_RATES: {

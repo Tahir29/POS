@@ -706,6 +706,15 @@ const API = {
     MATURITY_BENEFIT:    'Services/Helper/GetSchemeMaturityBenefit',
     FORECLOSE_BENEFIT:   'Services/Helper/GetSchemeForcloseBenefit',
     CANCELLATION:        'Services/Helper/GetSchemeCancellation',
+    // Confirmed live 2026-09-18 (captured from OrnaVerse's own client): the
+    // foreclosure-eligibility precondition ("pay at least N instalments")
+    // isn't a fixed rule — it's configured PER SCHEME here. rule_type:3 rows
+    // are the foreclosure window; a row's own from_installment is the real
+    // minimum (scheme "Vault of dream" = 6, scheme "New year" = 1 — the two
+    // differ, confirmed via a real from_installment:6 row matching that
+    // scheme's own real rejection message exactly). See
+    // schemeService.js's canForecloseEnrollment for how this is used.
+    RULES_LIST:          'Services/CRM/SchemesRules/List',
   },
 
   // ─────────────────────────────────────────────────────────────────────────

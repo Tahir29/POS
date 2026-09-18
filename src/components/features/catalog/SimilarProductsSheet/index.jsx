@@ -44,21 +44,44 @@ import ProductCard from '@/components/features/catalog/ProductCard';
 import BottomSheet from '@/components/shared/BottomSheet';
 import EmptyState from '@/components/shared/EmptyState';
 import { PackageSearch } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useLiveCatalogPrices } from '@/hooks/catalog/useLiveCatalogPrices';
 import { useCrossStoreStockCodes } from '@/hooks/catalog/useCrossStoreStockCodes';
+
+function SimilarProductsSkeleton() {
+  return (
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div key={i} className="flex flex-col gap-2">
+          <Skeleton className="aspect-square w-full rounded-2xl" />
+          <Skeleton className="h-3 w-3/4" />
+          <Skeleton className="h-3 w-1/2" />
+        </div>
+      ))}
+    </div>
+  );
+}
 
 /**
  * @param {{
  *   isOpen: boolean,
  *   onClose: () => void,
  *   items: object[],
+ *   isLoading?: boolean,
  * }} props
- *   items — the already-matched ProductCatalogRow list from ProductCard's
- *   own useSimilarProducts call (never empty when this is rendered at
- *   all — ProductCard only mounts this sheet once it knows there's
- *   something to show).
+ *   items — the matched ProductCatalogRow list from ProductCard's own
+ *   useSimilarProducts call.
+ *   isLoading (default false) — true while the tenant-wide catalog sweep
+ *   that useSimilarProducts matches against is still resolving. FIXED
+ *   2026-09-18 (reported: "View Similar icon takes minutes to appear"):
+ *   ProductCard now shows this icon immediately on every card and only
+ *   triggers/reads that sweep once the sheet actually opens (see
+ *   ProductCard's own comment), instead of pre-computing matches for every
+ *   card just to decide whether the icon should exist — so `items` can
+ *   genuinely still be empty-because-loading here, not just
+ *   empty-because-no-match, and those two states need to read differently.
  */
-export default function SimilarProductsSheet({ isOpen, onClose, items }) {
+export default function SimilarProductsSheet({ isOpen, onClose, items, isLoading = false }) {
   // Only price/stock-check while genuinely open — a list nobody is
   // looking at yet shouldn't pay for either.
   const effectiveItems = isOpen ? items : [];
@@ -69,7 +92,9 @@ export default function SimilarProductsSheet({ isOpen, onClose, items }) {
 
   return (
     <BottomSheet isOpen={isOpen} onClose={onClose} title="Similar Products" alwaysBottom>
-      {items.length === 0 ? (
+      {isLoading && items.length === 0 ? (
+        <SimilarProductsSkeleton />
+      ) : items.length === 0 ? (
         <EmptyState
           icon={PackageSearch}
           title="No similar products found"

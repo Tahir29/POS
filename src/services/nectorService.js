@@ -7,6 +7,8 @@
 // empty defaults on any error, so a Nector outage never breaks whatever
 // screen is asking for reviews or points around it.
 
+import { createConcurrencyQueue } from '@/lib/concurrencyQueue';
+
 const SOURCE = 'shopify';
 
 /**
@@ -37,6 +39,17 @@ export async function getReviewSummary(shopifyProductId) {
     return { count: 0, sum: 0 };
   }
 }
+
+/**
+ * Same call, routed through a shared concurrency-capped queue — the catalog
+ * grid isn't virtualized, so every mounted ProductCard calls this
+ * independently (via useProductReviewSummary) once its style resolves.
+ * Confirmed live 2026-09-18: ~100 simultaneous reviews-count requests
+ * compounds with the same-shaped Style/Retrieve flood (see
+ * getDesignVariantsQueued in itemService.js) to produce the multi-minute
+ * delay before a catalog card's rating badge appears.
+ */
+export const getReviewSummaryQueued = createConcurrencyQueue(getReviewSummary, { concurrency: 6 });
 
 /**
  * One page of approved reviews for a product, newest first.
