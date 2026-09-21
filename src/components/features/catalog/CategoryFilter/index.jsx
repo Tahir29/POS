@@ -3,7 +3,6 @@
 const ALLOWED_CATEGORIES = [
   'Rings',
   'Earrings',
-  'Bangles',
   'Bracelets',
   'Necklaces',
   'Pendants',
