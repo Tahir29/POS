@@ -12,4 +12,4 @@
 //
 // Change ACTIVE_ENV here to switch environments everywhere at once.
 //
-export const ACTIVE_ENV = 'UAT'; // 'LIVE' | 'UAT'
+export const ACTIVE_ENV = 'LIVE'; // 'LIVE' | 'UAT'
