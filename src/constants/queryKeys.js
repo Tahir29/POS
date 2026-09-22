@@ -1,16 +1,3 @@
-// src/constants/queryKeys.js
-// All TanStack Query cache keys for Lucira POS.
-//
-// RULES:
-//   - Every entry is a factory function — no plain strings/arrays
-//   - Pattern: [module, operation, ...discriminators]
-//   - Discriminators must make the key unique per data set
-//   - Keep keys stable — changing a key busts the cache for all users
-//
-// REMOVED: SETTINGS.APP (getSettings endpoint removed from API)
-// REMOVED: FULFILLMENT (not a POS feature)
-// MOVED:   ORDERS.INVOICE_* → INVOICES.* (invoices are their own module now)
-
 export const QUERY_KEYS = {
 
   STORES: {
@@ -28,8 +15,6 @@ export const QUERY_KEYS = {
     BANK_POS_ACCOUNTS:    () => ['settings', 'bank-pos-accounts'],
     TAXES:                (companyId) => ['settings', 'taxes', companyId],
     METAL_RATE_TODAY:     () => ['settings', 'metal-rate-today'],
-    // dateKey (a plain YYYY-MM-DD string, not a Date) so the key itself
-    // rolls over at midnight without a timer — see useMetalRates.js.
     METAL_RATE:           (karatId, companyId, dateKey) => ['settings', 'metal-rate', karatId, companyId, dateKey],
     REASON_CODES:         () => ['settings', 'reason-codes'],
   },
@@ -64,8 +49,6 @@ export const QUERY_KEYS = {
     ATTRIBUTES:      (typeId)  => ['items', 'attributes', typeId],
     DESIGN_VARIANTS: (styleId) => ['items', 'design-variants', styleId],
     MASTER_SEARCH:   (query)   => ['items', 'master-search', query],
-    // companyId is part of the key because the price depends on WHICH
-    // physical piece this store has on the shelf — see priceItemAsSold.
     PRICING:         (itemId, companyId) => ['items', 'pricing', itemId, companyId],
     SEARCH: (params) => ['items', 'search', {
       q:    params.item_search,
@@ -82,37 +65,12 @@ export const QUERY_KEYS = {
   // ── CATALOG (Live store inventory) ────────────────────────────────────────
   CATALOG: {
     PRODUCTS:              (params)  => ['catalog', 'products', params],
-    // FIXED 2026-09-09 — was ALL(storeId) => ['catalog','all',storeId]. See
-    // useAllCatalog.js's own header: current_company_id doesn't actually
-    // scope this fetch (confirmed live), so every store was re-running the
-    // identical ~15-round sweep under its own cache key. One shared,
-    // store-agnostic key now — filtering to a specific store happens via
-    // `select` in useAllCatalog.js instead, over this one cached fetch.
-    // ['catalog','all', ...] prefix kept for queryPersister.js's own
-    // prefix-matching (only checks the first 2 segments, so this is still
-    // persisted the same way).
     ALL_SHARED:            () => ['catalog', 'all', 'shared'],
     SKU_SEARCH:            (query, storeId) => ['catalog', 'sku-search', query, storeId],
     CATEGORY_SEARCH:       (typeIds, storeId) => ['catalog', 'category-search', typeIds, storeId],
     STOCK_BY_STORES:       (itemId)  => ['catalog', 'stock-by-stores', itemId],
     STOCK_BY_STORES_BATCH: (itemIds) => ['catalog', 'stock-by-stores-batch', itemIds],
-    // Live SetSalesItems price for ONE catalog card. Per-item (not per-page)
-    // so returning to /catalog reuses every price already fetched instead of
-    // re-running the whole 6-7s-per-batch pipeline — see useLiveCatalogPrices,
-    // which batches the network calls behind these individual keys.
-    //
-    // storeId is part of the key for the same reason as ITEMS.PRICING: the
-    // price depends on which physical piece this store holds.
-    //
-    // epoch is a signature of the canary items' current price (see
-    // usePricingEpoch). It is what lets these entries be cached INDEFINITELY
-    // rather than on a timer: the cached price cannot go wrong while the
-    // epoch holds, and the moment anything moves a real price the epoch
-    // changes, every key below it changes with it, and the whole catalog
-    // reprices. Keep epoch LAST so ['catalog','price'] stays a usable prefix.
     PRICE:                 (itemId, storeId, epoch) => ['catalog', 'price', itemId, storeId, epoch],
-    // The canary re-price itself. Keyed by the frozen canary id list so a
-    // different canary set can never be mistaken for a price movement.
     PRICE_EPOCH:           (storeId, canaryIds) => ['catalog', 'price-epoch', storeId, canaryIds],
   },
 
@@ -125,23 +83,12 @@ export const QUERY_KEYS = {
     RETRIEVE: (partyId)   => ['customers', 'detail', partyId],
     LIST:     (params)    => ['customers', 'list', params],
     ALL:      (companyId) => ['customers', 'all', companyId],
-    // Read-only fetch for the customer profile page's Wishlist tab —
-    // independent of wishlistSlice, which only ever describes whichever
-    // customer is currently ATTACHED to the POS session, not whichever
-    // customer's profile an operator happens to be viewing (those are
-    // often different people).
     WISHLIST: (partyId) => ['customers', 'wishlist', partyId],
   },
-
-  // ADDED 2026-09-08 — our own walk-in log (lib/mongo/walkins.js) — see
-  // that file's own header for why OrnaVerse's WalkIn/Lookup and /Register
-  // can't power this themselves (both single-customer, no listing mode).
+  
   WALKINS: {
     LIST: (companyId, fromDate, toDate) => ['walkins', 'list', companyId, fromDate, toDate],
   },
-
-  // PARTY_ADDRESS removed 2026-08-27 — matches apiEndpoints.js's
-  // PARTY_ADDRESS removal (dead: no service or hook ever used this key).
 
   ORDERS: {
     LIST:            (params)     => ['orders', 'list', params],
@@ -162,9 +109,6 @@ export const QUERY_KEYS = {
   },
 
   // ── INVOICE HELPERS (checkout available balances) ─────────────────────────
-  // ADVANCES/CREDIT_NOTE/EXCHANGE/OLD_GOLD/SCHEME collapsed into one RECEIPTS
-  // key 2026-08-18 — one call (POSReceiptsSelect/List) now backs all 5
-  // category totals; see useInvoiceHelpers.js.
   INVOICE_HELPERS: {
     RECEIPTS:        (partyId)            => ['invoice-helpers', 'receipts',   partyId],
     PARTY_DAILY_CASH:(partyId, companyId) => ['invoice-helpers', 'daily-cash', partyId, companyId],
@@ -214,14 +158,10 @@ export const QUERY_KEYS = {
   INTERSTORE_RETURN: {
     LIST:       (params)       => ['interstore-return', 'list', params],
     DETAIL:     (id)           => ['interstore-return', 'detail', id],
-    // Deliberately NOT keyed by companyId — cross-branch reach is the point,
-    // see getSoldItemsAcrossBranches's own header.
     SOLD_ITEMS: (partyId)      => ['interstore-return', 'sold-items', partyId],
   },
 
   REPAIR: {
-    // Workshop repair orders (document 75) — the source an intake is raised
-    // against. Distinct from the three POS repair documents below.
     ORDERS:              (params)          => ['repair', 'orders', params],
     ORDER_DETAIL:        (transactionId)   => ['repair', 'order-detail', transactionId],
     SOLD_ITEMS:          (params)          => ['repair', 'sold-items', params],
@@ -241,8 +181,6 @@ export const QUERY_KEYS = {
   DAILY_CLOSING: {
     LIST:   (companyId)  => ['daily-closing', 'list', companyId],
     DETAIL: (closingId)  => ['daily-closing', 'detail', closingId],
-    // System-recorded receipt totals for a given store+date, used to
-    // reconcile the manually-typed EOD form — see useDailyClosingReconciliation.
     RECONCILIATION: (companyId, dateString) => ['daily-closing', 'reconciliation', companyId, dateString],
   },
 
@@ -260,12 +198,7 @@ export const QUERY_KEYS = {
   },
 
   CUSTOMER_360: {
-    ALL: (customerId, storeId) => ['customer-360', 'all', customerId, storeId],
-  },
-
-  REWARDS: {
-    POINTS:          (customerId) => ['rewards', 'points',  customerId],
-    LOYALTY_HISTORY: (customerId) => ['rewards', 'history', customerId],
+    ALL: (customerId) => ['customer-360', 'all', customerId],
   },
 
   SCHEMES: {
@@ -286,22 +219,21 @@ export const QUERY_KEYS = {
   },
 
   // ── REVIEWS (Nector) ─────────────────────────────────────────────────────
-  // Keyed by Shopify product id (external_product_id) — reviews are indexed
-  // by Shopify's catalog, not OrnaVerse's item_id.
   REVIEWS: {
     SUMMARY: (shopifyProductId) => ['reviews', 'summary', shopifyProductId],
     LIST:    (shopifyProductId) => ['reviews', 'list', shopifyProductId],
   },
 
-  // NECTOR (loyalty points — added 2026-09-08). Keyed by MOBILE, not
-  // customerId — Nector's own lead lookup is mobile/email/customer_id
-  // based, not OrnaVerse's party_id, and this app only ever has a mobile
-  // number to search with (see nectorService.js's getCustomerLoyalty).
-  // Distinct from REWARDS above, which is OrnaVerse's own native CRM
-  // rewards system — two entirely separate loyalty programs this app
-  // happens to both read.
   NECTOR: {
     LOYALTY: (mobile) => ['nector', 'loyalty', mobile],
+    CHECKOUT_INFO: (mobile, amount) => ['nector', 'checkout-info', mobile, amount],
   },
 
+  // ── CUSTOM ─────────────────────────────────────────────────────
+  CUSTOM: {
+    ITEM: (entityId) => ['item', 'item', entityId],
+    SIZES: (typeId) => ['item', 'sizes', typeId],
+    TYPEDETAILS: (typeId) => ['custom', 'type-details', typeId],
+    QUOTE: (params) => ['custom', 'quote', params]
+  }
 };

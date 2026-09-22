@@ -35,6 +35,12 @@ export const recentlyViewedItemSchema = z.object({
   // store (see useRecentlyViewed.js's deriveKaratCode for why).
   metal_id:   numeric().int().nullable().optional(),
   karat_code: z.string().nullable().optional(),
+  // karat_id/type_id/sub_type_id/item_group_id (2026-09-22) — same fix as
+  // wishlistSchema.js's identical comment.
+  karat_id:      numeric().int().nullable().optional(),
+  type_id:       numeric().int().nullable().optional(),
+  sub_type_id:   numeric().int().nullable().optional(),
+  item_group_id: numeric().int().nullable().optional(),
   // metal_color_code/metal_color_name (2026-08-23) — ProductCard's
   // descriptive "14 Karat Yellow Gold" label needs one of these; Items/
   // Retrieve (this hook's source, see useRecentlyViewed.js) only ever

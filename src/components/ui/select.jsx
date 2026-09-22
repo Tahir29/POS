@@ -56,7 +56,13 @@ function SelectTrigger({
 function SelectContent({
   className,
   children,
-  position = "item-aligned",
+  // popper (not Radix's own default "item-aligned") — item-aligned does its
+  // own manual height/position math with no viewport collision handling,
+  // which overflows/leaves stray scroll space on long lists near a viewport
+  // edge (seen on the nationality dropdown's ~195 countries). popper uses
+  // Radix's battle-tested Popper positioning (proper collision + clamping)
+  // like every other popover in this app already does.
+  position = "popper",
   align = "center",
   ...props
 }) {

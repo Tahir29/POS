@@ -1,8 +1,8 @@
 // src/hooks/customer/useNectorLoyaltyPoints.js
 // A customer's Nector loyalty points balance, looked up by mobile number.
-// Nector is a separate loyalty program (tied to the Shopify storefront) from
-// OrnaVerse's own native CRM rewards (useCustomerLoyalty) — deliberately not
-// merged, since they're two unrelated balances from two unrelated systems.
+// OrnaVerse's own native CRM rewards system is a confirmed dead end for
+// this data (see apiEndpoints.js's REWARDS comment) — Nector is the only
+// real source, always fetched directly, never through OrnaVerse.
 
 import { useQuery } from '@tanstack/react-query';
 import { getCustomerLoyalty } from '@/services/nectorService';

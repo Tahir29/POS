@@ -270,10 +270,6 @@ const TOAST = {
     LOAD_FAILED: 'Failed to load customer history. Please try again.',
   },
 
-  REWARDS: {
-    LOAD_FAILED: 'Failed to load loyalty points. Please try again.',
-  },
-
   CATALOG: {
     LOAD_FAILED:  'Failed to load products. Please try again.',
     SEARCH_ERROR: 'Search failed. Please try again.',

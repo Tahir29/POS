@@ -26,6 +26,13 @@ export const wishlistItemSchema = z.object({
   image_1:    z.string().nullable().optional(),
   metal_id:   numeric().int().nullable().optional(),
   karat_code: z.string().nullable().optional(),
+  // karat_id/type_id/sub_type_id/item_group_id (2026-09-22) — needed for
+  // useSimilarProducts' tiering to work on a wishlisted card; see
+  // useWishlist.js's own comment for the full story.
+  karat_id:      numeric().int().nullable().optional(),
+  type_id:       numeric().int().nullable().optional(),
+  sub_type_id:   numeric().int().nullable().optional(),
+  item_group_id: numeric().int().nullable().optional(),
   // metal_color_code/metal_color_name (2026-08-23) — see the identical
   // fields in recentlyViewedSchema.js and lib/metalColor.js: catalog rows
   // only carry the short code (e.g. "YG"), Items/Retrieve only carries the

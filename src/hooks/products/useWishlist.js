@@ -73,6 +73,17 @@ export function useToggleWishlist() {
         image_1:    product.image_1    ?? null,
         metal_id:   product.metal_id   ?? null,
         karat_code: product.karat_code ?? null,
+        // karat_id/type_id/sub_type_id/item_group_id — FIXED: without these,
+        // useSimilarProducts' tiering (see its own header) always came back
+        // empty for a wishlisted card, since it scores/buckets against these
+        // exact fields and none of them were ever saved. The icon showed
+        // (default showSimilarIcon) but "View Similar" always opened to
+        // nothing. Carried through the same way metal_id already was —
+        // ProductCard/PDP already have these in hand at wishlist-time.
+        karat_id:       product.karat_id       ?? null,
+        type_id:        product.type_id        ?? null,
+        sub_type_id:    product.sub_type_id    ?? null,
+        item_group_id:  product.item_group_id  ?? null,
         // Code from a catalog card, name from PDP — see lib/metalColor.js.
         metal_color_code: product.metal_color_code ?? null,
         metal_color_name: product.metal_color_name ?? null,

@@ -364,6 +364,26 @@
   }
 }
 
+/* Radix Select's hidden native <select> (rendered for real <form> submission
+   compatibility — see @radix-ui/react-select's SelectBubbleInput) ships with
+   `position: absolute` but no top/left. With no offset given, the browser
+   falls back to the CSS "static position" algorithm, which anchors it to
+   wherever it happens to sit in normal document flow — and since it's a
+   sibling of the trigger, not nested inside it, that position can land deep
+   in the page depending on the field's location in a long form. Confirmed
+   live 2026-09-22: this is what was inflating document.documentElement's
+   scrollHeight and showing as extra blank space + a spurious scrollbar on
+   pages with many Select fields (e.g. the customer edit form's Nationality
+   dropdown) — nothing to do with the visible popup or item-aligned/popper.
+   Pinning explicit top/left removes the static-position fallback entirely,
+   for every Select in the app, regardless of where it's nested. The element
+   is already 1x1px and clip-rect'd invisible either way. */
+select[aria-hidden="true"][tabindex="-1"] {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+}
+
 /* Print CSS (#invoice-print-area / @media print, used by the old
    window.print()-based PrintInvoiceButton) removed 2026-08-20 — every
    caller now prints through InvoiceReportButton, which renders OrnaVerse's

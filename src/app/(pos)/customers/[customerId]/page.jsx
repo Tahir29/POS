@@ -544,17 +544,17 @@ function Customer360Tab({ customerId }) {
 // guard: OrnaVerse isn't masking, so there's nothing to defend against.
 //
 // FIXED AGAIN 2026-09-08 — even after the above, the card still never
-// rendered: PointsTab (below) returned early whenever useCustomerLoyalty
-// (OrnaVerse's OWN native CRM/CustomerRewards endpoint — a completely
-// different system from Nector) was still loading or had errored, and
-// LucraCoinsCard was mounted AFTER that early return. So any customer
-// where the native-rewards call was slow, or errored (not everyone is
-// enrolled in that separate program), never got a chance to show Lucira
+// rendered: PointsTab (below) used to also call OrnaVerse's own native
+// CRM/CustomerRewards endpoint (a completely different, since-confirmed-dead
+// system from Nector — see apiEndpoints.js's REWARDS comment) and returned
+// early whenever that call was still loading or had errored, with
+// LucraCoinsCard mounted AFTER that early return. So any customer where the
+// native-rewards call was slow or errored never got a chance to show Lucira
 // Coins either, regardless of Nector having a real balance for them.
 // LucraCoinsCard has always had its own independent loading state (see
 // useNectorLoyaltyPoints) — it doesn't need to wait on a different
-// endpoint's outcome. Moved above PointsTab's own loading/error gate so it
-// always mounts and fetches on its own.
+// endpoint's outcome. Moved above that early return so it always mounts and
+// fetches on its own.
 function LucraCoinsCard({ customerMobile }) {
   const { points, isFound, isLoading } = useNectorLoyaltyPoints(customerMobile, {
     enabled: !!customerMobile,
@@ -584,17 +584,10 @@ function LucraCoinsCard({ customerMobile }) {
   );
 }
 
-// REMOVED 2026-09-08 — this tab used to also show OrnaVerse's own native
-// CRM/CustomerRewards points ("Available Points" + a redemption/earn
-// History list) below the Lucira Coins card, via useCustomerLoyalty()
-// (Services/CRM/CustomerRewards/GetCustomerPoints + LoyaltyHistories). Per
-// product decision, this tab is Lucira Coins (Nector) only now — that
-// OrnaVerse call is dropped from here entirely. The endpoint constants
-// themselves (API.REWARDS.GET_POINTS / LOYALTY_HISTORY in apiEndpoints.js)
-// and the useCustomerLoyalty hook are deliberately left in place, unused,
-// rather than deleted — same pattern already used elsewhere in this file
-// for hooks no longer wired to a tab (see the 'orders'/'history' removal
-// note near TABS above).
+// This tab is Lucira Coins (Nector) only — OrnaVerse's own native
+// CRM/CustomerRewards points, which used to render below it, is a confirmed
+// dead end (see API.REWARDS's own comment in apiEndpoints.js). The hook
+// that called it (useCustomerLoyalty) has been deleted, not just unwired.
 function PointsTab({ customerMobile }) {
   return (
     <div className="flex flex-col gap-3">
@@ -685,7 +678,7 @@ export default function CustomerDetailPage() {
   };
 
   return (
-    <div className="flex flex-col gap-4 max-w-3xl mx-auto w-full">
+    <div className="p-4 pb-8 flex flex-col gap-4 max-w-3xl mx-auto w-full">
 
       {/* <div className="flex items-center gap-2">
         <Button

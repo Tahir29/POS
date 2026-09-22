@@ -90,7 +90,7 @@ import { selectActiveStoreId } from '@/store/slices/storeSlice';
 import { setCheckoutInProgress } from '@/store/slices/uiSlice';
 import tracker from '@/lib/analytics/tracker';
 import EVENTS, { GA_ECOMMERCE_EVENTS } from '@/lib/analytics/events';
-import { redeemLoyaltyCoins } from '@/services/nectorService';
+import { performNectorRedemption } from '@/services/nectorService';
 import { QUERY_KEYS } from '@/constants/queryKeys';
 import { formatAmount } from '@/lib/priceUtils';
 
@@ -404,28 +404,29 @@ function CheckoutScreen() {
     dispatch(setCheckoutInProgress(true));
 
     try {
-      if (isOrderMode) await placeOrder(submission);
-      else             await placeInvoice(submission);
+      const placed = isOrderMode ? await placeOrder(submission) : await placeInvoice(submission);
       // Success is handled by the isConfirmed effect above (clears cart,
       // redirects to /order-success) once orderResult/invoiceResult lands —
       // nothing further to do here.
 
-      // Lucira Coins — best-effort debit, AFTER the sale (2026-09-08,
-      // product decision). Deliberately NOT awaited into the try/catch
-      // flow above and never re-thrown: this is a real POS sale that has
-      // ALREADY completed by this point (placeOrder/placeInvoice already
-      // succeeded) — a failure to debit Nector must never look like the
-      // SALE failed, send the operator to /order-failed, or otherwise
-      // touch what just happened. See redeemLoyaltyCoins's own header for
-      // exactly why this is expected to fail until the lead-identifier gap
-      // is resolved; failures are only logged, never surfaced to the
-      // operator or the customer.
-      if (hasCoinsApplied && customerMobile) {
-        redeemLoyaltyCoins({
-          mobile:      customerMobile,
-          amount:      coinsRedeemed,
-          title:       'POS Redemption',
-          description: `Redeemed at checkout — ${documentType} for ${customerId ?? 'customer'}`,
+      // Lucira Coins — best-effort redemption, AFTER the sale (2026-09-08,
+      // product decision; mechanism replaced 2026-09-22 — see
+      // nectorService.performNectorRedemption's own header for the real,
+      // confirmed-working Custom Checkout Webhook this now uses, in place
+      // of the dead leads/wallettransactions guess). Deliberately NOT
+      // awaited into the try/catch flow above and never re-thrown: this is
+      // a real POS sale that has ALREADY completed by this point
+      // (placeOrder/placeInvoice already succeeded) — a failure to redeem
+      // via Nector must never look like the SALE failed, send the operator
+      // to /order-failed, or otherwise touch what just happened. `amount`
+      // is the sale's payable total (Nector's own eligibility input, not
+      // the coin amount) — matches what the earlier `list` check that
+      // showed this redemption as available was itself keyed on.
+      if (hasCoinsApplied && customerMobile && placed?.transactionId) {
+        performNectorRedemption({
+          mobile:           customerMobile,
+          amount:           payableTotal,
+          referenceOrderId: placed.transactionId,
         }).then((result) => {
           if (result.ok) {
             // Invalidate the cached balance (2026-09-08) — everywhere this

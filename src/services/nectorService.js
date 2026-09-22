@@ -129,58 +129,92 @@ export async function getCustomerLoyalty(mobile) {
 }
 
 /**
- * Debits (redeems) Lucira Coins from a customer's Nector wallet. Fires AFTER
- * a real POS sale has already completed; a failure here never blocks or
- * reverses that sale.
+ * What a customer can redeem right now, given the cart/order's total value —
+ * CONFIRMED LIVE 2026-09-22 against the real "Custom Checkout Webhook"
+ * integration the Shopify storefront's own checkout backend uses (read
+ * directly from its source — see api/nector/[...path]/route.js's header for
+ * the full trail). This REPLACES the old leads/wallettransactions approach
+ * for redemption purposes: `amount` here is Nector's own eligibility input
+ * (the cart/order total), NOT the coin amount — it decides what's
+ * redeemable from its own configured rules, we don't tell it how much to
+ * take. `getCustomerLoyalty` above still covers simple balance display.
  *
- * BEST-EFFORT, NOT CONFIRMED WORKING — Nector's debit endpoint needs a
- * lead's own `_id` (or a merchant-assigned `customer_id`, which this app has
- * never set — these leads were created by Nector's own Shopify storefront
- * app). The mobile-based lookup this function re-runs to find the lead
- * doesn't return either field in its response body. Sends `mid` as `lead_id`
- * as the closest available candidate (a per-lead value, unlike entity_id
- * which is shared across different leads) — this is a genuine guess,
- * expected to fail until Nector support clarifies how to get a lead's real
- * `_id` from a mobile lookup.
+ * 200 → { data: { points_balance, offers[], promotions: [{ type,
+ *   coin_value, fiat_value, id, ... }] } } — at least one redemption is
+ *   available at this amount.
+ * 422 → { data: { message: "No discount is available", earning_rule } } —
+ *   NOT an error to report; below Nector's minimum cart amount for this
+ *   customer's tier, or a genuinely non-enrolled customer. Confirmed live:
+ *   this tenant's real minimum is ₹10,000.
  *
- * @param {{ mobile: string, amount: number, title: string, description?: string }} params
- * @returns {Promise<{ ok: boolean, reason?: string }>} — never throws;
- *   caller decides what (if anything) to do with a failure (checkout logs
- *   it and moves on, it does not surface as an error to the operator).
+ * @param {{ mobile: string, amount: number }} params — amount is the
+ *   cart/order's total value, not a coin amount.
+ * @returns {Promise<{ found: boolean, pointsBalance: number, promotions: object[] }>}
  */
-export async function redeemLoyaltyCoins({ mobile, amount, title, description }) {
-  if (!mobile || !(amount > 0)) return { ok: false, reason: 'invalid_params' };
+export async function getNectorCheckoutInfo({ mobile, amount }) {
+  const empty = { found: false, pointsBalance: 0, promotions: [] };
+  if (!mobile || !(amount > 0)) return empty;
 
   try {
-    // Re-look-up the lead for its `mid` — see this function's own header for
-    // why that's the best candidate identifier available, not a
-    // confirmed-correct one.
-    const lookupParams = new URLSearchParams({ mobile: String(mobile) });
-    const lookupRes = await fetch(`/api/nector/leads?${lookupParams}`);
-    if (!lookupRes.ok) return { ok: false, reason: 'lead_not_found' };
+    const res = await fetch('/api/nector/checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mobile, action: 'list', amount }),
+    });
+    if (!res.ok) return empty; // 422 "No discount is available", or any other failure
 
-    const lookupJson = await lookupRes.json();
-    const mid = lookupJson?.data?.item?.mid;
-    if (!mid) return { ok: false, reason: 'no_lead_id' };
+    const json = await res.json();
+    const data = json?.data;
+    if (!data) return empty;
 
+    return {
+      found:         true,
+      pointsBalance: Number(data.points_balance) || 0,
+      promotions:    Array.isArray(data.promotions) ? data.promotions : [],
+    };
+  } catch (err) {
+    console.warn('[nectorService] getNectorCheckoutInfo failed:', err);
+    return empty;
+  }
+}
+
+/**
+ * Redeems Lucira Coins against a real, completed sale — the "perform" side
+ * of the same Custom Checkout Webhook integration `getNectorCheckoutInfo`
+ * reads from. Fires AFTER a real POS sale has already completed; a failure
+ * here never blocks or reverses that sale (mirrors the storefront's own
+ * checkout.js, which calls this fire-and-forget at order completion too).
+ *
+ * `amount` is again the sale's total value (Nector's own eligibility
+ * input), not a coin amount — Nector applies whatever redemption it already
+ * decided was available via the earlier `list` call.
+ *
+ * @param {{ mobile: string, amount: number, referenceOrderId: string|number }} params
+ * @returns {Promise<{ ok: boolean, reason?: string }>} — never throws;
+ *   caller decides what (if anything) to do with a failure.
+ */
+export async function performNectorRedemption({ mobile, amount, referenceOrderId }) {
+  if (!mobile || !(amount > 0) || !referenceOrderId) return { ok: false, reason: 'invalid_params' };
+
+  try {
     // Same-origin call — the operator's session cookie rides along
     // automatically; the route itself rejects with 401 if no one's signed in.
-    const res = await fetch('/api/nector/wallettransactions', {
+    const res = await fetch('/api/nector/checkout', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        lead_id:     mid,
+        mobile,
+        action: 'perform',
         amount,
-        operation:   'dr',
-        title:       title || 'POS Redemption',
-        description: description ?? undefined,
+        reference_order_id: String(referenceOrderId),
+        wallet_type: 'coins',
       }),
     });
 
     if (!res.ok) return { ok: false, reason: res.status === 401 ? 'not_authenticated' : `http_${res.status}` };
     return { ok: true };
   } catch (err) {
-    console.warn('[nectorService] redeemLoyaltyCoins failed:', err);
+    console.warn('[nectorService] performNectorRedemption failed:', err);
     return { ok: false, reason: 'network_error' };
   }
 }

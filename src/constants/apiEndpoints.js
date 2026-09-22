@@ -1,47 +1,16 @@
-// src/constants/apiEndpoints.js
-//
-// Single source of truth for every OrnaVerse API endpoint used in Lucira POS.
-// All calls use POST. All paths verified against v1.json (3932 endpoints, June 2026).
-//
-// ARCHITECTURE DECISIONS (do not re-litigate):
-//  - Order creation: POS/Order/Create → POS/Order/Post (native POS flow, no Marketplace)
-//  - Invoice creation: POS/Invoice/Create → POS/Invoice/Post (native POS flow)
-//  - Customer create/update: POS/Customer/Create + POS/Customer/Update (native POS)
-//  - MarketPlace namespace removed — no longer needed for any POS operation
-//
-// SCHEMA NOTES (field names confirmed from spec, never assume):
-//  - UsersCompanyRow:      store name = mailing_name  (NO company_name field)
-//  - POS.CustomerRow:      key = party_id, name = party_name
-//  - POS.OrderRow:         key = transaction_id, number = document_no, date = document_date
-//                          amount = net_amount, status DERIVED from balance_amount + receipt_amount
-//  - POS.InvoiceRow:       identical structure to OrderRow
-//  - Master.StyleRow:      external_product_id lives HERE (Shopify link)
-//  - ProductCatalogRow:    NO external_product_id — price field = price (not item_rate)
-//  - SchemeEnrollmentRow:  benifit_amount — API typo, preserve exactly in code
-//  - OrderItemsRow:        item_rate = unit price on line items (different from catalog price)
-
 const API = {
 
   // ─────────────────────────────────────────────────────────────────────────
   // AUTHENTICATION
-  // Identity server — not in v1.json spec (separate service, always POST)
   // ─────────────────────────────────────────────────────────────────────────
   AUTH: {
     GENERATE_TOKEN: 'connect/token',
     REFRESH_TOKEN:  'connect/token',
-    // Sets the SESSION's current company — a separate, server-tracked value
-    // from any `company_id` sent in a request body. Several endpoints
-    // (Order/List, Invoice/List, the InterstoreReturn workflow actions)
-    // scope themselves to THIS value, not to whatever the caller passes —
-    // confirmed live 2026-09-15 (see storeService.js's switchCompany).
-    // Same mechanism OrnaVerse's own header store-selector uses.
     SWITCH_COMPANY: 'Account/SwitchCompany',
   },
 
   // ─────────────────────────────────────────────────────────────────────────
   // STORES
-  // Response: Entities[] of UsersCompanyRow
-  // Fields: company_id, company_code, mailing_name, is_disabled
   // ─────────────────────────────────────────────────────────────────────────
   STORES: {
     GET_USER_STORES: 'Services/Administration/Stores/GetUserStores',
@@ -49,9 +18,6 @@ const API = {
 
   // ─────────────────────────────────────────────────────────────────────────
   // HR — EMPLOYEE
-  // EmployeeRow.user_id links back to UsersCompanyRow.user_id (from GetUserStores).
-  // Used to resolve the logged-in user's employee_id, which OrnaVerse expects
-  // as `sales_person_id` on SchemeEnrollment/Create (confirmed field name via v1.json).
   // ─────────────────────────────────────────────────────────────────────────
   HR: {
     EMPLOYEE_LIST: 'Services/HR/Employee/List',
@@ -60,11 +26,6 @@ const API = {
   SETTINGS: {
     GET_PAYMENT_MODES:        'Services/Administration/PaymentReceiptMode/List',
     GET_PAYMENT_MODES_REFUND: 'Services/Administration/PaymentReceiptMode/PaymentModesForRefund',
-    // Bank/POS accounts a bank-settled payment (Credit Card, Debit Card,
-    // UPI) is deposited against — confirmed live against UAT 2026-08-13,
-    // { Take: 0 } → { Entities: [{id, code, name, ledger_id, company_id}] }.
-    // Does NOT take company_id in the request body (500s if you send one —
-    // scoped server-side from the token).
     GET_BANK_POS_ACCOUNTS:    'Services/Administration/BankPOS/List',
     GET_TAXES:                'Services/Common/GetTaxes',
     CHECK_METAL_RATE_TODAY:   'Services/Common/Common/CheckMetalRateForToday',
@@ -73,8 +34,6 @@ const API = {
 
   // ─────────────────────────────────────────────────────────────────────────
   // LOCATION MASTER
-  // Cascading dropdowns: Country → State → City
-  // Used in customer create/update forms
   // ─────────────────────────────────────────────────────────────────────────
   LOCATION: {
     COUNTRIES: 'Services/Master/Countries/List',
@@ -84,7 +43,6 @@ const API = {
 
   // ─────────────────────────────────────────────────────────────────────────
   // CATEGORIES
-  // Static datasets — fetch once, cache for session
   // ─────────────────────────────────────────────────────────────────────────
   CATEGORIES: {
     GET_TYPES:       'Services/Master/Type/List',
@@ -94,9 +52,6 @@ const API = {
 
   // ─────────────────────────────────────────────────────────────────────────
   // ITEMS / PRODUCTS (Master data)
-  // Items = master SKU catalogue with full specifications
-  // external_product_id (Shopify) lives on StyleRow from DESIGN_DETAIL
-  // NOT on ProductCatalogRow — never try to read it from catalog
   // ─────────────────────────────────────────────────────────────────────────
   ITEMS: {
     LIST:          'Services/Master/Items/List',
@@ -109,9 +64,6 @@ const API = {
 
   // ─────────────────────────────────────────────────────────────────────────
   // CATALOG (Live store inventory)
-  // Always send current_company_id = activeStoreId
-  // Price field on ProductCatalogRow = price (NOT item_rate)
-  // has_stock (boolean), current_company_pieces (int)
   // ─────────────────────────────────────────────────────────────────────────
   CATALOG: {
     GET_PRODUCTS:              'Services/Inventory/ProductCatalog/List',
@@ -122,73 +74,14 @@ const API = {
   INVENTORY: {
     GET_STOCK:          'Services/Inventory/GetStock',
     STOCK_JOURNAL_LIST: 'Services/Inventory/StockJournal/List',
-    // Path is Services/POS/... (not Inventory/...) despite living in this
-    // group — grouped here for cohesion with STOCK_JOURNAL_LIST since it's
-    // fired immediately after it in the barcode-scan flow, confirmed live
-    // 2026-08-10 off lucira.uat.ornaverse.in/pos's own network capture.
     ITEM_ENQUIRIES_CREATE: 'Services/POS/ItemEnquiries/Create',
   },
 
   // ─────────────────────────────────────────────────────────────────────────
   // HELPERS (rate calculation)
-  // SET_SALES_ITEMS is the real per-variant price calculator — GET_RATE is
-  // NOT used for this (confirmed 2026-07-22: OrnaVerse's own live UI never
-  // calls GetRate when a variant is selected, only SetSalesItems). GetRate
-  // itself remains unconfirmed/unwired — a bare { item_id } 500s (generic
-  // unhandled exception), do not guess its contract further.
-  //
-  // SET_SALES_ITEMS contract — confirmed live 2026-07-22 against both
-  // OrnaVerse's live tenant and our own UAT tenant (see pricingService.js):
-  //   POST { selected_products: [ <full item object as returned by
-  //     Style/Retrieve's style_variants[] or Items/Retrieve, unmodified —
-  //     including its placeholder item_rate:0/item_labour:0 and full
-  //     item_components[] BOM> ], price_list_id: 0, calculate_rates: true,
-  //     document_date: <now, UTC string>, document_id: 52,
-  //     exchange_rate: 1, generate_line_no: false, generate_lot_no: false,
-  //     is_labour_applicable: true, is_purchase: false,
-  //     is_tax_applicable: true }
-  //   → { Entities: [ <same item shape, but item_rate/item_labour/
-  //       sub_total/tax_amount/net_amount/item_components[].rate all
-  //       recomputed against TODAY's live metal/stone rates> ] }
-  //
-  // document_id: 52 is a document-TYPE constant (same concept as our own
-  // Invoice type being 54 — see useCreateInvoice.js), not a specific
-  // order/transaction instance — confirmed portable across both tenants.
-  // Stateless: response always comes back with ref_document_id: 0 and
-  // ref_transaction_id: 0 — nothing is created or staged server-side, so
-  // this is safe to call from a pure price-preview context (product detail
-  // / customize sheet) before any cart or order exists.
-  //
-  // COSTING.GET_ALL_RATES / GET_METAL_RATE below are a DIFFERENT thing
-  // (raw metal/stone/labour rate tables) — also unverified, zero callers
-  // anywhere in this codebase despite existing since an earlier session.
   // ─────────────────────────────────────────────────────────────────────────
-  // SET_RETURN_ITEMS is the RETURNS counterpart of SET_SALES_ITEMS —
-  // discovered 2026-07-30 by capturing OrnaVerse's own UAT Returns journey.
-  // A return line item CANNOT be hand-built (that was the cause of the long
-  // run of opaque 500s on Return/Create): the server expects the ~186-field
-  // computed object this endpoint returns.
-  //
-  // Confirmed request shape (their own UI):
-  //   POST { selected_products: [ <full sold-item object from
-  //          POS/InvoiceItems/List with get_child:true — 189 fields,
-  //          carrying ref_transaction_id/ref_document_id back to the
-  //          original invoice> ],
-  //          exchange_rate: 1, document_date: <Date.toDateString()>,
-  //          is_tax_applicable: false, calculate_rates: false }
-  //   → { Entities: [ <line item ready to drop into Return/Create> ] }
-  // SET_BUYBACK_ITEMS / SET_EXCHANGE_ITEMS are the same idea for Buy Back
-  // and Exchange (all confirmed 2026-07-30 from capture sessions). Both
-  // omit calculate_rates, unlike the return variant:
-  //   POST { selected_products: [...], document_date, exchange_rate: 1,
-  //          is_tax_applicable: false }
   HELPERS: {
     GET_RATE:           'Services/Helpers/GetRate',
-    // GET_METAL_RATE — distinct from GET_RATE above (that one 500s on a bare
-    // { item_id }, still unwired). Confirmed live 2026-08-27 by capturing
-    // lucira.uat.ornaverse.in/pos's own dashboard — this is what actually
-    // powers the highlighted rate strip under their header, called once per
-    // configured karat_id. See useMetalRates.js for the full contract.
     GET_METAL_RATE:     'Services/Helpers/GetMetalRate',
     SET_SALES_ITEMS:    'Services/Helpers/SetSalesItems',
     SET_RETURN_ITEMS:   'Services/Helpers/SetReturnItems',
@@ -198,9 +91,6 @@ const API = {
 
   // ─────────────────────────────────────────────────────────────────────────
   // CUSTOMERS
-  // All native POS endpoints — MarketPlace/Customer/Generate scrapped
-  // Key: party_id | Name: party_name | Mobile: mobile
-  // Address: city_id/state_id/country_id + city_name/state_name/country_name
   // ─────────────────────────────────────────────────────────────────────────
   CUSTOMERS: {
     GET_CUSTOMER: 'Services/POS/Customer/GetCustomer',
@@ -212,36 +102,13 @@ const API = {
 
   // ─────────────────────────────────────────────────────────────────────────
   // WALK-IN
-  // Store-entry customer check: staff enters mobile; if registered, returns
-  // Customer + WalkInRecorded:true (also WRITES a customer_visits row against
-  // the active store, resolved server-side from the token — NOT a pure read).
-  // If unregistered, returns { WalkInRecorded: false } with no Customer —
-  // caller opens the New Customer signup form.
-  // Confirmed via live UAT test 2026-07-19. Request: { mobile }. Only sending
-  // `mobile` works — adding company_id/current_company_id causes a 500.
-  // Response.Customer.mobile is pre-masked by the API (******9999); the
-  // per-visit rows under customer_visits[].mobile come back unmasked.
-  // Because every call records a visit, only fire this once per staff
-  // submission — never speculatively (e.g. on keystroke).
   // ─────────────────────────────────────────────────────────────────────────
   WALKIN: {
     LOOKUP: 'Services/POS/WalkIn/Lookup',
   },
 
-  // PARTY_ADDRESS (Customer address book CRUD) removed 2026-08-27 — dead:
-  // no partyAddressService.js ever existed, no file under src/ called any
-  // of its three endpoints. Unlike other unused endpoints kept elsewhere in
-  // this file, nothing here carried a "confirmed unused, kept for X"
-  // comment — this was unfinished scaffolding, not deliberate reserved
-  // infrastructure. If this feature is picked back up, the endpoints were
-  // 'Services/Master/PartyAddress/{List,Create,Update}'.
-
   // ─────────────────────────────────────────────────────────────────────────
   // PARTY (Customer 360)
-  // Richer master-record read than CUSTOMERS.RETRIEVE — includes ledger ids,
-  // party_display_name, party_location, full party_address[]. Confirmed live
-  // 2026-08-12 against UAT with a real party_id, EntityId-in/Entity-out same
-  // as CUSTOMERS.RETRIEVE.
   // ─────────────────────────────────────────────────────────────────────────
   PARTY: {
     RETRIEVE: 'Services/Master/Party/PartyRetrieve',
@@ -262,89 +129,13 @@ const API = {
     POST:           'Services/POS/Order/Post',
     CANCEL:         'Services/POS/Order/Cancel',
     RETRIEVE:       'Services/POS/Order/Retrieve',
-    // ADDED 2026-09-03 — see src/services/crossStoreDocuments.js. Confirmed
-    // live: Order/List silently restricts a multi-store identity (e.g. the
-    // "admin" account) to its own home company no matter what company_id is
-    // requested, but OrderReceipt/List genuinely honours it. Receipt rows
-    // are per-payment, not per-document — used only to discover which
-    // transaction_ids belong to a store, never displayed directly.
     RECEIPT_LIST:   'Services/POS/OrderReceipt/List',
     LIST:           'Services/POS/Order/List',
     APPLY_DISCOUNT: 'Services/POS/Order/ApplyAdditionalDiscount',
   },
 
   // ─────────────────────────────────────────────────────────────────────────
-  // ORDER FULFILLMENT — "Fulfill from order": an Order (53) raised earlier,
-  // now converted into an Invoice (54) once the piece is ready.
-  //
-  // CONFIRMED 2026-08-19 by driving OrnaVerse's own "Fulfill from order"
-  // dialog live on UAT and capturing the network calls. Two distinct
-  // endpoints, not one:
-  //
-  //   READY_TO_INVOICE (POS/OrderItems/List) — { party_id,
-  //     validate_against_stock: true, document_id: 54, document_status: 1 }
-  //     → only order lines that pass a live stock-allocation check. This is
-  //     what "Fulfill from order"'s default tab shows.
-  //
-  //   ALL_OPEN (Inventory/OrderItemFulfilment/List) — { document_id: 53,
-  //     party_ids: [id], Take: 500 } → EVERY open order line regardless of
-  //     readiness, each carrying status_id/reason_status_description
-  //     ("New", "Ready To Invoice", ...). This is the "All open" tab.
-  //
-  // WHAT MOVES A LINE FROM "New" TO "Ready To Invoice": NOT a live stock
-  // check, and NOT anything reachable from the counter POS. Confirmed by
-  // placing two fresh test orders for an item with genuine physical stock —
-  // both stayed "New" immediately after creation. The real pipeline lives
-  // entirely in OrnaVerse's ERP admin ("Back to ERP" → Inventory →
-  // "Order Fulfilment"): New → Processing → In Stock → Ready To Invoice →
-  // Ready to Ship → QC Completed → Shipped, driven by dedicated warehouse/
-  // manufacturing tools (Work Order, Purchase Order, Allocate Stock,
-  // Shipment) — a back-office workflow, structurally separate from the
-  // sales counter, the same way a WMS sits apart from a POS terminal. The
-  // counter's job is only to check readiness and load a ready line, never to
-  // move it there itself.
-  //
-  // CONFIRMED LIVE 2026-09-08 — the round trip DOES work, but not the way
-  // this integration originally guessed. Reproduced end to end on UAT: order
-  // 268 (HO-RPO-08-26-00007, party 2482) had a line genuinely sitting
-  // "Ready to Invoice" (status_id 14) — the SAME "All open" vs
-  // READY_TO_INVOICE inconsistency documented above was present (the line
-  // showed twice in ALL_OPEN, once "New" once "Ready to Invoice", while
-  // READY_TO_INVOICE returned it once, correctly formed) but didn't block
-  // anything.
-  //
-  //   1. There is NO dedicated fulfillment field on InvoiceRow. Sending
-  //      is_fulfillment/fulfillment_order_id/fulfillment_order_no (this
-  //      integration's previous best-effort guess, mirroring the shape its
-  //      own client-side hydrateInvoiceCartFromOrder used) makes Invoice/Create
-  //      500 — {"Error":{"Code":"Exception","Message":"An error occurred
-  //      while processing your request."}} — EVERY time, confirmed by
-  //      isolating it: the exact same request with just those three keys
-  //      removed returns 200. These are NOT harmless-if-unrecognized; they
-  //      actively break the request. Do not send them.
-  //
-  //   2. The correlation is done SERVER-SIDE, keyed off the physical stock
-  //      piece, not a header field. READY_TO_INVOICE's row and the matching
-  //      Inventory/StockJournal/List row for that item share the same
-  //      `item_line_no` (confirmed: 19714 on both, for the same order). Simply
-  //      invoicing THAT stock piece through the normal
-  //      StockJournal/List → Helpers/SetSalesItems(document_id: 54) →
-  //      Invoice/Create pipeline (checkoutPricingService.buildPricedLineItems)
-  //      — with NO special fields at all — was enough: the source order's
-  //      line automatically flipped from status_id 14 "Ready to Invoice" to
-  //      status_id 6 "Shipped", with `current_document_no` pointing at the
-  //      new invoice. Cancelling that invoice (POS/Invoice/Cancel) reverted
-  //      it cleanly back to "Ready to Invoice" and the stock piece became
-  //      available again — a fully reversible, confirmed round trip.
-  //
-  //   3. WHAT THIS MEANS FOR WIRING IT UP: claimStockPieces (normally "any
-  //      available piece of this item_id") must be told to claim the SAME
-  //      specific piece the order reserved, not an arbitrary one of the same
-  //      item_id/style — two open orders on the same style would otherwise
-  //      risk claiming each other's piece. mapFulfillmentLineToCartItem
-  //      carries the fulfillment line's own item_line_no through as
-  //      `fulfillmentItemLineNo` on the CartItem for exactly this reason —
-  //      see checkoutPricingService.claimStockPieces.
+  // ORDER FULFILLMENT
   // ─────────────────────────────────────────────────────────────────────────
   ORDER_FULFILLMENT: {
     READY_TO_INVOICE: 'Services/POS/OrderItems/List',
@@ -352,9 +143,7 @@ const API = {
   },
 
   // ─────────────────────────────────────────────────────────────────────────
-  // INVOICES (POS native)
-  // Flow: Create → (optional Update) → Post
-  // Same field structure as OrderRow + is_insured boolean
+  // INVOICES 
   // ─────────────────────────────────────────────────────────────────────────
   INVOICES: {
     CREATE:         'Services/POS/Invoice/Create',
@@ -368,8 +157,7 @@ const API = {
   },
 
   // ─────────────────────────────────────────────────────────────────────────
-  // INVOICE RECEIPTS (payment entries against an invoice)
-  // mode_id, mode_name, amount per receipt row
+  // INVOICE RECEIPTS
   // ─────────────────────────────────────────────────────────────────────────
   INVOICE_RECEIPTS: {
     CREATE:           'Services/POS/InvoiceReceipt/Create',
@@ -379,29 +167,7 @@ const API = {
 
   // ─────────────────────────────────────────────────────────────────────────
   // INVOICE HELPERS
-  // Fetch available balances for a customer at checkout time
-  // Call before rendering payment section to show what customer can apply
   // ─────────────────────────────────────────────────────────────────────────
-  // GetAdvances/GetCreditNote/GetExchange/GetOldGold/GetScheme REMOVED
-  // 2026-08-18 — all five 500 on this tenant, and CONFIRMED by driving
-  // OrnaVerse's own POS end to end (Invoice tab, real customer Tahir Kutty,
-  // party_id 2221) while capturing every /Services/ call: their own payment
-  // screen never calls any of them. useCustomerHistory.js's header comment
-  // reached the same conclusion independently on 2026-07-16.
-  //
-  // What their UI actually calls — ONE request, { party_id } only (no
-  // company_id) — is RECEIPTS_SELECT below. It returns every outstanding
-  // credit-bearing receipt for that party in one flat list; their screen
-  // sums every row's balance_amount into the single "Credit" figure shown
-  // on the customer card (verified: rows summed to exactly ₹4,71,510.00,
-  // matching the displayed figure). Bucket rows by `document_id`
-  // (APP_CONFIG.DOCUMENT_TYPES) to rebuild the 5 category totals this app's
-  // UI shows — see useInvoiceHelpers.js.
-  //
-  // Same endpoint, already proven correct here for a different purpose —
-  // see REFUNDS.CUSTOMER_CREDITS / getCustomerCredits() in
-  // refundService.js, which reads the identical rows to know what a refund
-  // can pay out.
   INVOICE_HELPERS: {
     RECEIPTS_SELECT:      'Services/POS/POSReceiptsSelect/List',
     GET_PARTY_DAILY_CASH: 'Services/POS/POSInvoice/GetPartyDailyCash', // unaffected — confirmed working on its own
@@ -409,18 +175,6 @@ const API = {
 
   // ─────────────────────────────────────────────────────────────────────────
   // RETURNS
-  // Customer returns items from a previous purchase.
-  // Flow (confirmed 2026-07-30 by capturing OrnaVerse's own UAT journey):
-  //   1. SOLD_ITEMS  → what this customer has actually bought (returnable)
-  //   2. HELPERS.SET_RETURN_ITEMS → price the chosen piece(s) for return
-  //   3. CREATE → POST
-  //
-  // SOLD_ITEMS (POS/InvoiceItems/List) confirmed request:
-  //   { Take: 25, party_id, transaction_type: 1, get_child: true,
-  //     IncludeColumns: [item_code,item_line_no,pieces,weight,net_weight,sku,document_no] }
-  // get_child:true is ESSENTIAL — it returns the full nested item
-  // (item_components etc.) that SET_RETURN_ITEMS needs as input.
-  // transaction_type:1 = sold items.
   // ─────────────────────────────────────────────────────────────────────────
   RETURNS: {
     CREATE:     'Services/POS/Return/Create',
@@ -433,22 +187,7 @@ const API = {
 
   // ─────────────────────────────────────────────────────────────────────────
   // REFUNDS
-  // Cash/payment refund to customer
   // ─────────────────────────────────────────────────────────────────────────
-  // A Refund PAYS OUT credit that a Return / Exchange / Buy Back already
-  // raised — it has no line items of its own. Confirmed 2026-07-31 by
-  // capturing the ERP's own Refund dialog (there is no Refund screen in
-  // their POS UI; only the ERP at /POS/Refund has one).
-  //
-  //   CUSTOMER_CREDITS ({ party_id }) → that customer's OUTSTANDING credits
-  //     (already-settled ones are filtered out server-side). Each row is a
-  //     Return/Exchange/Buy Back document and carries the transaction_id
-  //     that the refund receipt must reference.
-  //   CREATE  → ONE call, with details[] and receipts[] nested.
-  //
-  // ADD_DETAIL / ADD_RECEIPT are NOT needed — the old three-call sequence
-  // (create → RefundDetails/Create → RefundReceipts/Create) never linked to
-  // a credit document at all, so it created refunds that settled nothing.
   REFUNDS: {
     CREATE:           'Services/POS/Refund/Create',
     UPDATE:           'Services/POS/Refund/Update',
@@ -460,8 +199,6 @@ const API = {
 
   // ─────────────────────────────────────────────────────────────────────────
   // CREDIT NOTES
-  // Store credit issued to customer (can be redeemed at next purchase)
-  // Flow: Create → Post
   // ─────────────────────────────────────────────────────────────────────────
   CREDIT_NOTES: {
     CREATE:   'Services/POS/CreditNote/Create',
@@ -473,8 +210,6 @@ const API = {
 
   // ─────────────────────────────────────────────────────────────────────────
   // EXCHANGE
-  // Customer brings old jewellery, exchanges for new piece
-  // Flow: Create → Post
   // ─────────────────────────────────────────────────────────────────────────
   EXCHANGE: {
     CREATE:   'Services/POS/Exchange/Create',
@@ -486,8 +221,6 @@ const API = {
 
   // ─────────────────────────────────────────────────────────────────────────
   // BUY BACK
-  // Store buys old jewellery from customer outright (no exchange)
-  // Flow: Create → Post
   // ─────────────────────────────────────────────────────────────────────────
   BUYBACK: {
     CREATE:   'Services/POS/BuyBack/Create',
@@ -499,8 +232,6 @@ const API = {
 
   // ─────────────────────────────────────────────────────────────────────────
   // URD PURCHASE (Old Gold / Unregistered Dealer)
-  // Purchase of raw old gold from customer or unregistered dealer
-  // Flow: Create → Post
   // ─────────────────────────────────────────────────────────────────────────
   URD_PURCHASE: {
     CREATE:   'Services/POS/URDPurchase/Create',
@@ -512,27 +243,14 @@ const API = {
 
   // ─────────────────────────────────────────────────────────────────────────
   // REPAIR
-  // Full repair workflow: customer drops item → repair out → repair in → invoice
-  // RepairIn = item comes in for repair
-  // RepairOut = item goes to craftsman
-  // RepairInvoice = billing when item is returned to customer
   // ─────────────────────────────────────────────────────────────────────────
   REPAIR: {
-    // The WORKSHOP repair order (document_id 75, prefix "REP"), created in
-    // Inventory — NOT one of the three POS repair documents below. A Repair In
-    // line item is copied from one of these orders' lines and points back at it
-    // via ref_document_id 75 / ref_transaction_id / ref_transaction_item_id.
-    // Confirmed 2026-08-01 off real posted records; see [[repair-flow-contract]].
     REPAIR_ORDER_LIST:     'Services/Inventory/Repair/List',
     REPAIR_ORDER_RETRIEVE: 'Services/Inventory/Repair/Retrieve',
     REPAIR_ORDER_CREATE:   'Services/Inventory/Repair/Create',
     REPAIR_ORDER_POST:     'Services/Inventory/Repair/Post',
     REPAIR_ORDER_CANCEL:   'Services/Inventory/Repair/Cancel',
-    // Sold items eligible for repair. NOTE transaction_type 3 — Return/Buyback/
-    // Exchange use 1 and Credit Note uses 4. Three journeys, three values.
     REPAIR_SOLD_ITEMS:     'Services/POS/InvoiceItems/List',
-    // Stock locations per company. A repair lands in the one named "Repair"
-    // (location_id 2 on this tenant) — matches every real Repair Order record.
     COMPANY_LOCATIONS:     'Services/Administration/CompanyWiseLocations/List',
     REPAIR_IN_CREATE:      'Services/POS/RepairIn/Create',
     REPAIR_IN_POST:        'Services/POS/RepairIn/Post',
@@ -555,48 +273,6 @@ const API = {
 
   // ─────────────────────────────────────────────────────────────────────────
   // INTERSTORE RETURN (IRR)
-  // A customer returns an item at a store OTHER than the one that sold it.
-  // document_id 128 (header), 129 (InterstoreConsignment), 130
-  // (CrossStoreCreditSettlement). Confirmed live 2026-09-11 on UAT (real
-  // record interstore_return_id 5, "CS1-PTC-09-26-1", full lifecycle
-  // Create→SubmitForApproval→Approve→PendingSettlement→LocalAbsorption→
-  // Closed) and confirmed 2026-09-17 read-only on LIVE (2 real
-  // store-created records, same field shape — UAT and LIVE map identically).
-  //
-  // Store-role gating is tied to the AUTHENTICATED ACCOUNT's own company,
-  // not any field in the request body: Approve requires the origin
-  // company to be "current" (see AUTH.SWITCH_COMPANY), while
-  // SubmitForApproval / LocalAbsorption / ReturnToOrigin require the
-  // receiving company. One admin account can act as both by switching
-  // company between actions — see storeService.switchCompany.
-  //
-  // Retrieve/Update/Delete use the generic Serenity { EntityId } key, NOT
-  // { interstore_return_id } — confirmed live (interstore_return_id in the
-  // body 500s; EntityId returns the record).
-  //
-  // Status enum: 0 Draft, 1 PendingApproval, 2 Approved, 3
-  // PendingSettlement, 4 Closed, 5 Rejected, 6 PermanentlyClosed, 7
-  // DeemedSupply.
-  //
-  // CREATE gotcha (confirmed live 2026-09-17, cost a long bisection):
-  // each line_items[] entry MUST include `line_no` (1-based) — it looks
-  // server-managed (comes back populated on every Retrieve, same as
-  // interstore_return_item_id) but omitting it throws a generic 500 for
-  // any genuinely NEW invoice-linked line. See
-  // interstoreReturnService.mapReturnLineToInterstoreReturnLine.
-  //
-  // Photo attach: AddItemImage's real contract, confirmed against
-  // OrnaVerse's own published API reference (ornaverse-advantage.apidog.io)
-  // 2026-09-17: flat `{ interstore_return_item_id, image_path }`, no
-  // Entity wrapper. Call it AFTER Create/once the line has a real
-  // interstore_return_item_id. (An earlier embed-base64-via-Update
-  // workaround is no longer needed now this is confirmed.)
-  //
-  // SOLD_ITEMS reuses POS/InvoiceItems/List (same endpoint Returns use),
-  // but the picker deliberately nulls company_id/financial_year_id
-  // server-side so it searches the customer's purchases across EVERY
-  // branch and year — that cross-branch reach is the whole point of this
-  // document type, not a bug to filter out client-side.
   // ─────────────────────────────────────────────────────────────────────────
   INTERSTORE_RETURN: {
     CREATE:               'Services/POS/InterstoreReturn/Create',
@@ -610,11 +286,6 @@ const API = {
     RESUBMIT:             'Services/POS/InterstoreReturn/Resubmit',
     RETURN_TO_ORIGIN:     'Services/POS/InterstoreReturn/ReturnToOrigin',
     LOCAL_ABSORPTION:     'Services/POS/InterstoreReturn/LocalAbsorption',
-    // Request shape confirmed 2026-09-17 against OrnaVerse's own published
-    // API reference: { interstore_return_item_id, image_path }. Endpoint
-    // itself still 500s live even with this exact shape — genuine
-    // server-side bug, not a contract guess. Use the Update-with-embedded-
-    // images path instead (see interstoreReturnService.js) until fixed.
     ADD_ITEM_IMAGE:       'Services/POS/InterstoreReturn/AddItemImage',
     REMOVE_ITEM_IMAGE:    'Services/POS/InterstoreReturn/RemoveItemImage',
     SOLD_ITEMS:           'Services/POS/InvoiceItems/List',
@@ -622,8 +293,6 @@ const API = {
 
   // ─────────────────────────────────────────────────────────────────────────
   // ESTIMATION / QUOTATION
-  // Generate price estimate before order — can be converted to invoice
-  // Flow: Create → (optional Post to convert to order) | or Cancel
   // ─────────────────────────────────────────────────────────────────────────
   ESTIMATION: {
     CREATE:   'Services/POS/Estimation/Create',
@@ -636,7 +305,6 @@ const API = {
 
   // ─────────────────────────────────────────────────────────────────────────
   // DAILY CLOSING
-  // End-of-day reconciliation — no Post step, Create finalises
   // ─────────────────────────────────────────────────────────────────────────
   DAILY_CLOSING: {
     CREATE:   'Services/POS/DailyClosing/Create',
@@ -649,10 +317,6 @@ const API = {
   // Promotions, gift vouchers
   // ─────────────────────────────────────────────────────────────────────────
   CRM: {
-    // NOTE: GetPromotion does NOT filter by the code you send it — confirmed
-    // 2026-07-15 by testing directly: it returns the same fixed record
-    // regardless of input. Use LIST + client-side matching for code
-    // validation instead (see promotionService.listPromotions).
     GET_PROMOTION:                'Services/CRM/Promotion/GetPromotion',
     LIST:                         'Services/CRM/Promotion/List',
     APPLY_PROMOTIONS:             'Services/Helper/ApplyPromotions',
@@ -663,23 +327,16 @@ const API = {
 
   // ─────────────────────────────────────────────────────────────────────────
   // CUSTOMER HISTORY
-  // Full purchase/transaction history per customer
   // ─────────────────────────────────────────────────────────────────────────
   CUSTOMER_HISTORY: {
     TRANSACTIONS:      'Services/Reports/CustomerHistory/Transactions',
     ITEM_TRANSACTIONS: 'Services/Reports/CustomerHistory/ItemTransactions',
     TOTAL_RECEIPTS:    'Services/Reports/CustomerHistory/TotalReceipts',
     TOTAL_PROMOTIONS:  'Services/Reports/CustomerHistory/TotalPromotions',
-    // Customer 360 (2026-08-12) — confirmed live against UAT with a real
-    // party_id. PARTY_TRANSACTIONS is the single richest call: one document
-    // feed split by type (Invoices/Orders/Returns/Exchanges/URDs/BuyBacks/
-    // Receipts) PLUS invoice_total/buyback_total/exchange_total/
-    // credit_balance — the exact aggregate figures useCustomerHistory's own
-    // header comment (below) says it couldn't find a source for.
     PARTY_TRANSACTIONS: 'Services/Reports/CustomerHistory/GetPartyTransactions',
     SALES_INSIGHTS:     'Services/Reports/CustomerHistory/GetSalesInsights',
   },
-
+  
   REWARDS: {
     GET_POINTS:      'Services/CRM/CustomerRewards/GetCustomerPoints',
     LOYALTY_HISTORY: 'Services/CRM/CustomerRewards/LoyaltyHistories',
@@ -687,18 +344,12 @@ const API = {
 
   // ─────────────────────────────────────────────────────────────────────────
   // SCHEMES (Jewellery savings/instalment schemes)
-  // IMPORTANT: benifit_amount is an API-side typo — preserve exactly in code
-  // Enrollment flow: ENROLL → monthly RECEIPT_CREATE payments → maturity/foreclose
   // ─────────────────────────────────────────────────────────────────────────
   SCHEMES: {
     LIST:                'Services/CRM/Schemes/List',
     ENROLLMENTS_LIST:    'Services/POS/SchemeEnrollment/List',
     ENROLL:              'Services/POS/SchemeEnrollment/Create',
     ENROLLMENT_RETRIEVE: 'Services/POS/SchemeEnrollment/Retrieve',
-    // Confirmed live 2026-08-14: no dedicated close/mature/foreclose/cancel
-    // endpoint exists anywhere in the API — this generic Update is the only
-    // mutation available on an enrollment. See schemeService.js
-    // closeSchemeEnrollment for what is and isn't safe to write through it.
     ENROLLMENT_UPDATE:   'Services/POS/SchemeEnrollment/Update',
     RECEIPT_CREATE:      'Services/POS/SchemeReceipt/Create',
     RECEIPT_LIST:        'Services/POS/SchemeReceipt/List',
@@ -706,91 +357,28 @@ const API = {
     MATURITY_BENEFIT:    'Services/Helper/GetSchemeMaturityBenefit',
     FORECLOSE_BENEFIT:   'Services/Helper/GetSchemeForcloseBenefit',
     CANCELLATION:        'Services/Helper/GetSchemeCancellation',
-    // Confirmed live 2026-09-18 (captured from OrnaVerse's own client): the
-    // foreclosure-eligibility precondition ("pay at least N instalments")
-    // isn't a fixed rule — it's configured PER SCHEME here. rule_type:3 rows
-    // are the foreclosure window; a row's own from_installment is the real
-    // minimum (scheme "Vault of dream" = 6, scheme "New year" = 1 — the two
-    // differ, confirmed via a real from_installment:6 row matching that
-    // scheme's own real rejection message exactly). See
-    // schemeService.js's canForecloseEnrollment for how this is used.
     RULES_LIST:          'Services/CRM/SchemesRules/List',
   },
 
   // ─────────────────────────────────────────────────────────────────────────
-  // DOCUMENT CONFIG (per-document-type header fields for Order/Invoice Create)
-  // Confirmed live 2026-07-28 via OrnaVerse's own OAuth client_credentials
-  // token: root-caused the Order/Invoice/Create 500s to two entirely-missing
-  // header fields that neither endpoint's 400 validation ever complained
-  // about, so they went undetected until we captured a real working payload
-  // from OrnaVerse's own frontend and cross-checked it against v1.json:
-  //
-  //   financial_year_id — NOT a customer/document field. FinancialYear/List
-  //   returns { financial_year_id, from_date, to_date, financial_year_code }
-  //   rows with no company/document scoping at all — resolve by finding the
-  //   row where from_date <= today <= to_date. Confirmed live: FY 2025-2026
-  //   (id 1) and FY 2026-2027 (id 3, current as of 2026-07).
-  //
-  //   ledger_id — NOT sourced from the customer (CustomerRow only has
-  //   payable_ledger_id/receivable_ledger_id/wip_ledger_id/loss_ledger_id,
-  //   confirmed via v1.json schema — no bare ledger_id). It's the document
-  //   TYPE's own configured control ledger: DocumentNumberingRow, keyed by
-  //   (document_id, company_id). Confirmed live: document_id 53 (RPO/Order),
-  //   company_id 1 (HO) → ledger_id 182 — an EXACT match to the real
-  //   ledger_id captured from OrnaVerse's own successful Order/Create.
-  //   Same row also carries is_tax_applicable/auto_posting/
-  //   is_document_number_editable — send those from here too rather than
-  //   hardcoding, since they're genuinely per-document-type config, not
-  //   universal constants.
+  // DOCUMENT CONFIG 
   // ─────────────────────────────────────────────────────────────────────────
   DOCUMENT_CONFIG: {
     FINANCIAL_YEAR_LIST:   'Services/Administration/FinancialYear/List',
     DOCUMENT_NUMBERING_LIST: 'Services/Administration/DocumentNumbering/List',
-    // The print/preview formats configured for a document type. Captured
-    // from OrnaVerse's own POS 2026-08-05: immediately after Invoice/Create
-    // they call this with { document_id, is_disabled: false } and offer the
-    // operator a "Select Report" choice. For POS Invoice (54) this tenant
-    // returns three — "E Certificate", "New Invoice Format" and
-    // "New Invoice Format WO Header".
-    //
-    // There is no GeneratePDF: Services/POS/Invoice/GeneratePDF, which this
-    // app used to call, returns 500 on UAT. Rendering goes through
-    // REPORT_RENDER below instead.
     DOCUMENT_REPORTS_LIST: 'Services/Administration/DocumentReports/List',
   },
 
   // ─────────────────────────────────────────────────────────────────────────
   // REPORT RENDERING
-  //
-  // NOTE THE MISSING "Services/" — these are MVC endpoints on the OrnaVerse
-  // web app, not the OAuth-protected JSON API, and they are COOKIE
-  // authenticated. Posting a bearer token to them returns the ERP's own
-  // "Login to your account" page (verified 2026-08-05), so they cannot be
-  // called through our axios instance. Their own client posts a plain form
-  // to them from the browser; see InvoiceReportButton for how we do the same.
-  //
-  // Body (application/x-www-form-urlencoded), all four from the
-  // DocumentReports row:
-  //   key, opt (JSON params, e.g. {"transaction_id":1207}),
-  //   reportFile, reportFolder, reportSubFolder
-  //
-  // RENDER returns an HTML document their UI shows in an iframe preview;
-  // PRINT_RENDER is the print variant.
-  //
-  // Not currently referenced via these constants — InvoiceReportButton
-  // hardcodes 'Print/Render' directly (see its own header comment for why).
-  // Kept here as the documented contract for that endpoint regardless.
   // ─────────────────────────────────────────────────────────────────────────
   REPORT_RENDER: {
     RENDER:       'Print/Render',
     PRINT_RENDER: 'Print/PrintRender',
   },
 
-
   // ─────────────────────────────────────────────────────────────────────────
   // EXCHANGE RATE
-  // Required on Order/Invoice Create alongside currency_id — confirmed via
-  // direct UAT test 2026-07-16: currency_id 103 (INR) returns exchange_rate: 1.
   // ─────────────────────────────────────────────────────────────────────────
   EXCHANGE_RATE: {
     GET: 'Services/Administration/ExchangeRate/GetExchangeRate',
@@ -798,7 +386,6 @@ const API = {
 
   // ─────────────────────────────────────────────────────────────────────────
   // COSTING / METAL RATES
-  // Daily gold/silver/platinum rate updates
   // ─────────────────────────────────────────────────────────────────────────
   COSTING: {
     ADD_METAL_RATE: 'Services/Costing/MetalRates/Create',
@@ -811,10 +398,9 @@ const API = {
     ATTRIBUTES_DEFINITION_LIST: 'Services/Master/CustomAttributesDefinition/List',
     ATTRIBUTES_OPTIONS_LIST: 'Services/Master/CustomAttributesOptions/List',
     ATTRIBUTES_VALUES_LIST: 'Services/Master/CustomAttributesValues/List',
-    ITEMS_LIST: 'Services/Master/Items/List',
+    CREATE_TEMP_VOUCHER: 'Services/POS/POSEstimationItems/CreateTempVoucher',
+    TYPE_DETAILS_LIST: 'Services/Master/TypeDetails/List'
   },
-
-
 };
 
 export default API;

@@ -294,7 +294,17 @@ function SoldItemFlowForm({ flow, onDone }) {
       setIsPricing(false);
       if (!line_items.length) throw new Error('Could not price the selected items.');
 
-      const sum = (f) => +line_items.reduce((s, li) => s + (li[f] ?? 0), 0).toFixed(2);
+      // CONFIRMED LIVE 2026-09-22: SetExchangeItems/SetBuybackItems (unlike
+      // SetReturnItems) come back with `net_amount`/`sub_total` at 0 — the
+      // real priced value only lands in `base_net_amount`/`base_sub_total`.
+      // A real Exchange/BuyBack created before this fix would silently
+      // record zero credit for a customer's real item (verified: a live
+      // Exchange and BuyBack both created successfully with net_amount:0/
+      // balance_amount:0 against their real ~₹86,731/~₹45,827 items).
+      // Falling back to the base_* field is safe for every flow — Return's
+      // own net_amount already equals its base_net_amount, so this changes
+      // nothing there, only fixes the two that were actually broken.
+      const sum = (f) => +line_items.reduce((s, li) => s + (li[f] || li[`base_${f}`] || 0), 0).toFixed(2);
       const subTotal = sum('sub_total');
       const taxAmount = sum('tax_amount');
       const netRaw = sum('net_amount');

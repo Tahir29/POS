@@ -3,8 +3,12 @@
 // Purchase/Repair/SchemeReceipt), which share the same OrnaVerse.POS.*Row
 // schema shape as OrderRow/InvoiceRow.
 //
-// Confirmed live only for Order/Invoice; extrapolated to the other flows on
-// the assumption they share one common base schema. Each flow's own quirks
+// Confirmed live for Order/Invoice AND now Return (2026-09-22 — a real
+// Return created against Tahir Test's HO-LJ-0926-016 on UAT: EntityId 157,
+// document_no HO-PSR-09-26-00005, correctly auto-posted, correctly linked
+// back via ref_transaction_id/ref_document_id, balance_amount correctly
+// held open at the full net amount). Exchange/Buyback/Credit-Note/URD still
+// extrapolated, not yet individually confirmed — each flow's own quirks
 // (line-item shape, extra required fields) aren't guaranteed to be fully
 // covered — treat a 500 on any of these as needing its own live-capture
 // diagnostic rather than a sign this function is wrong.

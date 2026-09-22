@@ -13,6 +13,18 @@ import { selectActiveStoreId } from '@/store/slices/storeSlice';
 import { QUERY_KEYS } from '@/constants/queryKeys';
 import TOAST from '@/constants/toastMessages';
 
+// Fire-and-forget — see api/customers/shopify-sync/route.js for why this
+// exists (OrnaVerse's own push to Shopify drops the phone number, breaking
+// Nector's mobile-based loyalty lookup). Never blocks or fails customer
+// creation if Shopify errors.
+function syncCustomerToShopify({ party_id, party_name, mobile, email }) {
+  fetch('/api/customers/shopify-sync', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ party_id, party_name, mobile, email }),
+  }).catch((err) => console.warn('[syncCustomerToShopify] failed', err));
+}
+
 export function useCreateCustomer() {
   const queryClient   = useQueryClient();
   const activeStoreId = useSelector(selectActiveStoreId);
@@ -46,6 +58,12 @@ export function useCreateCustomer() {
       } else {
         const customerId = result.response?.data?.EntityId;
         toast.success(TOAST.CUSTOMER.CREATED(customerName));
+        syncCustomerToShopify({
+          party_id:   customerId,
+          party_name: customerName,
+          mobile:     customerMobile,
+          email:      formValues.email,
+        });
 
         queryClient.invalidateQueries({
           queryKey: QUERY_KEYS.CUSTOMERS.LOOKUP(customerMobile),

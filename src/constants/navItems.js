@@ -13,6 +13,7 @@ import {
   ClipboardList,
   FileText,
   FileSpreadsheet,
+  Columns3Cog,
   BookOpen,
   ArrowLeftRight,
   Repeat,
@@ -20,6 +21,7 @@ import {
   Settings,
   Wrench,
   Footprints,
+  
 } from 'lucide-react';
 
 export const NAV_ITEMS = [
@@ -36,6 +38,7 @@ export const NAV_ITEMS = [
   // despite working end to end. Fixed here.
   { label: 'Transfers',    href: '/transfers',    icon: Repeat          },
   { label: 'Estimation',   href: '/estimation',   icon: FileSpreadsheet },
+  { label: 'Custom',   href: '/custom',   icon: Columns3Cog },
   { label: 'Customers',    href: '/customers',    icon: Users           },
   { label: 'Schemes',      href: '/schemes',      icon: BookOpen        },
   // ADDED 2026-09-08 — our own walk-in log (see lib/mongo/walkins.js's

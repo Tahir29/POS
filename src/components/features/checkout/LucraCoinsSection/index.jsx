@@ -3,28 +3,35 @@
 // Lucira Coins (Nector's loyalty program) redemption — cart-wide
 // counterpart to DiscountSection, mutually exclusive with it (enforced in
 // useCart.js's handleApplyLoyaltyCoins). Not editable: Apply always claims
-// the full claimable amount (min of wallet balance and payable total);
-// Remove clears it to zero.
+// the one redemption Nector itself says is available on this exact cart
+// total; Remove clears it to zero.
 //
-// Debiting the Nector wallet is not wired up yet — applying coins here
-// only updates local cart state (cartSlice's redeemedCoins), pending a
-// merchant/lead identifier that the current Nector lookup doesn't return.
-// checkout/page.jsx blocks completing a sale while coins are applied
-// until that's resolved; the real debit call belongs in checkout's
-// handlePaymentConfirmed once it is.
+// CONFIRMED LIVE 2026-09-22 — the claimable amount is NOT min(balance,
+// total): Nector has its own real eligibility rules (this tenant's real
+// minimum cart is ₹10,000, plus a max-discount cap) that only the
+// cart-total-aware `checkout` "list" call actually knows — a flat balance
+// lookup can't tell you what's redeemable. useNectorCheckoutInfo is that
+// call; useNectorLoyaltyPoints (plain balance, no amount) is kept only to
+// distinguish "not enrolled" from "enrolled, nothing redeemable yet". The
+// real debit (performNectorRedemption) fires in checkout/page.jsx's
+// handlePaymentConfirmed, after the sale — see that file's own comment.
 
 import { Coins } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useCart } from '@/hooks/cart/useCart';
 import { useCustomerSession } from '@/hooks/customer/useCustomerSession';
 import { useNectorLoyaltyPoints } from '@/hooks/customer/useNectorLoyaltyPoints';
+import { useNectorCheckoutInfo } from '@/hooks/checkout/useNectorCheckoutInfo';
 
 /**
  * @param {{ payableTotal: number, isPricing?: boolean }} props
  *   payableTotal — current payable amount (post-promo, pre-coins, e.g.
- *   useCheckoutPricing's amountDue).
+ *   useCheckoutPricing's amountDue). This is exactly the `amount` Nector's
+ *   own eligibility check is run against — checkout/page.jsx's redemption
+ *   call must use the SAME figure, or the two can disagree on what was
+ *   actually available.
  *   isPricing — distinguishes an empty cart from one still pricing (both
- *   otherwise read as maxClaimable <= 0).
+ *   otherwise read as no redemption available).
  */
 export default function LucraCoinsSection({ payableTotal, isPricing = false }) {
   const { customerMobile } = useCustomerSession();
@@ -32,8 +39,15 @@ export default function LucraCoinsSection({ payableTotal, isPricing = false }) {
   const { points: balance, isFound, isLoading } = useNectorLoyaltyPoints(customerMobile, {
     enabled: !!customerMobile,
   });
+  const {
+    promotion, isEligible, isLoading: isLoadingEligibility,
+  } = useNectorCheckoutInfo(customerMobile, payableTotal, {
+    // Only worth checking once there's a real, priced total to check
+    // against and a coin balance actually worth checking for.
+    enabled: !!customerMobile && isFound && balance > 0 && (payableTotal ?? 0) > 0,
+  });
 
-  const maxClaimable = Math.max(0, Math.min(balance, Math.floor(payableTotal ?? 0)));
+  const claimableAmount = Number(promotion?.fiat_value) || 0;
   const hasPromoApplied = appliedPromos.length > 0;
   const isApplied = redeemedCoins > 0;
 
@@ -54,10 +68,6 @@ export default function LucraCoinsSection({ payableTotal, isPricing = false }) {
       </section>
     );
   }
-
-  // Not enrolled, or a real balance of zero — hidden rather than shown as
-  // "0 Coins available" (same as the profile page's LucraCoinsCard).
-  if (!isFound || balance <= 0) return null;
 
   return (
     <section className="flex flex-col gap-3 rounded-xl border border-border bg-gradient-to-br from-amber-50 to-card p-5 shadow-sm">
@@ -87,20 +97,28 @@ export default function LucraCoinsSection({ payableTotal, isPricing = false }) {
         <p className="text-xs text-muted-foreground">
           Remove the applied promo code before redeeming Lucira Coins.
         </p>
-      ) : maxClaimable <= 0 ? (
+      ) : !isFound ? (
+        <p className="text-xs text-muted-foreground">Not enrolled in Lucira Coins yet.</p>
+      ) : (payableTotal ?? 0) <= 0 ? (
         <p className="text-xs text-muted-foreground">
           {isPricing
             ? 'Still pricing your cart — coins can be applied once that’s done.'
             : 'Add items to your cart to redeem Lucira Coins.'}
         </p>
+      ) : isLoadingEligibility ? (
+        <p className="text-xs text-muted-foreground">Checking what’s redeemable on this order…</p>
+      ) : !isEligible ? (
+        <p className="text-xs text-muted-foreground">
+          Not redeemable on this order yet — add more to your cart to unlock a discount.
+        </p>
       ) : (
         <div className="flex items-center justify-between gap-2">
           <p className="text-xs text-muted-foreground">
-            Claimable on this order: {maxClaimable.toLocaleString('en-IN')} Coins
+            {promotion?.title || `Redeem for ₹${claimableAmount.toLocaleString('en-IN')} off`}
           </p>
           <Button
             type="button"
-            onClick={() => applyLoyaltyCoins(maxClaimable)}
+            onClick={() => applyLoyaltyCoins(claimableAmount)}
             className="h-9 shrink-0"
           >
             Apply Coins
