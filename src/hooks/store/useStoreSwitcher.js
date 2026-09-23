@@ -6,7 +6,6 @@
 import { useCallback } from 'react';
 import { useDispatch } from 'react-redux';
 import { useRouter } from 'next/navigation';
-import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-toastify';
 
 import { useActiveStore } from '@/hooks/store/useActiveStore';
@@ -19,15 +18,23 @@ import TOAST from '@/constants/toastMessages';
  * Handles mid-session store switching.
  * On switch:
  *   1. Clears the cart (SEC-003 — removes customer PII from persisted state)
- *   2. Updates active store in Redux via useActiveStore
- *   3. Invalidates all TanStack Query cache (store-scoped data must refetch)
- *   4. Shows a success toast with the new store name
- *   5. Redirects to /dashboard of the newly selected store
+ *   2. Updates active store in Redux + invalidates store-scoped query cache
+ *      (both handled inside useActiveStore.switchStore — see its own header
+ *      for why cache invalidation lives there and not here)
+ *   3. Shows a success toast with the new store name
+ *   4. Redirects to /dashboard of the newly selected store
+ *
+ * FIXED 2026-09-23 (reported: "switching stores takes a lot of time") — this
+ * used to ALSO call a second, unfiltered queryClient.invalidateQueries()
+ * after switchStore(), which had already done its own correctly-scoped
+ * invalidation. That second call was redundant AND undid switchStore's own
+ * protection of the two caches confirmed store-agnostic (the shared catalog
+ * sweep, Shopify images) — forcing the ~15-20s catalog re-sweep on every
+ * single header store-switch, on top of switchStore's own (correct) work.
  */
 export function useStoreSwitcher() {
   const dispatch = useDispatch();
   const { switchStore, activeStoreId } = useActiveStore();
-  const queryClient = useQueryClient();
   const router = useRouter();
 
   const handleSwitchStore = useCallback(async (store) => {
@@ -42,13 +49,11 @@ export function useStoreSwitcher() {
 
     await switchStore(store);
 
-    await queryClient.invalidateQueries();
-
     const storeName = store.mailing_name ?? 'store';
     toast.success(TOAST.STORE.SWITCHED(storeName));
 
     router.replace('/dashboard');
-  }, [activeStoreId, dispatch, switchStore, queryClient, router]);
+  }, [activeStoreId, dispatch, switchStore, router]);
 
   return { handleSwitchStore };
 }

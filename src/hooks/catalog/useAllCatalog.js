@@ -46,10 +46,19 @@ const selectIsAuthenticated = (state) => state.auth.isAuthenticated;
  * @param {number|null} storeId - The store to filter the shared catalog to.
  *   Defaults to the Redux activeStoreId when not provided.
  *   Pass an explicit storeId to support the local catalog store switcher.
- * @param {{ enabled?: boolean }} [options] - `enabled` defaults to true; pass
- *   false to defer the fetch (e.g. until the caller actually needs search).
+ * @param {{ enabled?: boolean, showOutOfStock?: boolean }} [options]
+ *   `enabled` defaults to true; pass false to defer the fetch (e.g. until
+ *   the caller actually needs search).
+ *   `showOutOfStock` (default false) — CONFIRMED LIVE 2026-09-23: the fast
+ *   sweep this hook uses by default never contains an out-of-stock item at
+ *   all, so the operator's "Show Out of Stock" toggle had no effect on text
+ *   search no matter what. Pass true only once that toggle is actually on
+ *   (see catalog/page.jsx) — it's a genuinely separate, much larger pool
+ *   (own cache key, see QUERY_KEYS.CATALOG.ALL_SHARED), not a client-side
+ *   filter over the same data. Every other caller (AppShell's background
+ *   warmup, useSimilarProducts) omits it and stays on the fast default.
  */
-export function useAllCatalog(storeId, { enabled = true } = {}) {
+export function useAllCatalog(storeId, { enabled = true, showOutOfStock = false } = {}) {
   const isAuthenticated = useSelector(selectIsAuthenticated);
   const [loadedCount, setLoadedCount] = useState(0);
 
@@ -58,11 +67,11 @@ export function useAllCatalog(storeId, { enabled = true } = {}) {
     // `storeId` here only SEEDS the request payload (any real company_id
     // works — see catalogService's own header) since this result is shared
     // across every store; it does not scope what comes back.
-    return getAllProducts(storeId, setLoadedCount);
-  }, [storeId]);
+    return getAllProducts(storeId, setLoadedCount, showOutOfStock);
+  }, [storeId, showOutOfStock]);
 
   const query = useQuery({
-    queryKey:  QUERY_KEYS.CATALOG.ALL_SHARED(),
+    queryKey:  QUERY_KEYS.CATALOG.ALL_SHARED(showOutOfStock),
     queryFn,
     select:    useCallback((allProducts) => allProducts.filter((p) => belongsToStore(p, storeId)), [storeId]),
     enabled:   isAuthenticated && !!storeId && enabled,

@@ -65,7 +65,11 @@ export const QUERY_KEYS = {
   // ── CATALOG (Live store inventory) ────────────────────────────────────────
   CATALOG: {
     PRODUCTS:              (params)  => ['catalog', 'products', params],
-    ALL_SHARED:            () => ['catalog', 'all', 'shared'],
+    // showOutOfStock varies the key — it's a genuinely different, much
+    // larger pool (all tenant master records vs. the fast in-stock-only
+    // sweep), not a client-side filter over the same data; caching them
+    // under one key would let one silently overwrite the other.
+    ALL_SHARED:            (showOutOfStock = false) => ['catalog', 'all', 'shared', showOutOfStock],
     SKU_SEARCH:            (query, storeId) => ['catalog', 'sku-search', query, storeId],
     CATEGORY_SEARCH:       (typeIds, storeId) => ['catalog', 'category-search', typeIds, storeId],
     STOCK_BY_STORES:       (itemId)  => ['catalog', 'stock-by-stores', itemId],

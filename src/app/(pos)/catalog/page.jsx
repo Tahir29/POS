@@ -209,41 +209,75 @@ function CatalogScreen() {
     isLoading:   allLoading,
     isSuccess:   allReady,
     isError:     allError,
-  } = useAllCatalog(effectiveStoreId, { enabled: hasSearched });
+  // showOutOfStock (2026-09-23) — without this, the toggle had zero effect
+  // on text search: the shared sweep never contained an out-of-stock item
+  // regardless of what the operator picked. See useAllCatalog's own header
+  // for the separate, larger pool this switches to (own cache key, only
+  // fetched once the operator actually turns the toggle on).
+  } = useAllCatalog(effectiveStoreId, { enabled: hasSearched, showOutOfStock });
 
   const {
     data: skuResults = [],
     isLoading: skuLoading,
   } = useSkuSearch(isSearchMode && !allReady ? searchQuery : '', effectiveStoreId);
 
-  // Category-name matches for the interim pre-index result set — useSkuSearch
-  // only ever matches item_code. Categories load fast/independently of the
-  // slow full-catalog scan, so this resolves immediately even on a store
-  // with thousands of items still indexing.
-  const interimMatchingTypeIds = useMemo(
-    () => (isSearchMode && !allReady ? getMatchingTypeIds(searchQuery, categories) : []),
-    [isSearchMode, allReady, searchQuery, categories],
+  // Category-name matches — originally only an interim pre-index result set
+  // (useSkuSearch only ever matches item_code; categories load fast/
+  // independently of the slow full-catalog scan, so this resolves
+  // immediately even on a store with thousands of items still indexing).
+  // FIXED 2026-09-23 — kept enabled permanently, not just pre-index. This is
+  // a direct, server-side type_ids-scoped query (see useCategoryNameSearch's
+  // own header) — reliable and COMPLETE even for a rare category, unlike
+  // allProducts once showOutOfStock is on: that sweep is capped (see
+  // useAllCatalog's own header) and confirmed live to miss real items deep
+  // in the raw tenant order (one of two known real out-of-stock items in a
+  // rare category sat past the cap). Previously this got thrown away the
+  // moment the full sweep finished, so a correctly-found item could visibly
+  // disappear once loading completed — now merged into the final result
+  // below instead of being discarded.
+  const matchingTypeIds = useMemo(
+    () => (isSearchMode ? getMatchingTypeIds(searchQuery, categories) : []),
+    [isSearchMode, searchQuery, categories],
   );
   const {
     data: categoryNameResults = [],
     isLoading: categoryNameLoading,
-  } = useCategoryNameSearch(interimMatchingTypeIds, effectiveStoreId, isSearchMode && !allReady);
+  } = useCategoryNameSearch(matchingTypeIds, effectiveStoreId, isSearchMode);
 
   // UNSORTED — same reason as rawBrowseProducts above.
   const searchResults = useMemo(() => {
     if (!isSearchMode) return [];
+
+    // categoryNameResults always includes out-of-stock rows regardless of
+    // the toggle (useCategoryNameSearch's own query hardcodes
+    // show_out_of_stock:true — it needs the complete category, then this
+    // re-applies the operator's actual choice), and is scoped to the active
+    // category chip too, matching what applySearchFilterOnly/
+    // applyBasicFilterOnly already enforce on the other source.
+    const categoryNameMatches = categoryNameResults
+      .filter((p) => showOutOfStock || isInStock(p))
+      .filter((p) => !activeCategoryId || p.type_id === activeCategoryId);
+
     if (allReady) {
-      return applySearchFilterOnly(allProducts, {
+      const swept = applySearchFilterOnly(allProducts, {
         searchQuery,
         activeCategoryId,
         showOutOfStock,
         categories,           // ← passed so category name matching works
       });
+      // FIXED 2026-09-23 — merge in rather than replace: allProducts' own
+      // sweep can be missing a real match (see this file's own comment on
+      // matchingTypeIds above), so a reliable category-name match must
+      // never be dropped just because the (necessarily capped) sweep
+      // finished loading.
+      const seen = new Set(swept.map((p) => p.item_id));
+      const extra = categoryNameMatches.filter((p) => !seen.has(p.item_id));
+      return [...swept, ...extra];
     }
     // Full catalog still loading — show what the fast SKU + category-name
     // paths have so far, deduped (a query can match both).
     const seen = new Set();
-    const merged = [...skuResults, ...categoryNameResults].filter((p) => {
+    const merged = [...skuResults, ...categoryNameMatches].filter((p) => {
       if (seen.has(p.item_id)) return false;
       seen.add(p.item_id);
       return true;

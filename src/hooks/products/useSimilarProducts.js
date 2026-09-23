@@ -97,8 +97,20 @@ export function useSimilarProducts(product, storeId, { limit = 12, enabled = tru
 
     const pool = catalog.filter((p) => p.item_id !== currentId);
 
-    const sameSubType = subTypeId != null
-      ? pool.filter((p) => p.sub_type_id === subTypeId).sort(byCloseness)
+    // CONFIRMED LIVE 2026-09-23 (real console capture) — sub_type_id is NOT
+    // a globally unique category: it's only meaningful WITHIN its own
+    // type_id (e.g. sub_type_id 2 means something different under Earrings
+    // than under Bracelets). Filtering on sub_type_id alone matched a
+    // bracelet and an earring to the exact same 589-item pool — this tier
+    // must also require type_id to match, or it silently pulls in whatever
+    // type happens to dominate the catalog (Earrings/Rings here) for any
+    // product whose sub_type_id number coincidentally collides with one of
+    // theirs, regardless of actual category. This was the real cause of
+    // "different categories show the same similar-products set" — the
+    // earlier VirtuosoGrid computeItemKey fix was a real, separate bug
+    // (stale per-card state from item recycling) but did not fix this one.
+    const sameSubType = subTypeId != null && typeId != null
+      ? pool.filter((p) => p.sub_type_id === subTypeId && p.type_id === typeId).sort(byCloseness)
       : [];
 
     const sameTypeOnly = typeId != null

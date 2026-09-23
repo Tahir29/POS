@@ -34,13 +34,30 @@ export function useActiveStore() {
   /**
    * Switches the active store context.
    *
-   * Clears the TanStack Query cache here rather than leaving it to the
+   * Invalidates the TanStack Query cache here rather than leaving it to the
    * caller — the previous contract ("handled by the component initiating
    * the switch") was never actually honored by StoreSelectionGrid, the only
    * real caller, so every store-scoped query not keyed by store id (schemes
    * list, payment modes, sales persons, financial year/document config, ...)
    * kept serving the PREVIOUS store's cached data after a switch. Doing it
    * here means it can't be forgotten by a future caller either.
+   *
+   * FIXED 2026-09-23 (reported: "switching stores takes a lot of time") —
+   * this used to be queryClient.clear(), which wipes EVERYTHING, including
+   * caches explicitly confirmed store-agnostic: the shared tenant-wide
+   * catalog sweep (useAllCatalog — current_company_id doesn't even scope
+   * that endpoint, the exact same ~2,699-item pool comes back regardless of
+   * store, see catalogService's own header) and Shopify product images.
+   * Throwing those away on every switch forced a full ~15-20s re-sweep
+   * purely because the operator picked a different store, even though nothing
+   * about that data had actually changed. invalidateQueries with a predicate
+   * keeps the original safety guarantee (anything NOT explicitly excluded
+   * still gets invalidated, so a future store-scoped-but-unkeyed query still
+   * can't slip through) while sparing the two caches already proven safe to
+   * keep. It also only forces an immediate refetch for ACTIVE queries;
+   * inactive ones are marked stale and refetch on next use, same as any
+   * normal invalidation — clear() forced every one of them to reload right
+   * now, active or not.
    *
    * Also switches OrnaVerse's own SESSION company (storeService.switchCompany)
    * before touching local state — confirmed live 2026-09-15 that several
@@ -54,7 +71,16 @@ export function useActiveStore() {
    */
   const switchStore = useCallback(async (store) => {
     await switchCompany(store.company_id);
-    queryClient.clear();
+    queryClient.invalidateQueries({
+      predicate: (query) => {
+        const key = query.queryKey;
+        // The two confirmed store-agnostic caches — see this function's own
+        // comment above for why these specifically are safe to keep.
+        if (key[0] === 'catalog' && key[1] === 'all' && key[2] === 'shared') return false;
+        if (key[0] === 'shopify') return false;
+        return true;
+      },
+    });
     dispatch(
       setActiveStore({
         storeId: store.company_id,
