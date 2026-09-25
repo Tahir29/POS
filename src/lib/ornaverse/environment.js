@@ -1,1 +1,1 @@
-export const ACTIVE_ENV = 'UAT'; // 'LIVE' | 'UAT'
+export const ACTIVE_ENV = 'LIVE'; // 'LIVE' | 'UAT'
