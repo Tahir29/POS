@@ -210,7 +210,12 @@ function CatalogScreen() {
     isLoading:   allLoading,
     isSuccess:   allReady,
     isError:     allError,
-  } = useAllCatalog(effectiveStoreId, { enabled: hasSearched });
+  // showOutOfStock (2026-09-23) — without this, the toggle had zero effect
+  // on text search: the shared sweep never contained an out-of-stock item
+  // regardless of what the operator picked. See useAllCatalog's own header
+  // for the separate, larger pool this switches to (own cache key, only
+  // fetched once the operator actually turns the toggle on).
+  } = useAllCatalog(effectiveStoreId, { enabled: hasSearched, showOutOfStock });
 
   const {
     data: skuResults = [],

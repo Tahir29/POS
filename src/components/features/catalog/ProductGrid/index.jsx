@@ -153,6 +153,18 @@ export default function ProductGrid({
       overscan={OVERSCAN_PX}
       listClassName={GRID_CLASSNAME}
       rangeChanged={onRangeChanged}
+      // FIXED 2026-09-23 (reported: "View Similar shows the previous
+      // product's results no matter which card you open it from") — this
+      // had no computeItemKey at all, so Virtuoso's own item recycling kept
+      // whichever DOM/component instance a given grid slot already had and
+      // just handed it new props, INCLUDING every ProductCard's own local
+      // hook state (isSimilarOpen, and useSimilarProducts' memoized match
+      // list riding along with it) — a slot that had shown one product's
+      // "similar" sheet open could get recycled into a completely different
+      // product without React ever treating it as a fresh mount. Keying by
+      // the real item_id forces a genuine remount whenever a slot's product
+      // identity actually changes, instead of silently reusing stale state.
+      computeItemKey={(index) => products[index]?.item_id ?? index}
       endReached={() => {
         if (hasMore && !isFetchingMore) onLoadMore();
       }}

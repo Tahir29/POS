@@ -476,10 +476,23 @@ export async function getProducts(params) {
  * @returns {Promise<object[]>} ProductCatalogRow[], UNFILTERED by store —
  *   callers apply belongsToStore(entity, storeId) themselves
  */
-async function fetchEntireStoreCatalog(seedCompanyId, onProgress) {
+// showOutOfStock (2026-09-23) — CONFIRMED LIVE: hardcoding false here made
+// the "Show Out of Stock" toggle silently do nothing for text search (only
+// category-CHIP browsing, via getProducts above, actually threads the
+// toggle through) — an item with zero stock everywhere can never surface no
+// matter what the operator does, since this pool never contains it in the
+// first place. Kept `false` as the default (unaffected callers: AppShell's
+// background warmup, useSimilarProducts) — only catalog/page.jsx's search
+// passes `true`, and only once the operator has actually turned the toggle
+// on, so the fast ~2,699-item path stays the default in every other case.
+// ponytail: SAFETY_MAX_PAGES_OOS bounds this to the first ~48,000 tenant
+// records (not the full ~106,130) — a real result can still be missed if
+// it sits past that in the raw ordering; raise the ceiling if that's ever
+// reported, trading more worst-case latency for completeness.
+async function fetchEntireStoreCatalog(seedCompanyId, onProgress, showOutOfStock = false) {
   const PAGE_SIZE = 24; // the server's real hard cap, confirmed by direct testing
   const CONCURRENCY = 6;
-  const SAFETY_MAX_PAGES = 500; // ~12,000 items — generous ceiling against a runaway loop
+  const SAFETY_MAX_PAGES = showOutOfStock ? 2000 : 500; // ~48,000 items (OOS) vs ~12,000 (default) — generous ceiling against a runaway loop
 
   const all = [];
   // Tracks item_ids already collected. A short/empty page is the expected
@@ -511,11 +524,15 @@ async function fetchEntireStoreCatalog(seedCompanyId, onProgress) {
             current_company_id: seedCompanyId,
             Take: PAGE_SIZE,
             Skip: s,
-            // FIXED 2026-09-09 — was `true`. See this function's header for
-            // the confirmed-live measurement: this cuts the real, tenant-wide
-            // TotalCount from 106,130 to 2,699 (~40x), which is the actual
-            // fix for the reported 5-10 minute search-indexing delay.
-            show_out_of_stock: false,
+            // FIXED 2026-09-09 — was unconditionally `true`, then hardcoded
+            // `false` (see this function's header for the confirmed-live
+            // measurement: `false` cuts the real, tenant-wide TotalCount
+            // from 106,130 to 2,699, ~40x, the actual fix for the reported
+            // 5-10 minute search-indexing delay). Now the real toggle value
+            // for the one caller that opts in (see this function's own
+            // 2026-09-23 header note) — every other caller still gets the
+            // fast `false` default, unchanged.
+            show_out_of_stock: showOutOfStock,
           })
           .then((res) => res.data?.Entities ?? [])
       )
@@ -598,11 +615,13 @@ export function belongsToStore(entity, storeId) {
  * @param {number} seedCompanyId — any real company_id; seeds the request
  *   payload only, does not scope the result (see above)
  * @param {(loaded: number) => void} [onProgress]
+ * @param {boolean} [showOutOfStock] — see fetchEntireStoreCatalog's own
+ *   header; default false keeps every existing caller on the fast path.
  * @returns {Promise<object[]>} ProductCatalogRow[], unfiltered by store
  */
-export async function getAllProducts(seedCompanyId, onProgress) {
+export async function getAllProducts(seedCompanyId, onProgress, showOutOfStock = false) {
   // Unpriced — see the PRICING note above.
-  return fetchEntireStoreCatalog(seedCompanyId, onProgress);
+  return fetchEntireStoreCatalog(seedCompanyId, onProgress, showOutOfStock);
 }
 
 /**
