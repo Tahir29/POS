@@ -101,6 +101,7 @@ function FetchingSpinner() {
  *   onLoadMore:      () => void,
  *   onClearFilters:  () => void,
  *   prioritizeFirstRow?: boolean,
+ *   onRangeChanged?: (range: { startIndex: number, endIndex: number }) => void,
  * }} props
  *   storeCode - overrides ProductCard's default "In Stock" store code
  *   (activeStoreCode) with the store this grid is actually showing, since
@@ -122,6 +123,7 @@ export default function ProductGrid({
   onLoadMore,
   onClearFilters,
   prioritizeFirstRow = true,
+  onRangeChanged,
 }) {
   // Lazy-initialized, not an effect: by the time this component's function
   // body runs on the client (fresh mount or hydration), the browser has
@@ -150,6 +152,7 @@ export default function ProductGrid({
       totalCount={products.length}
       overscan={OVERSCAN_PX}
       listClassName={GRID_CLASSNAME}
+      rangeChanged={onRangeChanged}
       endReached={() => {
         if (hasMore && !isFetchingMore) onLoadMore();
       }}
