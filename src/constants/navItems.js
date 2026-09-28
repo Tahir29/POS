@@ -41,8 +41,8 @@ export const NAV_ITEMS = [
   // { label: 'Custom',   href: '/custom',   icon: Columns3Cog },
   { label: 'Customers',    href: '/customers',    icon: Users           },
   { label: 'Schemes',      href: '/schemes',      icon: BookOpen        },
-  // ADDED 2026-09-08 — our own walk-in log (see lib/mongo/walkins.js's
-  // header for why this exists instead of an OrnaVerse endpoint).
+  // ADDED 2026-09-08, rebuilt on live OrnaVerse CRM data 2026-09-28 (no
+  // local DB) — see app/(pos)/walkins/page.jsx's own header.
   { label: 'Walk-ins',     href: '/walkins',      icon: Footprints      },
 ];
 

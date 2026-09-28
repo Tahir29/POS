@@ -144,7 +144,7 @@ const RAW_EVENTS = {
   CUSTOMER_CREATED:      'customer_created',
   CUSTOMER_DETACHED:     'customer_detached',
   // Fires from useWalkInLookup.js the moment OrnaVerse reports a real
-  // walk-in match (found: true) — see lib/mongo/walkins.js.
+  // walk-in match (found: true).
   WALKIN_RECORDED:       'walkin_recorded',
 
   CLICK:                 'click',

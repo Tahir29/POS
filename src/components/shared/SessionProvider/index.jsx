@@ -11,17 +11,40 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useSelector, useDispatch } from 'react-redux';
+import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-toastify';
 
-import { selectCartCustomerId }  from '@/store/slices/cartSlice';
-import { selectIsAuthenticated } from '@/store/slices/authSlice';
+import { selectCartCustomerId, selectCartCustomerName }  from '@/store/slices/cartSlice';
+import { selectIsAuthenticated, selectAuthUser } from '@/store/slices/authSlice';
 import { selectActiveStoreId, selectActiveStoreName } from '@/store/slices/storeSlice';
 import { detachCustomer, clearCart } from '@/store/slices/cartSlice';
 import { useAuth } from '@/hooks/auth/useAuth';
 
 import tracker from '@/lib/analytics/tracker';
 import EVENTS  from '@/lib/analytics/events';
+import { getPageType } from '@/lib/analytics/pageType';
+import { QUERY_KEYS } from '@/constants/queryKeys';
 import APP_CONFIG from '@/constants/appConfig';
+
+// A bare item id in a /products/:id path isn't memorable in a console/report
+// (reported directly) — pull the product's own name/sku off whatever
+// useProductDetail(itemId) already has cached (react-query, same query key),
+// no extra fetch. Returns {} off a product page or before that query has
+// resolved — CLICK still fires either way, just without these extra fields.
+const PRODUCT_PATH_RE = /^\/products\/(\d+)/;
+function readCachedProductContext(queryClient, pathname) {
+  const match = pathname?.match(PRODUCT_PATH_RE);
+  if (!match) return {};
+  const itemId = Number(match[1]);
+  const item = queryClient.getQueryData(QUERY_KEYS.ITEMS.DETAIL(itemId))?.data?.Entity;
+  if (!item) return { product_id: itemId };
+  return {
+    product_id:   item.item_id ?? itemId,
+    product_name: item.item_name ?? null,
+    product_sku:  item.item_code ?? null,
+    product_category: item.type_name ?? null,
+  };
+}
 
 const ACTIVITY_EVENTS = [
   'mousedown', 'mousemove', 'keydown',
@@ -32,10 +55,13 @@ export default function SessionProvider({ children }) {
   const pathname        = usePathname();
   const router          = useRouter();
   const dispatch        = useDispatch();
+  const queryClient     = useQueryClient();
   const { logout }      = useAuth();
 
   const isAuthenticated = useSelector(selectIsAuthenticated);
+  const authUser        = useSelector(selectAuthUser);
   const customerId      = useSelector(selectCartCustomerId);
+  const customerName    = useSelector(selectCartCustomerName);
   const activeStoreId   = useSelector(selectActiveStoreId);
   const activeStoreName = useSelector(selectActiveStoreName);
   const isCustomerActive = isAuthenticated && !!customerId;
@@ -123,13 +149,14 @@ export default function SessionProvider({ children }) {
       // here. Distinct from the AGENT_LOGOUT event logout() fires next — this
       // one records why (idle timeout) the logout is happening.
       tracker.trackAgent(EVENTS.AGENT_IDLE_LOGOUT, {
+        username:  authUser?.username,
         timeoutMs: APP_CONFIG.SESSION.STAFF_IDLE_TIMEOUT_MS,
         storeId:   activeStoreId,
         storeName: activeStoreName,
       });
       logout();
     }, APP_CONFIG.SESSION.STAFF_IDLE_TIMEOUT_MS);
-  }, [isAuthenticated, clearStaffIdleTimers, logout, activeStoreId, activeStoreName]);
+  }, [isAuthenticated, clearStaffIdleTimers, logout, activeStoreId, activeStoreName, authUser]);
 
   // Start/stop staff idle timer based on auth state
   useEffect(() => {
@@ -162,8 +189,9 @@ export default function SessionProvider({ children }) {
     lastPathRef.current = pathname;
 
     tracker.track(EVENTS.PAGE_VIEW, {
-      path:  pathname,
-      title: typeof document !== 'undefined' ? document.title : '',
+      path:     pathname,
+      title:    typeof document !== 'undefined' ? document.title : '',
+      pageType: getPageType(pathname),
     });
   }, [pathname, isAuthenticated]);
 
@@ -186,17 +214,19 @@ export default function SessionProvider({ children }) {
       if (!target) return;
 
       tracker.track(EVENTS.CLICK, {
-        tag:       target.tagName,
-        text:      (target.textContent ?? '').trim().slice(0, 50),
-        ariaLabel: target.getAttribute('aria-label') ?? null,
-        path:      pathname,
-        id:        target.id || null,
-      });
+        tag:        target.tagName,
+        text:       (target.textContent ?? '').trim().slice(0, 50),
+        ariaLabel:  target.getAttribute('aria-label') ?? null,
+        path:       pathname,
+        id:         target.id || null,
+        customerId: customerId ?? null,
+        ...readCachedProductContext(queryClient, pathname),
+      }, customerName ? { customer_name: customerName } : {});
     };
 
     document.addEventListener('click', handleClick, { passive: true, capture: true });
     return () => document.removeEventListener('click', handleClick, { capture: true });
-  }, [isAuthenticated, pathname]);
+  }, [isAuthenticated, pathname, queryClient, customerId, customerName]);
 
   return children;
 }

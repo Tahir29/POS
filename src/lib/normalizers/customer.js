@@ -365,3 +365,62 @@ export function normalizeWalkInCustomer(entity) {
     visitCount:       Array.isArray(entity.customer_visits) ? entity.customer_visits.length : 0,
   };
 }
+
+/**
+ * A single real visit record — from Services/CRM/CustomerVisits/List
+ * (CONFIRMED LIVE 2026-09-28), replacing the old Mongo-backed walkins_POS
+ * log entirely. Flat rows (no nested arrays), already store-scoped by the
+ * caller's EqualityFilter — see crmService.js's getCustomerVisits.
+ */
+export function normalizeCrmVisit(entity) {
+  if (!entity) return null;
+  return {
+    visitId:      entity.id,
+    leadId:       entity.customer_id,
+    customerName: entity.customer_name?.trim() || null,
+    mobile:       entity.mobile ?? null,
+    email:        entity.email && entity.email !== 'NA' ? entity.email : null,
+    visitedAt:    entity.date ?? null,
+    companyName:  entity.company_name ?? null,
+    companyCode:  entity.company_code ?? null,
+    source:       entity.source ?? null,
+    notes:        entity.notes ?? null,
+  };
+}
+
+/**
+ * Full CRM lead detail — from Services/CRM/Customer/List, the same table
+ * WalkIn/Register writes into (see crmService.js's own header). Same
+ * customer_id identity space as normalizeWalkInCustomer above — never a
+ * party_id.
+ */
+export function normalizeCrmLead(entity) {
+  if (!entity) return null;
+
+  const name = [entity.first_name, entity.last_name].filter(Boolean).join(' ').trim();
+
+  return {
+    leadId:      entity.customer_id,
+    // CONFIRMED LIVE 2026-09-28: this table is the tenant's FULL CRM
+    // history (3,926 rows, unfiltered), not just open walk-in leads — most
+    // rows already carry a party_id, meaning they're a real, already-created
+    // billing customer, not someone still waiting to be converted. Carried
+    // through so useCrmLeads.js can filter to genuinely open leads only.
+    partyId:     entity.party_id ?? null,
+    name:        name || null,
+    mobile:      entity.mobile ?? null,
+    phone:       entity.phone && entity.phone !== 'NA' ? entity.phone : null,
+    email:       entity.email && entity.email !== 'NA' ? entity.email : null,
+    budget:      entity.budget || null,
+    sourceId:    entity.source_id || null,
+    // type_id array — same master as the catalog's own category filter.
+    interestTypeIds: Array.isArray(entity.interest)
+      ? entity.interest.map((i) => (typeof i === 'object' ? i.type_id : i)).filter((id) => id != null)
+      : [],
+    notes:       entity.notes ?? null,
+    isDisabled:  !!entity.is_disabled,
+    createdAt:   entity.creation_date ?? null,
+    visitCount:  Array.isArray(entity.customer_visits) ? entity.customer_visits.length : 0,
+    raw:         entity,
+  };
+}
