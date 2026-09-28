@@ -52,9 +52,9 @@ export function useAuth() {
     // old flow needed two for (an OAuth token, plus a separate cookie
     // session for printing): there's only one session, and it's the real
     // person's.
-    const { username: signedInAs } = await loginToOrnaverse(username, password);
+    const { username: signedInAs, isSuperAdmin } = await loginToOrnaverse(username, password);
 
-    dispatch(setAuthenticated({ username: signedInAs }));
+    dispatch(setAuthenticated({ username: signedInAs, isSuperAdmin }));
 
     // Store context is session-specific — never trust a store id persisted
     // from a previous login. Without this, a stale activeStoreId survives

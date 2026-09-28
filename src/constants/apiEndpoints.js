@@ -104,6 +104,7 @@ const API = {
   // WALK-IN
   // ─────────────────────────────────────────────────────────────────────────
   WALKIN: {
+    REGISTER: 'Services/POS/WalkIn/Register',
     LOOKUP: 'Services/POS/WalkIn/Lookup',
   },
 
