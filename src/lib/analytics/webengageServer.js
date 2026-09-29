@@ -93,17 +93,22 @@ function shapeEventData(properties) {
   return { topLevel, nested };
 }
 
-// 'POS_ORDER_PLACED' -> 'Order_Placed'. Derived from the existing EVENTS
-// naming convention (SCREAMING_SNAKE_CASE, POS_-prefixed) so every one of
-// the app's existing event constants maps to a WebEngage event_type
-// automatically — no per-event mapping table to keep in sync.
+// 'POS_order_placed' -> 'order_placed'. Derived from the app's real EVENTS
+// constant VALUES (lowercase snake_case, POS_-prefixed — see events.js's
+// RAW_EVENTS) so every one of the app's existing event constants maps to a
+// WebEngage event_type automatically — no per-event mapping table to keep
+// in sync.
+//
+// Deliberately lowercase (2026-09-29, explicit direction) — a brief attempt
+// to Title_Case this (matching an earlier, inaccurate comment here) was
+// reverted; lowercase is the preferred, intentional convention going forward.
 function toEventType(eventName) {
   return String(eventName)
     .replace(/^POS_/, '')
     .split('_')
     .filter(Boolean)
-    .map((word) => word.charAt(0) + word.slice(1).toLowerCase())
-    .join('_') || 'Unknown';
+    .map((word) => word.toLowerCase())
+    .join('_') || 'unknown';
 }
 
 async function postEvent(body) {

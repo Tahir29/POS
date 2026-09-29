@@ -51,6 +51,30 @@ const ACTIVITY_EVENTS = [
   'scroll', 'touchstart', 'pointerdown', 'click',
 ];
 
+// Every click across the whole app funnels through ONE handler below, so
+// WebEngage's own event_type came back as a flat "click" no matter what was
+// actually tapped (reported directly — "I clicked catalog, event_type was
+// just Click"). Derives a specific, readable event_type from whatever label
+// the clicked element actually has — "Catalog" -> "catalog_clicked" — same
+// lowercase_with_underscores convention webengageServer.js's toEventType()
+// uses for every other event (explicit direction, 2026-09-29), so this
+// reads consistently next to them in the WebEngage panel. Passed as an
+// explicit `event_type` property (see track() below), which OVERRIDES the
+// generic one toEventType() would otherwise derive from the shared
+// EVENTS.CLICK name — GA4 is unaffected, it still gets the one stable
+// "POS_click" event name either way, just with this as an extra parameter.
+function deriveClickEventType(label) {
+  const words = String(label ?? '')
+    .replace(/[^a-zA-Z0-9]+/g, ' ')
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 6); // keep it readable — a long button sentence doesn't need to survive whole
+  if (!words.length) return 'element_clicked';
+  return `${words.join('_')}_clicked`;
+}
+
 export default function SessionProvider({ children }) {
   const pathname        = usePathname();
   const router          = useRouter();
@@ -213,10 +237,16 @@ export default function SessionProvider({ children }) {
       );
       if (!target) return;
 
+      const text = (target.textContent ?? '').trim().slice(0, 50);
+      const ariaLabel = target.getAttribute('aria-label') ?? null;
+
       tracker.track(EVENTS.CLICK, {
+        // Overrides the generic "Click" WebEngage would otherwise derive
+        // from EVENTS.CLICK alone — see deriveClickEventType's own comment.
+        event_type: deriveClickEventType(ariaLabel || text || target.id),
         tag:        target.tagName,
-        text:       (target.textContent ?? '').trim().slice(0, 50),
-        ariaLabel:  target.getAttribute('aria-label') ?? null,
+        text,
+        ariaLabel,
         path:       pathname,
         id:         target.id || null,
         customerId: customerId ?? null,
