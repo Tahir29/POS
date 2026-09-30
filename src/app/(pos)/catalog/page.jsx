@@ -812,7 +812,17 @@ function CatalogScreen() {
             </p>
             {otherStores.map((store) => (
               <OtherStoreSection
-                key={`${store.company_id}-${effectiveStoreId}-${activeCategoryId ?? 'all'}-${showOutOfStock}`}
+                // No effectiveStoreId here on purpose (reported directly,
+                // 2026-09-30: store switching was slow) — otherStores already
+                // filters OUT effectiveStoreId (see its own useMemo above),
+                // so every section's own store.company_id never changes when
+                // the operator's active store does. Including effectiveStoreId
+                // in this key anyway forced React to unmount/remount EVERY
+                // other-store section (not just a newly added/removed one) on
+                // every single switch, discarding each one's already-cached
+                // useCatalogProducts/useLiveCatalogPrices state and refiring
+                // their fetches from scratch for stores that hadn't changed.
+                key={`${store.company_id}-${activeCategoryId ?? 'all'}-${showOutOfStock}`}
                 store={store}
                 showOutOfStock={showOutOfStock}
                 categoryId={activeCategoryId}
