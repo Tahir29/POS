@@ -72,7 +72,8 @@ function CheckoutScreen() {
   const [salesPersonId, setSalesPersonId] = useState(null);
   const { salesPersons } = useSalesPersonOptions(activeStoreId);
   const salesPersonName = salesPersons.find((p) => p.employee_id === salesPersonId)?.employee_name ?? null;
-  const [panNumber, setPanNumber]   = useState(null);
+  const [panNumber, setPanNumber]     = useState(null);
+  const [panDocument, setPanDocument] = useState(null);
   const [isBackConfirmOpen, setIsBackConfirmOpen] = useState(false);
   const [isPaymentConfirmOpen, setIsPaymentConfirmOpen] = useState(false);
 
@@ -166,6 +167,7 @@ function CheckoutScreen() {
     totalAmount:  doc.amountDue,
     cartTotal:    doc.amountDue,
     panNumber,
+    panDocument,
     allowPartialPayment: documentType === 'order',
   }) : { success: true };
 
@@ -239,6 +241,7 @@ function CheckoutScreen() {
             key={customerId}
             totalAmount={payableTotal}
             onPanResolved={setPanNumber}
+            onPanDocumentResolved={setPanDocument}
           />
           <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
             <h2 className="text-sm font-bold text-foreground mb-2">

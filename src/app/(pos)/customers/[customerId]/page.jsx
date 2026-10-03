@@ -26,6 +26,7 @@ import { Button }   from '@/components/ui/button';
 import { Input }    from '@/components/ui/input';
 import { Label }    from '@/components/ui/label';
 import LocationSelect from '@/components/shared/LocationSelect';
+import PanDocumentUpload from '@/components/shared/PanDocumentUpload';
 import PillTabs from '@/components/shared/PillTabs';
 import EmptyState from '@/components/shared/EmptyState';
 import ErrorState from '@/components/shared/ErrorState';
@@ -300,6 +301,16 @@ function EditTab({ customer, onSaved }) {
         <Label htmlFor="ep_pan">PAN</Label>
         <Input id="ep_pan" {...register('pan_no')} className="h-11" style={{ textTransform: 'uppercase' }} />
         {errors.pan_no && <p className="text-sm text-destructive">{errors.pan_no.message}</p>}
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label>PAN Document</Label>
+        <PanDocumentUpload
+          customerId={customer.customerId}
+          customerName={customer.customerName}
+          originalRaw={raw}
+          savedPath={customer.customerPanDocument}
+        />
       </div>
 
       <div className="flex flex-col gap-1.5">
