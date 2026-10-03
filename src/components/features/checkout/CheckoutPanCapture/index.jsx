@@ -17,7 +17,7 @@
 // Edit tab) so the "on file" state refreshes for free after a save.
 
 import { useEffect, useState } from 'react';
-import { CheckCircle2, ShieldAlert } from 'lucide-react';
+import { CheckCircle2, IdCard, ShieldAlert } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import PanDocumentUpload from '@/components/shared/PanDocumentUpload';
@@ -111,7 +111,8 @@ export default function CheckoutPanCapture({ totalAmount, onPanResolved, onPanDo
   if (panOnFile) {
     return (
       <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
-        <h2 className="text-sm font-bold text-foreground mb-2">
+        <h2 className="text-sm font-bold text-foreground mb-2 flex items-center gap-1.5">
+          <IdCard size={16} className="text-accent shrink-0" aria-hidden="true" />
           PAN Details <span className="text-destructive">*</span>
         </h2>
         <p className="flex items-center gap-1.5 text-sm text-status-in-stock mb-3">
@@ -125,7 +126,8 @@ export default function CheckoutPanCapture({ totalAmount, onPanResolved, onPanDo
 
   return (
     <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
-      <h2 className="text-sm font-bold text-foreground mb-1">
+      <h2 className="text-sm font-bold text-foreground mb-1 flex items-center gap-1.5">
+        <IdCard size={16} className="text-accent shrink-0" aria-hidden="true" />
         PAN Details <span className="text-destructive">*</span>
       </h2>
       <p className="flex items-center gap-1.5 text-xs text-status-made-order mb-3">
