@@ -1,14 +1,5 @@
 'use client';
 
-// Full customer profile page — reached via "View Full Profile" from CustomerDetailSheet.
-//
-// TABS: Profile | Edit | Orders | Schemes | History | Points
-// DEFAULT TAB: Edit (so staff can immediately update customer details)
-// Edit form is pre-filled from Customer/Retrieve (full record, not list snapshot)
-//
-// Uses useRetrieveCustomer(partyId) — direct fetch by party_id.
-// No longer relies on useAllCustomers directory lookup (fragile, stale).
-
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -48,33 +39,9 @@ import { formatAmountOrDash } from '@/lib/priceUtils';
 import { formatDateNumeric } from '@/lib/dateUtils';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-// De-duplicated 2026-09-08 — fmt/fmtDate here were the same shape as
-// several other files' own copies; see lib/priceUtils.js's
-// formatAmountOrDash and lib/dateUtils.js's formatDateNumeric.
 const fmt = formatAmountOrDash;
 const fmtDate = formatDateNumeric;
-
-// REMOVED 2026-09-08 — a maskPan() used to live here, showing PAN as
-// "****1234" on the assumption OrnaVerse itself masks it on read.
-// Confirmed live against LIVE (Customer/Retrieve on several unrelated
-// party_ids) that it does NOT — full PAN comes back same as mobile/email.
-// customerPan is now shown as-is (see ProfileTab below) rather than
-// re-masked client-side for no real privacy benefit.
-
-// ── Tab config ────────────────────────────────────────────────────────────────
-// '360' added 2026-08-12 — see useCustomer360.js. 'orders' and 'history' were
-// REMOVED the same day: both were fully subsumed by 360's Order/Invoice
-// sub-tabs (360 covers the same documents plus real aggregate totals
-// useCustomerHistory's own header comment said it couldn't find a source
-// for) — kept as separate tabs, they were just the same data shown twice.
-// useCustomerOrders/useCustomerHistory hooks are left in place (still valid,
-// just no longer wired to this page) rather than deleted outright.
-// 'wishlist' added 2026-08-23 — reads lib/mongo/wishlist.js directly by
-// party_id (see useCustomerWishlist.js), independent of wishlistSlice
-// (which only ever describes whoever's currently ATTACHED to the POS
-// session, not whoever's profile is being viewed here — often different
-// people).
-const TABS    = ['profile', 'edit', 'schemes', 'points', '360', 'wishlist'];
+const TABS    = ['profile', 'edit', 'schemes', 'points', '360', 'wishlist', 'Recently Viewed'];
 const TAB_LABELS = {
   profile:  'Profile',
   edit:     'Edit',
@@ -82,11 +49,9 @@ const TAB_LABELS = {
   points:   'Points',
   '360':    '360',
   wishlist: 'Wishlist',
+  RecentlyViewed: 'Recently Viewed',
 };
 
-// Document-type sub-tabs inside the 360 tab's transaction table. Keys match
-// useCustomer360's `documents` shape exactly. "Scheme" isn't included here —
-// it's already the existing Schemes tab above, not duplicated.
 const DOC_TYPES = [
   { key: 'order',    label: 'Order',        icon: ShoppingCart },
   { key: 'invoice',  label: 'Invoice',      icon: FileText },
@@ -97,10 +62,6 @@ const DOC_TYPES = [
   { key: 'receipt',  label: 'Receipt',      icon: Receipt },
 ];
 
-// Sales Insights are backend-computed and open-ended (kind/severity/title/
-// detail/priority) — render whatever comes back rather than hardcoding
-// per-insight copy. Icon map is best-effort by `kind`, with a generic
-// fallback for any kind not yet seen.
 const INSIGHT_ICON = {
   preference:         Star,
   open_order_balance: ShoppingCart,
@@ -723,27 +684,6 @@ export default function CustomerDetailPage() {
 
   return (
     <div className="p-4 pb-8 flex flex-col gap-4 max-w-3xl mx-auto w-full">
-
-      {/* <div className="flex items-center gap-2">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          onClick={() => router.push('/customers')}
-          aria-label="Back to customers"
-          className="h-9 w-9 -ml-2 shrink-0"
-        >
-          <ArrowLeft size={18} aria-hidden="true" />
-        </Button>
-        <h1 className="text-base font-bold text-foreground truncate">
-          {customer?.customerName ?? 'Customer Profile'}
-        </h1>
-      </div> */}
-
-      {/* fallbackCustomerName (2026-09-08) — passed via ?name= by whichever
-          link brought the operator here (see CustomerDetailSheet/
-          CustomerSessionSheet), so the loading state can show WHO instead
-          of a bare spinner while useRetrieveCustomer is still in flight. */}
       {isLoading && (
         <InlineLoader
           className="py-16"
