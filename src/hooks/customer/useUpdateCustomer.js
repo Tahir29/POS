@@ -1,10 +1,40 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { updateCustomer } from '@/services/customerService';
+import { updateCustomer, retrieveCustomer } from '@/services/customerService';
 import { buildCustomerUpdatePayload } from '@/lib/normalizers/customer';
 import { normalizeCustomer } from '@/lib/normalizers/customer';
 import { QUERY_KEYS } from '@/constants/queryKeys';
 import TOAST from '@/constants/toastMessages';
+
+// OrnaVerse's own Customer/Update can return a normal 200 while silently
+// NOT persisting the change — confirmed directly (2026-10-12) on OrnaVerse's
+// own native client, logged in as a non-admin operator: the UI showed the
+// edited PAN number as "updated", but logging back in as admin showed the
+// field unchanged; only the admin's own re-save actually stuck. A 200
+// response here is therefore not proof the write happened — this re-reads
+// the record right after and treats any field that doesn't match what was
+// just sent as a failure, so a caller never shows "saved" for something
+// that silently didn't. 'NA' and empty/null are treated as equivalent,
+// matching OrnaVerse's own convention of storing an empty field as "NA".
+function normalizeForCompare(value) {
+  if (value == null || value === 'NA') return '';
+  return String(value).trim();
+}
+
+async function verifyPersisted(partyId, formChanges) {
+  const response = await retrieveCustomer(partyId);
+  const fresh = response?.data?.Entity ?? {};
+  const mismatched = Object.keys(formChanges).filter(
+    (key) => normalizeForCompare(fresh[key]) !== normalizeForCompare(formChanges[key])
+  );
+  if (mismatched.length > 0) {
+    const err = new Error(
+      `${mismatched.join(', ')} didn't actually save on OrnaVerse's side — this may require an admin account.`
+    );
+    err.serverMessage = err.message;
+    throw err;
+  }
+}
 
 function syncCustomerUpdateToShopify({ party_name, mobile, email, originalMobile, originalEmail }) {
   fetch('/api/customers/shopify-sync', {
@@ -27,9 +57,11 @@ export function useUpdateCustomer() {
      *   formChanges: object,   — only the changed fields from the edit form
      * }} params
      */
-    mutationFn: ({ partyId, originalRaw, formChanges }) => {
+    mutationFn: async ({ partyId, originalRaw, formChanges }) => {
       const mergedEntity = buildCustomerUpdatePayload(originalRaw, formChanges);
-      return updateCustomer(partyId, mergedEntity);
+      const response = await updateCustomer(partyId, mergedEntity);
+      await verifyPersisted(partyId, formChanges);
+      return response;
     },
 
     onSuccess: (response, { partyId, originalRaw, formChanges }) => {
