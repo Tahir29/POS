@@ -124,7 +124,18 @@ export async function applyPromotionsToLines({
     // A promotion the server declines to price (not applicable to anything in
     // the basket) comes back with no items. Leave the lines as they were
     // rather than dropping the basket on the floor.
-    if (!Array.isArray(items) || items.length !== lines.length) continue;
+    if (!Array.isArray(items) || items.length !== lines.length) {
+      if (Array.isArray(items)) {
+        // items WAS an array, just the wrong length — a genuine 200 that
+        // this silently discards with zero trace. Logged so a real instance
+        // of this (vs. the documented "declined, no items" case) is visible
+        // instead of reading as "nothing happened" with a 200 in the network tab.
+        console.warn(
+          `[checkoutPricingService] promotion "${promo.promoCode}" returned ${items.length} priced rows, expected ${lines.length} — discarding this promotion's effect`,
+        );
+      }
+      continue;
+    }
 
     lines = items;
     promotionDetails = [...promotionDetails, ...rows];

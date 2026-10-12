@@ -117,6 +117,19 @@ export function useCheckoutPricing() {
   const invoiceData = query.data?.invoice ?? null;
   const orderData    = query.data?.order   ?? null;
 
+  // True for the whole debounce window after items/appliedPromos change,
+  // not just while the query itself is actively fetching. Reported directly
+  // (2026-10-12): applying ANY promo updates the live `appliedPromos`
+  // immediately, but `invoiceData.promotionDetails` above is still the
+  // PREVIOUS (pre-apply) result until the debounced snapshot catches up and
+  // the query re-fires — during that gap, query.isLoading reads false (it's
+  // not fetching, it's just showing stale cached data), so every cleanup
+  // effect in DiscountSection saw "this promo has no effect yet" and removed
+  // it on the spot, for every promo, every time. isLoading must cover this
+  // gap too, or callers act on a result that doesn't correspond to the live
+  // cart/promo state yet.
+  const isDebouncePending = debouncedItems !== items || debouncedPromos !== appliedPromos;
+
   return {
     invoice: invoiceData ? {
       cartItems: invoiceData.cartItems,
@@ -129,7 +142,7 @@ export function useCheckoutPricing() {
       ...summarizeGroup(orderData.lineItems),
     } : null,
     promoCodes: appliedPromos.map((p) => p.promoCode),
-    isLoading: query.isLoading,
+    isLoading: query.isLoading || isDebouncePending,
     error:     query.error ?? null,
   };
 }
