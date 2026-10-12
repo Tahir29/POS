@@ -111,6 +111,16 @@ export async function applyPromotionsToLines({
     const items = response?.data?.items;
     const rows  = response?.data?.invoice_promotions ?? [];
 
+    // OrnaVerse's own ApplyPromotions schema carries a top-level `warning`
+    // string we'd never read otherwise — confirmed live (2026-10-12) it's
+    // simply absent (not even null) on an ordinary clean success, so it's
+    // only ever sent when there's something worth flagging (a capped
+    // quantity, a partial match). Logged rather than silently dropped, so a
+    // future occurrence is at least visible instead of invisible.
+    if (response?.data?.warning) {
+      console.warn(`[checkoutPricingService] promotion "${promo.promoCode}" warning`, response.data.warning);
+    }
+
     // A promotion the server declines to price (not applicable to anything in
     // the basket) comes back with no items. Leave the lines as they were
     // rather than dropping the basket on the floor.

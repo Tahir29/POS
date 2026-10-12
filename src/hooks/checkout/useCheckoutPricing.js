@@ -47,21 +47,47 @@ export function useCheckoutPricing() {
   const { items, appliedPromos } = useCart();
   const activeStoreId = useSelector(selectActiveStoreId);
 
-  const [debouncedItems, setDebouncedItems] = useState(items);
+  // items and appliedPromos are debounced TOGETHER, as one snapshot — a
+  // promo that adds its own free-gift cart line changes both in the same
+  // dispatch, and debouncing only `items` (as this used to) let the OTHER
+  // one — appliedPromos, undebounced — reach the query a full 400ms before
+  // the matching item line did. That fired a real ApplyPromotions call
+  // carrying the new promo against the OLD item list (no free-gift line
+  // yet), which OrnaVerse correctly rejects with "Free gift items not found
+  // in the transaction" — and the cleanup effect then removes the promo it
+  // just added. Confirmed live (2026-10-12): this reproduced the "applied
+  // then instantly removed, can't reapply" symptom with no abandoned-cart
+  // merge involved at all. Debouncing both together means the query only
+  // ever sees a cart+promo pair that were already stable side by side.
+  const [debounced, setDebounced] = useState({ items, appliedPromos });
   const debounceRef = useRef(null);
   useEffect(() => {
     clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => setDebouncedItems(items), DEBOUNCE_MS);
+    debounceRef.current = setTimeout(() => setDebounced({ items, appliedPromos }), DEBOUNCE_MS);
     return () => clearTimeout(debounceRef.current);
-  }, [items]);
+  }, [items, appliedPromos]);
 
+  const debouncedItems = debounced.items;
+  const debouncedPromos = debounced.appliedPromos;
   const cartKey  = debouncedItems.map((i) => `${i.itemId}x${i.quantity}`).join('|');
-  const promoKey = appliedPromos.map((p) => `${p.promoCode}:${p.overrideAmount ?? ''}`).join('|');
+  const promoKey = debouncedPromos.map((p) => `${p.promoCode}:${p.overrideAmount ?? ''}`).join('|');
 
   const query = useQuery({
     queryKey: ['checkout-pricing', activeStoreId, cartKey, promoKey],
     enabled:  debouncedItems.length > 0 && !!activeStoreId,
-    staleTime: 5 * 60 * 1000,
+    // NOT 5 minutes (as this used to be) — confirmed live (2026-10-12) this
+    // is a real root cause of "the gold coin won't reapply": the first
+    // attempt at a given {cart composition, promo} pair can genuinely fail
+    // for a transient reason (a stock claim briefly short, a promotion
+    // eligibility edge), and OrnaVerse's own live state (stock, rates) can
+    // change moment to moment regardless. With a 5-minute staleTime, ARRIVING
+    // BACK at that exact same pair (e.g. remove an item then re-add it, or
+    // empty the cart and re-add the same products) just replays the old
+    // cached failure instead of genuinely re-pricing — looks permanently
+    // broken for that composition until the 5 minutes pass. Checkout pricing
+    // must always reflect live state; this query is never worth serving
+    // stale for the sake of avoiding one extra round trip.
+    staleTime: 0,
     retry: false,
     queryFn: async () => {
       const split = await buildPricedLineItems({ items: debouncedItems, activeStoreId });
@@ -69,13 +95,13 @@ export function useCheckoutPricing() {
       const [invoicePromoted, orderPromoted] = await Promise.all([
         split.invoice
           ? applyPromotionsToLines({
-              lineItems: split.invoice.lineItems, appliedPromos,
+              lineItems: split.invoice.lineItems, appliedPromos: debouncedPromos,
               documentId: APP_CONFIG.DOCUMENT_TYPES.POS_INVOICE,
             })
           : null,
         split.order
           ? applyPromotionsToLines({
-              lineItems: split.order.lineItems, appliedPromos,
+              lineItems: split.order.lineItems, appliedPromos: debouncedPromos,
               documentId: APP_CONFIG.DOCUMENT_TYPES.POS_ORDER,
             })
           : null,
