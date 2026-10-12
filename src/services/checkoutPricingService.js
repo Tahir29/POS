@@ -551,8 +551,15 @@ export function mapPricedLinesToCart(items, lineItems) {
 // different quantity), so it's what buildCartDisplayRows below matches on
 // instead of object reference (a split line's two portions are never the
 // same object as the original cart item, or as each other).
+//
+// freeGiftPromoCode included (2026-10-12, a real React "duplicate key"
+// warning led straight to this): a promo's free-gift line and a genuinely
+// separate real purchase of the SAME item/size/style share every other
+// field, so without this they produced identical keys here — React warned,
+// and worse, the findIndex lookups below could resolve to the wrong one of
+// the two, mispricing either row.
 function cartLineKey(item) {
-  return `${item.itemId}-${item.sizeId}-${item.styleId}`;
+  return `${item.itemId}-${item.sizeId}-${item.styleId}-${item.freeGiftPromoCode ?? ''}`;
 }
 
 /**
