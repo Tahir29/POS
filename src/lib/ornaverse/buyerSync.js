@@ -108,11 +108,14 @@ async function upsertEntities(kind, entities) {
 }
 
 // ── Store-level sync (every document for one company) ──────────────────────
-// Mirrors src/services/crossStoreDocuments.js's fetchStoreScopedDocuments:
-// trust List's own rows (already full entities, no Retrieve needed) when at
-// least one genuinely belongs to this store; otherwise fall back to the
-// Receipt List (correctly company_id-scoped) to discover transaction_ids,
-// then Retrieve each one individually.
+// List's own rows do NOT carry line_items/promotion_details — confirmed
+// live: every purchase synced via List alone came back with items:[] and
+// promotions:[] (only receipt_details/payments were present). Retrieve is
+// the only endpoint that returns the full document, so List (or, when it
+// can't be trusted for this company, the Receipt List fallback — same
+// src/services/crossStoreDocuments.js approach) is used ONLY to discover
+// which transaction_ids belong to this store; every one of them is then
+// Retrieved individually for the real record.
 
 const LIST_PATH     = { order: 'Services/POS/Order/List',       invoice: 'Services/POS/Invoice/List' };
 const RETRIEVE_PATH = { order: 'Services/POS/Order/Retrieve',    invoice: 'Services/POS/Invoice/Retrieve' };
@@ -136,18 +139,20 @@ function groupReceiptsByTransaction(rows) {
 async function fetchStoreDocuments(kind, companyId, session) {
   const list = await ornaversePost(LIST_PATH[kind], { Take: 0, Skip: 0, company_id: companyId }, session);
   const entities = list?.Entities ?? [];
+  const trustworthy = entities.filter((e) => e.company_id === companyId);
 
-  if (entities.some((e) => e.company_id === companyId)) {
-    return entities;
+  let transactionIds;
+  if (trustworthy.length > 0) {
+    transactionIds = trustworthy.map((e) => e.transaction_id);
+  } else {
+    const receiptPeek = await ornaversePost(RECEIPT_PATH[kind], { Take: 1, company_id: companyId }, session);
+    if ((receiptPeek?.TotalCount ?? 0) === 0) return [];
+
+    const receiptData = await ornaversePost(RECEIPT_PATH[kind], { Take: 0, company_id: companyId }, session);
+    transactionIds = groupReceiptsByTransaction(receiptData?.Entities ?? []).map((g) => g.transactionId);
   }
 
-  const receiptPeek = await ornaversePost(RECEIPT_PATH[kind], { Take: 1, company_id: companyId }, session);
-  if ((receiptPeek?.TotalCount ?? 0) === 0) return [];
-
-  const receiptData = await ornaversePost(RECEIPT_PATH[kind], { Take: 0, company_id: companyId }, session);
-  const grouped = groupReceiptsByTransaction(receiptData?.Entities ?? []);
-
-  const retrieved = await runWithConcurrency(grouped, async ({ transactionId }) => {
+  const retrieved = await runWithConcurrency(transactionIds, async (transactionId) => {
     try {
       const data = await ornaversePost(RETRIEVE_PATH[kind], { EntityId: transactionId }, session);
       return data?.Entity ?? null;

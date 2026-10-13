@@ -108,10 +108,10 @@ export default function BuyersPage() {
   };
 
   return (
-    <div className="flex flex-col gap-4 w-full p-4 pb-28 md:p-6 lg:pb-6">
+    <div className="flex flex-col gap-4 w-full p-4 pb-28 md:p-6 md:pb-6">
       <div className="sticky top-0 z-10 -mx-4 -mt-4 flex flex-col gap-2 border-b border-border bg-background px-4 pt-4 pb-3 md:-mx-6 md:-mt-6 md:px-6 md:pt-6">
-        <div className="flex items-center gap-2 lg:gap-2">
-          <div className="hidden lg:flex lg:flex-1 relative">
+        <div className="flex items-center gap-2 md:gap-2">
+          <div className="hidden md:flex md:flex-1 relative">
             <Search size={16} aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input
               type="text"
@@ -134,7 +134,7 @@ export default function BuyersPage() {
             )}
           </div>
 
-          <div className="hidden lg:flex lg:flex-1 items-center gap-2">
+          <div className="hidden md:flex md:flex-1 items-center gap-2">
             <Input
               type="date"
               value={fromDate}
@@ -166,12 +166,12 @@ export default function BuyersPage() {
             )}
           </div>
 
-          <div className="flex items-center gap-2 flex-1 lg:flex-1">
+          <div className="flex items-center gap-2 flex-1 md:flex-1">
             <Button
               type="button"
               variant="outline"
               onClick={() => setIsFilterOpen(true)}
-              className="hidden lg:flex h-11 flex-1 gap-2"
+              className="hidden md:flex h-11 flex-1 gap-2"
             >
               <SlidersHorizontal size={16} aria-hidden="true" />
               Filters
@@ -186,7 +186,7 @@ export default function BuyersPage() {
                 onClick={() => sync(companyId).then(() => refetch())}
                 disabled={isSyncing}
                 aria-label="Refresh"
-                className="hidden lg:flex h-11 w-11 shrink-0"
+                className="hidden md:flex h-11 w-11 shrink-0"
               >
                 <RefreshCw size={16} className={isSyncing ? 'animate-spin' : ''} aria-hidden="true" />
               </Button>
@@ -275,7 +275,7 @@ export default function BuyersPage() {
         }
       >
         <div className="flex flex-col gap-4">
-          <div className="lg:hidden flex flex-col gap-3">
+          <div className="md:hidden flex flex-col gap-3">
             <div className="relative w-full">
               <Search size={16} aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <Input
