@@ -27,9 +27,6 @@ export default function BuyersPage() {
   const isSuperAdmin = useSelector(selectIsSuperAdmin);
   const activeStoreId = useSelector(selectActiveStoreId);
   const availableStores = useSelector(selectAvailableStores);
-
-  // Admin starts scoped to their own current store (same default every other
-  // page uses), not "All stores" — they can still widen it from the filter.
   const [storeFilter, setStoreFilter] = useState(() => (activeStoreId ? String(activeStoreId) : 'all'));
   const [search, setSearch] = useState('');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
@@ -37,12 +34,6 @@ export default function BuyersPage() {
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [pagination, setPagination] = useState({ key: '', visibleCount: PAGE_SIZE });
-
-  // Follows the app's own global store switch (the header selector, used
-  // everywhere else) — so switching store while on this page updates the
-  // data here too, exactly like every other store-scoped page, rather than
-  // silently leaving this page pinned to whatever store was active when it
-  // first loaded.
   const prevActiveStoreIdRef = useRef(activeStoreId);
   useEffect(() => {
     if (activeStoreId !== prevActiveStoreIdRef.current) {
@@ -54,20 +45,8 @@ export default function BuyersPage() {
   const companyId = isSuperAdmin
     ? (storeFilter === 'all' ? undefined : Number(storeFilter))
     : activeStoreId;
-
-  // Every raw purchase for the scope, loaded in one shot (not paginated at
-  // the fetch level) — so the date/type filters below always run against
-  // the complete dataset, never just whatever page happened to be fetched.
   const { purchases, isLoading, isError, refetch } = useBuyerPurchases({ companyId });
   const { sync, isSyncing } = useSyncStorePurchases();
-
-  // The list can only ever show customers that already have a Mongo record —
-  // the first time a store is opened there's nothing to click into and
-  // nothing to trigger a per-customer sync from (that lives on the detail
-  // page). Pulling this store's full Invoice/Order history from OrnaVerse
-  // here closes that gap. Scoped to a single company_id (never "all
-  // stores" — looping every store on every list load would be too heavy to
-  // run silently); synced once per store per session, not on every refetch.
   const syncedStoresRef = useRef(new Set());
   useEffect(() => {
     if (companyId == null || syncedStoresRef.current.has(companyId)) return;
@@ -78,10 +57,6 @@ export default function BuyersPage() {
 
   const hasActiveFilters = documentTypes.length !== ALL_DOCUMENT_TYPES.length || !!fromDate || !!toDate;
   const trimmedSearch = search.trim().toLowerCase();
-
-  // Date/type filters run on the raw purchases BEFORE grouping, so a buyer's
-  // card always reflects totals for the currently filtered set (e.g.
-  // "Invoices only, this month") rather than a fixed lifetime number.
   const filteredBuyers = useMemo(() => {
     const matching = purchases.filter((p) => {
       if (!documentTypes.includes(p.documentType)) return false;
@@ -97,13 +72,6 @@ export default function BuyersPage() {
       || b.customerMobile?.includes(trimmedSearch)
     );
   }, [purchases, documentTypes, fromDate, toDate, trimmedSearch]);
-
-  // Resets to the first page whenever the filtered set changes — otherwise a
-  // narrower filter could leave visibleCount pointing past the new (shorter)
-  // list with nothing rendered. Adjusted during render (not an effect) per
-  // React's own "reset state when a prop changes" pattern — same approach
-  // the catalog page's stableSort already uses — so the reset is visible in
-  // the very first render after the filters change, not one tick later.
   const filterKey = `${documentTypes.join(',')}|${fromDate}|${toDate}|${trimmedSearch}|${purchases.length}`;
   if (pagination.key !== filterKey) {
     setPagination({ key: filterKey, visibleCount: PAGE_SIZE });
@@ -143,9 +111,6 @@ export default function BuyersPage() {
     <div className="flex flex-col gap-4 w-full p-4 pb-28 md:p-6 lg:pb-6">
       <div className="sticky top-0 z-10 -mx-4 -mt-4 flex flex-col gap-2 border-b border-border bg-background px-4 pt-4 pb-3 md:-mx-6 md:-mt-6 md:px-6 md:pt-6">
         <div className="flex items-center gap-2 lg:gap-2">
-          {/* Search + date range live inline on desktop; on mobile they move
-              into the Filters sheet below (same space-saving pattern the
-              catalog page uses) so this row stays a single compact line. */}
           <div className="hidden lg:flex lg:flex-1 relative">
             <Search size={16} aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -220,7 +185,7 @@ export default function BuyersPage() {
                 size="icon"
                 onClick={() => sync(companyId).then(() => refetch())}
                 disabled={isSyncing}
-                aria-label="Refresh from OrnaVerse"
+                aria-label="Refresh"
                 className="hidden lg:flex h-11 w-11 shrink-0"
               >
                 <RefreshCw size={16} className={isSyncing ? 'animate-spin' : ''} aria-hidden="true" />
@@ -232,12 +197,12 @@ export default function BuyersPage() {
         {isSyncing && (
           <p className="text-xs text-muted-foreground flex items-center gap-1.5">
             <Loader2 size={12} className="animate-spin" aria-hidden="true" />
-            Syncing this store&rsquo;s purchases from OrnaVerse…
+            Syncing this store&rsquo;s purchases…
           </p>
         )}
         {isSuperAdmin && companyId == null && (
           <p className="text-xs text-muted-foreground">
-            Select a store to sync its purchases from OrnaVerse.
+            Select a store to sync its purchases.
           </p>
         )}
         {!isLoading && !isError && (
