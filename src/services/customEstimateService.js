@@ -48,6 +48,7 @@
 
 import axiosInstance from '@/lib/axios/axiosInstance';
 import API from '@/constants/apiEndpoints';
+import APP_CONFIG from '@/constants/appConfig';
 
 /**
  * Catalog items eligible for Custom Estimate — gated by `allow_custom_estimation`
@@ -235,6 +236,27 @@ export async function getLabourRate({
  * @returns {Promise<object[]>} re-priced line — use for its rate/amount
  *   fields only; item_operations/item_taxes are unreliable, see above.
  */
+/**
+ * Creates an ephemeral, unsaved "voucher" for the current custom-estimate
+ * line — CONFIRMED LIVE 2026-10-14 against OrnaVerse's own Estimation >
+ * Custom tab: this is exactly what its "Print Estimate" button calls before
+ * opening the report picker. It does NOT create a real, listed Estimation
+ * document (nothing shows up in Estimation/List afterward) — its only
+ * purpose is to hand the report engine a transaction_id to render against.
+ * The line's own document_id is forced to ESTIMATION here regardless of
+ * what it was priced under (Custom Estimate items are always priced via
+ * POS_ORDER — see this file's own header), matching the real captured
+ * payload exactly.
+ * @param {object} lineItem — same shape handleSubmit already builds
+ * @returns {Promise<number|null>} the temp voucher's transaction id
+ */
+export async function createEstimationTempVoucher(lineItem) {
+  const response = await axiosInstance.post(API.CUSTOM.CREATE_TEMP_VOUCHER, {
+    Entity: { ...lineItem, document_id: APP_CONFIG.DOCUMENT_TYPES.ESTIMATION },
+  });
+  return response.data?.EntityId ?? null;
+}
+
 export async function applyLabourToLine({ item, operations, documentDate = new Date(), documentId }) {
   const response = await axiosInstance.post(API.HELPERS.SET_SALES_ITEMS, {
     selected_products: [{ ...item, item_operations: operations }],
