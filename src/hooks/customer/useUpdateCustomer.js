@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { updateCustomer, retrieveCustomer } from '@/services/customerService';
-import { buildCustomerUpdatePayload } from '@/lib/normalizers/customer';
+import { buildCustomerUpdatePayload, isMaskedValue } from '@/lib/normalizers/customer';
 import { normalizeCustomer } from '@/lib/normalizers/customer';
 import { QUERY_KEYS } from '@/constants/queryKeys';
 import TOAST from '@/constants/toastMessages';
@@ -21,12 +21,26 @@ function normalizeForCompare(value) {
   return String(value).trim();
 }
 
+// pan_document/other_document are never stored verbatim — OrnaVerse moves
+// the uploaded temp file to a permanent "Documents/..." path on save, so an
+// exact-match comparison against the temp path we sent always fails even
+// when the save genuinely succeeded. These two only need to be non-empty.
+const FILE_FIELDS = new Set(['pan_document', 'other_document']);
+
 async function verifyPersisted(partyId, formChanges) {
   const response = await retrieveCustomer(partyId);
   const fresh = response?.data?.Entity ?? {};
-  const mismatched = Object.keys(formChanges).filter(
-    (key) => normalizeForCompare(fresh[key]) !== normalizeForCompare(formChanges[key])
-  );
+  const mismatched = Object.keys(formChanges).filter((key) => {
+    if (FILE_FIELDS.has(key)) return normalizeForCompare(fresh[key]) === '';
+    // Confirmed live 2026-10-14: OrnaVerse returns some compliance fields
+    // (pan_no, mobile, ...) fully masked in Customer/Retrieve for a non-
+    // admin session, even right after that same session's own save
+    // succeeded. An exact-match check against a field OrnaVerse won't echo
+    // back can never pass, so a masked response is treated as "can't
+    // verify, trust the save" rather than a mismatch.
+    if (isMaskedValue(fresh[key])) return false;
+    return normalizeForCompare(fresh[key]) !== normalizeForCompare(formChanges[key]);
+  });
   if (mismatched.length > 0) {
     const err = new Error(
       `${mismatched.join(', ')} didn't actually save on OrnaVerse's side — this may require an admin account.`

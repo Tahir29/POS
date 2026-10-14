@@ -7,9 +7,9 @@ import { Plus, X } from 'lucide-react';
 
 import { useCustomEstimateItems, useItemSizesByType, useStoneTypeDetails } from '@/hooks/estimation/useCustomEstimate';
 import { useItemGroups } from '@/hooks/catalog/useCategoryFilters';
-import { useAttributeOptions } from '@/hooks/catalog/useCatalogFilterOptions';
+import { useAttributeOptions, useKaratOptions } from '@/hooks/catalog/useCatalogFilterOptions';
 import { calculateItemRates } from '@/services/pricingService';
-import { getStoneRate, getLabourRate, applyLabourToLine } from '@/services/customEstimateService';
+import { getStoneRate, getLabourRate, applyLabourToLine, getMetalRateForItem } from '@/services/customEstimateService';
 import { createOrder, postOrder } from '@/services/orderService';
 import { useOrderHeaderConfig } from '@/hooks/checkout/useOrderHeaderConfig';
 import { buildTransactionHeaderFields } from '@/services/transactionHeaderService';
@@ -92,6 +92,8 @@ export default function CustomEstimateForm({ onDone }) {
   const { options: shapeOptions }   = useAttributeOptions(APP_CONFIG.ATTRIBUTE_TYPES.DIAMOND_SHAPE);
   const { options: colorOptions }   = useAttributeOptions(APP_CONFIG.ATTRIBUTE_TYPES.STONE_COLOR);
   const { options: qualityOptions } = useAttributeOptions(APP_CONFIG.ATTRIBUTE_TYPES.STONE_QUALITY);
+  const { options: karatOptions }      = useKaratOptions();
+  const { options: metalColorOptions } = useAttributeOptions(APP_CONFIG.ATTRIBUTE_TYPES.METAL_COLOR);
 
   const [selectedItem, setSelectedItem] = useState(null);
   const [sizeId, setSizeId]             = useState('');
@@ -144,6 +146,46 @@ export default function CustomEstimateForm({ onDone }) {
   const weightNum = Number(weight) || 0;
   const pureWeight  = +(weightNum * purity).toFixed(3);
   const metalAmount = +(pureWeight * metalRate).toFixed(2);
+
+  // Karat change re-fetches Rate (GetMetalRate) — Purity comes from the
+  // Karat option's own std_purity, no network call needed for it. Color
+  // change needs no call at all: confirmed live, it never affects
+  // purity/rate (see getMetalRateForItem's header for both findings).
+  const patchMetalComponent = (patch) => setBaseRow((prev) => ({
+    ...prev,
+    item_components: [{ ...prev.item_components[0], ...patch }, ...prev.item_components.slice(1)],
+  }));
+
+  const handleKaratChange = async (valueStr) => {
+    const karatId = Number(valueStr);
+    const karatOpt = karatOptions.find((o) => o.value === karatId);
+    if (!karatOpt || !metalComponent) return;
+    setIsPricingItem(true);
+    try {
+      const { rate } = await getMetalRateForItem({
+        baseItemId:        metalComponent.base_item_id,
+        typeId:            metalComponent.type_id,
+        subTypeId:         metalComponent.sub_type_id,
+        karatId,
+        metalId:           metalComponent.metal_id,
+        itemGroupId:       metalComponent.item_group_id,
+        salesCostingId:    metalComponent.sales_costing_id,
+        purchaseCostingId: metalComponent.purchase_costing_id,
+      });
+      patchMetalComponent({ karat_id: karatId, karat_name: karatOpt.label, purity: karatOpt.purity, rate: rate || 0 });
+    } catch (err) {
+      toast.error(getErrorMessage(err));
+    } finally {
+      setIsPricingItem(false);
+    }
+  };
+
+  const handleColorChange = (valueStr) => {
+    const colorId = Number(valueStr);
+    const colorOpt = metalColorOptions.find((o) => o.value === colorId);
+    if (!colorOpt) return;
+    patchMetalComponent({ metal_color_id: colorId, metal_color_name: colorOpt.label });
+  };
 
   const stonesTotal  = +stones.reduce((s, row) => s + (row.amount || 0), 0).toFixed(2);
   const labourAmount = appliedLabour ? +appliedLabour.reduce((s, op) => s + (op.amount || 0), 0).toFixed(2) : 0;
@@ -211,7 +253,7 @@ export default function CustomEstimateForm({ onDone }) {
         itemAttributeId: selectedItem.item_attribute_id,
         itemGroupId: selectedItem.item_group_id,
         typeId: selectedItem.type_id,
-        karatId: selectedItem.karat_id,
+        karatId: metalComponent?.karat_id,
         pieces: 1,
         weight: weightNum,
         netWeight: weightNum,
@@ -387,8 +429,28 @@ export default function CustomEstimateForm({ onDone }) {
         <>
           <Section title="Metal">
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
-              <div><span className="text-xs text-muted-foreground block">Karat</span>{selectedItem.karat_name}</div>
-              <div><span className="text-xs text-muted-foreground block">Color</span>{selectedItem.metal_color_name}</div>
+              <FormField label="Karat">
+                <PickerSelect
+                  value={metalComponent?.karat_id}
+                  onChange={handleKaratChange}
+                  placeholder="Select karat"
+                  options={karatOptions}
+                  getValue={(o) => o.value}
+                  getLabel={(o) => o.label}
+                  disabled={isPricingItem}
+                />
+              </FormField>
+              <FormField label="Color">
+                <PickerSelect
+                  value={metalComponent?.metal_color_id}
+                  onChange={handleColorChange}
+                  placeholder="Select color"
+                  options={metalColorOptions}
+                  getValue={(o) => o.value}
+                  getLabel={(o) => o.label}
+                  disabled={isPricingItem}
+                />
+              </FormField>
               <div><span className="text-xs text-muted-foreground block">Purity</span>{purity}</div>
               <FormField label="Weight (g)" required>
                 <Input type="number" inputMode="decimal" step="0.001" value={weight}
@@ -418,52 +480,66 @@ export default function CustomEstimateForm({ onDone }) {
               </div>
             )}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 rounded-lg border border-dashed border-border p-3">
-              <PickerSelect
-                value={stoneDraft.itemGroupId}
-                onChange={(v) => setStoneDraft((d) => ({ ...d, itemGroupId: v, typeId: '' }))}
-                placeholder="Item group"
-                options={stoneItemGroups}
-                getValue={(g) => g.item_group_id}
-                getLabel={(g) => g.item_group_name}
-              />
-              <PickerSelect
-                value={stoneDraft.shapeId}
-                onChange={(v) => setStoneDraft((d) => ({ ...d, shapeId: v }))}
-                placeholder="Shape"
-                options={shapeOptions}
-                getValue={(o) => o.value}
-                getLabel={(o) => o.label}
-              />
-              <PickerSelect
-                value={stoneDraft.stoneColorId}
-                onChange={(v) => setStoneDraft((d) => ({ ...d, stoneColorId: v }))}
-                placeholder="Color"
-                options={colorOptions}
-                getValue={(o) => o.value}
-                getLabel={(o) => o.label}
-              />
-              <PickerSelect
-                value={stoneDraft.qualityId}
-                onChange={(v) => setStoneDraft((d) => ({ ...d, qualityId: v }))}
-                placeholder="Quality"
-                options={qualityOptions}
-                getValue={(o) => o.value}
-                getLabel={(o) => o.label}
-              />
-              <PickerSelect
-                value={stoneDraft.typeId}
-                onChange={(v) => setStoneDraft((d) => ({ ...d, typeId: v }))}
-                placeholder="Type"
-                options={stoneTypeOptions}
-                getValue={(o) => o.type_id}
-                getLabel={(o) => o.type_name}
-                disabled={!stoneDraft.itemGroupId}
-              />
+              <FormField label="Item group">
+                <PickerSelect
+                  value={stoneDraft.itemGroupId}
+                  onChange={(v) => setStoneDraft((d) => ({ ...d, itemGroupId: v, typeId: '' }))}
+                  placeholder="Item group"
+                  options={stoneItemGroups}
+                  getValue={(g) => g.item_group_id}
+                  getLabel={(g) => g.item_group_name}
+                />
+              </FormField>
+              <FormField label="Shape">
+                <PickerSelect
+                  value={stoneDraft.shapeId}
+                  onChange={(v) => setStoneDraft((d) => ({ ...d, shapeId: v }))}
+                  placeholder="Shape"
+                  options={shapeOptions}
+                  getValue={(o) => o.value}
+                  getLabel={(o) => o.label}
+                />
+              </FormField>
+              <FormField label="Color">
+                <PickerSelect
+                  value={stoneDraft.stoneColorId}
+                  onChange={(v) => setStoneDraft((d) => ({ ...d, stoneColorId: v }))}
+                  placeholder="Color"
+                  options={colorOptions}
+                  getValue={(o) => o.value}
+                  getLabel={(o) => o.label}
+                />
+              </FormField>
+              <FormField label="Quality">
+                <PickerSelect
+                  value={stoneDraft.qualityId}
+                  onChange={(v) => setStoneDraft((d) => ({ ...d, qualityId: v }))}
+                  placeholder="Quality"
+                  options={qualityOptions}
+                  getValue={(o) => o.value}
+                  getLabel={(o) => o.label}
+                />
+              </FormField>
+              <FormField label="Type">
+                <PickerSelect
+                  value={stoneDraft.typeId}
+                  onChange={(v) => setStoneDraft((d) => ({ ...d, typeId: v }))}
+                  placeholder="Type"
+                  options={stoneTypeOptions}
+                  getValue={(o) => o.type_id}
+                  getLabel={(o) => o.type_name}
+                  disabled={!stoneDraft.itemGroupId}
+                />
+              </FormField>
               <div className="grid grid-cols-2 gap-3">
-                <Input type="number" inputMode="numeric" min={1} placeholder="Pcs" value={stoneDraft.pieces}
-                  onChange={(e) => setStoneDraft((d) => ({ ...d, pieces: e.target.value }))} className="h-10 text-sm" />
-                <Input type="number" inputMode="decimal" placeholder="Weight (ct)" value={stoneDraft.weight}
-                  onChange={(e) => setStoneDraft((d) => ({ ...d, weight: e.target.value }))} className="h-10 text-sm" />
+                <FormField label="Pcs">
+                  <Input type="number" inputMode="numeric" min={1} placeholder="Pcs" value={stoneDraft.pieces}
+                    onChange={(e) => setStoneDraft((d) => ({ ...d, pieces: e.target.value }))} className="h-10 text-sm" />
+                </FormField>
+                <FormField label="Weight (ct)">
+                  <Input type="number" inputMode="decimal" placeholder="Weight (ct)" value={stoneDraft.weight}
+                    onChange={(e) => setStoneDraft((d) => ({ ...d, weight: e.target.value }))} className="h-10 text-sm" />
+                </FormField>
               </div>
               <Button type="button" variant="outline" size="sm" className="col-span-1 sm:col-span-2 lg:col-span-3 gap-1.5"
                 disabled={isAddingStone} onClick={handleAddStone}>
