@@ -269,5 +269,18 @@ export const QUERY_KEYS = {
     SIZES: (typeId) => ['item', 'sizes', typeId],
     TYPEDETAILS: (typeId) => ['custom', 'type-details', typeId],
     QUOTE: (params) => ['custom', 'quote', params]
-  }
+  },
+
+  REPORTS: {
+    POS_DASHBOARD:           (params) => ['reports', 'pos-dashboard', params],
+    CATEGORY_WISE_SALES:     (params) => ['reports', 'category-wise-sales', params],
+    SALES_PERSON_WISE_SALES: (params) => ['reports', 'sales-person-wise-sales', params],
+    SKU_VELOCITY:            (params) => ['reports', 'sku-velocity', params],
+    OPEN_POS_ORDERS:         (params) => ['reports', 'open-pos-orders', params],
+  },
+
+  ADHOC_REPORTS: {
+    LIST: () => ['adhoc-reports', 'list'],
+    RUN:  (adhocReportId) => ['adhoc-reports', 'run', adhocReportId],
+  },
 };

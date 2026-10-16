@@ -395,6 +395,30 @@ const API = {
   },
 
   // ─────────────────────────────────────────────────────────────────────────
+  // REPORTS — curated reports from OrnaVerse's own Reporting module, each
+  // confirmed live 2026-10-16 by capturing its real network call. Every one
+  // here is its own dedicated, purpose-built endpoint — NOT the generic
+  // Ad-hoc Report engine (a separate query-builder system, Services/
+  // Reporting/AdhocReport/Run, wired separately when that's prioritized).
+  // ─────────────────────────────────────────────────────────────────────────
+  REPORTS: {
+    POS_DASHBOARD:           'Services/Reports/POSDashbaord/List', // sic — real upstream typo, confirmed live
+    CATEGORY_WISE_SALES:     'Services/Reports/CategoryWiseSalesReport/List',
+    SALES_PERSON_WISE_SALES: 'Services/POS/SalesPersonWiseSales/List',
+    SKU_VELOCITY:            'Services/Analytics/SKUVelocity', // no /List suffix — confirmed live; /List 404s
+    OPEN_POS_ORDERS:         'Services/Reports/OpenPOSOrdersReport/List',
+  },
+
+  // Generic ad-hoc report engine — confirmed live 2026-10-16. 111 user-built
+  // reports behind one self-describing Run call ({Table: {Columns,
+  // ColumnInfos, Rows}}); no company/date scoping built in (FilterOverrides
+  // is empty on OrnaVerse's own default view too).
+  ADHOC_REPORTS: {
+    LIST: 'Services/Reporting/AdhocReport/List',
+    RUN:  'Services/Reporting/AdhocReport/Run',
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
   // EXCHANGE RATE
   // ─────────────────────────────────────────────────────────────────────────
   EXCHANGE_RATE: {

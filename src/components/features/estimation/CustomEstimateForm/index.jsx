@@ -434,7 +434,7 @@ export default function CustomEstimateForm({ onDone }) {
         await postOrder(transactionId);
       }
       toast.success('Custom order placed.');
-      onDone();
+      onDone(transactionId);
     } catch (err) {
       toast.error(getErrorMessage(err));
     } finally {
