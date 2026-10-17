@@ -221,6 +221,23 @@ const API = {
   },
 
   // ─────────────────────────────────────────────────────────────────────────
+  // ADVANCE RECEIPT — a pure prepayment (no items, no linked invoice yet),
+  // confirmed live 2026-10-16 by capturing OrnaVerse's own POS "Advance F8"
+  // tab. Genuinely a different document from Credit Note (which is an
+  // item-level Return, document_id 55) — this is document_id 57 ("PRC",
+  // the same as APP_CONFIG.DOCUMENT_TYPES.POS_RECEIPT), flagged with
+  // is_advance:true. One Create call fully commits it — no separate Post
+  // step, confirmed live (the created receipt's document_status was already
+  // 1/Completed with no Post call made).
+  // ─────────────────────────────────────────────────────────────────────────
+  ADVANCE_RECEIPT: {
+    CREATE:   'Services/POS/Receipt/Create',
+    CANCEL:   'Services/POS/Receipt/Cancel',
+    RETRIEVE: 'Services/POS/Receipt/Retrieve',
+    LIST:     'Services/POS/Receipt/List',
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
   // EXCHANGE
   // ─────────────────────────────────────────────────────────────────────────
   EXCHANGE: {

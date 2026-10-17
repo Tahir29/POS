@@ -167,6 +167,11 @@ export const QUERY_KEYS = {
     DETAIL: (transactionId)   => ['credit-notes', 'detail', transactionId],
   },
 
+  ADVANCE_RECEIPT: {
+    LIST:   (params)          => ['advance-receipt', 'list', params],
+    DETAIL: (transactionId)   => ['advance-receipt', 'detail', transactionId],
+  },
+
   EXCHANGE: {
     LIST:   (params)          => ['exchange', 'list', params],
     DETAIL: (transactionId)   => ['exchange', 'detail', transactionId],
