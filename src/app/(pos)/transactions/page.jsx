@@ -850,6 +850,7 @@ const refundSchema = z.object({
   document_date: z.string().min(1, 'Required'),
   mode_id:       z.coerce.number().min(1, 'Select how the money is paid out'),
   credit_keys:   z.array(z.number()).min(1, 'Select at least one credit to refund'),
+  bank_pos_id:   z.coerce.number().optional().or(z.literal('')),
   ref_no: z.string().optional(),
 });
 
@@ -866,7 +867,7 @@ function RefundNewForm({ onDone }) {
 
   const { register, handleSubmit, control, watch, setValue, reset, formState: { errors } } = useForm({
     resolver: zodResolver(refundSchema),
-    defaultValues: { document_date: todayDateString(), mode_id: '', credit_keys: [], ref_no: '' },
+    defaultValues: { document_date: todayDateString(), mode_id: '', credit_keys: [], bank_pos_id: '', ref_no: '' },
   });
 
   const creditKeys = watch('credit_keys');
@@ -896,8 +897,9 @@ function RefundNewForm({ onDone }) {
     }
     try {
       const mode = paymentModes.find((m) => m.modeId === Number(data.mode_id));
-      if (mode && paymentRequiresBank(mode) && !data.ref_no?.trim()) {
-        return toast.error('Enter a reference number for this payout.');
+      if (mode && paymentRequiresBank(mode)) {
+        if (!data.bank_pos_id) return toast.error('Select the bank account this payout settles from.');
+        if (!data.ref_no?.trim()) return toast.error('Enter a reference number for this payout.');
       }
       await create.mutateAsync({
         partyId: customerId,
@@ -910,6 +912,7 @@ function RefundNewForm({ onDone }) {
           modeId:   Number(data.mode_id),
           ledgerId: mode?.ledgerId,
           amount:   total,
+          bankPos:  data.bank_pos_id || undefined,
           refNo:    data.ref_no?.trim() || undefined,
         },
       });
@@ -995,6 +998,7 @@ function RefundNewForm({ onDone }) {
           name="mode_id"
           paymentModes={paymentModes}
           modesLoading={modesLoading}
+          bankFieldName="bank_pos_id"
           refFieldName="ref_no"
         />
       </FormField>
@@ -1022,6 +1026,7 @@ const advanceReceiptSchema = z.object({
   amount:        z.coerce.number().min(1, 'Enter an amount'),
   mode_id:       z.coerce.number().min(1, 'Select how the advance is paid'),
   narration:     z.string().optional(),
+  bank_pos_id:   z.coerce.number().optional().or(z.literal('')),
   ref_no:        z.string().optional(),
 });
 
@@ -1036,7 +1041,7 @@ function AdvanceReceiptNewForm({ onDone }) {
 
   const { register, handleSubmit, control, reset, formState: { errors } } = useForm({
     resolver: zodResolver(advanceReceiptSchema),
-    defaultValues: { document_date: todayDateString(), amount: '', mode_id: '', narration: '', ref_no: '' },
+    defaultValues: { document_date: todayDateString(), amount: '', mode_id: '', narration: '', bank_pos_id: '', ref_no: '' },
   });
 
   const onSubmit = async (data) => {
@@ -1053,8 +1058,9 @@ function AdvanceReceiptNewForm({ onDone }) {
     }
     try {
       const mode = paymentModes.find((m) => m.modeId === Number(data.mode_id));
-      if (mode && paymentRequiresBank(mode) && !data.ref_no?.trim()) {
-        return toast.error('Enter a reference number for this payment.');
+      if (mode && paymentRequiresBank(mode)) {
+        if (!data.bank_pos_id) return toast.error('Select the bank account this payment settles to.');
+        if (!data.ref_no?.trim()) return toast.error('Enter a reference number for this payment.');
       }
       await create.mutateAsync({
         partyId: customerId,
@@ -1068,6 +1074,7 @@ function AdvanceReceiptNewForm({ onDone }) {
           modeId:   Number(data.mode_id),
           ledgerId: mode?.ledgerId,
           amount:   data.amount,
+          bankPos:  data.bank_pos_id || undefined,
           refNo:    data.ref_no?.trim() || undefined,
         },
       });
@@ -1096,6 +1103,7 @@ function AdvanceReceiptNewForm({ onDone }) {
           name="mode_id"
           paymentModes={paymentModes}
           modesLoading={modesLoading}
+          bankFieldName="bank_pos_id"
           refFieldName="ref_no"
         />
       </FormField>

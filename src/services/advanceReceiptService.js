@@ -47,8 +47,8 @@ export async function getAdvanceReceiptDetail(transactionId) {
  *   partyId: number, activeStoreId: number, financialYearId: number,
  *   ledgerId: number, numberOfBackdatedDays?: number, documentDate?: string,
  *   narration?: string,
- *   payout: { modeId: number, ledgerId: number, amount: number, refNo?: string,
- *             chequeNo?: string, chequeDate?: string },
+ *   payout: { modeId: number, ledgerId: number, amount: number, bankPos?: number,
+ *             refNo?: string, chequeNo?: string, chequeDate?: string },
  * }} params
  * @returns {Promise<object>} SaveResponse { EntityId }
  */
@@ -82,6 +82,7 @@ export async function createAdvanceReceipt({
       ledger_id:     payout.ledgerId,
       amount:        payout.amount,
       exchange_rate: 1,
+      bank_pos:      payout.bankPos ?? '',
       ref_no:        payout.refNo ?? '',
       cheque_no:     payout.chequeNo ?? '',
       cheque_date:   payout.chequeDate ?? '',
