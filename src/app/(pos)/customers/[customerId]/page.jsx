@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowLeft, Phone, Mail, MapPin, CreditCard,
@@ -23,6 +23,11 @@ import { QUERY_KEYS } from '@/constants/queryKeys';
 import { Button }   from '@/components/ui/button';
 import { Input }    from '@/components/ui/input';
 import { Label }    from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
+import { GENDER_OPTIONS, MARITAL_STATUS_OPTIONS, RELIGION_OPTIONS } from '@/constants/customerOptions';
 import LocationSelect from '@/components/shared/LocationSelect';
 import PanDocumentUpload from '@/components/shared/PanDocumentUpload';
 import PillTabs from '@/components/shared/PillTabs';
@@ -32,6 +37,7 @@ import InlineLoader from '@/components/shared/InlineLoader';
 
 import { buildUpdateCustomerSchema } from '@/validators/customerSchema';
 import { storedValueToPhone, isMaskedValue } from '@/lib/normalizers/customer';
+import { useCustomerSession }     from '@/hooks/customer/useCustomerSession';
 import { useRetrieveCustomer }    from '@/hooks/customer/useRetrieveCustomer';
 import { useUpdateCustomer }      from '@/hooks/customer/useUpdateCustomer';
 import { useCustomerEnrollments } from '@/hooks/customer/useCustomerEnrollments';
@@ -49,7 +55,7 @@ import ProductCard from '@/components/features/catalog/ProductCard';
 import { Badge } from '@/components/ui/badge';
 import Logo from '@/components/shared/Logo';
 import { formatAmountOrDash } from '@/lib/priceUtils';
-import { formatDateNumeric } from '@/lib/dateUtils';
+import { formatDateNumeric, todayDateString } from '@/lib/dateUtils';
 import Link from 'next/link';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -178,6 +184,12 @@ function ProfileTab({ customer }) {
 }
 
 // ── Edit Tab ──────────────────────────────────────────────────────────────────
+// OrnaVerse returns birth_date/anniversary as a full ISO datetime
+// ("2026-12-05T00:00:00.000") — <input type="date"> needs just the date part.
+function toDateInputValue(iso) {
+  return iso ? String(iso).slice(0, 10) : '';
+}
+
 function EditTab({ customer, onSaved }) {
   const updateCustomer = useUpdateCustomer();
   const raw = customer.raw;
@@ -205,9 +217,18 @@ function EditTab({ customer, onSaved }) {
       city_id:     raw?.city_id     ?? null,
       nationality_id: raw?.nationality_id ?? null,
       pin_code:    raw?.pin_code ? String(raw.pin_code) : '',
+      birth_date:  toDateInputValue(raw?.birth_date),
+      anniversary: toDateInputValue(raw?.anniversary),
+      gender:         raw?.gender         || null,
+      marital_status: raw?.marital_status || null,
+      religion_id:    raw?.religion_id    || null,
+      allow_credit:   raw?.allow_credit   ?? false,
+      credit_limit:   raw?.credit_limit ? String(raw.credit_limit) : '',
     },
   });
-  
+
+  const allowCredit = watch('allow_credit');
+
   useEffect(() => {
     reset({
       party_name:  raw?.party_name  ?? '',
@@ -226,6 +247,13 @@ function EditTab({ customer, onSaved }) {
       city_id:     raw?.city_id     ?? null,
       nationality_id: raw?.nationality_id ?? null,
       pin_code:    raw?.pin_code ? String(raw.pin_code) : '',
+      birth_date:  toDateInputValue(raw?.birth_date),
+      anniversary: toDateInputValue(raw?.anniversary),
+      gender:         raw?.gender         || null,
+      marital_status: raw?.marital_status || null,
+      religion_id:    raw?.religion_id    || null,
+      allow_credit:   raw?.allow_credit   ?? false,
+      credit_limit:   raw?.credit_limit ? String(raw.credit_limit) : '',
     });
   }, [raw, reset]);
 
@@ -377,6 +405,64 @@ function EditTab({ customer, onSaved }) {
             placeholder="Select nationality" isLoading={countriesLoading}
           />
         </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="ep_birth_date">Birth Date <span className="text-muted-foreground text-xs">(optional)</span></Label>
+          <Input id="ep_birth_date" type="date" max={todayDateString()} {...register('birth_date')} className="h-11" />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="ep_anniversary">Anniversary <span className="text-muted-foreground text-xs">(optional)</span></Label>
+          <Input id="ep_anniversary" type="date" max={todayDateString()} {...register('anniversary')} className="h-11" />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label>Gender <span className="text-muted-foreground text-xs">(optional)</span></Label>
+          <Controller
+            name="gender"
+            control={control}
+            render={({ field }) => (
+              <Select value={field.value != null ? String(field.value) : ''} onValueChange={(v) => field.onChange(Number(v))}>
+                <SelectTrigger className="h-11 w-full"><SelectValue placeholder="Select gender" /></SelectTrigger>
+                <SelectContent>
+                  {GENDER_OPTIONS.map((g) => <SelectItem key={g.value} value={String(g.value)}>{g.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            )}
+          />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label>Marital status <span className="text-muted-foreground text-xs">(optional)</span></Label>
+          <Controller
+            name="marital_status"
+            control={control}
+            render={({ field }) => (
+              <Select value={field.value != null ? String(field.value) : ''} onValueChange={(v) => field.onChange(Number(v))}>
+                <SelectTrigger className="h-11 w-full"><SelectValue placeholder="Select marital status" /></SelectTrigger>
+                <SelectContent>
+                  {MARITAL_STATUS_OPTIONS.map((m) => <SelectItem key={m.value} value={String(m.value)}>{m.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            )}
+          />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label>Religion <span className="text-muted-foreground text-xs">(optional)</span></Label>
+          <Controller
+            name="religion_id"
+            control={control}
+            render={({ field }) => (
+              <Select value={field.value != null ? String(field.value) : ''} onValueChange={(v) => field.onChange(Number(v))}>
+                <SelectTrigger className="h-11 w-full"><SelectValue placeholder="Select religion" /></SelectTrigger>
+                <SelectContent>
+                  {RELIGION_OPTIONS.map((r) => <SelectItem key={r.value} value={String(r.value)}>{r.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            )}
+          />
+        </div>
       </div>
       <div className="flex flex-col gap-1.5">
         <Label>Address</Label>
@@ -392,6 +478,20 @@ function EditTab({ customer, onSaved }) {
           originalRaw={raw}
           savedPath={customer.customerPanDocument}
         />
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <label className="flex items-center gap-2 cursor-pointer select-none">
+          <Controller
+            name="allow_credit"
+            control={control}
+            render={({ field }) => <Checkbox checked={field.value} onCheckedChange={field.onChange} />}
+          />
+          <span className="text-sm text-foreground">Allow credit</span>
+        </label>
+        {allowCredit && (
+          <Input id="ep_credit_limit" type="number" inputMode="numeric" placeholder="Credit limit" {...register('credit_limit')} className="h-11" />
+        )}
       </div>
 
       <Button type="submit" disabled={updateCustomer.isPending || !isDirty} className="h-11 mt-1">
@@ -919,6 +1019,16 @@ export default function CustomerDetailPage() {
   const { customer, isLoading, isError, refetch } = useRetrieveCustomer(partyId, {
     enabled: !!partyId,
   });
+
+  const { customerId: attachedCustomerId } = useCustomerSession();
+  const wasAttachedRef = useRef(false);
+  useEffect(() => {
+    if (attachedCustomerId === partyId) {
+      wasAttachedRef.current = true;
+    } else if (wasAttachedRef.current) {
+      router.replace('/dashboard');
+    }
+  }, [attachedCustomerId, partyId, router]);
 
   const handleSaved = () => {
     refetch();
