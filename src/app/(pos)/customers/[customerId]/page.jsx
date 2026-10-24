@@ -229,7 +229,10 @@ function EditTab({ customer, onSaved }) {
 
   const allowCredit = watch('allow_credit');
 
+  const loadedPartyIdRef = useRef(null);
   useEffect(() => {
+    if (!raw || loadedPartyIdRef.current === raw.party_id) return;
+    loadedPartyIdRef.current = raw.party_id;
     reset({
       party_name:  raw?.party_name  ?? '',
       mobile:      storedValueToPhone(raw?.mobile),
