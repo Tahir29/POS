@@ -1,15 +1,15 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { ArrowLeft, Download, Lock, SlidersHorizontal, X } from 'lucide-react';
 
 import PillTabs from '@/components/shared/PillTabs';
 import BottomSheet from '@/components/shared/BottomSheet';
+import DataTable from '@/components/shared/DataTable';
 import EmptyState from '@/components/shared/EmptyState';
 import ErrorState from '@/components/shared/ErrorState';
 import { Skeleton } from '@/components/ui/skeleton';
-import { TableHeader, TableBody, TableFooter, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
@@ -48,116 +48,6 @@ const BASE_TABS = [
 ];
 const ADHOC_TAB = { key: 'adhoc', label: 'Ad-hoc Reports' };
 
-// Shared table shell for the four tabular reports — loading/error/empty
-// states match this app's existing ListRowsSkeleton/ErrorState/EmptyState
-// conventions; the column-driven body is local to this page since no
-// generic multi-column DataTable exists elsewhere in the codebase yet.
-const PAGE_SIZE = 100;
-
-function formatTotal(column, value) {
-  if (column.format) return column.format(value);
-  return Number(value.toFixed(3)).toLocaleString('en-IN');
-}
-
-function ReportTable({ columns, rows, isLoading, isError, onRetry, emptyMessage, getRowKey }) {
-  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
-  const scrollRef = useRef(null);
-  const sentinelRef = useRef(null);
-  const hasMore = visibleCount < rows.length;
-
-  useEffect(() => {
-    const node = sentinelRef.current;
-    if (!hasMore || !node) return undefined;
-    const observer = new IntersectionObserver(([entry]) => {
-      if (entry.isIntersecting) setVisibleCount((count) => count + PAGE_SIZE);
-    }, { root: scrollRef.current, rootMargin: '400px' });
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [hasMore, visibleCount]);
-
-  const totals = useMemo(() => {
-    if (!columns.some((c) => c.total)) return null;
-    return Object.fromEntries(columns.filter((c) => c.total)
-      .map((c) => [c.key, rows.reduce((sum, row) => sum + (Number(row[c.key]) || 0), 0)]));
-  }, [columns, rows]);
-
-  if (isLoading) {
-    return (
-      <div className="rounded-xl border border-border overflow-hidden">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="flex items-center gap-4 px-4 py-3 border-b border-border last:border-0">
-            {columns.map((c) => <Skeleton key={c.key} className="h-4 flex-1" />)}
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  if (isError) {
-    return <ErrorState title="Failed to load this report." onRetry={onRetry} />;
-  }
-
-  if (!rows.length) {
-    return <EmptyState title={emptyMessage ?? 'No records for this range.'} />;
-  }
-
-  // A bounded, self-scrolling box (not the whole page). Deliberately NOT the
-  // shared Table primitive here — its own wrapper div sets overflow-x-auto,
-  // which forces overflow-y to also compute as 'auto' (browsers won't allow
-  // one axis visible when the other isn't). Being nearer to the header cells
-  // than this div, THAT wrapper — not this one — would win as the sticky
-  // positioning anchor, no matter what's set here. Scrolling both axes on
-  // this one div directly (never visible/non-visible mixed, so no override)
-  // keeps this the only scroll container, and the header sticks correctly.
-  return (
-    <div className="flex flex-col gap-2">
-    <div ref={scrollRef} className="rounded-xl border border-border max-h-[65vh] overflow-auto">
-      <table className="w-full caption-bottom text-sm">
-        <TableHeader>
-          <TableRow>
-            {columns.map((c) => (
-              <TableHead
-                key={c.key}
-                className={`sticky top-0 z-[1] bg-muted/70 backdrop-blur-sm ${c.align === 'right' ? 'text-right' : ''}`}
-              >
-                {c.label}
-              </TableHead>
-            ))}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rows.slice(0, visibleCount).map((row, i) => (
-            <TableRow key={getRowKey ? getRowKey(row, i) : i}>
-              {columns.map((c) => (
-                <TableCell key={c.key} className={c.align === 'right' ? 'text-right tabular-nums' : undefined}>
-                  {c.format ? c.format(row[c.key], row) : row[c.key] ?? '—'}
-                </TableCell>
-              ))}
-            </TableRow>
-          ))}
-        </TableBody>
-        {totals && (
-          <TableFooter className="sticky bottom-0 z-[1] bg-muted">
-            <TableRow>
-              {columns.map((c, i) => (
-                <TableCell key={c.key} className={`font-semibold ${c.align === 'right' ? 'text-right tabular-nums' : ''}`}>
-                  {c.total ? formatTotal(c, totals[c.key]) : i === 0 ? 'Total' : ''}
-                </TableCell>
-              ))}
-            </TableRow>
-          </TableFooter>
-        )}
-      </table>
-      {hasMore && <div ref={sentinelRef} className="h-px" aria-hidden="true" />}
-    </div>
-    <p className="text-xs text-muted-foreground">
-      Showing {Math.min(visibleCount, rows.length).toLocaleString('en-IN')} of {rows.length.toLocaleString('en-IN')} rows
-      {totals && ' · totals cover all rows'}
-    </p>
-    </div>
-  );
-}
-
 // OrnaVerse's own DataType strings, confirmed live: 'int', 'number', 'string',
 // 'date', 'enum' (paired with EnumTexts). Shared by the on-screen table and
 // the export button's enum-decoding, so neither can drift from the other.
@@ -170,6 +60,7 @@ function getAdhocColumnConfig(info) {
     key: info.Name,
     label: info.Title,
     align: isNumeric ? 'right' : undefined,
+    filter: isEnum,
     format: isEnum
       ? (v) => (v == null ? '—' : info.EnumTexts[String(v)] ?? v)
       : isDate
@@ -183,8 +74,9 @@ function getAdhocColumnConfig(info) {
 // Browse + run one of OrnaVerse's 111 user-built ad-hoc reports. Unlike the
 // curated tabs, these aren't store/date-scoped — Run is called with an empty
 // FilterOverrides, same as OrnaVerse's own default view.
-function AdhocReportsTab({ reportsList, selectedReportId, selectedReport, onSelectReport, runReport }) {
+function AdhocReportsTab({ reportsList, selectedReportId, selectedReport, onSelectReport, runReport, onViewChange }) {
   const [search, setSearch] = useState('');
+  const columns = useMemo(() => runReport.columns.map(getAdhocColumnConfig), [runReport.columns]);
 
   if (!selectedReportId) {
     const trimmed = search.trim().toLowerCase();
@@ -256,8 +148,6 @@ function AdhocReportsTab({ reportsList, selectedReportId, selectedReport, onSele
     );
   }
 
-  const columns = runReport.columns.map(getAdhocColumnConfig);
-
   return (
     <div className="flex flex-col gap-3">
       <Button
@@ -278,13 +168,14 @@ function AdhocReportsTab({ reportsList, selectedReportId, selectedReport, onSele
         )}
       </div>
 
-      <ReportTable
+      <DataTable
+        key={selectedReportId}
         columns={columns}
         rows={runReport.rows}
         isLoading={runReport.isLoading}
         isError={runReport.isError}
         onRetry={runReport.refetch}
-        getRowKey={(row, i) => i}
+        onViewChange={onViewChange}
         emptyMessage="This report returned no rows."
       />
     </div>
@@ -353,57 +244,57 @@ function SalesSummaryTab({ data, isLoading, isError, onRetry }) {
 }
 
 const CATEGORY_COLUMNS = [
-  { key: 'type_name',       label: 'Category' },
+  { key: 'type_name',       label: 'Category', mobile: true },
   { key: 'total_pieces',    label: 'Pieces',     align: 'right', total: true },
   { key: 'total_weight',    label: 'Weight (g)', align: 'right', total: true },
   { key: 'total_sub_total', label: 'Subtotal',   align: 'right', format: formatAmountOrDash, total: true },
   { key: 'total_tax_amount', label: 'Tax',        align: 'right', format: formatAmountOrDash, total: true },
-  { key: 'total_Net_Amount', label: 'Net Amount', align: 'right', format: formatAmountOrDash, total: true },
+  { key: 'total_Net_Amount', label: 'Net Amount', align: 'right', format: formatAmountOrDash, total: true, mobile: true },
 ];
 
 const SALESPERSON_COLUMNS = [
-  { key: 'employee_name', label: 'Sales Person' },
+  { key: 'employee_name', label: 'Sales Person', mobile: true },
   { key: 'employee_code', label: 'Code' },
   { key: 'pieces',        label: 'Pieces',     align: 'right', total: true },
   { key: 'weight',        label: 'Weight (g)', align: 'right', total: true },
   { key: 'sub_total',     label: 'Subtotal',   align: 'right', format: formatAmountOrDash, total: true },
-  { key: 'net_amount',    label: 'Net Amount', align: 'right', format: formatAmountOrDash, total: true },
+  { key: 'net_amount',    label: 'Net Amount', align: 'right', format: formatAmountOrDash, total: true, mobile: true },
 ];
 
 const VELOCITY_COLUMNS = [
-  { key: 'ItemCode',           label: 'Item Code' },
-  { key: 'ItemGroup',          label: 'Group' },
-  { key: 'TotalQuantity',      label: 'Qty Sold',  align: 'right' },
+  { key: 'ItemCode',           label: 'Item Code', mobile: true },
+  { key: 'ItemGroup',          label: 'Group', filter: true },
+  { key: 'TotalQuantity',      label: 'Qty Sold',  align: 'right', mobile: true },
   { key: 'TotalValue',         label: 'Value',     align: 'right', format: formatAmountOrDash },
   { key: 'NormalizedVelocity', label: 'Velocity',  align: 'right', format: (v) => (v == null ? '—' : v.toFixed(2)) },
   { key: 'VelocityRank',       label: 'Rank',      align: 'right' },
-  { key: 'Recommendation',     label: 'Recommendation' },
+  { key: 'Recommendation',     label: 'Recommendation', filter: true },
 ];
 
 const OPEN_ORDERS_COLUMNS = [
-  { key: 'document_no',     label: 'Order No.' },
+  { key: 'document_no',     label: 'Order No.', mobile: true },
   { key: 'document_date',   label: 'Date',      format: formatDatePadded },
   { key: 'party_name',      label: 'Customer' },
   { key: 'net_amount',      label: 'Net Amount', align: 'right', format: formatAmountOrDash },
   { key: 'receipt_amount',  label: 'Received',   align: 'right', format: formatAmountOrDash },
-  { key: 'balance_amount',  label: 'Balance',    align: 'right', format: formatAmountOrDash },
+  { key: 'balance_amount',  label: 'Balance',    align: 'right', format: formatAmountOrDash, mobile: true },
 ];
 
 const STORE_COLUMNS = [
   { key: 'store_code', label: 'Store Code' },
-  { key: 'store_name', label: 'Store Name' },
+  { key: 'store_name', label: 'Store Name', filter: true },
 ];
 
 const STOCK_COLUMNS = [
   { key: 'item_code',          label: 'Item Code' },
   { key: 'item_name',          label: 'Item Name' },
-  { key: 'sku',                label: 'SKU' },
-  { key: 'location_name',      label: 'Location' },
-  { key: 'item_group_name',    label: 'Item Group' },
-  { key: 'type_name',          label: 'Type' },
-  { key: 'sub_type_name',      label: 'Sub Type' },
-  { key: 'karat_name',         label: 'Karat' },
-  { key: 'metal_color_name',   label: 'Metal Color' },
+  { key: 'sku',                label: 'SKU', mobile: true },
+  { key: 'location_name',      label: 'Location', filter: true },
+  { key: 'item_group_name',    label: 'Item Group', filter: true },
+  { key: 'type_name',          label: 'Type', filter: true },
+  { key: 'sub_type_name',      label: 'Sub Type', filter: true },
+  { key: 'karat_name',         label: 'Karat', filter: true },
+  { key: 'metal_color_name',   label: 'Metal Color', filter: true },
   { key: 'item_size_name',     label: 'Size' },
   { key: 'huid',               label: 'HUID' },
   { key: 'certificate_no',     label: 'Certificate No.' },
@@ -411,7 +302,7 @@ const STOCK_COLUMNS = [
   { key: 'supplier_style',     label: 'Supplier Style' },
   { key: 'supplier_batch',     label: 'Supplier Batch' },
   { key: 'pieces',             label: 'Pieces',       align: 'right', total: true },
-  { key: 'weight',             label: 'Gross Wt (g)', align: 'right', total: true },
+  { key: 'weight',             label: 'Gross Wt (g)', align: 'right', total: true, mobile: true },
   { key: 'net_weight',         label: 'Net Wt (g)',   align: 'right', total: true },
   { key: 'diamond_pieces',     label: 'Dia Pcs',      align: 'right', total: true },
   { key: 'diamond_weight',     label: 'Dia Wt (ct)',  align: 'right', total: true },
@@ -425,7 +316,7 @@ const STOCK_COLUMNS = [
   { key: 'center_stone_weight_name',  label: 'Center Stone Wt' },
   { key: 'center_stone_color_name',   label: 'Center Stone Color' },
   { key: 'center_stone_quality_name', label: 'Center Stone Quality' },
-  { key: 'is_allocated',       label: 'Allocated',    format: (v) => (v ? 'Yes' : 'No') },
+  { key: 'is_allocated',       label: 'Allocated',    format: (v) => (v ? 'Yes' : 'No'), filter: true },
 ];
 
 const normalizeName = (name) => String(name ?? '').trim().toLowerCase();
@@ -491,9 +382,8 @@ export default function ReportsPage() {
   const openOrdersReport  = useOpenPosOrdersReport({ ...range, enabled: activeTab === 'openOrders' });
   const stockReport       = useStockReport({ companyIds: selectedCompanyIds, toDate, enabled: activeTab === 'stock' });
 
-const tableKey = `${activeTab}-${selectedCompanyIds.join(',')}-${fromDate}-${toDate}`;
-  const scope = (rows) => scopeRowsToStores(rows, availableStores, selectedCompanyIds);
-  const withStoreColumns = (columns) => (isAllStores ? [...STORE_COLUMNS, ...columns] : columns);
+  const companyKey = selectedCompanyIds.join(',');
+  const tableKey = `${activeTab}-${companyKey}-${fromDate}-${toDate}`;
 
   const [selectedAdhocReportId, setSelectedAdhocReportId] = useState(null);
   const adhocReportsList = useAdhocReportsList();
@@ -505,13 +395,23 @@ const tableKey = `${activeTab}-${selectedCompanyIds.join(',')}-${fromDate}-${toD
   // View permission, surfaced here via isPermissionError.
   const TABS = adhocReportsList.isPermissionError ? BASE_TABS : [...BASE_TABS, ADHOC_TAB];
 
-  const TAB_REPORTS = {
-    category:    { columns: withStoreColumns(CATEGORY_COLUMNS),    rows: scope(categoryReport.rows),    filenamePrefix: 'category-wise-sales' },
-    salesperson: { columns: withStoreColumns(SALESPERSON_COLUMNS), rows: scope(salesPersonReport.rows), filenamePrefix: 'salesperson-wise-sales' },
-    velocity:    { columns: withStoreColumns(VELOCITY_COLUMNS),    rows: scope(velocityReport.rows),    filenamePrefix: 'sku-velocity' },
-    openOrders:  { columns: withStoreColumns(OPEN_ORDERS_COLUMNS), rows: scope(openOrdersReport.rows),  filenamePrefix: 'open-pos-orders' },
-    stock:       { columns: [...STORE_COLUMNS, ...STOCK_COLUMNS],  rows: scope(stockReport.rows),       filenamePrefix: 'jewellery-stock' },
-  };
+  // Memoized so a parent re-render doesn't hand the table new arrays (which would reset its page).
+  const TAB_REPORTS = useMemo(() => {
+    const ids = companyKey ? companyKey.split(',').map(Number) : [];
+    const scope = (rows) => scopeRowsToStores(rows, availableStores, ids);
+    const withStoreColumns = (columns) => (isAllStores ? [...STORE_COLUMNS, ...columns] : columns);
+    return {
+      category:    { columns: withStoreColumns(CATEGORY_COLUMNS),    rows: scope(categoryReport.rows),    filenamePrefix: 'category-wise-sales' },
+      salesperson: { columns: withStoreColumns(SALESPERSON_COLUMNS), rows: scope(salesPersonReport.rows), filenamePrefix: 'salesperson-wise-sales' },
+      velocity:    { columns: withStoreColumns(VELOCITY_COLUMNS),    rows: scope(velocityReport.rows),    filenamePrefix: 'sku-velocity' },
+      openOrders:  { columns: withStoreColumns(OPEN_ORDERS_COLUMNS), rows: scope(openOrdersReport.rows),  filenamePrefix: 'open-pos-orders' },
+      stock:       { columns: [...STORE_COLUMNS, ...STOCK_COLUMNS],  rows: scope(stockReport.rows),       filenamePrefix: 'jewellery-stock' },
+    };
+  }, [companyKey, availableStores, isAllStores, categoryReport.rows, salesPersonReport.rows, velocityReport.rows, openOrdersReport.rows, stockReport.rows]);
+
+  // The on-screen table's filtered + sorted rows and visible columns, so Export Excel matches what's shown.
+  const exportViewRef = useRef(null);
+  const handleViewChange = useCallback((view) => { exportViewRef.current = view; }, []);
 
   const canExport = activeTab === 'summary'
     ? !!summaryReport.data
@@ -537,25 +437,26 @@ const tableKey = `${activeTab}-${selectedCompanyIds.join(',')}-${fromDate}-${toD
       return;
     }
     if (activeTab === 'adhoc') {
-      if (!selectedAdhocReport || adhocReportRun.rows.length === 0) return;
-      const exportColumns = adhocReportRun.columns.map((info) => ({ key: info.Name, label: info.Title }));
-      const exportRows = adhocReportRun.rows.map((row) => {
-        const out = {};
-        adhocReportRun.columns.forEach((info) => {
-          const raw = row[info.Name];
-          out[info.Name] = (info.DataType === 'enum' && info.EnumTexts) ? (info.EnumTexts[String(raw)] ?? raw) : raw;
-        });
-        return out;
-      });
+      const view = exportViewRef.current;
+      if (!selectedAdhocReport || !view?.rows.length) return;
+      const infoByName = new Map(adhocReportRun.columns.map((info) => [info.Name, info]));
+      const exportColumns = view.columns.map(({ key, label }) => ({ key, label }));
+      const exportRows = view.rows.map((row) => Object.fromEntries(view.columns.map(({ key }) => {
+        const info = infoByName.get(key);
+        const raw = row[key];
+        return [key, (info?.DataType === 'enum' && info.EnumTexts) ? (info.EnumTexts[String(raw)] ?? raw) : raw];
+      })));
       const safeName = selectedAdhocReport.Name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
       downloadXlsx(`${safeName}.xlsx`, [{ name: selectedAdhocReport.Name, columns: exportColumns, rows: exportRows }]);
       return;
     }
-    const { columns, rows, filenamePrefix } = TAB_REPORTS[activeTab];
+    const view = exportViewRef.current;
+    if (!view?.rows.length) return;
+    const { filenamePrefix } = TAB_REPORTS[activeTab];
     const filename = activeTab === 'stock'
       ? `${filenamePrefix}_as_of_${toDate}.xlsx`
       : `${filenamePrefix}_${fromDate}_to_${toDate}.xlsx`;
-    downloadXlsx(filename, [{ name: 'Report', columns, rows }]);
+    downloadXlsx(filename, [{ name: 'Report', columns: view.columns, rows: view.rows }]);
   };
 
   const activeTabLabel = TABS.find((t) => t.key === activeTab)?.label ?? 'Report';
@@ -760,66 +661,66 @@ const tableKey = `${activeTab}-${selectedCompanyIds.join(',')}-${fromDate}-${toD
           )}
 
           {activeTab === 'category' && (
-            <ReportTable
+            <DataTable
               key={tableKey}
               columns={TAB_REPORTS.category.columns}
               rows={TAB_REPORTS.category.rows}
               isLoading={categoryReport.isLoading}
               isError={categoryReport.isError}
               onRetry={categoryReport.refetch}
-              getRowKey={(row) => `${row.company_id}-${row.type_name}`}
+              onViewChange={handleViewChange}
               emptyMessage="No category sales in this range."
             />
           )}
 
           {activeTab === 'salesperson' && (
-            <ReportTable
+            <DataTable
               key={tableKey}
               columns={TAB_REPORTS.salesperson.columns}
               rows={TAB_REPORTS.salesperson.rows}
               isLoading={salesPersonReport.isLoading}
               isError={salesPersonReport.isError}
               onRetry={salesPersonReport.refetch}
-              getRowKey={(row, i) => row.transaction_item_id ?? i}
+              onViewChange={handleViewChange}
               emptyMessage="No salesperson sales in this range."
             />
           )}
 
           {activeTab === 'velocity' && (
-            <ReportTable
+            <DataTable
               key={tableKey}
               columns={TAB_REPORTS.velocity.columns}
               rows={TAB_REPORTS.velocity.rows}
               isLoading={velocityReport.isLoading}
               isError={velocityReport.isError}
               onRetry={velocityReport.refetch}
-              getRowKey={(row) => row.performance_id}
+              onViewChange={handleViewChange}
               emptyMessage="No SKU velocity data in this range."
             />
           )}
 
           {activeTab === 'openOrders' && (
-            <ReportTable
+            <DataTable
               key={tableKey}
               columns={TAB_REPORTS.openOrders.columns}
               rows={TAB_REPORTS.openOrders.rows}
               isLoading={openOrdersReport.isLoading}
               isError={openOrdersReport.isError}
               onRetry={openOrdersReport.refetch}
-              getRowKey={(row, i) => i} // one Entity per order LINE, not per order — document_no repeats
+              onViewChange={handleViewChange}
               emptyMessage="No open orders in this range."
             />
           )}
 
           {activeTab === 'stock' && (
-            <ReportTable
+            <DataTable
               key={tableKey}
               columns={TAB_REPORTS.stock.columns}
               rows={TAB_REPORTS.stock.rows}
               isLoading={stockReport.isLoading}
               isError={stockReport.isError}
               onRetry={stockReport.refetch}
-              getRowKey={(row, i) => i} // SKUs repeat (bulk stock rows)
+              onViewChange={handleViewChange}
               emptyMessage="No stock for this store on this date."
             />
           )}
@@ -831,6 +732,7 @@ const tableKey = `${activeTab}-${selectedCompanyIds.join(',')}-${fromDate}-${toD
               selectedReport={selectedAdhocReport}
               onSelectReport={setSelectedAdhocReportId}
               runReport={adhocReportRun}
+              onViewChange={handleViewChange}
             />
           )}
         </>
