@@ -1,19 +1,23 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSelector } from 'react-redux';
-import { ArrowLeft, Download, Lock, X } from 'lucide-react';
+import { ArrowLeft, Download, Lock, SlidersHorizontal, X } from 'lucide-react';
 
 import PillTabs from '@/components/shared/PillTabs';
+import BottomSheet from '@/components/shared/BottomSheet';
 import EmptyState from '@/components/shared/EmptyState';
 import ErrorState from '@/components/shared/ErrorState';
 import { Skeleton } from '@/components/ui/skeleton';
-import { TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
+import { TableHeader, TableBody, TableFooter, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Switch } from '@/components/ui/switch';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
 import KPICard from '@/components/features/dashboard/KPICard';
 import { selectActiveStoreId, selectActiveStoreName, selectAvailableStores } from '@/store/slices/storeSlice';
+import { selectIsSuperAdmin } from '@/store/slices/authSlice';
 import { todayDateString, formatDatePadded } from '@/lib/dateUtils';
 import { formatAmount, formatAmountOrDash } from '@/lib/priceUtils';
 import { downloadXlsx } from '@/lib/excelExport';
@@ -23,6 +27,7 @@ import { useCategoryWiseSalesReport } from '@/hooks/reports/useCategoryWiseSales
 import { useSalesPersonWiseSalesReport } from '@/hooks/reports/useSalesPersonWiseSalesReport';
 import { useSkuVelocityReport } from '@/hooks/reports/useSkuVelocityReport';
 import { useOpenPosOrdersReport } from '@/hooks/reports/useOpenPosOrdersReport';
+import { useStockReport } from '@/hooks/reports/useStockReport';
 import { useAdhocReportsList } from '@/hooks/reports/useAdhocReportsList';
 import { useAdhocReportRun } from '@/hooks/reports/useAdhocReportRun';
 
@@ -39,6 +44,7 @@ const BASE_TABS = [
   { key: 'salesperson', label: 'Salesperson Wise' },
   { key: 'velocity',    label: 'SKU Velocity' },
   { key: 'openOrders',  label: 'Open Orders' },
+  { key: 'stock',       label: 'Stock' },
 ];
 const ADHOC_TAB = { key: 'adhoc', label: 'Ad-hoc Reports' };
 
@@ -46,7 +52,35 @@ const ADHOC_TAB = { key: 'adhoc', label: 'Ad-hoc Reports' };
 // states match this app's existing ListRowsSkeleton/ErrorState/EmptyState
 // conventions; the column-driven body is local to this page since no
 // generic multi-column DataTable exists elsewhere in the codebase yet.
+const PAGE_SIZE = 100;
+
+function formatTotal(column, value) {
+  if (column.format) return column.format(value);
+  return Number(value.toFixed(3)).toLocaleString('en-IN');
+}
+
 function ReportTable({ columns, rows, isLoading, isError, onRetry, emptyMessage, getRowKey }) {
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const scrollRef = useRef(null);
+  const sentinelRef = useRef(null);
+  const hasMore = visibleCount < rows.length;
+
+  useEffect(() => {
+    const node = sentinelRef.current;
+    if (!hasMore || !node) return undefined;
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) setVisibleCount((count) => count + PAGE_SIZE);
+    }, { root: scrollRef.current, rootMargin: '400px' });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [hasMore, visibleCount]);
+
+  const totals = useMemo(() => {
+    if (!columns.some((c) => c.total)) return null;
+    return Object.fromEntries(columns.filter((c) => c.total)
+      .map((c) => [c.key, rows.reduce((sum, row) => sum + (Number(row[c.key]) || 0), 0)]));
+  }, [columns, rows]);
+
   if (isLoading) {
     return (
       <div className="rounded-xl border border-border overflow-hidden">
@@ -76,7 +110,8 @@ function ReportTable({ columns, rows, isLoading, isError, onRetry, emptyMessage,
   // this one div directly (never visible/non-visible mixed, so no override)
   // keeps this the only scroll container, and the header sticks correctly.
   return (
-    <div className="rounded-xl border border-border max-h-[65vh] overflow-auto">
+    <div className="flex flex-col gap-2">
+    <div ref={scrollRef} className="rounded-xl border border-border max-h-[65vh] overflow-auto">
       <table className="w-full caption-bottom text-sm">
         <TableHeader>
           <TableRow>
@@ -91,7 +126,7 @@ function ReportTable({ columns, rows, isLoading, isError, onRetry, emptyMessage,
           </TableRow>
         </TableHeader>
         <TableBody>
-          {rows.map((row, i) => (
+          {rows.slice(0, visibleCount).map((row, i) => (
             <TableRow key={getRowKey ? getRowKey(row, i) : i}>
               {columns.map((c) => (
                 <TableCell key={c.key} className={c.align === 'right' ? 'text-right tabular-nums' : undefined}>
@@ -101,7 +136,24 @@ function ReportTable({ columns, rows, isLoading, isError, onRetry, emptyMessage,
             </TableRow>
           ))}
         </TableBody>
+        {totals && (
+          <TableFooter className="sticky bottom-0 z-[1] bg-muted">
+            <TableRow>
+              {columns.map((c, i) => (
+                <TableCell key={c.key} className={`font-semibold ${c.align === 'right' ? 'text-right tabular-nums' : ''}`}>
+                  {c.total ? formatTotal(c, totals[c.key]) : i === 0 ? 'Total' : ''}
+                </TableCell>
+              ))}
+            </TableRow>
+          </TableFooter>
+        )}
       </table>
+      {hasMore && <div ref={sentinelRef} className="h-px" aria-hidden="true" />}
+    </div>
+    <p className="text-xs text-muted-foreground">
+      Showing {Math.min(visibleCount, rows.length).toLocaleString('en-IN')} of {rows.length.toLocaleString('en-IN')} rows
+      {totals && ' · totals cover all rows'}
+    </p>
     </div>
   );
 }
@@ -302,20 +354,20 @@ function SalesSummaryTab({ data, isLoading, isError, onRetry }) {
 
 const CATEGORY_COLUMNS = [
   { key: 'type_name',       label: 'Category' },
-  { key: 'total_pieces',    label: 'Pieces',     align: 'right' },
-  { key: 'total_weight',    label: 'Weight (g)', align: 'right' },
-  { key: 'total_sub_total', label: 'Subtotal',   align: 'right', format: formatAmountOrDash },
-  { key: 'total_tax_amount', label: 'Tax',        align: 'right', format: formatAmountOrDash },
-  { key: 'total_Net_Amount', label: 'Net Amount', align: 'right', format: formatAmountOrDash },
+  { key: 'total_pieces',    label: 'Pieces',     align: 'right', total: true },
+  { key: 'total_weight',    label: 'Weight (g)', align: 'right', total: true },
+  { key: 'total_sub_total', label: 'Subtotal',   align: 'right', format: formatAmountOrDash, total: true },
+  { key: 'total_tax_amount', label: 'Tax',        align: 'right', format: formatAmountOrDash, total: true },
+  { key: 'total_Net_Amount', label: 'Net Amount', align: 'right', format: formatAmountOrDash, total: true },
 ];
 
 const SALESPERSON_COLUMNS = [
   { key: 'employee_name', label: 'Sales Person' },
   { key: 'employee_code', label: 'Code' },
-  { key: 'pieces',        label: 'Pieces',     align: 'right' },
-  { key: 'weight',        label: 'Weight (g)', align: 'right' },
-  { key: 'sub_total',     label: 'Subtotal',   align: 'right', format: formatAmountOrDash },
-  { key: 'net_amount',    label: 'Net Amount', align: 'right', format: formatAmountOrDash },
+  { key: 'pieces',        label: 'Pieces',     align: 'right', total: true },
+  { key: 'weight',        label: 'Weight (g)', align: 'right', total: true },
+  { key: 'sub_total',     label: 'Subtotal',   align: 'right', format: formatAmountOrDash, total: true },
+  { key: 'net_amount',    label: 'Net Amount', align: 'right', format: formatAmountOrDash, total: true },
 ];
 
 const VELOCITY_COLUMNS = [
@@ -337,17 +389,74 @@ const OPEN_ORDERS_COLUMNS = [
   { key: 'balance_amount',  label: 'Balance',    align: 'right', format: formatAmountOrDash },
 ];
 
+const STORE_COLUMNS = [
+  { key: 'store_code', label: 'Store Code' },
+  { key: 'store_name', label: 'Store Name' },
+];
+
+const STOCK_COLUMNS = [
+  { key: 'item_code',          label: 'Item Code' },
+  { key: 'item_name',          label: 'Item Name' },
+  { key: 'sku',                label: 'SKU' },
+  { key: 'location_name',      label: 'Location' },
+  { key: 'item_group_name',    label: 'Item Group' },
+  { key: 'type_name',          label: 'Type' },
+  { key: 'sub_type_name',      label: 'Sub Type' },
+  { key: 'karat_name',         label: 'Karat' },
+  { key: 'metal_color_name',   label: 'Metal Color' },
+  { key: 'item_size_name',     label: 'Size' },
+  { key: 'huid',               label: 'HUID' },
+  { key: 'certificate_no',     label: 'Certificate No.' },
+  { key: 'hsn',                label: 'HSN' },
+  { key: 'supplier_style',     label: 'Supplier Style' },
+  { key: 'supplier_batch',     label: 'Supplier Batch' },
+  { key: 'pieces',             label: 'Pieces',       align: 'right', total: true },
+  { key: 'weight',             label: 'Gross Wt (g)', align: 'right', total: true },
+  { key: 'net_weight',         label: 'Net Wt (g)',   align: 'right', total: true },
+  { key: 'diamond_pieces',     label: 'Dia Pcs',      align: 'right', total: true },
+  { key: 'diamond_weight',     label: 'Dia Wt (ct)',  align: 'right', total: true },
+  { key: 'color_stone_pieces', label: 'CS Pcs',       align: 'right', total: true },
+  { key: 'color_stone_weight', label: 'CS Wt',        align: 'right', total: true },
+  { key: 'stone_pieces',       label: 'Stone Pcs',    align: 'right', total: true },
+  { key: 'stone_weight',       label: 'Stone Wt',     align: 'right', total: true },
+  { key: 'other_pieces',       label: 'Other Pcs',    align: 'right', total: true },
+  { key: 'other_weight',       label: 'Other Wt',     align: 'right', total: true },
+  { key: 'center_stone_shape_name',   label: 'Center Stone Shape' },
+  { key: 'center_stone_weight_name',  label: 'Center Stone Wt' },
+  { key: 'center_stone_color_name',   label: 'Center Stone Color' },
+  { key: 'center_stone_quality_name', label: 'Center Stone Quality' },
+  { key: 'is_allocated',       label: 'Allocated',    format: (v) => (v ? 'Yes' : 'No') },
+];
+
+const normalizeName = (name) => String(name ?? '').trim().toLowerCase();
+
+// Rows identify their store differently per endpoint (company_id, company_code,
+// or only the store's name). Rows outside the selected stores are dropped —
+// SKU Velocity ignores company_ids upstream and returns every store.
+function scopeRowsToStores(rows, stores, selectedIds) {
+  const byId   = new Map(stores.map((s) => [s.company_id, s]));
+  const byCode = new Map(stores.map((s) => [s.company_code, s]));
+  const byName = new Map(stores.map((s) => [normalizeName(s.mailing_name), s]));
+  const selected = new Set(selectedIds);
+  return rows.flatMap((row) => {
+    const store = byId.get(row.company_id)
+      ?? byCode.get(row.company_code)
+      ?? byName.get(normalizeName(row.Company ?? row.mailing_name));
+    if (!store || !selected.has(store.company_id)) return [];
+    return [{ ...row, store_code: store.company_code, store_name: store.mailing_name }];
+  });
+}
+
 export default function ReportsPage() {
   const companyId   = useSelector(selectActiveStoreId);
   const companyName = useSelector(selectActiveStoreName);
   const availableStores = useSelector(selectAvailableStores);
+  const isSuperAdmin = useSelector(selectIsSuperAdmin);
 
   const [activeTab, setActiveTab] = useState('summary');
-  // All-stores toggle — Sales Summary only: POSDashbaord/List is the one
-  // report endpoint confirmed live to aggregate correctly across multiple
-  // company_ids in a single call (2026-10-19). The other tabs hit different
-  // endpoints that haven't been confirmed the same way, so they stay single-store.
-  const [allStores, setAllStores] = useState(false);
+  // Super admin only: null = the active store, 'all', or a company_id string. Store logins are always pinned to their active store.
+  const [storeFilter, setStoreFilter] = useState(null);
+  const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
   const [fromDate, setFromDate] = useState(() => firstOfMonthDateString());
   const [toDate, setToDate]     = useState(() => todayDateString());
   const hasCustomRange = fromDate !== firstOfMonthDateString() || toDate !== todayDateString();
@@ -362,16 +471,29 @@ export default function ReportsPage() {
     setToDate(todayDateString());
   };
 
-  const range = { companyId, fromDate, toDate };
-  const summaryCompanyIds = allStores
-    ? availableStores.map((s) => s.company_id)
-    : companyId ? [companyId] : [];
+  const isAllStores = isSuperAdmin && storeFilter === 'all';
+  const selectedCompanyIds = !companyId
+    ? []
+    : isAllStores
+      ? availableStores.map((s) => s.company_id)
+      : [isSuperAdmin && storeFilter ? Number(storeFilter) : companyId];
+  const selectedStoreName = isAllStores
+    ? `all ${availableStores.length} stores`
+    : availableStores.find((s) => s.company_id === selectedCompanyIds[0])?.mailing_name ?? companyName;
 
-  const summaryReport     = usePosDashboardReport({ companyIds: summaryCompanyIds, fromDate, toDate });
-  const categoryReport    = useCategoryWiseSalesReport(range);
-  const salesPersonReport = useSalesPersonWiseSalesReport(range);
-  const velocityReport    = useSkuVelocityReport(range);
-  const openOrdersReport  = useOpenPosOrdersReport(range);
+  const range = { companyIds: selectedCompanyIds, fromDate, toDate };
+
+  // Only the open tab's report is fetched — firing all of them at once adds needless load on OrnaVerse.
+  const summaryReport     = usePosDashboardReport({ ...range, enabled: activeTab === 'summary' });
+  const categoryReport    = useCategoryWiseSalesReport({ ...range, enabled: activeTab === 'category' });
+  const salesPersonReport = useSalesPersonWiseSalesReport({ ...range, enabled: activeTab === 'salesperson' });
+  const velocityReport    = useSkuVelocityReport({ ...range, enabled: activeTab === 'velocity' });
+  const openOrdersReport  = useOpenPosOrdersReport({ ...range, enabled: activeTab === 'openOrders' });
+  const stockReport       = useStockReport({ companyIds: selectedCompanyIds, toDate, enabled: activeTab === 'stock' });
+
+const tableKey = `${activeTab}-${selectedCompanyIds.join(',')}-${fromDate}-${toDate}`;
+  const scope = (rows) => scopeRowsToStores(rows, availableStores, selectedCompanyIds);
+  const withStoreColumns = (columns) => (isAllStores ? [...STORE_COLUMNS, ...columns] : columns);
 
   const [selectedAdhocReportId, setSelectedAdhocReportId] = useState(null);
   const adhocReportsList = useAdhocReportsList();
@@ -384,10 +506,11 @@ export default function ReportsPage() {
   const TABS = adhocReportsList.isPermissionError ? BASE_TABS : [...BASE_TABS, ADHOC_TAB];
 
   const TAB_REPORTS = {
-    category:    { columns: CATEGORY_COLUMNS,    rows: categoryReport.rows,    filenamePrefix: 'category-wise-sales' },
-    salesperson: { columns: SALESPERSON_COLUMNS, rows: salesPersonReport.rows, filenamePrefix: 'salesperson-wise-sales' },
-    velocity:    { columns: VELOCITY_COLUMNS,    rows: velocityReport.rows,    filenamePrefix: 'sku-velocity' },
-    openOrders:  { columns: OPEN_ORDERS_COLUMNS, rows: openOrdersReport.rows,  filenamePrefix: 'open-pos-orders' },
+    category:    { columns: withStoreColumns(CATEGORY_COLUMNS),    rows: scope(categoryReport.rows),    filenamePrefix: 'category-wise-sales' },
+    salesperson: { columns: withStoreColumns(SALESPERSON_COLUMNS), rows: scope(salesPersonReport.rows), filenamePrefix: 'salesperson-wise-sales' },
+    velocity:    { columns: withStoreColumns(VELOCITY_COLUMNS),    rows: scope(velocityReport.rows),    filenamePrefix: 'sku-velocity' },
+    openOrders:  { columns: withStoreColumns(OPEN_ORDERS_COLUMNS), rows: scope(openOrdersReport.rows),  filenamePrefix: 'open-pos-orders' },
+    stock:       { columns: [...STORE_COLUMNS, ...STOCK_COLUMNS],  rows: scope(stockReport.rows),       filenamePrefix: 'jewellery-stock' },
   };
 
   const canExport = activeTab === 'summary'
@@ -429,95 +552,197 @@ export default function ReportsPage() {
       return;
     }
     const { columns, rows, filenamePrefix } = TAB_REPORTS[activeTab];
-    downloadXlsx(`${filenamePrefix}_${fromDate}_to_${toDate}.xlsx`, [{ name: 'Report', columns, rows }]);
+    const filename = activeTab === 'stock'
+      ? `${filenamePrefix}_as_of_${toDate}.xlsx`
+      : `${filenamePrefix}_${fromDate}_to_${toDate}.xlsx`;
+    downloadXlsx(filename, [{ name: 'Report', columns, rows }]);
   };
 
+  const activeTabLabel = TABS.find((t) => t.key === activeTab)?.label ?? 'Report';
+  const rangeSummary = activeTab === 'adhoc'
+    ? 'All stores and dates'
+    : activeTab === 'stock'
+      ? `As of ${formatDatePadded(toDate)}`
+      : `${formatDatePadded(fromDate)} – ${formatDatePadded(toDate)}`;
+
+  const dateInputs = activeTab === 'adhoc' ? (
+    <p className="text-xs text-muted-foreground">
+      Ad-hoc reports query live across all stores and dates — not scoped to a range.
+    </p>
+  ) : (
+    <div className="flex items-center gap-2 w-full md:w-auto">
+      {activeTab === 'stock' ? (
+        <span className="text-muted-foreground text-sm shrink-0">Stock as of</span>
+      ) : (
+        <>
+          <Input
+            type="date"
+            value={fromDate}
+            max={todayDateString()}
+            onChange={(e) => setFromDate(e.target.value)}
+            aria-label="From date"
+            className="h-11 flex-1 md:h-9 md:w-37.5 md:flex-none"
+          />
+          <span className="text-muted-foreground text-sm shrink-0">to</span>
+        </>
+      )}
+      <Input
+        type="date"
+        value={toDate}
+        max={todayDateString()}
+        onChange={(e) => setToDate(e.target.value)}
+        aria-label="To date"
+        className="h-11 flex-1 md:h-9 md:w-37.5 md:flex-none"
+      />
+    </div>
+  );
+
+  const storeSelect = isSuperAdmin && activeTab !== 'adhoc' && (
+    <Select value={storeFilter ?? String(companyId)} onValueChange={setStoreFilter}>
+      <SelectTrigger className="h-11 w-full md:h-9 md:w-56" aria-label="Store">
+        <SelectValue placeholder="Select store" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="all">All stores</SelectItem>
+        {availableStores.map((store) => (
+          <SelectItem key={store.company_id} value={String(store.company_id)}>
+            {store.company_code} — {store.mailing_name}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+
+  const rangeButtons = activeTab !== 'adhoc' && (
+    <>
+      <Button type="button" variant="outline" size="sm" onClick={handleToday} className="flex-1 md:flex-none">
+        Today
+      </Button>
+      {hasCustomRange && (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={handleResetRange}
+          className="flex-1 gap-1.5 md:flex-none"
+          aria-label="Reset date range"
+        >
+          <X size={14} aria-hidden="true" />
+          Reset
+        </Button>
+      )}
+    </>
+  );
+
+  const exportButton = (className) => (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      onClick={handleExport}
+      disabled={!canExport}
+      className={`gap-1.5 ${className}`}
+    >
+      <Download size={14} aria-hidden="true" />
+      Export Excel
+    </Button>
+  );
+
   return (
-    <div className="flex flex-col gap-4 w-full p-4 md:p-6">
+    <div className="flex flex-col gap-4 w-full p-4 pb-28 md:p-6 md:pb-6">
       <div className="sticky top-0 z-10 -mx-4 -mt-4 flex flex-col gap-2 border-b border-border bg-background px-4 pt-4 pb-3 md:-mx-6 md:-mt-6 md:px-6 md:pt-6">
         <p className="text-sm text-muted-foreground">
-          {activeTab === 'summary' && allStores
-            ? `For all ${availableStores.length} stores`
-            : companyName ? `For ${companyName}` : 'For the active store'}
+          {selectedStoreName ? `For ${selectedStoreName}` : 'For the active store'}
         </p>
 
         {companyId && (
           <>
-            <div className="flex flex-wrap items-center gap-2">
-              {activeTab === 'adhoc' ? (
-                <p className="text-xs text-muted-foreground">
-                  Ad-hoc reports query live across all stores and dates — not scoped to a range.
-                </p>
-              ) : (
-                <div className="flex items-center gap-2 w-full sm:w-auto">
-                  <Input
-                    type="date"
-                    value={fromDate}
-                    max={todayDateString()}
-                    onChange={(e) => setFromDate(e.target.value)}
-                    aria-label="From date"
-                    className="flex-1 sm:w-37.5 sm:flex-none"
-                  />
-                  <span className="text-muted-foreground text-sm shrink-0">to</span>
-                  <Input
-                    type="date"
-                    value={toDate}
-                    max={todayDateString()}
-                    onChange={(e) => setToDate(e.target.value)}
-                    aria-label="To date"
-                    className="flex-1 sm:w-37.5 sm:flex-none"
-                  />
-                </div>
-              )}
+            <div className="md:hidden flex flex-col gap-2">
+              <p className="text-sm">
+                <span className="font-semibold text-foreground">{activeTabLabel}</span>
+                <span className="text-muted-foreground"> · {rangeSummary}</span>
+              </p>
+              {exportButton('h-10 w-full')}
+            </div>
 
-              <div className="flex items-center gap-2 sm:ml-auto">
-                {activeTab === 'summary' && availableStores.length > 1 && (
-                  <label className="flex items-center gap-2 text-sm text-foreground">
-                    <Switch checked={allStores} onCheckedChange={setAllStores} aria-label="Show all stores" />
-                    All stores
-                  </label>
-                )}
-                {activeTab !== 'adhoc' && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={handleToday}
-                  >
-                    Today
-                  </Button>
-                )}
-                {activeTab !== 'adhoc' && hasCustomRange && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={handleResetRange}
-                    className="gap-1.5"
-                    aria-label="Reset date range"
-                  >
-                    <X size={14} aria-hidden="true" />
-                    Reset
-                  </Button>
-                )}
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleExport}
-                  disabled={!canExport}
-                  className="gap-1.5"
-                >
-                  <Download size={14} aria-hidden="true" />
-                  Export Excel
-                </Button>
+            <div className="hidden md:flex flex-wrap items-center gap-2">
+              {dateInputs}
+              <div className="flex items-center gap-2 ml-auto">
+                {storeSelect}
+                {rangeButtons}
+                {exportButton('')}
               </div>
             </div>
 
-            <PillTabs tabs={TABS} value={activeTab} onChange={setActiveTab} scrollable variant="chip" />
+            <div className="hidden md:block">
+              <PillTabs tabs={TABS} value={activeTab} onChange={setActiveTab} scrollable variant="chip" />
+            </div>
           </>
         )}
       </div>
+
+      {companyId && (
+        <div className="md:hidden fixed inset-x-0 bottom-4 z-30 flex justify-center pointer-events-none">
+          <button
+            type="button"
+            onClick={() => setIsMobileFilterOpen(true)}
+            className="pointer-events-auto flex items-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-medium text-background shadow-xl active:bg-primary/90"
+          >
+            <SlidersHorizontal size={16} aria-hidden="true" />
+            {activeTabLabel} · Filters
+          </button>
+        </div>
+      )}
+
+      <BottomSheet
+        isOpen={isMobileFilterOpen}
+        onClose={() => setIsMobileFilterOpen(false)}
+        title="Report & Filters"
+        footerClassName="p-0"
+        footer={
+          <Button type="button" className="min-h-14 w-full rounded-none" onClick={() => setIsMobileFilterOpen(false)}>
+            Show Report
+          </Button>
+        }
+      >
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-2">
+            <span className="text-xs font-medium text-muted-foreground">Report</span>
+            <div className="grid grid-cols-2 gap-2">
+              {TABS.map((tab) => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => setActiveTab(tab.key)}
+                  aria-pressed={activeTab === tab.key}
+                  className={`min-h-11 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                    activeTab === tab.key
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-muted/40 text-muted-foreground hover:bg-muted/70'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <span className="text-xs font-medium text-muted-foreground">
+              {activeTab === 'stock' ? 'Date' : 'Date range'}
+            </span>
+            {dateInputs}
+            {rangeButtons && <div className="flex gap-2">{rangeButtons}</div>}
+          </div>
+
+          {storeSelect && (
+            <div className="flex flex-col gap-2">
+              <span className="text-xs font-medium text-muted-foreground">Store</span>
+              {storeSelect}
+            </div>
+          )}
+        </div>
+      </BottomSheet>
 
       {!companyId ? (
         <div className="rounded-xl border border-border p-6 text-center">
@@ -536,20 +761,22 @@ export default function ReportsPage() {
 
           {activeTab === 'category' && (
             <ReportTable
-              columns={CATEGORY_COLUMNS}
-              rows={categoryReport.rows}
+              key={tableKey}
+              columns={TAB_REPORTS.category.columns}
+              rows={TAB_REPORTS.category.rows}
               isLoading={categoryReport.isLoading}
               isError={categoryReport.isError}
               onRetry={categoryReport.refetch}
-              getRowKey={(row) => row.type_name}
+              getRowKey={(row) => `${row.company_id}-${row.type_name}`}
               emptyMessage="No category sales in this range."
             />
           )}
 
           {activeTab === 'salesperson' && (
             <ReportTable
-              columns={SALESPERSON_COLUMNS}
-              rows={salesPersonReport.rows}
+              key={tableKey}
+              columns={TAB_REPORTS.salesperson.columns}
+              rows={TAB_REPORTS.salesperson.rows}
               isLoading={salesPersonReport.isLoading}
               isError={salesPersonReport.isError}
               onRetry={salesPersonReport.refetch}
@@ -560,8 +787,9 @@ export default function ReportsPage() {
 
           {activeTab === 'velocity' && (
             <ReportTable
-              columns={VELOCITY_COLUMNS}
-              rows={velocityReport.rows}
+              key={tableKey}
+              columns={TAB_REPORTS.velocity.columns}
+              rows={TAB_REPORTS.velocity.rows}
               isLoading={velocityReport.isLoading}
               isError={velocityReport.isError}
               onRetry={velocityReport.refetch}
@@ -572,13 +800,27 @@ export default function ReportsPage() {
 
           {activeTab === 'openOrders' && (
             <ReportTable
-              columns={OPEN_ORDERS_COLUMNS}
-              rows={openOrdersReport.rows}
+              key={tableKey}
+              columns={TAB_REPORTS.openOrders.columns}
+              rows={TAB_REPORTS.openOrders.rows}
               isLoading={openOrdersReport.isLoading}
               isError={openOrdersReport.isError}
               onRetry={openOrdersReport.refetch}
               getRowKey={(row, i) => i} // one Entity per order LINE, not per order — document_no repeats
               emptyMessage="No open orders in this range."
+            />
+          )}
+
+          {activeTab === 'stock' && (
+            <ReportTable
+              key={tableKey}
+              columns={TAB_REPORTS.stock.columns}
+              rows={TAB_REPORTS.stock.rows}
+              isLoading={stockReport.isLoading}
+              isError={stockReport.isError}
+              onRetry={stockReport.refetch}
+              getRowKey={(row, i) => i} // SKUs repeat (bulk stock rows)
+              emptyMessage="No stock for this store on this date."
             />
           )}
 

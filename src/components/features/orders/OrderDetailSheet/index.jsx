@@ -15,6 +15,7 @@ import APP_CONFIG from '@/constants/appConfig';
 import { formatAmountOrNull as formatCurrency } from '@/lib/priceUtils';
 import { formatDateNumeric } from '@/lib/dateUtils';
 import { resolveImageSrc } from '@/lib/resolveImageSrc';
+import { formatMobileWithCountryCode } from '@/lib/phoneFormat';
 
 function Row({ label, value, bold, border }) {
   if (value === null || value === undefined || value === '') return null;
@@ -48,7 +49,7 @@ function OrderContent({ raw, status }) {
       <Row label="Order No." value={raw.document_no} />
       <Row label="Date" value={formatDateNumeric(raw.document_date)} />
       <Row label="Customer" value={raw.party_name} />
-      <Row label="Mobile"   value={raw.mobile} />
+      <Row label="Mobile"   value={formatMobileWithCountryCode(raw.mobile)} />
       <Row label="Email"    value={raw.email} />
       <Row label="Store"    value={raw.company_name} />
       <Row label="Status"   value={STATUS_LABELS[status] ?? null} />

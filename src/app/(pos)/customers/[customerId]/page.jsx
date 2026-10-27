@@ -57,6 +57,7 @@ import Logo from '@/components/shared/Logo';
 import { formatAmountOrDash } from '@/lib/priceUtils';
 import { formatDateNumeric, todayDateString } from '@/lib/dateUtils';
 import Link from 'next/link';
+import { formatMobileWithCountryCode } from '@/lib/phoneFormat';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const fmt = formatAmountOrDash;
@@ -119,7 +120,7 @@ function ProfileTab({ customer }) {
       {customerMobile && (
         <div className="flex items-center gap-2 text-muted-foreground">
           <Phone size={15} className="shrink-0 text-muted-foreground/70" />
-          {customerMobile}
+          {formatMobileWithCountryCode(customerMobile)}
         </div>
       )}
       {customerEmail && (
@@ -300,7 +301,7 @@ function EditTab({ customer, onSaved }) {
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="ep_mobile">Mobile <span className="text-destructive">*</span></Label>
           {isMaskedValue(raw?.mobile) ? (
-            <Input id="ep_mobile" value={raw.mobile} disabled className="h-11" />
+            <Input id="ep_mobile" value={formatMobileWithCountryCode(raw.mobile)} disabled className="h-11" />
           ) : (
             <Controller
               name="mobile"
@@ -316,7 +317,7 @@ function EditTab({ customer, onSaved }) {
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="ep_phone">Phone <span className="text-muted-foreground text-xs">(optional)</span></Label>
           {isMaskedValue(raw?.phone) ? (
-            <Input id="ep_phone" value={raw.phone} disabled className="h-11" />
+            <Input id="ep_phone" value={formatMobileWithCountryCode(raw.phone)} disabled className="h-11" />
           ) : (
             <Controller
               name="phone"

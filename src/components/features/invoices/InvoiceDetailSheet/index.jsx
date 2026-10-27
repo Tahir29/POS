@@ -22,6 +22,7 @@ import APP_CONFIG from '@/constants/appConfig';
 import { formatAmountOrNull as formatCurrency } from '@/lib/priceUtils';
 import { formatDateNumeric } from '@/lib/dateUtils';
 import { resolveImageSrc } from '@/lib/resolveImageSrc';
+import { formatMobileWithCountryCode } from '@/lib/phoneFormat';
 
 function Row({ label, value, bold, border }) {
   if (value === null || value === undefined || value === '') return null;
@@ -45,7 +46,7 @@ function InvoiceContent({ raw }) {
       <Row label="Invoice No." value={raw.document_no} />
       <Row label="Date" value={formatDateNumeric(raw.document_date)} />
       <Row label="Customer" value={raw.party_name} />
-      <Row label="Mobile"   value={raw.mobile} />
+      <Row label="Mobile"   value={formatMobileWithCountryCode(raw.mobile)} />
       <Row label="Email"   value={raw.email} />
       <Row label="Store"    value={raw.location_name ?? raw.company_name} />
 

@@ -280,6 +280,7 @@ export const QUERY_KEYS = {
     SALES_PERSON_WISE_SALES: (params) => ['reports', 'sales-person-wise-sales', params],
     SKU_VELOCITY:            (params) => ['reports', 'sku-velocity', params],
     OPEN_POS_ORDERS:         (params) => ['reports', 'open-pos-orders', params],
+    STOCK:                   (params) => ['reports', 'stock', params],
   },
 
   ADHOC_REPORTS: {
