@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 
 import DataTable from '@/components/shared/DataTable';
 import { useTickets } from '@/hooks/ticketing/useTickets';
-import { TICKET_STATUS_LABELS } from '@/lib/ticketing/constants';
+import { ticketStatusLabel } from '@/lib/ticketing/constants';
 import { formatDatePadded } from '@/lib/dateUtils';
 
 export const ticketHref = (ticketNumber, partyId) =>
@@ -33,15 +33,14 @@ export default function TicketList({ partyId }) {
     { key: 'category',          label: 'Category', filter: true },
     { key: 'store_code',        label: 'Store', filter: true },
     { key: 'sales_person_name', label: 'Sales Person' },
-    { key: 'design_version',    label: 'Design', format: (v) => (v ? `V${v}` : '—') },
+    { key: 'latest_design_label', label: 'Design', format: (v) => v ?? '—' },
     { key: 'status_label',      label: 'Status', filter: true, mobile: true },
   ], [partyId]);
 
   const rows = useMemo(() => tickets.map((t) => ({
     ...t,
     category: t.specs?.category ?? null,
-    design_version: t.designs?.length ? Math.max(...t.designs.map((d) => Number(d.version) || 0)) : null,
-    status_label: TICKET_STATUS_LABELS[t.status] ?? t.status,
+    status_label: ticketStatusLabel(t.status),
   })), [tickets]);
 
   return (

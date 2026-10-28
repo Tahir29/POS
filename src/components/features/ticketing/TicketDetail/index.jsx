@@ -5,14 +5,14 @@ import { toast } from 'sonner';
 import { CheckCircle2, MessageSquareWarning, Pencil, XCircle } from 'lucide-react';
 
 import TicketFileThumb from '@/components/features/ticketing/TicketFileThumb';
-import TicketRequestFields, { specsFromTicket, formatStone } from '@/components/features/ticketing/TicketRequestFields';
+import TicketRequestFields, { specsFromTicket } from '@/components/features/ticketing/TicketRequestFields';
 import ConfirmDialog from '@/components/shared/ConfirmDialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useTicketAction } from '@/hooks/ticketing/useTickets';
-import { TICKET_STATUS, TICKET_STATUS_LABELS } from '@/lib/ticketing/constants';
+import { TICKET_STATUS, ticketStatusLabel } from '@/lib/ticketing/constants';
 import { formatMobileWithCountryCode } from '@/lib/phoneFormat';
 import { formatAmountOrDash } from '@/lib/priceUtils';
 
@@ -26,6 +26,7 @@ const STATUS_TONES = {
 
 const ACTION_LABELS = {
   ticket_created:   'Ticket created',
+  design_shared:    'Design shared by CAD team',
   request_updated:  'Request updated',
   design_approved:  'Design approved',
   design_rejected:  'Design changes requested',
@@ -37,7 +38,12 @@ const SPEC_LABELS = {
   karat: 'Karat', metal: 'Metal color', gold_weight: 'Metal weight (g)', requirement_notes: 'Requirement',
 };
 
-const formatDateTime = (value) => (value
+const STONE_LABELS = [
+  ['item_group', 'Item group'], ['shape', 'Shape'], ['color', 'Colour'], ['quality', 'Quality'],
+  ['type', 'Type'], ['pieces', 'Pieces'], ['weight', 'Weight (ct)'],
+];
+
+const formatDateTime =(value) => (value
   ? new Date(value).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
   : '—');
 
@@ -53,16 +59,17 @@ const formatSpec = (key, value) => {
   return key === 'budget' ? formatAmountOrDash(value) : String(value);
 };
 
-const designFiles = (design) => (design.files ?? (design.url ? [{ url: design.url }] : [])).map((f, i) => ({
+const designFiles = (design) => design.files.map((f) => ({
   ...f,
-  file_name: f.file_name ?? `Design V${design.version}${i ? ` (${i + 1})` : ''}`,
-  type: f.type ?? (/\.pdf($|\?)/i.test(f.url) ? 'application/pdf' : 'image/*'),
+  type: /\.pdf($|\?)/i.test(f.url) ? 'application/pdf' : 'image/*',
 }));
+
+const versionText = (version) => `V${String(version).replace(/^v/i, '')}`;
 
 export function TicketStatusBadge({ status }) {
   return (
     <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_TONES[status] ?? 'bg-muted text-muted-foreground'}`}>
-      {TICKET_STATUS_LABELS[status] ?? status}
+      {ticketStatusLabel(status)}
     </span>
   );
 }
@@ -163,7 +170,7 @@ export default function TicketDetail({ ticket, partyId }) {
     onError: (err) => toast.error(err.message),
   });
 
-  const designs = [...(ticket.designs ?? [])].sort((a, b) => Number(b.version) - Number(a.version));
+  const designs = ticket.designs ?? [];
   const latest = designs[0];
   const canDecide = ticket.status === TICKET_STATUS.AWAITING_CUSTOMER_FEEDBACK && latest && !latest.customer_decision;
   const canEdit = [TICKET_STATUS.AWAITING_CAD, TICKET_STATUS.AWAITING_CUSTOMER_FEEDBACK].includes(ticket.status);
@@ -179,14 +186,14 @@ export default function TicketDetail({ ticket, partyId }) {
       {canDecide && (
         <div className="rounded-xl border border-sky-300 bg-sky-50 p-4 dark:border-sky-800 dark:bg-sky-950/40 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-foreground">
-            The CAD team has shared <strong>design V{latest.version}</strong>. Show it to the customer and record their decision.
+            The CAD team has shared <strong>design {latest.label}</strong>. Show it to the customer and record their decision.
           </p>
           <div className="flex gap-2">
             <Button type="button" variant="outline" className="h-11 flex-1 gap-1.5" onClick={() => setDialog('reject')}>
               <MessageSquareWarning size={16} aria-hidden="true" /> Request changes
             </Button>
             <Button type="button" className="h-11 flex-1 gap-1.5" onClick={() => setDialog('approve')}>
-              <CheckCircle2 size={16} aria-hidden="true" /> Approve V{latest.version}
+              <CheckCircle2 size={16} aria-hidden="true" /> Approve {latest.label}
             </Button>
           </div>
         </div>
@@ -217,11 +224,14 @@ export default function TicketDetail({ ticket, partyId }) {
       >
         <InfoGrid items={Object.keys(SPEC_LABELS).map((key) => [SPEC_LABELS[key], formatSpec(key, ticket.specs?.[key])])} />
         {ticket.specs?.stones?.length > 0 && (
-          <div className="flex flex-col gap-1 text-sm">
-            <span className="text-xs text-muted-foreground">Diamonds / stones</span>
-            <ul className="flex flex-col gap-1">
-              {ticket.specs.stones.map((s, i) => <li key={i} className="rounded-lg bg-muted/50 px-3 py-1.5">{formatStone(s)}</li>)}
-            </ul>
+          <div className="flex flex-col gap-3 border-t border-border pt-3">
+            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Diamonds / stones</span>
+            {ticket.specs.stones.map((s, i) => (
+              <div key={i} className="flex flex-col gap-2">
+                {ticket.specs.stones.length > 1 && <span className="text-sm font-medium">Stone {i + 1}</span>}
+                <InfoGrid items={STONE_LABELS.map(([key, label]) => [label, formatSpec(key, s[key])])} />
+              </div>
+            ))}
           </div>
         )}
         <div className="flex flex-wrap gap-2">
@@ -230,20 +240,30 @@ export default function TicketDetail({ ticket, partyId }) {
       </Card>
 
       <Card title="CAD designs">
+        {ticket.cad_remarks && (
+          <p className="text-sm whitespace-pre-line">
+            <span className="text-xs text-muted-foreground">CAD remarks: </span>{ticket.cad_remarks}
+          </p>
+        )}
         {designs.length === 0 ? (
           <p className="text-sm text-muted-foreground">The CAD team hasn&apos;t shared a design yet.</p>
         ) : designs.map((design) => (
           <div key={design.version} className="flex flex-col gap-2 border-t border-border pt-3 first:border-0 first:pt-0">
             <div className="flex flex-wrap items-center gap-2 text-sm">
-              <span className="font-semibold">V{design.version}</span>
-              <span className="text-xs text-muted-foreground">{formatDateTime(design.uploaded_at)}</span>
+              <span className="font-semibold">{design.label}</span>
+              {design === latest && designs.length > 1 && <span className="text-xs font-medium text-sky-700 dark:text-sky-300">Latest</span>}
+              <span className="text-xs text-muted-foreground">
+                {formatDateTime(design.uploaded_at)}{design.uploaded_by ? ` by ${design.uploaded_by}` : ''}
+              </span>
               {design.customer_decision === 'approved' && <span className="text-xs font-medium text-emerald-700 dark:text-emerald-300">Approved</span>}
               {design.customer_decision === 'rejected' && <span className="text-xs font-medium text-destructive">Changes requested</span>}
             </div>
             {design.cad_notes && <p className="text-sm text-muted-foreground whitespace-pre-line">{design.cad_notes}</p>}
-            <div className="flex flex-wrap gap-2">
-              {designFiles(design).map((file) => <TicketFileThumb key={file.url} file={file} />)}
-            </div>
+            {design.files.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {designFiles(design).map((file) => <TicketFileThumb key={file.url} file={file} />)}
+              </div>
+            ) : <p className="text-xs text-muted-foreground">No design file attached to this version.</p>}
             {design.customer_feedback && (
               <p className="rounded-lg bg-muted/50 p-2 text-sm whitespace-pre-line">
                 <span className="text-xs text-muted-foreground">Customer feedback: </span>{design.customer_feedback}
@@ -276,7 +296,9 @@ export default function TicketDetail({ ticket, partyId }) {
         <ol className="flex flex-col gap-2">
           {history.map((entry, i) => (
             <li key={i} className="text-sm">
-              <span className="font-medium">{ACTION_LABELS[entry.action] ?? entry.action}</span>
+              <span className="font-medium">
+                {ACTION_LABELS[entry.action] ?? entry.action}{entry.changes?.version ? ` · ${versionText(entry.changes.version)}` : ''}
+              </span>
               <span className="text-muted-foreground"> · {formatDateTime(entry.at)} · {entry.user}{entry.store_code ? ` (${entry.store_code})` : ''}</span>
               {entry.changes?.feedback && <p className="text-xs text-muted-foreground whitespace-pre-line">“{entry.changes.feedback}”</p>}
               {entry.changes?.reason && <p className="text-xs text-muted-foreground whitespace-pre-line">“{entry.changes.reason}”</p>}
@@ -289,23 +311,23 @@ export default function TicketDetail({ ticket, partyId }) {
         <ConfirmDialog
           isOpen={dialog === 'approve'}
           onOpenChange={(open) => setDialog(open ? 'approve' : null)}
-          title={`Approve design V${latest.version}?`}
+          title={`Approve design ${latest.label}?`}
           description="Confirm the customer has approved this exact version. The CAD team will process the order from it."
           confirmLabel="Approve"
           confirmVariant="default"
-          onConfirm={() => run({ action: 'approve_design', version: Number(latest.version) }, `Design V${latest.version} approved.`)}
+          onConfirm={() => run({ action: 'approve_design', version: latest.version }, `Design ${latest.label} approved.`)}
         />
       )}
       {canDecide && (
         <ReasonDialog
           isOpen={dialog === 'reject'}
           onOpenChange={(open) => setDialog(open ? 'reject' : null)}
-          title={`Request changes to V${latest.version}`}
+          title={`Request changes to ${latest.label}`}
           description="The customer's feedback goes to the CAD team for the next version."
           label="Customer feedback"
           confirmLabel="Send to CAD"
           isPending={action.isPending}
-          onConfirm={(feedback) => run({ action: 'reject_design', version: Number(latest.version), feedback }, 'Feedback sent to the CAD team.')}
+          onConfirm={(feedback) => run({ action: 'reject_design', version: latest.version, feedback }, 'Feedback sent to the CAD team.')}
         />
       )}
       <ReasonDialog

@@ -12,23 +12,26 @@ export async function GET(request) {
 
   try {
     const cutoff = new Date(Date.now() - CAD_REMINDER_DAYS * DAY_MS);
+    // The panel sets status in its own vocabulary, so open tickets are filtered after normalising.
     const tickets = await (await getTicketsCollection()).find(
       {
         env: session.env,
         store_id: session.companyId,
-        $or: [
-          { status: TICKET_STATUS.AWAITING_CUSTOMER_FEEDBACK },
-          { status: TICKET_STATUS.AWAITING_CAD, awaiting_cad_since: { $lte: cutoff } },
-        ],
+        status: { $nin: [TICKET_STATUS.APPROVED, TICKET_STATUS.ORDER_PLACED, TICKET_STATUS.CANCELLED] },
       },
-      { projection: { ticket_number: 1, customer_name: 1, customer_party_id: 1, status: 1, awaiting_cad_since: 1, updated_at: 1, designs: 1 } },
-    ).sort({ updated_at: -1 }).limit(50).toArray();
+      {
+        projection: {
+          ticket_number: 1, customer_name: 1, customer_party_id: 1, status: 1, awaiting_cad_since: 1,
+          updated_at: 1, cadVersions: 1, design_decisions: 1,
+        },
+      },
+    ).sort({ updated_at: -1 }).limit(200).toArray();
 
     const publicTickets = tickets.map(toPublicTicket);
     return Response.json({
       designReady: publicTickets.filter((t) => t.status === TICKET_STATUS.AWAITING_CUSTOMER_FEEDBACK),
       cadOverdue:  publicTickets
-        .filter((t) => t.status === TICKET_STATUS.AWAITING_CAD)
+        .filter((t) => t.status === TICKET_STATUS.AWAITING_CAD && new Date(t.awaiting_cad_since) <= cutoff)
         .map((t) => ({ ...t, days_waiting: Math.floor((Date.now() - new Date(t.awaiting_cad_since).getTime()) / DAY_MS) })),
     });
   } catch (err) {

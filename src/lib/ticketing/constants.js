@@ -7,12 +7,15 @@ export const TICKET_STATUS = {
 };
 
 export const TICKET_STATUS_LABELS = {
-  awaiting_cad:               'Awaiting CAD Design',
-  awaiting_customer_feedback: 'Awaiting Customer Feedback',
-  approved:                   'Design Approved',
-  order_placed:               'Order Placed',
+  awaiting_cad:               'Awaiting CAD design',
+  awaiting_customer_feedback: 'Design shared – awaiting customer feedback',
+  approved:                   'Design approved – order in process',
+  order_placed:               'Order placed',
   cancelled:                  'Cancelled',
 };
+
+export const ticketStatusLabel = (status) => TICKET_STATUS_LABELS[status]
+  ?? (status ? String(status).replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase()) : '—');
 
 export const CAD_REMINDER_DAYS = 10;
 

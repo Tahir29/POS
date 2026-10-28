@@ -88,7 +88,6 @@ export async function POST(request) {
       reference_images: [],
       status: TICKET_STATUS.AWAITING_CAD,
       awaiting_cad_since: now,
-      designs: [],
       approved_version: null,
       order_number: null,
       order_placed_at: null,

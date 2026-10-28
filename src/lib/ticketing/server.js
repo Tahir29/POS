@@ -9,6 +9,9 @@ import jwt from 'jsonwebtoken';
 import { getDb } from '@/lib/mongo/client';
 import { getWebsiteDb } from '@/lib/mongo/websiteClient';
 import { getUserStoresCached, postUpstream } from '@/lib/reports/serverAccess';
+import { toPublicTicket } from './normalize';
+
+export { toPublicTicket };
 
 const TICKETS = 'pos_cad_tickets';
 const RAW_COPY = 'cadTickets_POS';
@@ -146,12 +149,6 @@ export function historyEntry(session, store, action, changes = null) {
     store_code: store?.company_code ?? null,
     changes,
   };
-}
-
-export function toPublicTicket(ticket) {
-  if (!ticket) return null;
-  const { _id, ...rest } = ticket;
-  return rest;
 }
 
 export async function saveRawCopy(ticket) {

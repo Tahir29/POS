@@ -7,6 +7,7 @@ import {
   getTicketsCollection, getSessionStore, canAccessTicket, claimFiles,
   historyEntry, toPublicTicket, saveRawCopy, notifyCloud,
 } from '@/lib/ticketing/server';
+import { ticketDesigns, effectiveStatus } from '@/lib/ticketing/normalize';
 
 const EDITABLE_STATUSES = [TICKET_STATUS.AWAITING_CAD, TICKET_STATUS.AWAITING_CUSTOMER_FEEDBACK];
 
@@ -28,9 +29,6 @@ async function loadAccessibleTicket(request, params) {
   }
   return { session, col, ticket };
 }
-
-const latestDesign = (designs = []) =>
-  designs.reduce((latest, d) => (!latest || Number(d.version) > Number(latest.version) ? d : latest), null);
 
 export async function GET(request, { params }) {
   try {
@@ -62,12 +60,14 @@ export async function POST(request, { params }) {
 
     const store = await getSessionStore(session).catch(() => null);
     const now = new Date();
+    const designs = ticketDesigns(ticket);
+    const status = effectiveStatus(ticket, designs);
     const filter = { env: ticket.env, ticket_number: ticket.ticket_number, status: ticket.status };
     let update;
     let arrayFilters;
 
     if (input.action === 'update_request') {
-      if (!EDITABLE_STATUSES.includes(ticket.status)) {
+      if (!EDITABLE_STATUSES.includes(status)) {
         return Response.json({ error: 'This ticket can no longer be edited.' }, { status: 409 });
       }
       const specChanges = Object.fromEntries(Object.entries(input.specs)
@@ -88,24 +88,30 @@ export async function POST(request, { params }) {
         },
       };
     } else if (input.action === 'approve_design' || input.action === 'reject_design') {
-      const design = latestDesign(ticket.designs);
-      if (ticket.status !== TICKET_STATUS.AWAITING_CUSTOMER_FEEDBACK || !design || Number(design.version) !== input.version) {
+      const design = designs[0];
+      if (status !== TICKET_STATUS.AWAITING_CUSTOMER_FEEDBACK || !design || design.version !== input.version) {
         return Response.json({ error: 'Only the latest shared design can be approved or rejected.' }, { status: 409 });
       }
       const approved = input.action === 'approve_design';
-      arrayFilters = [{ 'd.version': design.version }];
+      filter['design_decisions.version'] = { $ne: design.version };
+      // cadVersions[].status is what the workflow panel reads for each version.
+      arrayFilters = [{ 'v.version': design.version }];
       update = {
         $set: {
-          'designs.$[d].customer_decision': approved ? 'approved' : 'rejected',
-          'designs.$[d].customer_feedback': approved ? null : input.feedback,
-          'designs.$[d].decided_at': now,
-          'designs.$[d].decided_by': session.username,
+          'cadVersions.$[v].status': approved ? 'approved' : 'changes_requested',
           updated_at: now,
           ...(approved
             ? { status: TICKET_STATUS.APPROVED, approved_version: design.version }
             : { status: TICKET_STATUS.AWAITING_CAD, awaiting_cad_since: now, customer_feedback: input.feedback }),
         },
         $push: {
+          design_decisions: {
+            version: design.version,
+            decision: approved ? 'approved' : 'rejected',
+            feedback: approved ? null : input.feedback,
+            decided_at: now,
+            decided_by: session.username,
+          },
           history: historyEntry(session, store, approved ? 'design_approved' : 'design_rejected', {
             version: design.version,
             ...(!approved && { feedback: input.feedback }),
@@ -113,7 +119,7 @@ export async function POST(request, { params }) {
         },
       };
     } else {
-      if (ticket.status !== TICKET_STATUS.ORDER_PLACED) {
+      if (status !== TICKET_STATUS.ORDER_PLACED) {
         return Response.json({ error: 'A ticket can only be cancelled after its order is placed.' }, { status: 409 });
       }
       update = {

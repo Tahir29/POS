@@ -46,10 +46,10 @@ export const createTicketSchema = z.object({
 
 export const ticketActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('update_request'), specs: ticketSpecsSchema, file_ids: fileIds.default([]) }),
-  z.object({ action: z.literal('approve_design'), version: z.coerce.number().int().positive() }),
+  z.object({ action: z.literal('approve_design'), version: text(20) }),
   z.object({
     action:   z.literal('reject_design'),
-    version:  z.coerce.number().int().positive(),
+    version:  text(20),
     feedback: text(2000).min(3, 'Enter the customer feedback for the CAD team'),
   }),
   z.object({ action: z.literal('cancel'), reason: text(1000).min(3, 'Enter the cancellation reason') }),
