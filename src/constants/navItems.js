@@ -15,6 +15,7 @@ import {
   Footprints,
   HeartHandshake,
   BarChart3,
+  Ticket,
 
 } from 'lucide-react';
 
@@ -28,6 +29,7 @@ export const NAV_ITEMS = [
   { label: 'Repair',       href: '/repair',       icon: Wrench          },
   { label: 'Transfers',    href: '/transfers',    icon: Repeat          },
   { label: 'Estimation',   href: '/estimation',   icon: FileSpreadsheet },
+  { label: 'Ticketing',    href: '/ticketing',    icon: Ticket          },
   // { label: 'Customers',    href: '/customers',    icon: Users           },
   { label: 'Buyers',       href: '/buyers',       icon: HeartHandshake  },
   { label: 'Schemes',      href: '/schemes',      icon: BookOpen        },

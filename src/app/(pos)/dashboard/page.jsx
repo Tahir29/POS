@@ -11,6 +11,7 @@ import TodaysActivityStrip  from '@/components/features/dashboard/TodaysActivity
 import MetalRatesTicker     from '@/components/features/dashboard/MetalRatesTicker';
 import UpcomingEventsCard   from '@/components/features/dashboard/UpcomingEventsCard';
 import SchemeRemindersCard  from '@/components/features/dashboard/SchemeRemindersCard';
+import TicketNotificationsCard from '@/components/features/dashboard/TicketNotificationsCard';
 import InlineLoader         from '@/components/shared/InlineLoader';
 import ErrorState           from '@/components/shared/ErrorState';
 
@@ -75,6 +76,8 @@ function DashboardScreen() {
       <MetalRatesTicker />
 
       <div className="flex flex-col gap-6 max-w-[1600px] mx-auto w-full px-4 py-4 md:px-6">
+
+        <TicketNotificationsCard />
 
         {/* ── ROW 1: KPI cards ───────────────────────────────────── */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

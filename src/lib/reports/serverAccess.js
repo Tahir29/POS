@@ -15,7 +15,7 @@ export function isValidCompanyIds(companyIds) {
 const STORES_TTL_MS = 5 * 60 * 1000;
 const storesCache = new Map();
 
-async function getUserStoresCached(session) {
+export async function getUserStoresCached(session) {
   const key = `${session.env}|${session.username}`;
   const hit = storesCache.get(key);
   if (hit && hit.expiresAt > Date.now()) return hit.stores;
