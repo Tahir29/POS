@@ -4,7 +4,7 @@ import { getSessionFromRequest } from '@/lib/ornaverse/session';
 import { createTicketSchema } from '@/validators/ticketSchema';
 import { TICKET_STATUS } from '@/lib/ticketing/constants';
 import {
-  getTicketsCollection, getSessionStore, insertTicketWithNumber, claimFiles,
+  getTicketsCollection, getSessionStore, insertTicketWithNumber, claimFiles, getCustomerProfileSnapshot,
   historyEntry, toPublicTicket, saveRawCopy, notifyCloud,
 } from '@/lib/ticketing/server';
 
@@ -67,7 +67,7 @@ export async function POST(request) {
   if (!store) return Response.json({ error: 'Switch to a store before raising a ticket.' }, { status: 403 });
 
   try {
-
+    const profile = await getCustomerProfileSnapshot(session, customer.party_id);
     const now = new Date();
     const ticket = await insertTicketWithNumber({
       env: session.env,
@@ -76,8 +76,9 @@ export async function POST(request) {
       store_code: store.company_code,
       store_name: store.mailing_name,
       customer_party_id: customer.party_id,
-      customer_name: customer.name,
-      customer_mobile: customer.mobile,
+      customer_name: profile?.party_name ?? customer.name,
+      customer_mobile: customer.mobile ?? profile?.mobile ?? null,
+      customer_profile: profile,
       sales_person_id: salesPerson.id,
       sales_person_name: salesPerson.name,
       created_by: session.username,

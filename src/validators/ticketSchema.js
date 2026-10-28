@@ -34,7 +34,7 @@ export const createTicketSchema = z.object({
   customer: z.object({
     party_id: z.coerce.number().int().positive(),
     name:     text(200).min(1),
-    mobile:   text(20).regex(/^\+\d{8,15}$/, 'Customer mobile is required'),
+    mobile:   optionalText(30),
   }),
   sales_person: z.object({
     id:   z.coerce.number().int().positive(),

@@ -41,6 +41,13 @@ const formatDateTime = (value) => (value
   ? new Date(value).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
   : '—');
 
+// OrnaVerse keeps birthdays/anniversaries as day + month with year 0001 when the year isn't known.
+const formatProfileDate = (value) => {
+  const d = value ? new Date(value) : null;
+  if (!d || Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', ...(d.getFullYear() > 1900 && { year: 'numeric' }) });
+};
+
 const formatSpec = (key, value) => {
   if (value == null || value === '') return '—';
   return key === 'budget' ? formatAmountOrDash(value) : String(value);
@@ -188,7 +195,11 @@ export default function TicketDetail({ ticket, partyId }) {
       <Card title="Ticket">
         <InfoGrid items={[
           ['Customer', ticket.customer_name],
+          ['Customer code', ticket.customer_profile?.party_code ?? '—'],
           ['Mobile', ticket.customer_mobile ? formatMobileWithCountryCode(ticket.customer_mobile) : '—'],
+          ['City', [ticket.customer_profile?.city_name, ticket.customer_profile?.state_name].filter(Boolean).join(', ') || '—'],
+          ['Birthday', formatProfileDate(ticket.customer_profile?.birth_date)],
+          ['Anniversary', formatProfileDate(ticket.customer_profile?.anniversary)],
           ['Store', `${ticket.store_code} — ${ticket.store_name}`],
           ['Sales person', ticket.sales_person_name],
           ['Created', `${formatDateTime(ticket.created_at)} by ${ticket.created_by}`],

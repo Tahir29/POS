@@ -8,7 +8,7 @@ import jwt from 'jsonwebtoken';
 
 import { getDb } from '@/lib/mongo/client';
 import { getWebsiteDb } from '@/lib/mongo/websiteClient';
-import { getUserStoresCached } from '@/lib/reports/serverAccess';
+import { getUserStoresCached, postUpstream } from '@/lib/reports/serverAccess';
 
 const TICKETS = 'pos_cad_tickets';
 const RAW_COPY = 'cadTickets_POS';
@@ -67,6 +67,24 @@ export async function claimFiles(request, fileIds, ticketNumber) {
     const f = byId.get(id);
     return { id, url: fileUrl(request, id), file_name: f.filename, type: f.metadata.contentType, uploaded_at: f.uploadDate };
   });
+}
+
+// ID documents (PAN, Aadhaar, passport, DL, GST) and accounting settings are deliberately not copied.
+const PROFILE_FIELDS = [
+  'party_code', 'party_name', 'mobile', 'phone',
+  'city_name', 'state_name', 'country_name', 'birth_date', 'anniversary', 'party_address', 'party_contacts',
+];
+
+/** The customer's profile as OrnaVerse returns it to this login (masked values stay masked), or null if unavailable. */
+export async function getCustomerProfileSnapshot(session, partyId) {
+  try {
+    const entity = (await postUpstream(session, 'Services/POS/Customer/Retrieve', { EntityId: partyId }))?.Entity;
+    if (!entity) return null;
+    return Object.fromEntries(PROFILE_FIELDS.filter((k) => k in entity).map((k) => [k, entity[k]]));
+  } catch (err) {
+    console.error('[ticketing] customer profile fetch failed', partyId, err?.message);
+    return null;
+  }
 }
 
 /** The store this session is logged into, as OrnaVerse's GetUserStores returns it, or null. */

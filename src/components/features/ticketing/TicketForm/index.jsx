@@ -9,7 +9,6 @@ import TicketRequestFields, { EMPTY_SPECS } from '@/components/features/ticketin
 import SalesPersonSelect from '@/components/features/checkout/SalesPersonSelect';
 import CustomerAttachedBanner from '@/components/shared/CustomerAttachedBanner';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useSalesPersonOptions } from '@/hooks/schemes/useSalesPersonOptions';
 import { useCreateTicket } from '@/hooks/ticketing/useTickets';
@@ -34,12 +33,12 @@ export default function TicketForm({ onCreated }) {
   const customerName   = useSelector(selectCartCustomerName);
   const customerMobile = useSelector(selectCartCustomerMobile);
   const contactMobile  = useSelector(selectCartCustomerContactMobile);
-  const knownMobile    = contactMobile ?? (customerMobile && !isMaskedValue(customerMobile) ? customerMobile : null);
+  // Full number when staff typed it (mobile search / new customer); otherwise OrnaVerse's masked value as-is.
+  const mobile = contactMobile ?? customerMobile ?? null;
   const { salesPersons } = useSalesPersonOptions(storeId);
   const createTicket = useCreateTicket();
 
   const [salesPersonId, setSalesPersonId] = useState(null);
-  const [typedMobile, setTypedMobile] = useState('');
   const [specs, setSpecs] = useState(EMPTY_SPECS);
   const [files, setFiles] = useState([]);
 
@@ -51,15 +50,13 @@ export default function TicketForm({ onCreated }) {
     if (!specs.category) return toast.error('Select the jewellery category.');
     if (specs.requirement_notes.trim().length < 3) return toast.error('Describe the customer requirement.');
     if (!files.length) return toast.error('Add at least one reference image.');
-    const phone = parsePhoneNumberFromString(String(knownMobile ?? typedMobile), 'IN');
-    if (!phone?.isValid()) return toast.error("Enter the customer's mobile number.");
 
     createTicket.mutate(
       {
         customer: {
           party_id: customerId,
           name: customerName,
-          mobile: phone.number,
+          mobile: mobile && !isMaskedValue(mobile) ? (parsePhoneNumberFromString(String(mobile), 'IN')?.number ?? mobile) : mobile,
         },
         sales_person: { id: salesPerson.employee_id, name: salesPerson.employee_name },
         specs,
@@ -83,28 +80,10 @@ export default function TicketForm({ onCreated }) {
         emptyMessage="Assign or create the customer from the header before raising a ticket."
       />
 
-      <Section title="Customer & sales person">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {customerId && !knownMobile && (
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="ticket-mobile">Customer mobile <span className="text-destructive">*</span></Label>
-              <Input
-                id="ticket-mobile"
-                type="tel"
-                inputMode="tel"
-                className="h-11"
-                placeholder="10-digit mobile number"
-                value={typedMobile}
-                onChange={(e) => setTypedMobile(e.target.value)}
-                maxLength={20}
-              />
-              <p className="text-xs text-muted-foreground">Needed because the customer was found by name, so only the masked number is available.</p>
-            </div>
-          )}
-          <div className="flex flex-col gap-1.5">
-            <Label>Sales person <span className="text-destructive">*</span></Label>
-            <SalesPersonSelect companyId={storeId} value={salesPersonId} onChange={setSalesPersonId} />
-          </div>
+      <Section title="Sales person">
+        <div className="flex flex-col gap-1.5 sm:max-w-sm">
+          <Label>Sales person <span className="text-destructive">*</span></Label>
+          <SalesPersonSelect companyId={storeId} value={salesPersonId} onChange={setSalesPersonId} />
         </div>
       </Section>
 
