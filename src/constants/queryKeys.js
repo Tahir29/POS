@@ -291,4 +291,11 @@ export const QUERY_KEYS = {
     LIST: () => ['adhoc-reports', 'list'],
     RUN:  (adhocReportId) => ['adhoc-reports', 'run', adhocReportId],
   },
+
+  TICKETING: {
+    ALL:           () => ['ticketing'],
+    LIST:          (partyId) => ['ticketing', 'list', partyId ?? 'store'],
+    DETAIL:        (ticketNumber) => ['ticketing', 'detail', ticketNumber],
+    NOTIFICATIONS: () => ['ticketing', 'notifications'],
+  },
 };

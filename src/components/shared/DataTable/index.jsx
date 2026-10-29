@@ -79,8 +79,9 @@ function FacetFilter({ column }) {
  * Below md only `mobile` columns are shown (default: first two); the rest open
  * from each row's expand button. onViewChange receives the filtered + sorted
  * rows and the visible columns, for exports that should match the screen.
+ * onRowClick(row) makes each row open something (keep a real link in a cell for keyboard users).
  */
-export default function DataTable({ columns, rows, isLoading, isError, onRetry, emptyMessage, onViewChange }) {
+export default function DataTable({ columns, rows, isLoading, isError, onRetry, emptyMessage, onViewChange, onRowClick }) {
   const [sorting, setSorting] = useState([]);
   const [globalFilter, setGlobalFilter] = useState('');
   const [columnFilters, setColumnFilters] = useState([]);
@@ -259,12 +260,15 @@ export default function DataTable({ columns, rows, isLoading, isError, onRetry, 
               </TableRow>
             ) : table.getRowModel().rows.map((row) => (
               <Fragment key={row.id}>
-                <TableRow>
+                <TableRow
+                  onClick={onRowClick ? () => onRowClick(row.original) : undefined}
+                  className={onRowClick ? 'cursor-pointer' : undefined}
+                >
                   {hasMobileDetails && (
                     <TableCell className="w-10 md:hidden">
                       <button
                         type="button"
-                        onClick={row.getToggleExpandedHandler()}
+                        onClick={(e) => { e.stopPropagation(); row.toggleExpanded(); }}
                         aria-expanded={row.getIsExpanded()}
                         aria-label={row.getIsExpanded() ? 'Hide details' : 'Show details'}
                         className="flex size-6 items-center justify-center rounded-full bg-primary text-primary-foreground"

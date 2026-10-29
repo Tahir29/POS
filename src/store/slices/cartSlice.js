@@ -12,6 +12,7 @@ const initialState = {
   customerId:          null,
   customerName:        null,
   customerMobile:      null,
+  customerContactMobile: null, // full number typed by staff (mobile search / new customer); OrnaVerse masks customerMobile for store logins
   customerAddress:     null,  // { address, address1, city, state, country, zip } — used as
                                // shipping_address/billing_address at order creation
   appliedPromos:       [],    // { promoCode, promoDetails, overrideAmount, discountAmount }[] —
@@ -166,7 +167,8 @@ const cartSlice = createSlice({
     },
 
     attachCustomer: (state, action) => {
-      const { customerId, customerName, customerMobile, customerAddress } = action.payload;
+      const { customerId, customerName, customerMobile, customerAddress, customerContactMobile } = action.payload;
+      const keptContactMobile = state.customerId === customerId ? state.customerContactMobile : null;
       // Last-resort guard, not a replacement for detaching first: every call site
       // should dispatch detachCustomer() before attaching a different customer over
       // one with items, since only that path snapshots the outgoing cart to Mongo.
@@ -186,6 +188,7 @@ const cartSlice = createSlice({
       state.customerName    = customerName;
       state.customerMobile  = customerMobile;
       state.customerAddress = customerAddress ?? null;
+      state.customerContactMobile = customerContactMobile ?? keptContactMobile;
     },
 
     // Full reset, not just the customer fields — a detach ends this customer's
@@ -380,6 +383,7 @@ export const selectCartDiscount       = (state) => state.cart.discountAmount;
 export const selectCartCustomerId     = (state) => state.cart.customerId;
 export const selectCartCustomerName   = (state) => state.cart.customerName;
 export const selectCartCustomerMobile = (state) => state.cart.customerMobile;
+export const selectCartCustomerContactMobile = (state) => state.cart.customerContactMobile;
 export const selectCartCustomerAddress = (state) => state.cart.customerAddress;
 export const selectAppliedPromos      = (state) => state.cart.appliedPromos;
 export const selectIsCartEmpty        = (state) => state.cart.items.length === 0;

@@ -31,6 +31,7 @@ import { GENDER_OPTIONS, MARITAL_STATUS_OPTIONS, RELIGION_OPTIONS } from '@/cons
 import LocationSelect from '@/components/shared/LocationSelect';
 import PanDocumentUpload from '@/components/shared/PanDocumentUpload';
 import PillTabs from '@/components/shared/PillTabs';
+import TicketList from '@/components/features/ticketing/TicketList';
 import EmptyState from '@/components/shared/EmptyState';
 import ErrorState from '@/components/shared/ErrorState';
 import InlineLoader from '@/components/shared/InlineLoader';
@@ -62,7 +63,7 @@ import { formatMobileWithCountryCode } from '@/lib/phoneFormat';
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const fmt = formatAmountOrDash;
 const fmtDate = formatDateNumeric;
-const TABS    = ['profile', 'edit', 'schemes', 'points', '360', 'wishlist', 'RecentlyViewed'];
+const TABS    = ['profile', 'edit', 'schemes', 'points', '360', 'wishlist', 'RecentlyViewed', 'ticketing'];
 const TEXT_TABS = ['profile', 'edit', 'schemes', 'points', '360'];
 const TAB_LABELS = {
   profile:  'Profile',
@@ -72,6 +73,7 @@ const TAB_LABELS = {
   '360':    '360',
   wishlist: 'Wishlist',
   RecentlyViewed: 'Recently Viewed',
+  ticketing: 'Ticketing',
 };
 
 const DOC_TYPES = [
@@ -1098,6 +1100,7 @@ export default function CustomerDetailPage() {
             {activeTab === '360'     && isSuperAdmin && <Customer360Tab customerId={customer.customerId} />}
             {activeTab === 'wishlist' && <WishlistTab customerId={customer.customerId} customerMobile={customer.customerMobile} customerEmail={customer.customerEmail} />}
             {activeTab === 'RecentlyViewed' && <RecentlyViewedTab customerId={customer.customerId} customerMobile={customer.customerMobile} customerEmail={customer.customerEmail} />}
+            {activeTab === 'ticketing' && <TicketList partyId={customer.customerId} />}
           </div>
 
         </div>
