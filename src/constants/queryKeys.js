@@ -224,6 +224,10 @@ export const QUERY_KEYS = {
     LEADS:                  ()            => ['crm', 'leads'],
     SOURCES:                ()            => ['crm', 'sources'],
     VISITS:                 (companyId)   => ['crm', 'visits', companyId],
+    // Full (uncapped) visit history for the Non-Buyers tab. Nested under
+    // VISITS(companyId) on purpose: useWalkInLookup/useWalkInRegister
+    // invalidate that prefix, so a new visit refreshes this list too.
+    VISITS_ALL:             (companyId)   => ['crm', 'visits', companyId, 'all'],
   },
 
   CUSTOMER_HISTORY: {
