@@ -70,7 +70,9 @@ function PurchaseCard({ purchase }) {
       {items?.length > 0 && (
         <div className="border-t border-dashed border-border pt-3 flex flex-col gap-1.5">
           {items.map((item, idx) => (
-            <div key={`${item.item_id ?? idx}`} className="flex items-center justify-between gap-2 text-sm">
+            // Not item_id alone: one purchase can carry the same item on two
+            // lines (e.g. a paid + a free gold coin), which collided.
+            <div key={`${item.item_id ?? 'item'}-${idx}`} className="flex items-center justify-between gap-2 text-sm">
               <span className="min-w-0 truncate text-foreground">
                 {item.item_name || 'Item'}
                 {item.quantity > 1 ? ` × ${item.quantity}` : ''}
