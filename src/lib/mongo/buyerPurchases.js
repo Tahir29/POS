@@ -74,8 +74,9 @@ export async function upsertPurchase(record) {
         environment:     record.environment ?? ACTIVE_ENV,
         storeName:       record.storeName ?? null,
         salesPersonId:   record.salesPersonId   ?? null,
-        salesPersonName: record.salesPersonName ?? null,
-        items:           record.items       ?? [],
+        // Only written when known, so a sync without the name never wipes one saved at checkout.
+        ...(record.salesPersonName != null && { salesPersonName: record.salesPersonName }),
+        items:          record.items       ?? [],
         promotions:      record.promotions  ?? [],
         payments:        record.payments    ?? [],
         totalAmount:     record.totalAmount ?? 0,
