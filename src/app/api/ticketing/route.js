@@ -2,7 +2,7 @@ import { after } from 'next/server';
 
 import { getSessionFromRequest } from '@/lib/ornaverse/session';
 import { createTicketSchema } from '@/validators/ticketSchema';
-import { TICKET_STATUS } from '@/lib/ticketing/constants';
+import { PANEL_STATE } from '@/lib/ticketing/constants';
 import {
   getTicketsCollection, getSessionStore, insertTicketWithNumber, claimFiles, getCustomerProfileSnapshot,
   historyEntry, toPublicTicket, saveRawCopy, notifyCloud,
@@ -85,8 +85,9 @@ export async function POST(request) {
       created_at: now,
       updated_at: now,
       specs,
+      requested_specs: specs,
       reference_images: [],
-      status: TICKET_STATUS.AWAITING_CAD,
+      ...PANEL_STATE.G2D_REQUESTED,
       awaiting_cad_since: now,
       approved_version: null,
       order_number: null,

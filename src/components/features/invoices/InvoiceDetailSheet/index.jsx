@@ -52,10 +52,13 @@ function InvoiceContent({ raw }) {
 
       {lineItems.length > 0 && (
         <div className="border-t border-border pt-2 flex flex-col gap-2">
-          <span className="text-muted-foreground text-xs font-medium uppercase tracking-wide">Items</span>
+          <span className="text-muted-foreground text-xs font-medium uppercase tracking-wide">
+            Items ({lineItems.reduce((sum, item) => sum + (Number(item.pieces) || 1), 0)})
+          </span>
           {lineItems.map((item, i) => {
             const imageSrc = resolveImageSrc(item.image);
             const specs = [
+              `Qty ${Number(item.pieces) || 1}`,
               item.item_group_name,
               item.karat_name,
               item.metal_color_name,

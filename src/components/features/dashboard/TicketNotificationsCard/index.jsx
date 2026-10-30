@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Clock, PenTool } from 'lucide-react';
+import { ClipboardCheck, ClipboardList, Clock, PenTool } from 'lucide-react';
 
 import { useTicketNotifications } from '@/hooks/ticketing/useTickets';
 import { ticketHref } from '@/components/features/ticketing/TicketList';
@@ -22,12 +22,25 @@ function NoticeRow({ href, icon: Icon, tone, children }) {
 /** Shown only to the store that raised each ticket, until someone acts on it. */
 export default function TicketNotificationsCard() {
   const { data } = useTicketNotifications();
+  const g2dShared = data?.g2dShared ?? [];
   const designReady = data?.designReady ?? [];
+  const finalReceived = data?.finalReceived ?? [];
   const cadOverdue = data?.cadOverdue ?? [];
-  if (!designReady.length && !cadOverdue.length) return null;
+  if (!g2dShared.length && !designReady.length && !finalReceived.length && !cadOverdue.length) return null;
 
   return (
     <div className="flex flex-col gap-2">
+      {g2dShared.map((t) => (
+        <NoticeRow
+          key={t.ticket_number}
+          href={ticketHref(t.ticket_number)}
+          icon={ClipboardList}
+          tone="border-violet-300 bg-violet-50 text-violet-900 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-100"
+        >
+          The CAD team has shared the G2D estimate for <strong>{t.ticket_number}</strong>
+          {t.customer_name ? ` · ${t.customer_name}` : ''}, kindly confirm with the customer.
+        </NoticeRow>
+      ))}
       {designReady.map((t) => (
         <NoticeRow
           key={t.ticket_number}
@@ -37,6 +50,17 @@ export default function TicketNotificationsCard() {
         >
           The CAD team has shared design {t.latest_design_label} for <strong>{t.ticket_number}</strong>
           {t.customer_name ? ` · ${t.customer_name}` : ''}, kindly view.
+        </NoticeRow>
+      ))}
+      {finalReceived.map((t) => (
+        <NoticeRow
+          key={t.ticket_number}
+          href={ticketHref(t.ticket_number)}
+          icon={ClipboardCheck}
+          tone="border-emerald-300 bg-emerald-50 text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100"
+        >
+          Final details for <strong>{t.ticket_number}</strong>
+          {t.customer_name ? ` · ${t.customer_name}` : ''} have been received, kindly review and place the order.
         </NoticeRow>
       ))}
       {cadOverdue.map((t) => (

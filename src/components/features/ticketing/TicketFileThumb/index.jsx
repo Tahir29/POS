@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { ExternalLink, FileText, X } from 'lucide-react';
+import { FileText, X } from 'lucide-react';
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
@@ -43,14 +43,6 @@ export default function TicketFileThumb({ file, onRemove }) {
             </DialogHeader>
             {/* eslint-disable-next-line @next/next/no-img-element -- see above */}
             <img src={src} alt={file.file_name} className="max-h-[75vh] w-full rounded-lg object-contain" />
-            <a
-              href={src}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 justify-self-end self-end text-sm text-muted-foreground hover:text-foreground"
-            >
-              <ExternalLink size={14} aria-hidden="true" /> Open full size
-            </a>
           </DialogContent>
         </Dialog>
       )}

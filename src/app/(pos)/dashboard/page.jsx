@@ -12,6 +12,7 @@ import MetalRatesTicker     from '@/components/features/dashboard/MetalRatesTick
 import UpcomingEventsCard   from '@/components/features/dashboard/UpcomingEventsCard';
 import SchemeRemindersCard  from '@/components/features/dashboard/SchemeRemindersCard';
 import TicketNotificationsCard from '@/components/features/dashboard/TicketNotificationsCard';
+import LapsedBuyersCard     from '@/components/features/dashboard/LapsedBuyersCard';
 import InlineLoader         from '@/components/shared/InlineLoader';
 import ErrorState           from '@/components/shared/ErrorState';
 
@@ -128,6 +129,8 @@ function DashboardScreen() {
             <SchemeRemindersCard due={schemesDue} maturing={schemesMaturing} isLoading={schemesLoading} />
           </div>
         </div>
+
+        <LapsedBuyersCard />
 
         {/* ── ROW 4: Today's activity ────────────────────────────── */}
         <TodaysActivityStrip

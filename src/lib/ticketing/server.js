@@ -10,6 +10,7 @@ import { getDb } from '@/lib/mongo/client';
 import { getWebsiteDb } from '@/lib/mongo/websiteClient';
 import { getUserStoresCached, postUpstream } from '@/lib/reports/serverAccess';
 import { toPublicTicket } from './normalize';
+import { goldKarat } from './constants';
 
 export { toPublicTicket };
 
@@ -37,6 +38,18 @@ export async function getTicketsCollection() {
 
 export async function getFileBucket() {
   return new GridFSBucket(await getDb(), { bucketName: FILE_BUCKET });
+}
+
+/** Today's (IST) OrnaVerse sales rate per gram for a gold karat at the session's store, or null. */
+export async function getTodayGoldRate(session, karat) {
+  const gold = goldKarat(karat);
+  if (!gold || !session.companyId) return null;
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
+  const data = await postUpstream(session, 'Services/Helpers/GetMetalRate', {
+    item_group_id: 106, karat_id: gold.karatId, is_purchase: false,
+    from_date: today, to_date: today, company_id: session.companyId, use_karat_rate: true,
+  });
+  return typeof data?.rate === 'number' && data.rate > 0 ? data.rate : null;
 }
 
 export function newFileId() {
