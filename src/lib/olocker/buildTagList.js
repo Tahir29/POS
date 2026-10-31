@@ -153,9 +153,13 @@ export function buildTag({ invoice, item, index, token }) {
     cust_name:     String(invoice.party_name ?? '').trim(),
     cust_email:    String(invoice.email ?? '').trim(),
     cust_mobile:   normalizeMobile(invoice.mobile),
-    // Per the guide `inv_amt` is the invoice total while `insurance` is the
-    // sum covered for THIS item, so a multi-item invoice repeats the same
-    // total on every tag and varies only the insured value.
+    // `inv_amt` is the invoice total; `insurance` is the sum covered for
+    // THIS item — so a multi-item invoice repeats the same total on every
+    // tag and varies only the insured value. Confirmed live 2026-10-31 by
+    // issuing two policies off one invoice with inv_amt 44486.44 and
+    // per-item insurance of 11225.44 / 33261.00: the certificates read
+    // "Rs. 11225" and "Rs. 33261", so cover follows `insurance` alone and
+    // `inv_amt` never leaks into the sum insured.
     inv_amt:   amt(invoice.net_amount),
     insurance: amt(item.gross_amount ?? item.net_amount),
   };

@@ -9,8 +9,17 @@ import { useGenerateInsurance } from '@/hooks/invoices/useGenerateInsurance';
 import { lineItemKey } from '@/lib/olocker/buildTagList';
 import { formatAmountOrNull as formatCurrency } from '@/lib/priceUtils';
 
-/** One already-issued policy, with its certificate link. */
-function PolicyRow({ policy }) {
+/**
+ * One already-issued policy.
+ *
+ * `showLink` is decided by the caller, not by whether this row has a url:
+ * every policy issued in the same generatePolicies call comes back with
+ * the SAME url, because Olocker's certificate is one PDF covering that
+ * whole call (confirmed live 2026-10-31 — two policies, two urls, byte
+ * -identical documents listing both). Rendering a "Certificate" link on
+ * each row would be several identical links to one document.
+ */
+function PolicyRow({ policy, showLink }) {
   return (
     <div className="flex items-start justify-between gap-2">
       <div className="min-w-0">
@@ -20,7 +29,7 @@ function PolicyRow({ policy }) {
         </p>
         <p className="truncate text-xs text-muted-foreground">{policy.policy}</p>
       </div>
-      {policy.url && (
+      {policy.url && showLink && (
         <a
           href={policy.url}
           target="_blank"
@@ -98,8 +107,13 @@ export default function InsuranceSection({ raw }) {
             <ShieldCheck size={13} />
             Insured ({policies.length})
           </span>
-          {policies.map((policy) => (
-            <PolicyRow key={policy.policy} policy={policy} />
+          {policies.map((policy, i) => (
+            <PolicyRow
+              key={policy.policy}
+              policy={policy}
+              // First row for each distinct certificate carries the link.
+              showLink={policies.findIndex((p) => p.url === policy.url) === i}
+            />
           ))}
         </div>
       )}
