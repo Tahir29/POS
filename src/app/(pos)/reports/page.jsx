@@ -28,6 +28,8 @@ import { useSalesPersonWiseSalesReport } from '@/hooks/reports/useSalesPersonWis
 import { useSkuVelocityReport } from '@/hooks/reports/useSkuVelocityReport';
 import { useOpenPosOrdersReport } from '@/hooks/reports/useOpenPosOrdersReport';
 import { useStockReport } from '@/hooks/reports/useStockReport';
+import { useWalkinVisitsReport } from '@/hooks/reports/useWalkinVisitsReport';
+import { formatMobileWithCountryCode } from '@/lib/phoneFormat';
 import { useAdhocReportsList } from '@/hooks/reports/useAdhocReportsList';
 import { useAdhocReportRun } from '@/hooks/reports/useAdhocReportRun';
 
@@ -45,6 +47,7 @@ const BASE_TABS = [
   { key: 'velocity',    label: 'SKU Velocity' },
   { key: 'openOrders',  label: 'Open Orders' },
   { key: 'stock',       label: 'Stock' },
+  { key: 'walkins',     label: 'Walk-in Visits' },
 ];
 const ADHOC_TAB = { key: 'adhoc', label: 'Ad-hoc Reports' };
 
@@ -319,6 +322,18 @@ const STOCK_COLUMNS = [
   { key: 'is_allocated',       label: 'Allocated',    format: (v) => (v ? 'Yes' : 'No'), filter: true },
 ];
 
+// One row per walk-in visit; dates and times are India time.
+const WALKIN_COLUMNS = [
+  { key: 'visited_on',       label: 'Date',     format: formatDatePadded, mobile: true },
+  { key: 'visited_time',     label: 'Time' },
+  { key: 'customer_name',    label: 'Customer', mobile: true },
+  { key: 'mobile',           label: 'Mobile',   format: (v) => (v ? formatMobileWithCountryCode(v) : '—'), hidden: true },
+  { key: 'email',            label: 'Email' },
+  { key: 'source',           label: 'Source',   filter: true },
+  { key: 'visits_in_period', label: 'Visits in period', align: 'right', filter: true },
+  { key: 'notes',            label: 'Notes' },
+];
+
 const normalizeName = (name) => String(name ?? '').trim().toLowerCase();
 
 // Rows identify their store differently per endpoint (company_id, company_code,
@@ -381,6 +396,7 @@ export default function ReportsPage() {
   const velocityReport    = useSkuVelocityReport({ ...range, enabled: activeTab === 'velocity' });
   const openOrdersReport  = useOpenPosOrdersReport({ ...range, enabled: activeTab === 'openOrders' });
   const stockReport       = useStockReport({ companyIds: selectedCompanyIds, toDate, enabled: activeTab === 'stock' });
+  const walkinReport      = useWalkinVisitsReport({ ...range, enabled: activeTab === 'walkins' });
 
   const companyKey = selectedCompanyIds.join(',');
   const tableKey = `${activeTab}-${companyKey}-${fromDate}-${toDate}`;
@@ -406,8 +422,9 @@ export default function ReportsPage() {
       velocity:    { columns: withStoreColumns(VELOCITY_COLUMNS),    rows: scope(velocityReport.rows),    filenamePrefix: 'sku-velocity' },
       openOrders:  { columns: withStoreColumns(OPEN_ORDERS_COLUMNS), rows: scope(openOrdersReport.rows),  filenamePrefix: 'open-pos-orders' },
       stock:       { columns: [...STORE_COLUMNS, ...STOCK_COLUMNS],  rows: scope(stockReport.rows),       filenamePrefix: 'jewellery-stock' },
+      walkins:     { columns: withStoreColumns(WALKIN_COLUMNS),      rows: scope(walkinReport.rows),      filenamePrefix: 'walk-in-visits' },
     };
-  }, [companyKey, availableStores, isAllStores, categoryReport.rows, salesPersonReport.rows, velocityReport.rows, openOrdersReport.rows, stockReport.rows]);
+  }, [companyKey, availableStores, isAllStores, categoryReport.rows, salesPersonReport.rows, velocityReport.rows, openOrdersReport.rows, stockReport.rows, walkinReport.rows]);
 
   // The on-screen table's filtered + sorted rows and visible columns, so Export Excel matches what's shown.
   const exportViewRef = useRef(null);
@@ -722,6 +739,19 @@ export default function ReportsPage() {
               onRetry={stockReport.refetch}
               onViewChange={handleViewChange}
               emptyMessage="No stock for this store on this date."
+            />
+          )}
+
+          {activeTab === 'walkins' && (
+            <DataTable
+              key={tableKey}
+              columns={TAB_REPORTS.walkins.columns}
+              rows={TAB_REPORTS.walkins.rows}
+              isLoading={walkinReport.isLoading}
+              isError={walkinReport.isError}
+              onRetry={walkinReport.refetch}
+              onViewChange={handleViewChange}
+              emptyMessage="No walk-in visits in this range."
             />
           )}
 

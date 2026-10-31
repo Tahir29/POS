@@ -224,10 +224,9 @@ export const QUERY_KEYS = {
     LEADS:                  ()            => ['crm', 'leads'],
     SOURCES:                ()            => ['crm', 'sources'],
     VISITS:                 (companyId)   => ['crm', 'visits', companyId],
-    // Full (uncapped) visit history for the Non-Buyers tab. Nested under
-    // VISITS(companyId) on purpose: useWalkInLookup/useWalkInRegister
+    // Non-Buyers pages, nested under VISITS(companyId) on purpose: useWalkInLookup/useWalkInRegister
     // invalidate that prefix, so a new visit refreshes this list too.
-    VISITS_ALL:             (companyId)   => ['crm', 'visits', companyId, 'all'],
+    NON_BUYERS:             (companyId, filters) => ['crm', 'visits', companyId, 'non-buyers', filters],
   },
 
   CUSTOMER_HISTORY: {
@@ -285,6 +284,7 @@ export const QUERY_KEYS = {
     SKU_VELOCITY:            (params) => ['reports', 'sku-velocity', params],
     OPEN_POS_ORDERS:         (params) => ['reports', 'open-pos-orders', params],
     STOCK:                   (params) => ['reports', 'stock', params],
+    WALKIN_VISITS:           (params) => ['reports', 'walkin-visits', params],
   },
 
   ADHOC_REPORTS: {

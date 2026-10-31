@@ -43,6 +43,11 @@ export async function getOpenPosOrders(params) {
   return (await runSalesReport('openOrders', params)).rows ?? [];
 }
 
+/** @returns {Promise<object[]>} every walk-in visit in the range (IST dates), newest first */
+export async function getWalkinVisits({ companyIds, fromDate, toDate }) {
+  return (await postReport('/api/reports/walkins', { companyIds, fromDate, toDate })).rows ?? [];
+}
+
 /** @returns {Promise<object[]>} jewellery stock on hand as of toDate (cost fields stripped server-side) */
 export async function getStockReport({ companyIds, toDate }) {
   return (await postReport('/api/reports/stock', { companyIds, toDate })).rows ?? [];

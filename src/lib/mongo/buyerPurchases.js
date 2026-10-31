@@ -116,6 +116,22 @@ export async function listPurchases({ companyId } = {}) {
   return db.collection(COLLECTION).find(match).sort({ documentDate: -1 }).toArray();
 }
 
+/** One store's invoices and orders, only the fields the Non-Buyers matching needs. */
+export async function listStoreSales(companyId) {
+  const db = await getDb();
+  return db.collection(COLLECTION)
+    .find(
+      { ...environmentMatch(), companyId, documentType: { $in: ['invoice', 'order'] } },
+      {
+        projection: {
+          documentType: 1, documentNo: 1, documentDate: 1, documentStatus: 1,
+          balanceAmount: 1, receiptAmount: 1, totalAmount: 1, customerName: 1, customerMobile: 1,
+        },
+      },
+    )
+    .toArray();
+}
+
 /**
  * Every purchase for one customer, newest first — powers the
  * /buyers/[customerId] detail page.

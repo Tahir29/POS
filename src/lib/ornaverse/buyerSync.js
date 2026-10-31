@@ -42,7 +42,7 @@ async function ornaversePost(path, body, session) {
   return res.json();
 }
 
-async function getSalesPersonNames(companyIds, session) {
+async function getSalesPersonNames(companyIds, session, salesPersonIds) {
   const names = new Map();
   await Promise.all([...companyIds].map(async (companyId) => {
     try {
@@ -52,6 +52,16 @@ async function getSalesPersonNames(companyIds, session) {
       console.warn(`[buyerSync] employee list for company ${companyId} failed`, error.message);
     }
   }));
+  // A sales person can be set up under another company than the store they sell at, so anyone still
+  // unnamed is looked up once in the full employee list.
+  if ([...salesPersonIds].some((id) => !names.has(id))) {
+    try {
+      const data = await ornaversePost(API.HR.EMPLOYEE_LIST, { Take: 5000 }, session);
+      for (const e of data?.Entities ?? []) if (!names.has(e.employee_id)) names.set(e.employee_id, e.employee_name);
+    } catch (error) {
+      console.warn('[buyerSync] full employee list failed', error.message);
+    }
+  }
   return names;
 }
 
@@ -121,8 +131,9 @@ function shapeRecord(kind, entity, salesPersonNames) {
 }
 
 async function upsertEntities(kind, entities, session) {
-  const companyIds = new Set(entities.filter((e) => e?.sales_person_id != null).map((e) => e.company_id));
-  const salesPersonNames = await getSalesPersonNames(companyIds, session);
+  const withSalesPerson = entities.filter((e) => e?.sales_person_id != null);
+  const companyIds = new Set(withSalesPerson.map((e) => e.company_id));
+  const salesPersonNames = await getSalesPersonNames(companyIds, session, new Set(withSalesPerson.map((e) => e.sales_person_id)));
   let synced = 0;
   for (const entity of entities) {
     if (entity?.party_id == null) continue; // guest sale — nothing to retarget

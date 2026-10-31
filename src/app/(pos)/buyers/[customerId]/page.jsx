@@ -135,8 +135,6 @@ export default function BuyerDetailPage() {
   const { sync, isSyncing } = useSyncBuyerHistory();
   const [activeTab, setActiveTab] = useState('invoice');
 
-  console.log("purchases", purchases)
-
   // Pulls this customer's full history straight from OrnaVerse (every store,
   // via GetPartyTransactions) and saves it into buyerPurchases_POS, so a sale
   // placed before this module existed — or directly on OrnaVerse's own

@@ -1,28 +1,30 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSelector } from 'react-redux';
-import { Search, X, Loader2, RefreshCw, Download, UserX } from 'lucide-react';
+import { Search, X, Loader2, RefreshCw, UserX } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
+import BottomSheet from '@/components/shared/BottomSheet';
 import EmptyState from '@/components/shared/EmptyState';
 import ErrorState from '@/components/shared/ErrorState';
 import { StaggerList } from '@/components/shared/StaggerList';
+import BuyersMobileFilterBar from '@/components/features/buyers/BuyersMobileFilterBar';
 import NonBuyerListItem from '@/components/features/nonBuyers/NonBuyerListItem';
 import NonBuyerDetailSheet from '@/components/features/nonBuyers/NonBuyerDetailSheet';
-import { useNonBuyerSources } from '@/hooks/customer/useNonBuyerSources';
-import { deriveNonBuyers } from '@/lib/nonBuyers/deriveNonBuyers';
-import { selectActiveStoreId, selectActiveStoreName } from '@/store/slices/storeSlice';
-import { todayDateString, formatDatePadded } from '@/lib/dateUtils';
-import { formatMobileWithCountryCode } from '@/lib/phoneFormat';
-import { downloadXlsx } from '@/lib/excelExport';
+import { useNonBuyers } from '@/hooks/customer/useNonBuyers';
+import { selectActiveStoreId, selectActiveStoreName, selectAvailableStores } from '@/store/slices/storeSlice';
+import { selectIsSuperAdmin } from '@/store/slices/authSlice';
+import { todayDateString } from '@/lib/dateUtils';
+import APP_CONFIG from '@/constants/appConfig';
 
-const PAGE_SIZE = 48;
 // Default look-back: recent enough that a follow-up call still makes sense.
 const DEFAULT_LOOKBACK_DAYS = 90;
+const DEFAULT_MIN_VISITS = '2';
+const DEFAULT_SORT = 'visits';
 
 const MIN_VISIT_OPTIONS = [
   { value: '1', label: '1+ visits' },
@@ -49,190 +51,201 @@ function defaultFromDate() {
   return localDateString(d);
 }
 
-const EXPORT_COLUMNS = [
-  { key: 'name',             label: 'Name' },
-  { key: 'mobile',           label: 'Mobile' },
-  { key: 'email',            label: 'Email' },
-  { key: 'visitCount',       label: 'Visits' },
-  { key: 'firstVisit',       label: 'First visit' },
-  { key: 'lastVisit',        label: 'Last visit' },
-  { key: 'daysSince',        label: 'Days since last visit' },
-  { key: 'sources',          label: 'Sources' },
-  { key: 'pastBuyer',        label: 'Past buyer' },
-  { key: 'lastPurchase',     label: 'Last purchase' },
-  { key: 'cancelledOrder',   label: 'Cancelled order' },
-];
-
 export default function NonBuyersPage() {
-  const companyId   = useSelector(selectActiveStoreId);
-  const companyName = useSelector(selectActiveStoreName);
+  const activeStoreId   = useSelector(selectActiveStoreId);
+  const activeStoreName = useSelector(selectActiveStoreName);
+  const isSuperAdmin    = useSelector(selectIsSuperAdmin);
+  const availableStores = useSelector(selectAvailableStores);
+
+  // Store logins only ever see their own store; a super admin can pick any store or all of them (like Buyers).
+  const [storeFilter, setStoreFilter] = useState(() => (activeStoreId ? String(activeStoreId) : 'all'));
+  const [prevActiveStoreId, setPrevActiveStoreId] = useState(activeStoreId);
+  if (activeStoreId !== prevActiveStoreId) {
+    setPrevActiveStoreId(activeStoreId);
+    setStoreFilter(activeStoreId ? String(activeStoreId) : 'all');
+  }
+  const companyId = isSuperAdmin ? storeFilter : activeStoreId;
+  const companyName = !isSuperAdmin || storeFilter === String(activeStoreId)
+    ? activeStoreName
+    : storeFilter === 'all'
+      ? null
+      : availableStores.find((s) => String(s.company_id) === storeFilter)?.mailing_name;
 
   const [search, setSearch]       = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [fromDate, setFromDate]   = useState(defaultFromDate);
   const [toDate, setToDate]       = useState('');
-  const [minVisits, setMinVisits] = useState('2');
-  const [sortBy, setSortBy]       = useState('visits');
+  const [minVisits, setMinVisits] = useState(DEFAULT_MIN_VISITS);
+  const [sortBy, setSortBy]       = useState(DEFAULT_SORT);
   const [selected, setSelected]   = useState(null);
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const debounceRef = useRef(null);
 
-  const { visits, documents, isLoading, isFetching, isError, refetch } = useNonBuyerSources(companyId);
-
-  const nonBuyers = useMemo(
-    () => deriveNonBuyers({ visits, documents, fromDate, toDate, minVisits: Number(minVisits) }),
-    [visits, documents, fromDate, toDate, minVisits],
-  );
-
-  const trimmedSearch = search.trim().toLowerCase();
-  const searchDigits = trimmedSearch.replace(/\D/g, '');
-  const filtered = useMemo(() => {
-    const matching = trimmedSearch
-      ? nonBuyers.filter((n) =>
-          n.name?.toLowerCase().includes(trimmedSearch)
-          || (searchDigits.length >= 3 && String(n.mobile ?? '').replace(/\D/g, '').includes(searchDigits)))
-      : nonBuyers;
-    if (sortBy === 'recent') {
-      return [...matching].sort((a, b) => new Date(b.lastVisitAt) - new Date(a.lastVisitAt));
-    }
-    return matching; // deriveNonBuyers already sorts by most visits
-  }, [nonBuyers, trimmedSearch, searchDigits, sortBy]);
-
-  // Reset paging whenever the result set changes (same render-time pattern
-  // as the Buyers page — no effect, no flash of the old page size).
-  const filterKey = `${fromDate}|${toDate}|${minVisits}|${sortBy}|${trimmedSearch}|${filtered.length}`;
-  const [pagination, setPagination] = useState({ key: filterKey, visibleCount: PAGE_SIZE });
-  if (pagination.key !== filterKey) {
-    setPagination({ key: filterKey, visibleCount: PAGE_SIZE });
-  }
-  const visibleCount = pagination.key === filterKey ? pagination.visibleCount : PAGE_SIZE;
-  const visible = filtered.slice(0, visibleCount);
-  const hasMore = visibleCount < filtered.length;
-
-  const pastBuyerCount = filtered.filter((n) => n.isPastBuyer).length;
-  const hasDateFilter = !!fromDate || !!toDate;
-
-  const handleExport = () => {
-    const rows = filtered.map((n) => ({
-      name:           n.name ?? '',
-      mobile:         n.mobile ? formatMobileWithCountryCode(n.mobile) : '',
-      email:          n.email ?? '',
-      visitCount:     n.visitCount,
-      firstVisit:     formatDatePadded(n.firstVisitAt),
-      lastVisit:      formatDatePadded(n.lastVisitAt),
-      daysSince:      n.daysSinceLastVisit ?? '',
-      sources:        n.sources.join(', '),
-      pastBuyer:      n.isPastBuyer ? 'Yes' : 'No',
-      lastPurchase:   n.lastPurchaseDate ? formatDatePadded(n.lastPurchaseDate) : '',
-      cancelledOrder: n.hasCancelledOrder ? 'Yes' : 'No',
-    }));
-    const range = `${fromDate || 'start'}_to_${toDate || todayDateString()}`;
-    downloadXlsx(`non-buyers_${range}.xlsx`, [{ name: 'Non-Buyers', columns: EXPORT_COLUMNS, rows }]);
+  const handleSearchChange = (value) => {
+    setSearch(value);
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => setDebouncedSearch(value.trim()), APP_CONFIG.SEARCH.DEBOUNCE_MS);
+  };
+  const clearSearch = () => {
+    clearTimeout(debounceRef.current);
+    setSearch('');
+    setDebouncedSearch('');
   };
 
+  const filters = { companyId, from: fromDate, to: toDate, minVisits, sort: sortBy, search: debouncedSearch };
+  const {
+    nonBuyers, total, pastBuyerCount, hasMore, loadMore, isLoadingMore, isLoading, isFetching, isError, refresh,
+  } = useNonBuyers(filters);
+
+  // Load the next page as the list's end scrolls into view (same pattern as the Buyers page).
+  const sentinelRef = useRef(null);
+  useEffect(() => {
+    if (!hasMore) return;
+    const node = sentinelRef.current;
+    if (!node) return;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0]?.isIntersecting && !isLoadingMore) loadMore();
+    }, { rootMargin: '400px' });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [hasMore, isLoadingMore, loadMore]);
+
+  const hasDateFilter = !!fromDate || !!toDate;
+  const hasActiveFilters = fromDate !== defaultFromDate() || !!toDate
+    || minVisits !== DEFAULT_MIN_VISITS || sortBy !== DEFAULT_SORT
+    || (isSuperAdmin && storeFilter !== String(activeStoreId));
+
+  const clearFilters = () => {
+    setFromDate(defaultFromDate());
+    setToDate('');
+    setMinVisits(DEFAULT_MIN_VISITS);
+    setSortBy(DEFAULT_SORT);
+    if (isSuperAdmin) setStoreFilter(activeStoreId ? String(activeStoreId) : 'all');
+  };
+
+  const searchInput = (
+    <div className="relative w-full">
+      <Search size={16} aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+      <Input
+        type="text"
+        inputMode="search"
+        placeholder="Search by name or mobile number"
+        value={search}
+        onChange={(e) => handleSearchChange(e.target.value)}
+        className="h-11 w-full pl-9 pr-9"
+        aria-label="Search non-buyers"
+      />
+      {search.length > 0 && (
+        <button
+          type="button"
+          onClick={clearSearch}
+          aria-label="Clear search"
+          className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center justify-center h-7 w-7 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+        >
+          <X size={15} aria-hidden="true" />
+        </button>
+      )}
+    </div>
+  );
+
+  const dateInputs = (
+    <div className="flex items-center gap-2 w-full">
+      <Input
+        type="date"
+        value={fromDate}
+        max={toDate || todayDateString()}
+        onChange={(e) => setFromDate(e.target.value)}
+        aria-label="From date"
+        className="h-11 flex-1 min-w-0"
+      />
+      <span className="text-muted-foreground text-sm shrink-0">to</span>
+      <Input
+        type="date"
+        value={toDate}
+        min={fromDate || undefined}
+        max={todayDateString()}
+        onChange={(e) => setToDate(e.target.value)}
+        aria-label="To date"
+        className="h-11 flex-1 min-w-0"
+      />
+      {hasDateFilter && (
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          onClick={() => { setFromDate(''); setToDate(''); }}
+          aria-label="Show all dates"
+          className="h-11 w-11 shrink-0"
+        >
+          <X size={14} aria-hidden="true" />
+        </Button>
+      )}
+    </div>
+  );
+
+  const storeSelect = isSuperAdmin && (
+    <Select value={storeFilter} onValueChange={setStoreFilter}>
+      <SelectTrigger className="h-11 w-full" aria-label="Store">
+        <SelectValue placeholder="All stores" />
+      </SelectTrigger>
+      <SelectContent align="start" className="max-h-72 overflow-y-auto">
+        <SelectItem value="all">All stores</SelectItem>
+        {availableStores.map((store) => (
+          <SelectItem key={store.company_id} value={String(store.company_id)}>{store.mailing_name}</SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+
+  const minVisitsSelect = (
+    <Select value={minVisits} onValueChange={setMinVisits}>
+      <SelectTrigger className="h-11 w-full" aria-label="Minimum visits">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent align="start">
+        {MIN_VISIT_OPTIONS.map((opt) => (
+          <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+
+  const sortSelect = (
+    <Select value={sortBy} onValueChange={setSortBy}>
+      <SelectTrigger className="h-11 w-full" aria-label="Sort by">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent align="start">
+        {SORT_OPTIONS.map((opt) => (
+          <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+
   return (
-    <div className="flex flex-col gap-4 w-full p-4 md:p-6">
+    <div className="flex flex-col gap-4 w-full p-4 pb-28 md:p-6 md:pb-6">
       <div className="sticky top-0 z-10 -mx-4 -mt-4 flex flex-col gap-2 border-b border-border bg-background px-4 pt-4 pb-3 md:-mx-6 md:-mt-6 md:px-6 md:pt-6">
         <div>
           <h1 className="text-lg font-bold text-foreground">Non-Buyers</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Walk-ins at {companyName ?? 'this store'} who visited but haven&rsquo;t bought since their first visit in the period.
+            Walk-ins at {companyId === 'all' ? 'every store' : (companyName ?? 'this store')} who visited but haven&rsquo;t bought since their first visit in the period.
           </p>
         </div>
 
-        <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
-          <div className="relative lg:flex-1 lg:min-w-56">
-            <Search size={16} aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              type="text"
-              inputMode="search"
-              placeholder="Search by name or mobile number"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="h-11 w-full pl-9 pr-9"
-              aria-label="Search non-buyers"
-            />
-            {search.length > 0 && (
-              <button
-                type="button"
-                onClick={() => setSearch('')}
-                aria-label="Clear search"
-                className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center justify-center h-7 w-7 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-              >
-                <X size={15} aria-hidden="true" />
-              </button>
-            )}
-          </div>
-
+        {/* Tablet and desktop: every control inline. Phones use the Filter pill + bottom sheet below. */}
+        <div className="hidden md:flex md:flex-col md:gap-2 lg:flex-row lg:items-center">
+          <div className="lg:flex-1 lg:min-w-56">{searchInput}</div>
+          <div className="lg:w-80">{dateInputs}</div>
           <div className="flex items-center gap-2">
-            <Input
-              type="date"
-              value={fromDate}
-              max={toDate || todayDateString()}
-              onChange={(e) => setFromDate(e.target.value)}
-              aria-label="From date"
-              className="h-11 flex-1 min-w-0 lg:w-38 lg:flex-none"
-            />
-            <span className="text-muted-foreground text-sm shrink-0">to</span>
-            <Input
-              type="date"
-              value={toDate}
-              min={fromDate || undefined}
-              max={todayDateString()}
-              onChange={(e) => setToDate(e.target.value)}
-              aria-label="To date"
-              className="h-11 flex-1 min-w-0 lg:w-38 lg:flex-none"
-            />
-            {hasDateFilter && (
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                onClick={() => { setFromDate(''); setToDate(''); }}
-                aria-label="Show all dates"
-                className="h-11 w-11 shrink-0"
-              >
-                <X size={14} aria-hidden="true" />
-              </Button>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Select value={minVisits} onValueChange={setMinVisits}>
-              <SelectTrigger className="h-11 flex-1 lg:w-32 lg:flex-none" aria-label="Minimum visits">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent align="start">
-                {MIN_VISIT_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Select value={sortBy} onValueChange={setSortBy}>
-              <SelectTrigger className="h-11 flex-1 lg:w-36 lg:flex-none" aria-label="Sort by">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent align="start">
-                {SORT_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              onClick={handleExport}
-              disabled={isLoading || filtered.length === 0}
-              aria-label="Export to Excel"
-              className="h-11 w-11 shrink-0"
-            >
-              <Download size={16} aria-hidden="true" />
-            </Button>
+            {storeSelect && <div className="flex-1 lg:w-48 lg:flex-none">{storeSelect}</div>}
+            <div className="flex-1 lg:w-32 lg:flex-none">{minVisitsSelect}</div>
+            <div className="flex-1 lg:w-36 lg:flex-none">{sortSelect}</div>
             <Button
               type="button"
               variant="ghost"
               size="icon"
-              onClick={() => refetch()}
+              onClick={() => refresh()}
               disabled={isFetching}
               aria-label="Refresh"
               className="h-11 w-11 shrink-0"
@@ -244,7 +257,7 @@ export default function NonBuyersPage() {
 
         {!isLoading && !isError && (
           <p className="text-xs text-muted-foreground">
-            {filtered.length} non-buyer{filtered.length !== 1 ? 's' : ''}
+            {total} non-buyer{total !== 1 ? 's' : ''}
             {pastBuyerCount > 0 ? ` · ${pastBuyerCount} bought here before` : ''}
             {hasDateFilter ? '' : ' · all dates'}
           </p>
@@ -261,17 +274,17 @@ export default function NonBuyersPage() {
           <ErrorState
             className="col-span-full"
             title="Couldn't load walk-ins or orders."
-            onRetry={() => refetch()}
+            onRetry={() => refresh()}
           />
-        ) : visible.length === 0 ? (
+        ) : nonBuyers.length === 0 ? (
           <EmptyState
             className="col-span-full"
             icon={UserX}
-            title={trimmedSearch ? 'No matching non-buyers.' : 'No non-buyers for these filters.'}
-            description={trimmedSearch ? undefined : 'Try fewer minimum visits or a wider date range.'}
+            title={debouncedSearch ? 'No matching non-buyers.' : 'No non-buyers for these filters.'}
+            description={debouncedSearch ? undefined : 'Try fewer minimum visits or a wider date range.'}
           />
         ) : (
-          visible.map((nonBuyer) => (
+          nonBuyers.map((nonBuyer) => (
             <NonBuyerListItem
               key={nonBuyer.key}
               nonBuyer={nonBuyer}
@@ -282,16 +295,68 @@ export default function NonBuyersPage() {
       </StaggerList>
 
       {hasMore && (
-        <div className="flex justify-center">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => setPagination((prev) => ({ ...prev, visibleCount: prev.visibleCount + PAGE_SIZE }))}
-          >
-            Show more ({filtered.length - visibleCount} left)
-          </Button>
+        <div ref={sentinelRef} className="flex justify-center py-4 text-sm text-muted-foreground">
+          {isLoadingMore && (
+            <span className="flex items-center gap-2">
+              <Loader2 size={16} className="animate-spin" aria-hidden="true" /> Loading more…
+            </span>
+          )}
         </div>
       )}
+
+      <BuyersMobileFilterBar
+        hasActiveFilters={hasActiveFilters || !!debouncedSearch}
+        onOpenFilters={() => setIsFilterOpen(true)}
+        showSync
+        isSyncing={isFetching}
+        onSync={() => refresh()}
+      />
+
+      <BottomSheet
+        isOpen={isFilterOpen}
+        onClose={() => setIsFilterOpen(false)}
+        title="Filters"
+        footerClassName="p-0"
+        footer={
+          <div className="flex items-stretch">
+            <Button
+              type="button"
+              variant="outline"
+              className="min-h-14 flex-1 rounded-none"
+              onClick={() => { clearFilters(); clearSearch(); }}
+            >
+              Clear All
+            </Button>
+            <Button type="button" className="min-h-14 flex-1 rounded-none" onClick={() => setIsFilterOpen(false)}>
+              Apply Filters
+            </Button>
+          </div>
+        }
+      >
+        <div className="flex flex-col gap-4">
+          {searchInput}
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs font-medium text-muted-foreground">Visit period</span>
+            {dateInputs}
+          </div>
+          {storeSelect && (
+            <div className="flex flex-col gap-1.5">
+              <span className="text-xs font-medium text-muted-foreground">Store</span>
+              {storeSelect}
+            </div>
+          )}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1.5">
+              <span className="text-xs font-medium text-muted-foreground">Minimum visits</span>
+              {minVisitsSelect}
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <span className="text-xs font-medium text-muted-foreground">Sort by</span>
+              {sortSelect}
+            </div>
+          </div>
+        </div>
+      </BottomSheet>
 
       <NonBuyerDetailSheet
         nonBuyer={selected}

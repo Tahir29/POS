@@ -75,7 +75,8 @@ function FacetFilter({ column }) {
 
 /**
  * Searchable, sortable, paginated report table with per-column filters and a
- * Columns menu. `columns`: { key, label, align?, format?, total?, filter?, mobile? }.
+ * Columns menu. `columns`: { key, label, align?, format?, total?, filter?, mobile?, hidden? }.
+ * `hidden` columns start unticked in the Columns menu, so they show only when chosen there.
  * Below md only `mobile` columns are shown (default: first two); the rest open
  * from each row's expand button. onViewChange receives the filtered + sorted
  * rows and the visible columns, for exports that should match the screen.
@@ -85,7 +86,9 @@ export default function DataTable({ columns, rows, isLoading, isError, onRetry, 
   const [sorting, setSorting] = useState([]);
   const [globalFilter, setGlobalFilter] = useState('');
   const [columnFilters, setColumnFilters] = useState([]);
-  const [columnVisibility, setColumnVisibility] = useState({});
+  const [columnVisibility, setColumnVisibility] = useState(
+    () => Object.fromEntries(columns.filter((c) => c.hidden).map((c) => [c.key, false])),
+  );
   const [expanded, setExpanded] = useState({});
 
   const columnDefs = useMemo(() => columns.map((c) => ({

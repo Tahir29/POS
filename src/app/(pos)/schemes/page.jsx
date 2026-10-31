@@ -352,14 +352,14 @@ function EnrollmentsTab() {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
       {customerId && (
-        <div className="rounded-xl border border-status-in-stock/30 bg-status-in-stock/10 px-3 py-2 text-sm text-status-in-stock">
+        <div className="col-span-full rounded-xl border border-status-in-stock/30 bg-status-in-stock/10 px-3 py-2 text-sm text-status-in-stock">
           Showing enrollments for <strong>{customerName}</strong>
         </div>
       )}
 
       {enrollments.length === 0 ? (
         <EmptyState
-          className="border-0 py-16"
+          className="col-span-full border-0 py-16"
           icon={LayoutGrid}
           title={customerId ? 'No enrollments for this customer.' : 'No enrollments found.'}
           action={(
