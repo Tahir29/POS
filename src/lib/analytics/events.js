@@ -49,6 +49,12 @@ const RAW_EVENTS = {
   INVOICE_RECEIPT_ADDED:  'invoice_receipt_added',
   INVOICE_RECEIPT_FAILED: 'invoice_receipt_failed',
 
+  INSURANCE_GENERATED:    'insurance_generated',
+  INSURANCE_FAILED:       'insurance_failed',
+  INSURANCE_NUDGE_SHOWN:     'insurance_nudge_shown',
+  INSURANCE_NUDGE_ACCEPTED:  'insurance_nudge_accepted',
+  INSURANCE_NUDGE_DISMISSED: 'insurance_nudge_dismissed',
+
   RETURN_CREATED:         'return_created',
   RETURN_POSTED:          'return_posted',
   RETURN_CANCELLED:       'return_cancelled',
