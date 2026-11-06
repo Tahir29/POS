@@ -29,7 +29,7 @@ function ordinal(day) {
   }
 }
 
-function EventRow({ event, onSelect }) {
+export function EventRow({ event, onSelect }) {
   return (
     <button
       type="button"
