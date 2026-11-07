@@ -17,8 +17,22 @@ import { generatePolicies, OlockerError } from '@/lib/olocker/client';
 import { buildTagList, lineItemKey } from '@/lib/olocker/buildTagList';
 import { getInvoicePolicies, appendInvoicePolicies } from '@/lib/mongo/insurancePolicies';
 import { getInsuranceWindow, formatWindowDate } from '@/lib/olocker/insuranceWindow';
-import { INSURANCE_WINDOW_DAYS } from '@/lib/olocker/constants';
+import { INSURANCE_WINDOW_DAYS, OLOCKER_MAX_TAGS_PER_CALL } from '@/lib/olocker/constants';
 import API from '@/constants/apiEndpoints';
+
+// One request covers at most OLOCKER_MAX_TAGS_PER_CALL policies, but each
+// of those can take Olocker tens of seconds (policy + PDF + email +
+// WhatsApp). Leave room for the 60s generate budget plus auth and the
+// OrnaVerse read; 60s is also the ceiling every Vercel plan allows.
+export const maxDuration = 60;
+
+const UNATTRIBUTED_MESSAGES = {
+  mismatch: 'This invoice has a policy that could not be matched to an item. '
+          + 'Check it in Olocker before generating any more.',
+  timeout:  'Olocker did not confirm the last insurance request for this invoice, so policies '
+          + 'may have been issued without being recorded here. Check the Olocker dashboard '
+          + 'before generating any more.',
+};
 
 function parseTransactionId(value) {
   const id = Number(value);
@@ -35,8 +49,9 @@ export async function GET(request) {
   }
 
   try {
-    const { items, unattributed } = await getInvoicePolicies({ env: session.env, transactionId });
-    return Response.json({ items, unattributed });
+    const { items, unattributed, unattributedReason } =
+      await getInvoicePolicies({ env: session.env, transactionId });
+    return Response.json({ items, unattributed, unattributedReason });
   } catch (err) {
     console.error('[api/insurance] GET', err);
     return Response.json({ error: 'Could not load insurance policies' }, { status: 500 });
@@ -89,7 +104,7 @@ export async function POST(request) {
       );
     }
 
-    const { items: existing, unattributed: alreadyUnattributed } =
+    const { items: existing, unattributed: alreadyUnattributed, unattributedReason } =
       await getInvoicePolicies({ env: session.env, transactionId });
 
     // This invoice already holds a policy that could not be tied to a line,
@@ -100,8 +115,8 @@ export async function POST(request) {
     if (alreadyUnattributed) {
       return Response.json(
         {
-          error: 'This invoice has a policy that could not be matched to an item. '
-               + 'Check it in Olocker before generating any more.',
+          error: UNATTRIBUTED_MESSAGES[unattributedReason] ?? UNATTRIBUTED_MESSAGES.mismatch,
+          code:  'UNATTRIBUTED',
           items: existing,
         },
         { status: 409 },
@@ -122,7 +137,7 @@ export async function POST(request) {
 
     if (!eligible.size) {
       return Response.json(
-        { error: 'Every selected item is already insured.', items: existing },
+        { error: 'Every selected item is already insured.', code: 'ALREADY_INSURED', items: existing },
         { status: 409 },
       );
     }
@@ -145,14 +160,49 @@ export async function POST(request) {
       );
     }
 
+    // Never more than OLOCKER_MAX_TAGS_PER_CALL policies per Olocker call —
+    // a bigger TagList is what ran past the timeout on a 6-item invoice.
+    // The client already sends one batch per request; anything beyond the
+    // cap is reported back as `deferred` rather than silently dropped.
+    const batchKeys = new Set(
+      preflight.lines.slice(0, OLOCKER_MAX_TAGS_PER_CALL).map((line) => line.key),
+    );
+    const deferred = preflight.lines.length - batchKeys.size;
+
     // The token is embedded in every tag, so the TagList is rebuilt per
     // attempt (see generatePolicies). `lines` comes back parallel to `tags`.
     let lines = [];
-    const rows = await generatePolicies((token) => {
-      const built = buildTagList({ invoice, token, selectedKeys: eligible });
-      lines = built.lines;
-      return built.tags;
-    });
+    let rows;
+    try {
+      rows = await generatePolicies((token) => {
+        const built = buildTagList({ invoice, token, selectedKeys: batchKeys });
+        lines = built.lines;
+        return built.tags;
+      });
+    } catch (err) {
+      // A timeout leaves the outcome unknown: Olocker may well have issued
+      // these policies (and charged for them) after we stopped waiting, and
+      // it offers no way to look them up. Latch the invoice so nobody
+      // re-buys them on a retry — the same guard as a row-count mismatch.
+      if (err instanceof OlockerError && err.code === 'TIMEOUT') {
+        await appendInvoicePolicies({
+          env:                session.env,
+          transactionId,
+          documentNo:         invoice.document_no,
+          partyId:            invoice.party_id ?? null,
+          createdBy:          session.username ?? null,
+          items:              [],
+          rawResponse:        { timeout: true, attemptedKeys: [...batchKeys], message: err.message },
+          unattributed:       true,
+          unattributedReason: 'timeout',
+        });
+        return Response.json(
+          { error: UNATTRIBUTED_MESSAGES.timeout, code: 'TIMEOUT' },
+          { status: 504 },
+        );
+      }
+      throw err;
+    }
 
     // Olocker answers with a bare array and no echo of what each row refers
     // to, so rows can only be attributed to lines positionally — and only
@@ -203,10 +253,11 @@ export async function POST(request) {
       // Olocker itself declined — both are things the operator must see.
       skipped,
       failures: failed,
+      deferred,
     });
   } catch (err) {
     if (err instanceof OlockerError) {
-      console.error('[api/insurance] POST olocker', err.code, err.message);
+      console.error('[api/insurance] POST olocker', err.code, err.message, err.cause ?? '');
       const status = err.code === 'NOT_CONFIGURED' ? 503 : 502;
       return Response.json({ error: err.message, code: err.code }, { status });
     }

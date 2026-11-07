@@ -39,6 +39,19 @@ export const OLOCKER_TOKEN_TTL_MS = 10 * 60 * 1000;
 
 export const OLOCKER_TIMEOUT_MS = 25_000;
 
+// generatePolicies does far more than authenticate: per tag it issues a
+// policy, renders the certificate PDF and sends the customer an email and a
+// WhatsApp, all before it answers. A 6-item invoice (PN1-LJ-1126-018,
+// 2026-11-06) ran past the 25s budget twice while 1–2 item invoices went
+// through, so this call gets a much longer budget of its own.
+export const OLOCKER_GENERATE_TIMEOUT_MS = 60_000;
+
+// …and is never asked for more than this many policies at once. Two per
+// call is what has been issuing reliably on live; larger invoices are sent
+// as consecutive calls (see useGenerateInsurance), each recorded as soon as
+// it succeeds. One certificate PDF and one customer notification per call.
+export const OLOCKER_MAX_TAGS_PER_CALL = 2;
+
 // Olocker takes stone weights in carats and everything else in grams; the
 // gross/net reconciliation their guide asks for has to happen in one unit.
 export const GRAMS_PER_CARAT = 0.2;
