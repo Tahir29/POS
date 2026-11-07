@@ -6,7 +6,7 @@ import { QUERY_KEYS } from '@/constants/queryKeys';
 import TOAST from '@/constants/toastMessages';
 import tracker from '@/lib/analytics/tracker';
 import EVENTS from '@/lib/analytics/events';
-import { OLOCKER_MAX_TAGS_PER_CALL } from '@/lib/olocker/constants';
+import { OLOCKER_MAX_TAGS_PER_REQUEST } from '@/lib/olocker/constants';
 
 function chunk(list, size) {
   const out = [];
@@ -25,11 +25,12 @@ const STOP_CODES = new Set([
 /**
  * Issues Olocker policies for the invoice lines the customer opted in for.
  *
- * Olocker is sent at most OLOCKER_MAX_TAGS_PER_CALL items per request, one
- * request after another: a single 6-item TagList ran past the timeout on
- * live, while 1–2 items go through. Each batch is recorded server-side the
- * moment it succeeds, so a failure part-way keeps everything issued before
- * it and the operator sees exactly which part failed.
+ * Sent in requests of OLOCKER_MAX_TAGS_PER_REQUEST items; the route splits
+ * each into small Olocker calls that run side by side (a single 6-item
+ * TagList ran past the timeout on live, while 1–2 items go through). Every
+ * call is recorded server-side the moment it succeeds, so a failure
+ * part-way keeps everything issued before it and the operator sees exactly
+ * which part failed.
  *
  * @returns mutation taking `{ transactionId, itemKeys, onProgress? }`
  *   onProgress({ done, total }) fires before each batch is sent.
@@ -40,7 +41,7 @@ export function useGenerateInsurance() {
 
   return useMutation({
     mutationFn: async ({ transactionId, itemKeys, onProgress }) => {
-      const batches = chunk(itemKeys ?? [], OLOCKER_MAX_TAGS_PER_CALL);
+      const batches = chunk(itemKeys ?? [], OLOCKER_MAX_TAGS_PER_REQUEST);
       const result = { issuedCount: 0, skipped: [], failures: [], unattributed: false, items: [] };
 
       for (let i = 0; i < batches.length; i += 1) {
