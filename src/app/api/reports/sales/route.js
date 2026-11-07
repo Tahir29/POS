@@ -32,11 +32,21 @@ const OPEN_ORDER_COLUMNS = [
 // Every report's rows are filtered here to the requested stores, so the browser
 // never receives another store's data (SKU Velocity ignores company_ids upstream).
 const REPORTS = {
+  // New MTO's amount is exactly the open POS orders in the range (confirmed live 2026-11-06),
+  // so its order count comes from the same report.
   async summary(session, { companyIds, fromDate, toDate }) {
-    const data = await postUpstream(session, API.REPORTS.POS_DASHBOARD, {
-      company_ids: companyIds, from_date: toRfc1123(fromDate), to_date: toRfc1123(toDate),
-    });
-    return { data };
+    const [data, orders] = await Promise.all([
+      postUpstream(session, API.REPORTS.POS_DASHBOARD, {
+        company_ids: companyIds, from_date: toRfc1123(fromDate), to_date: toRfc1123(toDate),
+      }),
+      postUpstream(session, API.REPORTS.OPEN_POS_ORDERS, {
+        document_status: 1, company_ids: companyIds, from_date: fromDate, to_date: toDate,
+        IncludeColumns: ['document_no', 'company_id'],
+      }),
+    ]);
+    const allowed = new Set(companyIds);
+    const orderNos = new Set((orders?.Entities ?? []).filter((r) => allowed.has(r.company_id)).map((r) => r.document_no));
+    return { data: data && { ...data, new_mto_count: orderNos.size } };
   },
 
   // OrnaVerse merges categories across company_ids and applies Take before grouping,

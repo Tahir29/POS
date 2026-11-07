@@ -197,7 +197,7 @@ function AdhocReportsTab({ reportsList, selectedReportId, selectedReport, onSele
 function buildSummaryKpis(data) {
   return [
     { label: 'Total Sales',       value: data.total_sales_amount },
-    { label: 'New MTO',           value: data.total_order_amount },
+    { label: 'New MTO',           value: data.total_order_amount, count: data.new_mto_count },
     { label: 'Closed MTO',        value: data.mto_orders },
     { label: 'RTS',               value: data.mto_sales },
     { label: 'RTS / MTO',         value: data.rts_and_mto },
@@ -227,7 +227,12 @@ function SalesSummaryTab({ data, isLoading, isError, onRetry }) {
     <div className="flex flex-col gap-4">
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
         {kpis.map((k) => (
-          <KPICard key={k.label} label={k.label} value={formatAmount(k.value)} />
+          <KPICard
+            key={k.label}
+            label={k.label}
+            value={formatAmount(k.value)}
+            trend={k.count != null ? { type: 'neutral', text: `${k.count} ${k.count === 1 ? 'order' : 'orders'}` } : undefined}
+          />
         ))}
       </div>
 
@@ -562,7 +567,7 @@ export default function ReportsPage() {
       downloadXlsx(`sales-summary_${fromDate}_to_${toDate}.xlsx`, [
         {
           name: 'Summary',
-          columns: [{ key: 'label', label: 'Metric' }, { key: 'value', label: 'Value' }],
+          columns: [{ key: 'label', label: 'Metric' }, { key: 'value', label: 'Value' }, { key: 'count', label: 'Orders' }],
           rows: buildSummaryKpis(summaryReport.data),
         },
         {
