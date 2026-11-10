@@ -194,8 +194,15 @@ const tracker = {
       if (sentOnce.has(key)) return;
       sentOnce.add(key);
     }
-    logEvent(eventName, eventData);
-    sendToWebEngageServer(eventName, eventData, { userId });
+    // Marks the event as POS-originated (website events never carry `source`).
+    const tagged = {
+      ...eventData,
+      source:    'POS',
+      storeCode: session?.storeCode ?? undefined,
+      storeName: session?.storeName ?? undefined,
+    };
+    logEvent(eventName, tagged);
+    sendToWebEngageServer(eventName, tagged, { userId });
   },
 
   trackAgent(eventName, properties = {}) {

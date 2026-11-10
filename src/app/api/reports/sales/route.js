@@ -94,7 +94,7 @@ const REPORTS = {
         const store = stores.find((s) => s.company_id === d.companyId);
         rows.push({
           company_id: d.companyId, company_code: store?.company_code, mailing_name: store?.mailing_name,
-          sales_person_id: d.salesPersonId, employee_name: d.salesPersonName ?? (d.salesPersonId ? `Employee #${d.salesPersonId}` : 'No sales person'),
+          sales_person_id: d.salesPersonId, employee_name: d.salesPersonName ?? (d.salesPersonId ? `Employee #${d.salesPersonId}` : 'No jewelry consultant'),
           ...counts,
         });
       }

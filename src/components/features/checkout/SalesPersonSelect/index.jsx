@@ -8,7 +8,7 @@ import { useSalesPersonOptions } from '@/hooks/schemes/useSalesPersonOptions';
 /**
  * @param {{ companyId: number|null, value: number|null, onChange: (employeeId: number) => void }} props
  */
-export default function SalesPersonSelect({ companyId, value, onChange, placeholder = 'Select sales person' }) {
+export default function SalesPersonSelect({ companyId, value, onChange, placeholder = 'Select jewelry consultant' }) {
   const { salesPersons, isLoading } = useSalesPersonOptions(companyId);
 
   return (

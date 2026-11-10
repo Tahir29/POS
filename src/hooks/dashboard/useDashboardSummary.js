@@ -72,6 +72,9 @@ export function useDashboardSummary() {
   };
 
   const summary = useMemo(() => {
+    // Same rule as the Sales reports: cancelled and draft documents are not sales.
+    const NOT_SALES = [APP_CONFIG.ORDER_STATUS.CANCELLED, APP_CONFIG.ORDER_STATUS.DRAFT];
+    const salesDocs = allOrders.filter((o) => !NOT_SALES.includes(o.status));
     const todayPrefix     = toLocalPrefix(new Date());
     const yesterdayPrefix = daysAgoPrefix(1);
 
@@ -80,7 +83,7 @@ export function useDashboardSummary() {
     let yesterdayRevenue = 0;
     let yesterdayOrderCount = 0;
 
-    for (const order of allOrders) {
+    for (const order of salesDocs) {
       if (!order.orderDate) continue;
       const prefix = getLocalDatePrefix(order.orderDate);
       const amount = order.totalAmount ?? 0;
@@ -105,7 +108,7 @@ export function useDashboardSummary() {
     for (let i = 6; i >= 0; i--) {
       dayBuckets.set(daysAgoPrefix(i), 0);
     }
-    for (const order of allOrders) {
+    for (const order of salesDocs) {
       if (!order.orderDate) continue;
       const prefix = getLocalDatePrefix(order.orderDate);
       if (dayBuckets.has(prefix)) {

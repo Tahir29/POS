@@ -44,7 +44,7 @@ function firstOfMonthDateString() {
 const BASE_TABS = [
   { key: 'summary',     label: 'Sales Summary' },
   { key: 'category',    label: 'Category Wise' },
-  { key: 'salesperson', label: 'Salesperson Wise' },
+  { key: 'salesperson', label: 'Jewelry Consultant Wise' },
   { key: 'velocity',    label: 'SKU Velocity' },
   { key: 'openOrders',  label: 'Open Orders' },
   { key: 'stock',       label: 'Stock' },
@@ -260,7 +260,7 @@ const CATEGORY_COLUMNS = [
 ];
 
 const SALESPERSON_COLUMNS = [
-  { key: 'employee_name', label: 'Sales Person', mobile: true },
+  { key: 'employee_name', label: 'Jewelry Consultant', mobile: true },
   { key: 'employee_code', label: 'Code' },
   { key: 'invoice_count', label: 'Invoices',      align: 'right', total: true },
   { key: 'invoice_value', label: 'Invoice Value', align: 'right', format: formatAmountOrDash, total: true },
@@ -531,7 +531,7 @@ export default function ReportsPage() {
     };
     return {
       category:    { columns: withStoreColumns(CATEGORY_COLUMNS),    rows: scope(categoryReport.rows),    filenamePrefix: 'category-wise-sales' },
-      salesperson: { columns: withStoreColumns(SALESPERSON_COLUMNS), rows: scope(salesPersonReport.rows), filenamePrefix: 'salesperson-wise-sales' },
+      salesperson: { columns: withStoreColumns(SALESPERSON_COLUMNS), rows: scope(salesPersonReport.rows), filenamePrefix: 'jewelry-consultant-wise-sales' },
       velocity:    { columns: withStoreColumns(VELOCITY_COLUMNS),    rows: scope(velocityReport.rows),    filenamePrefix: 'sku-velocity' },
       openOrders:  { columns: withStoreColumns(OPEN_ORDERS_COLUMNS), rows: scope(openOrdersReport.rows),  filenamePrefix: 'open-pos-orders' },
       stock:       { columns: [...STORE_COLUMNS, ...STOCK_COLUMNS],  rows: scope(stockReport.rows),       filenamePrefix: 'jewellery-stock' },
@@ -902,7 +902,7 @@ export default function ReportsPage() {
               onRetry={salesPersonReport.refetch}
               onViewChange={handleViewChange}
               {...filterBar}
-              emptyMessage="No salesperson sales in this range."
+              emptyMessage="No jewelry consultant sales in this range."
             />
           )}
 
