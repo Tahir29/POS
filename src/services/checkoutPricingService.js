@@ -313,8 +313,11 @@ async function claimStockPieces({ item, activeStoreId, claimed, candidatesByItem
     // complete A sale, but silently stop being "fulfillment" (the source
     // order would never close out, since correlation is keyed off this exact
     // item_line_no) — surfacing a clear error beats an operator believing
-    // they fulfilled an order they didn't.
-    const row = available.find((r) => r.item_line_no === item.fulfillmentItemLineNo);
+    // they fulfilled an order they didn't. The piece is is_allocated when it
+    // was reserved for THIS order by Stock Allocation, so that flag is ignored here.
+    const row = rows.find((r) => r.item_line_no === item.fulfillmentItemLineNo && !claimed.has(r.stock_journal_id))
+      ?? (await getStockPieces({ itemId: item.itemId, companyId: activeStoreId })).data?.Entities
+        ?.find((r) => r.item_line_no === item.fulfillmentItemLineNo && !claimed.has(r.stock_journal_id));
     if (!row) {
       throw new Error(
         `"${item.itemName}" is no longer available to fulfill — the reserved piece may have just been claimed by another sale. Refresh "Fulfill from Order" and try again.`
@@ -504,7 +507,11 @@ export async function buildPricedLineItems({ items, activeStoreId, salesPersonId
     }
     // A no-op for every normal claim (piecesClaimed already equals the row's
     // own full pieces) — only a PARTIAL bulk claim actually scales here.
-    const priced = pricedFullRows.map((fullPriced, i) => scalePricedRowToQuantity(fullPriced, claims[i].piecesClaimed));
+    const refs = claimsByItem.flatMap((itemClaims, i) => itemClaims.map(() => items[i].fulfillmentRef ?? null));
+    const priced = pricedFullRows.map((fullPriced, i) => ({
+      ...scalePricedRowToQuantity(fullPriced, claims[i].piecesClaimed),
+      ...(refs[i] ?? {}),
+    }));
     // One lineItems row per CLAIM, not per unit — a bulk row sold partially
     // is one row covering several units (mapPricedLinesToCart needs this
     // count explicitly; it can no longer assume item.quantity rows per item).

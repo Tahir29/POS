@@ -66,6 +66,19 @@ function useDocDetail(kind, id, fn) {
 
 export const useBranchOuts = () => useDocList('out', listBranchOuts);
 export const useBranchIns = () => useDocList('in', listBranchIns);
+
+/** Transfers sent to the active store that still need receiving (OrnaVerse lists Branch Ins for the logged-in store only). */
+export function usePendingBranchIns() {
+  const companyId = useSelector(selectActiveStoreId);
+  const query = useQuery({
+    queryKey: [KEY, 'in', 'pending', companyId],
+    queryFn: async () => (await listBranchIns({ take: 100 })).rows.filter((r) => !r.authorize && r.document_status !== 2),
+    enabled: !!companyId,
+    staleTime: 60 * 1000,
+    refetchInterval: 3 * 60 * 1000,
+  });
+  return query.data ?? [];
+}
 export const useStockAllocations = () => useDocList('allocation', listStockAllocations);
 export const useBranchOutDetail = (id) => useDocDetail('out', id, retrieveBranchOut);
 export const useBranchInDetail = (id) => useDocDetail('in', id, retrieveBranchIn);

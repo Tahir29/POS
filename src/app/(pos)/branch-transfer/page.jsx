@@ -1,6 +1,7 @@
 'use client';
 
 import { Suspense, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
@@ -506,9 +507,9 @@ function BranchInDetail({ id, onClose }) {
   );
 }
 
-function ReceiveTab() {
+function ReceiveTab({ initialId = null }) {
   const [pendingOnly, setPendingOnly] = useState(true);
-  const [selectedId, setSelectedId] = useState(null);
+  const [selectedId, setSelectedId] = useState(initialId);
   const list = useBranchIns();
   const rows = pendingOnly ? list.rows.filter((r) => !r.authorize && r.document_status !== 2) : list.rows;
   return (
@@ -819,7 +820,15 @@ function AllocationTab() {
 }
 
 function BranchTransferScreen() {
-  const [tab, setTab] = useState('send');
+  const searchParams = useSearchParams();
+  const requestedTab = searchParams.get('tab');
+  const receiveId = Number(searchParams.get('in')) || null;
+  const initialTab = TABS.some((t) => t.key === requestedTab) ? requestedTab : 'send';
+  return <BranchTransferBody key={`${initialTab}-${receiveId ?? ''}`} initialTab={initialTab} receiveId={receiveId} />;
+}
+
+function BranchTransferBody({ initialTab, receiveId }) {
+  const [tab, setTab] = useState(initialTab);
   const { companyId } = useMyCompany();
   if (!companyId) {
     return <div className="p-4"><EmptyState icon={Truck} title="No store selected." description="Switch to a store to manage branch transfers." /></div>;
@@ -829,7 +838,7 @@ function BranchTransferScreen() {
       <p className="text-sm text-muted-foreground">Send stock to other branches, receive incoming transfers and reserve stock against orders.</p>
       <PillTabs tabs={TABS} value={tab} onChange={setTab} getKey={(t) => t.key} getLabel={(t) => t.label} getIcon={(t) => t.icon} variant="pill" scrollable />
       {tab === 'send' && <SendTab />}
-      {tab === 'receive' && <ReceiveTab />}
+      {tab === 'receive' && <ReceiveTab initialId={receiveId} />}
       {tab === 'allocation' && <AllocationTab />}
     </div>
   );

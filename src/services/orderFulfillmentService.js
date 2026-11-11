@@ -104,5 +104,13 @@ export function mapFulfillmentLineToCartItem(line) {
     // close out, and to avoid two open orders on the same style claiming
     // each other's reserved piece.
     fulfillmentItemLineNo: line.item_line_no ?? null,
+    // A piece reserved by Stock Allocation: the invoice line must point at the allocation, as OrnaVerse's own bills do.
+    fulfillmentRef: line.ref_document_id === APP_CONFIG.DOCUMENT_TYPES.STOCK_ALLOCATION
+      ? {
+        ref_document_id:         line.ref_document_id,
+        ref_transaction_id:      line.ref_transaction_id,
+        ref_transaction_item_id: line.ref_transaction_item_id,
+      }
+      : null,
   };
 }
