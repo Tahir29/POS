@@ -145,6 +145,24 @@ export function useCreateOrder() {
         promotionDetails = promoted.promotionDetails;
       }
 
+      // Free-gift items (the gold coin) are not booked on an order: OrnaVerse keeps only the promotion, with the
+      // coin count in gift_qty, and adds the coins from stock when the order is invoiced (as its own orders do).
+      const isFreeGiftRow = (row) => row.is_gift && (Number(row.net_amount) || 0) <= 0.01;
+      const freeGiftPieces = new Map();
+      for (const row of lineItems.filter(isFreeGiftRow)) {
+        freeGiftPieces.set(row.item_id, (freeGiftPieces.get(row.item_id) ?? 0) + (Number(row.pieces) || 1));
+      }
+      if (freeGiftPieces.size) {
+        lineItems = lineItems.filter((row) => !isFreeGiftRow(row));
+        const onlyGiftItemId = freeGiftPieces.size === 1 ? [...freeGiftPieces.keys()][0] : null;
+        promotionDetails = promotionDetails.map((p) => {
+          const giftItemId = p.free_item_id ?? (p.promotion_type === 6 ? onlyGiftItemId : null);
+          return giftItemId != null && freeGiftPieces.has(giftItemId)
+            ? { ...p, gift_qty: freeGiftPieces.get(giftItemId) }
+            : p;
+        });
+      }
+
       const entity = buildOrderEntity({
         lineItems, promotionDetails,
         customerId, customerName, customerMobile,

@@ -313,6 +313,9 @@ function CheckoutScreen() {
             <p className="rounded-lg border border-border bg-muted px-3 py-2 text-xs text-muted-foreground">
               Not in stock at this store — this will be booked as an order and
               billed when the piece arrives.
+              {items.some((i) => i.freeGiftPromoCode != null) && (
+                <> The free gold coins are recorded on the order and added to the bill when it is invoiced.</>
+              )}
             </p>
           )}
 

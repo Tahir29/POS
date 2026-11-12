@@ -396,6 +396,9 @@ async function buildOrderLineItems({ items, documentId }) {
         findRealBomComponents(item.itemId),
       ]);
       if (!master) return null;
+      // A default-SKU item (e.g. the 0.1 g gold coin) is stocked in bulk bags; a bag's BOM carries the whole
+      // bag's weight, which OrnaVerse rejects for one piece ("Weight cannot exceed 0.300 for 3 pcs").
+      if (master.is_default_sku) return master;
       return bomComponents ? { ...master, item_components: bomComponents } : master;
     })
   );
