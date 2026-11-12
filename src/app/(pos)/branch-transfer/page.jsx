@@ -9,15 +9,17 @@ import {
 } from 'lucide-react';
 
 import {
-  useMyCompany, useDestinations, useFreights, useCanPostAllocation,
+  useMyCompany, useDestinations, useFreights, useCanPostAllocation, useAllocationPermissions,
   useBranchOuts, useBranchIns, useStockAllocations,
   useBranchOutDetail, useBranchInDetail, useStockAllocationDetail,
   usePostBranchOut, useCancelBranchOut, useAuthorizeBranchIn, getErrorMessage,
+  usePostAllocation, useCancelAllocation, useUpdateAllocation, logTransferEvent, useTransferEvents, useSentTransferReceipts,
+  useCancelledAllocations,
 } from '@/hooks/branchTransfer/useBranchTransfer';
 import { useOrderHeaderConfig } from '@/hooks/checkout/useOrderHeaderConfig';
 import {
   getParty, getCompanyByParty, getCompanyLocations, buildPricingContext,
-  listTransferStock, priceTransferItems, transferTotals, createBranchOut, postBranchOut, getLinkedBranchIn,
+  listTransferStock, priceTransferItems, transferTotals, createBranchOut, postBranchOut, getLinkedBranchIn, retrieveBranchOut,
 } from '@/services/branchTransferService';
 import {
   listPosOrderLines, listSalesOrderLines, buildDemandLines, listAllocatableStock,
@@ -153,6 +155,89 @@ function TotalsBar({ totals }) {
     </div>
   );
 }
+
+// OrnaVerse's stamps have no zone marker but differ: posting_date is IST, authorized_date is UTC
+// (e.g. HO-BIT-11-26-2 posted 12:11 IST, authorized_date 06:41 — the same moment). creation_date carries "Z".
+const parseOvTime = (v, zone = 'ist') => {
+  if (!v) return null;
+  if (v instanceof Date) return v;
+  const hasZone = /[zZ]|[+-]\d\d:?\d\d$/.test(v);
+  const d = new Date(hasZone ? v : `${v}${zone === 'utc' ? 'Z' : '+05:30'}`);
+  return Number.isNaN(d.getTime()) ? null : d;
+};
+const authorisedAt = (r) => parseOvTime(r?.authorized_date, 'utc');
+const formatDateTime = (v) => {
+  const d = v instanceof Date ? v : parseOvTime(v);
+  return d ? d.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+};
+
+const EVENT_LABELS = {
+  created: 'Created in POS', posted: 'Posted from POS', cancelled: 'Cancelled', authorised: 'Received & authorised from POS', updated: 'Updated in POS',
+};
+
+/** Merges OrnaVerse's own stamps with the POS activity log into one dated history, oldest first. */
+function Timeline({ steps, events = [] }) {
+  // Steps stay in their natural order (older OrnaVerse documents lack some stamps); POS log entries slot in by time.
+  const items = steps.filter(Boolean).map((s) => ({ ...s, time: s.at ? parseOvTime(s.at) : null }));
+  for (const e of events) {
+    const entry = { label: EVENT_LABELS[e.action] ?? e.action, time: new Date(e.at), by: `${e.user}${e.store_code ? ` (${e.store_code})` : ''}`, tone: e.action === 'cancelled' ? 'red' : 'muted' };
+    const at = items.findIndex((it) => it.pending || (it.time && it.time > entry.time));
+    items.splice(at === -1 ? items.length : at, 0, entry);
+  }
+  const dot = { green: 'bg-status-in-stock', amber: 'bg-status-made-order', red: 'bg-destructive', muted: 'bg-primary' };
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Activity</p>
+      <ol className="flex flex-col gap-3 border-l border-border pl-4">
+        {items.map((it, i) => (
+          <li key={`${it.label}-${i}`} className="relative text-sm">
+            <span className={`absolute -left-5.25 top-1.5 size-2 rounded-full ${dot[it.tone ?? 'muted']}`} aria-hidden="true" />
+            <p className={`font-medium ${it.pending ? 'text-status-made-order' : 'text-foreground'}`}>{it.label}</p>
+            <p className="text-xs text-muted-foreground">
+              {it.time ? (it.dateOnly ? formatDate(it.time) : formatDateTime(it.time)) : it.pending ? 'Waiting' : '—'}{it.by ? ` · ${it.by}` : ''}
+            </p>
+            {it.note && <p className="text-xs text-muted-foreground">{it.note}</p>}
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
+const STATUS_FILTERS = {
+  send: [
+    { key: 'all', label: 'All' }, { key: 'draft', label: 'Drafts' }, { key: 'transit', label: 'In transit' },
+    { key: 'received', label: 'Received' }, { key: 'cancelled', label: 'Cancelled' },
+  ],
+  receive: [
+    { key: 'all', label: 'All' }, { key: 'awaiting', label: 'Awaiting authorisation' }, { key: 'received', label: 'Received' }, { key: 'cancelled', label: 'Cancelled' },
+  ],
+  allocation: [
+    { key: 'all', label: 'All' }, { key: 'draft', label: 'Drafts' }, { key: 'posted', label: 'Posted' }, { key: 'cancelled', label: 'Cancelled' },
+  ],
+};
+
+function ListToolbar({ filters, value, onChange, search, onSearch, counts }) {
+  return (
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Filter by status">
+        {filters.map((f) => (
+          <button key={f.key} type="button" role="tab" aria-selected={value === f.key} onClick={() => onChange(f.key)}
+            className={`rounded-full px-3 py-1.5 text-xs font-medium ${value === f.key ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/70'}`}>
+            {f.label}{counts?.[f.key] != null ? ` (${counts[f.key]})` : ''}
+          </button>
+        ))}
+      </div>
+      <div className="relative sm:w-64">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+        <Input value={search} onChange={(e) => onSearch(e.target.value)} placeholder="Search document no. / branch" className="h-10 pl-9" aria-label="Search" />
+      </div>
+    </div>
+  );
+}
+
+const matchesSearch = (r, q) => !q || [r.document_no, r.party_display_name, r.party_name, r.narration, r.remark]
+  .some((v) => String(v ?? '').toLowerCase().includes(q.toLowerCase()));
 
 function FieldSelect({ label, value, onChange, options, placeholder, disabled, required }) {
   return (
@@ -303,7 +388,9 @@ function NewBranchOutForm({ onDone }) {
     try {
       const res = await createBranchOut({ companyId, headerConfig, party, context, locationId, freightId, awbNo, remark, address, lines });
       if (!res?.EntityId) throw new Error('Creation failed — no document was returned.');
+      logTransferEvent({ doc_type: 'branch_out', transaction_id: res.EntityId, action: 'created' });
       if (andPost && !headerConfig.autoPosting) await postBranchOut(res.EntityId);
+      if (andPost || headerConfig.autoPosting) logTransferEvent({ doc_type: 'branch_out', transaction_id: res.EntityId, action: 'posted' });
       toast.success(andPost ? 'Transfer posted — it is now in transit to the destination.' : 'Transfer saved as draft.');
       queryClient.invalidateQueries({ queryKey: ['branch-transfer'] });
       onDone();
@@ -368,6 +455,9 @@ function BranchOutDetail({ id, onClose }) {
   const postDoc = usePostBranchOut();
   const cancelDoc = useCancelBranchOut();
   const [confirm, setConfirm] = useState(null);
+  const outEvents = useTransferEvents('branch_out', [id]);
+  const inEvents = useTransferEvents('branch_in', [receipt?.transaction_id]);
+  const docNo = entity?.document_no ?? null;
 
   return (
     <Sheet open onOpenChange={(o) => !o && onClose()}>
@@ -389,9 +479,23 @@ function BranchOutDetail({ id, onClose }) {
               {(entity.awb_no || entity.freight_code) && <p className="text-xs text-muted-foreground">Freight {entity.freight_code ?? '—'} · AWB {entity.awb_no || '—'}</p>}
               <LinesTable lines={entity.line_items ?? []} />
               <TotalsBar totals={transferTotals(entity.line_items ?? [], entity.is_tax_applicable)} />
+              <Timeline
+                events={[...outEvents.filter((e) => e.action !== 'created' && e.action !== 'posted'), ...inEvents.filter((e) => e.action !== 'authorised')]}
+                steps={[
+                  { label: 'Created', at: entity.creation_date, by: entity.username },
+                  entity.document_status !== 0 && entity.posting_date && { label: 'Posted · sent', at: entity.posting_date, by: entity.posted_by_name, tone: 'green' },
+                  entity.document_status === 0 && { label: 'Draft · not posted yet', pending: true, tone: 'amber' },
+                  receipt && { label: `Receipt ${receipt.document_no} created at ${receipt.company_code ?? 'destination'}`, at: receipt.creation_date, tone: 'muted' },
+                  receipt && (receipt.authorize
+                    ? { label: `Received & authorised at ${receipt.company_code ?? 'destination'}`, at: authorisedAt(receipt), by: receipt.authorized_by_name, tone: 'green' }
+                    : receipt.document_status === 2
+                      ? { label: `Receipt ${receipt.document_no} cancelled`, tone: 'red' }
+                      : { label: `In transit · awaiting authorisation at ${receipt.company_code ?? 'destination'}`, pending: true, tone: 'amber' }),
+                ]}
+              />
               <div className="flex flex-col gap-2">
                 {entity.document_status === 0 && (
-                  <Button disabled={postDoc.isPending} onClick={() => postDoc.mutate(id, { onSuccess: () => refetch() })}>
+                  <Button disabled={postDoc.isPending} onClick={() => postDoc.mutate({ id, documentNo: docNo }, { onSuccess: () => refetch() })}>
                     {postDoc.isPending ? 'Posting…' : 'Post transfer'}
                   </Button>
                 )}
@@ -404,16 +508,40 @@ function BranchOutDetail({ id, onClose }) {
         </div>
         <ConfirmDialog isOpen={!!confirm} onOpenChange={(o) => !o && setConfirm(null)} title="Cancel this transfer?"
           description="The stock goes back to this store. This can't be undone." confirmLabel="Cancel transfer"
-          onConfirm={() => cancelDoc.mutate(id, { onSuccess: () => { setConfirm(null); refetch(); } })} />
+          onConfirm={() => cancelDoc.mutate({ id, documentNo: docNo }, { onSuccess: () => { setConfirm(null); refetch(); } })} />
       </SheetContent>
     </Sheet>
   );
 }
 
+const sendStatus = (r, receipt) => {
+  if (r.document_status === 2) return 'cancelled';
+  if (r.document_status === 0) return 'draft';
+  if (receipt?.authorize) return 'received';
+  return 'transit';
+};
+
+function SendStatusChips({ row, receipt }) {
+  const st = sendStatus(row, receipt);
+  if (st === 'cancelled') return <Chip tone="red">Cancelled</Chip>;
+  if (st === 'draft') return <Chip>Draft</Chip>;
+  if (st === 'received') return <Chip tone="green">Received</Chip>;
+  return <><Chip tone="green">Posted</Chip><Chip tone="amber">{receipt ? 'In transit' : 'Sent'}</Chip></>;
+}
+
 function SendTab() {
   const [view, setView] = useState('list');
   const [selectedId, setSelectedId] = useState(null);
+  const [filter, setFilter] = useState('all');
+  const [search, setSearch] = useState('');
   const list = useBranchOuts();
+  const receipts = useSentTransferReceipts();
+  const counts = Object.fromEntries(STATUS_FILTERS.send.map((f) => [f.key, f.key === 'all'
+    ? list.rows.length
+    : list.rows.filter((r) => sendStatus(r, receipts.get(r.transaction_id)) === f.key).length]));
+  const rows = list.rows
+    .filter((r) => filter === 'all' || sendStatus(r, receipts.get(r.transaction_id)) === filter)
+    .filter((r) => matchesSearch(r, search));
   return (
     <div className="flex flex-col gap-3">
       <div className="flex justify-end">
@@ -424,15 +552,23 @@ function SendTab() {
       {view === 'new' ? (
         <div className="rounded-xl border border-border bg-card p-4"><NewBranchOutForm onDone={() => setView('list')} /></div>
       ) : (
-        <ListShell {...list} emptyIcon={Truck} emptyTitle="No transfers sent yet." emptyHint="Transfers this store sends to other branches appear here.">
-          {list.rows.map((r) => (
-            <DocRow key={r.transaction_id} title={r.document_no} subtitle={`To ${r.party_display_name ?? r.party_name}`}
-              meta={`${formatDate(r.document_date)} · ${r.pieces ?? 0} pc · ${Number(r.weight ?? 0).toFixed(3)} g${r.username ? ` · ${r.username}` : ''}`}
-              amount={r.net_amount}
-              chips={<DocStatusChip status={r.document_status} />}
-              onSelect={() => setSelectedId(r.transaction_id)} />
-          ))}
-        </ListShell>
+        <>
+          <ListToolbar filters={STATUS_FILTERS.send} value={filter} onChange={setFilter} search={search} onSearch={setSearch} counts={counts} />
+          <ListShell {...list} rows={rows} emptyIcon={Truck}
+            emptyTitle={list.rows.length ? 'Nothing matches this filter.' : 'No transfers sent yet.'}
+            emptyHint="Transfers this store sends to other branches appear here.">
+            {rows.map((r) => {
+              const receipt = receipts.get(r.transaction_id);
+              return (
+                <DocRow key={r.transaction_id} title={r.document_no} subtitle={`To ${r.party_display_name ?? r.party_name}${receipt ? ` · ${receipt.document_no}` : ''}`}
+                  meta={`${r.posting_date && r.document_status === 1 ? `Posted ${formatDateTime(r.posting_date)}` : formatDate(r.document_date)} · ${r.pieces ?? 0} pc · ${Number(r.weight ?? 0).toFixed(3)} g${r.username ? ` · ${r.username}` : ''}`}
+                  amount={r.net_amount}
+                  chips={<SendStatusChips row={r} receipt={receipt} />}
+                  onSelect={() => setSelectedId(r.transaction_id)} />
+              );
+            })}
+          </ListShell>
+        </>
       )}
       {selectedId && <BranchOutDetail id={selectedId} onClose={() => setSelectedId(null)} />}
     </div>
@@ -476,6 +612,16 @@ function BranchInDetail({ id, onClose }) {
   const authorize = useAuthorizeBranchIn();
   const [authOpen, setAuthOpen] = useState(false);
   const pending = entity && !entity.authorize && entity.document_status !== 2;
+  const sentId = entity?.ref_document_id === DOCS.BRANCH_OUT ? entity.ref_transaction_id : null;
+  const sent = useQuery({
+    queryKey: ['branch-transfer', 'out', 'detail', sentId],
+    queryFn: () => retrieveBranchOut(sentId),
+    enabled: !!sentId,
+    staleTime: 0,
+    retry: false,
+  });
+  const inEvents = useTransferEvents('branch_in', [id]);
+  const outEvents = useTransferEvents('branch_out', [sentId]);
 
   return (
     <Sheet open onOpenChange={(o) => !o && onClose()}>
@@ -494,6 +640,18 @@ function BranchInDetail({ id, onClose }) {
               {entity.remark && <p className="text-sm text-muted-foreground">{entity.remark}</p>}
               <LinesTable lines={entity.line_items ?? []} />
               <TotalsBar totals={transferTotals(entity.line_items ?? [], entity.is_tax_applicable)} />
+              <Timeline
+                events={[...outEvents.filter((e) => e.action === 'cancelled'), ...inEvents.filter((e) => e.action !== 'authorised')]}
+                steps={[
+                  sent.data && { label: `Sent as ${sent.data.document_no}`, at: sent.data.posting_date ?? sent.data.creation_date, by: sent.data.posted_by_name ?? sent.data.username, tone: 'green' },
+                  { label: 'Receipt created (in transit)', at: entity.creation_date },
+                  entity.authorize
+                    ? { label: 'Received & authorised', at: authorisedAt(entity), by: entity.authorized_by_name, tone: 'green' }
+                    : entity.document_status === 2
+                      ? { label: 'Cancelled', tone: 'red' }
+                      : { label: 'Awaiting authorisation at this store', pending: true, tone: 'amber' },
+                ]}
+              />
               {pending && (
                 <Button onClick={() => setAuthOpen(true)}><ShieldCheck className="h-4 w-4" /> Authorise receipt</Button>
               )}
@@ -501,30 +659,33 @@ function BranchInDetail({ id, onClose }) {
           )}
         </div>
         <AuthorizeDialog open={authOpen} onOpenChange={setAuthOpen} isPending={authorize.isPending}
-          onConfirm={(creds, done) => authorize.mutate({ id, ...creds }, { onSuccess: () => { done(); refetch(); } })} />
+          onConfirm={(creds, done) => authorize.mutate({ id, documentNo: entity?.document_no ?? null, ...creds }, { onSuccess: () => { done(); refetch(); } })} />
       </SheetContent>
     </Sheet>
   );
 }
 
+const receiveStatus = (r) => (r.authorize ? 'received' : r.document_status === 2 ? 'cancelled' : 'awaiting');
+
 function ReceiveTab({ initialId = null }) {
-  const [pendingOnly, setPendingOnly] = useState(true);
+  const [filter, setFilter] = useState('all');
+  const [search, setSearch] = useState('');
   const [selectedId, setSelectedId] = useState(initialId);
   const list = useBranchIns();
-  const rows = pendingOnly ? list.rows.filter((r) => !r.authorize && r.document_status !== 2) : list.rows;
+  const counts = Object.fromEntries(STATUS_FILTERS.receive.map((f) => [f.key, f.key === 'all'
+    ? list.rows.length
+    : list.rows.filter((r) => receiveStatus(r) === f.key).length]));
+  const rows = list.rows
+    .filter((r) => filter === 'all' || receiveStatus(r) === filter)
+    .filter((r) => matchesSearch(r, search));
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex justify-end">
-        <button type="button" onClick={() => setPendingOnly((v) => !v)}
-          className={`rounded-full px-3 py-1.5 text-xs font-medium ${pendingOnly ? 'bg-status-made-order/15 text-status-made-order' : 'bg-muted text-muted-foreground'}`}>
-          {pendingOnly ? 'Awaiting authorisation' : 'All receipts'}
-        </button>
-      </div>
-      <ListShell {...list} rows={rows} emptyIcon={PackageCheck} emptyTitle={pendingOnly ? 'Nothing waiting to be received.' : 'No receipts yet.'}
+      <ListToolbar filters={STATUS_FILTERS.receive} value={filter} onChange={setFilter} search={search} onSearch={setSearch} counts={counts} />
+      <ListShell {...list} rows={rows} emptyIcon={PackageCheck} emptyTitle={list.rows.length ? 'Nothing matches this filter.' : 'No receipts yet.'}
         emptyHint="Transfers other branches send to this store appear here once they are posted.">
         {rows.map((r) => (
           <DocRow key={r.transaction_id} title={r.document_no} subtitle={`From ${r.party_display_name ?? r.party_name}`}
-            meta={`${formatDate(r.document_date)} · ${r.pieces ?? 0} pc · ${Number(r.weight ?? 0).toFixed(3)} g`}
+            meta={`${r.authorize ? `Received ${formatDateTime(authorisedAt(r))}${r.authorized_by_name ? ` by ${r.authorized_by_name}` : ''}` : `Sent ${formatDateTime(r.posting_date ?? r.creation_date)}`} · ${r.pieces ?? 0} pc · ${Number(r.weight ?? 0).toFixed(3)} g`}
             amount={r.net_amount}
             chips={r.authorize ? <Chip tone="green">Received</Chip> : r.document_status === 2 ? <Chip tone="red">Cancelled</Chip> : <Chip tone="amber">Awaiting authorisation</Chip>}
             onSelect={() => setSelectedId(r.transaction_id)} />
@@ -718,7 +879,9 @@ function NewAllocationForm({ onDone }) {
     try {
       const res = await createStockAllocation({ companyId, companyCode: company?.company_code, partyId: company?.party_id, headerConfig, canPost, narration, lines });
       if (!res?.EntityId) throw new Error('Creation failed — no document was returned.');
-      toast.success(canPost ? 'Stock allocation saved and posted.' : 'Stock allocation saved.');
+      logTransferEvent({ doc_type: 'allocation', transaction_id: res.EntityId, action: 'created' });
+      if (canPost) logTransferEvent({ doc_type: 'allocation', transaction_id: res.EntityId, action: 'posted' });
+      toast.success(canPost ? 'Stock allocation saved and posted.' : 'Stock allocation saved as draft.');
       queryClient.invalidateQueries({ queryKey: ['branch-transfer'] });
       onDone();
     } catch (err) {
@@ -768,8 +931,67 @@ function NewAllocationForm({ onDone }) {
   );
 }
 
+/** OrnaVerse's Edit on an existing allocation: select (or remove) stock on its order lines, then save. */
+function AllocationEditor({ entity, onSaved, onCancel }) {
+  const [lines, setLines] = useState(() => structuredClone(entity.line_items ?? []));
+  const [selectedIdx, setSelectedIdx] = useState(() => {
+    const i = (entity.line_items ?? []).findIndex((l) => (l.allocated_pieces ?? 0) < (l.pieces ?? 0));
+    return i >= 0 ? i : null;
+  });
+  const [allotOpen, setAllotOpen] = useState(false);
+  const update = useUpdateAllocation();
+
+  const allot = async (row) => {
+    const [priced] = await priceAllocatedStock([row]);
+    if (!priced) throw new Error('Could not add this stock piece.');
+    setLines((prev) => prev.map((l, i) => {
+      if (i !== selectedIdx) return l;
+      const allocated = [...(l.allocated_items ?? []), priced];
+      return { ...l, allocated_items: allocated, ...allocationTotals(allocated) };
+    }));
+  };
+  const removeAllocated = (i, j) => setLines((prev) => prev.map((l, k) => {
+    if (k !== i) return l;
+    const allocated = l.allocated_items.filter((_, x) => x !== j);
+    return { ...l, allocated_items: allocated, ...allocationTotals(allocated) };
+  }));
+  const save = () => {
+    const over = lines.find((l) => (l.allocated_pieces ?? 0) > (l.pieces ?? 0));
+    if (over) return toast.error(`Allocated pieces cannot be greater than required pieces for ${over.item_code}.`);
+    update.mutate({ id: entity.transaction_id, documentNo: entity.document_no, lines }, { onSuccess: onSaved });
+  };
+
+  const selected = selectedIdx != null ? lines[selectedIdx] : null;
+  const allocatedKeys = new Set(lines.flatMap((l) => (l.allocated_items ?? []).map(stockKey)));
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="rounded-lg bg-primary/5 p-2 text-xs text-foreground">Pick an order line, then select the stock piece to reserve for it. Removing a piece frees it.</p>
+      <AllocationLines lines={lines} selectedIdx={selectedIdx} onSelect={(i) => { setSelectedIdx(i); setAllotOpen(false); }} onRemoveAllocated={removeAllocated} />
+      {selected && !allotOpen && (selected.allocated_pieces ?? 0) < (selected.pieces ?? 0) && (
+        <Button type="button" variant="outline" onClick={() => setAllotOpen(true)}><Search className="h-4 w-4" /> Select stock for {selected.item_code}</Button>
+      )}
+      {selected && allotOpen && (
+        <AllotStockPicker key={selectedIdx} line={selected} excludeKeys={allocatedKeys} onPick={allot} onClose={() => setAllotOpen(false)} />
+      )}
+      <div className="flex gap-2">
+        <Button type="button" variant="outline" className="flex-1" onClick={onCancel}>Discard changes</Button>
+        <Button type="button" className="flex-1" disabled={update.isPending} onClick={save}>{update.isPending ? 'Saving…' : 'Save allocation'}</Button>
+      </div>
+    </div>
+  );
+}
+
 function AllocationDetail({ id, onClose }) {
   const { entity, isLoading, isError, refetch } = useStockAllocationDetail(id);
+  const { canEdit, canPost } = useAllocationPermissions();
+  const postDoc = usePostAllocation();
+  const cancelDoc = useCancelAllocation();
+  const [editing, setEditing] = useState(false);
+  const [confirm, setConfirm] = useState(false);
+  const events = useTransferEvents('allocation', [id]);
+  const status = entity?.document_status;
+  const docNo = entity?.document_no ?? null;
+
   return (
     <Sheet open onOpenChange={(o) => !o && onClose()}>
       <SheetContent className="w-full overflow-y-auto sm:max-w-lg">
@@ -778,23 +1000,67 @@ function AllocationDetail({ id, onClose }) {
           <SheetDescription>{entity ? formatDate(entity.document_date) : ' '}</SheetDescription>
         </SheetHeader>
         <div className="flex flex-col gap-4 px-4 pb-6">
-          {isLoading ? <InlineLoader label="Loading…" /> : isError || !entity ? <ErrorState title="Couldn't load this allocation." onRetry={refetch} /> : (
+          {isLoading ? <InlineLoader label="Loading…" /> : isError || !entity ? <ErrorState title="Couldn't load this allocation." onRetry={refetch} /> : editing ? (
+            <AllocationEditor entity={entity} onCancel={() => setEditing(false)} onSaved={() => { setEditing(false); refetch(); }} />
+          ) : (
             <>
-              <DocStatusChip status={entity.document_status} />
+              <DocStatusChip status={status} />
               {entity.narration && <p className="text-sm text-muted-foreground">{entity.narration}</p>}
               <AllocationLines lines={entity.line_items ?? []} />
+              <Timeline
+                events={events.filter((e) => e.action !== 'posted' && (e.action !== 'created' || entity.creation_date))}
+                steps={[
+                  entity.creation_date
+                    ? { label: 'Created', at: entity.creation_date, by: entity.username }
+                    : !events.some((e) => e.action === 'created') && { label: 'Created', at: entity.document_date, dateOnly: true, by: entity.username },
+                  status !== 0 && entity.posting_date && { label: 'Posted', at: entity.posting_date, by: entity.posted_by_name, tone: 'green' },
+                  status === 0 && { label: 'Draft · not posted yet', pending: true, tone: 'amber' },
+                ]}
+              />
+              <div className="flex flex-col gap-2">
+                {status !== 2 && canEdit && (
+                  <Button variant="outline" onClick={() => setEditing(true)}><Search className="h-4 w-4" /> Edit · select stock</Button>
+                )}
+                {status === 0 && canPost && (
+                  <Button disabled={postDoc.isPending} onClick={() => postDoc.mutate({ id, documentNo: docNo }, { onSuccess: () => refetch() })}>
+                    {postDoc.isPending ? 'Posting…' : 'Post allocation'}
+                  </Button>
+                )}
+                {(status === 0 || status === 1) && canPost && (
+                  <Button variant="outline" className="text-destructive hover:text-destructive" disabled={cancelDoc.isPending} onClick={() => setConfirm(true)}>Cancel allocation</Button>
+                )}
+              </div>
             </>
           )}
         </div>
+        <ConfirmDialog isOpen={confirm} onOpenChange={setConfirm}
+          title="Cancel this allocation?"
+          description={status === 0 ? 'Cancel this draft allocation?' : 'This reverses the allocation in OrnaVerse — every reserved piece on it becomes free stock again. This cannot be undone.'}
+          confirmLabel="Cancel allocation"
+          onConfirm={() => cancelDoc.mutate({ id, documentNo: docNo }, { onSuccess: () => { setConfirm(false); onClose(); } })} />
       </SheetContent>
     </Sheet>
   );
 }
 
+const allocationDocStatus = (r) => (r.document_status === 2 ? 'cancelled' : r.document_status === 1 ? 'posted' : 'draft');
+
 function AllocationTab() {
   const [view, setView] = useState('list');
   const [selectedId, setSelectedId] = useState(null);
+  const [filter, setFilter] = useState('all');
+  const [search, setSearch] = useState('');
   const list = useStockAllocations();
+  const cancelled = useCancelledAllocations().filter((e) => matchesSearch(e, search));
+  const counts = Object.fromEntries(STATUS_FILTERS.allocation.map((f) => [f.key, f.key === 'all'
+    ? list.rows.length
+    : f.key === 'cancelled'
+      ? cancelled.length
+      : list.rows.filter((r) => allocationDocStatus(r) === f.key).length]));
+  const rows = list.rows
+    .filter((r) => filter === 'all' || allocationDocStatus(r) === filter)
+    .filter((r) => matchesSearch(r, search));
+  const showCancelled = filter === 'cancelled';
   return (
     <div className="flex flex-col gap-3">
       <div className="flex justify-end">
@@ -805,14 +1071,35 @@ function AllocationTab() {
       {view === 'new' ? (
         <div className="rounded-xl border border-border bg-card p-4"><NewAllocationForm onDone={() => setView('list')} /></div>
       ) : (
-        <ListShell {...list} emptyIcon={Boxes} emptyTitle="No stock allocations yet." emptyHint="Stock reserved against orders at this store appears here.">
-          {list.rows.map((r) => (
-            <DocRow key={r.transaction_id} title={r.document_no} subtitle={r.narration || null}
-              meta={`${formatDate(r.document_date)}${r.username ? ` · ${r.username}` : ''}`}
-              chips={<DocStatusChip status={r.document_status} />}
-              onSelect={() => setSelectedId(r.transaction_id)} />
-          ))}
-        </ListShell>
+        <>
+          <ListToolbar filters={STATUS_FILTERS.allocation} value={filter} onChange={setFilter} search={search} onSearch={setSearch} counts={counts} />
+          {showCancelled ? (
+            cancelled.length === 0 ? (
+              <EmptyState icon={Boxes} title="No cancelled allocations." description="Allocations cancelled from the POS at this store are listed here (OrnaVerse removes them on cancel)." />
+            ) : (
+              <div className="overflow-hidden rounded-xl border border-border">
+                {cancelled.map((e) => (
+                  <div key={`${e.transaction_id}-${e.at}`} className="flex flex-col gap-0.5 border-b border-border px-4 py-3.5 last:border-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-sm font-medium text-foreground">{e.document_no ?? `Allocation #${e.transaction_id}`}</p>
+                      <Chip tone="red">Cancelled</Chip>
+                    </div>
+                    <p className="text-xs text-muted-foreground">Cancelled {formatDateTime(new Date(e.at))} · {e.user}{e.store_code ? ` (${e.store_code})` : ''} · stock released</p>
+                  </div>
+                ))}
+              </div>
+            )
+          ) : (
+          <ListShell {...list} rows={rows} emptyIcon={Boxes} emptyTitle={list.rows.length ? 'Nothing matches this filter.' : 'No stock allocations yet.'} emptyHint="Stock reserved against orders at this store appears here.">
+            {rows.map((r) => (
+              <DocRow key={r.transaction_id} title={r.document_no} subtitle={r.narration || null}
+                meta={`${r.posting_date && r.document_status === 1 ? `Posted ${formatDateTime(r.posting_date)}` : formatDate(r.document_date)}${r.username ? ` · ${r.username}` : ''}`}
+                chips={<DocStatusChip status={r.document_status} />}
+                onSelect={() => setSelectedId(r.transaction_id)} />
+            ))}
+          </ListShell>
+          )}
+        </>
       )}
       {selectedId && <AllocationDetail id={selectedId} onClose={() => setSelectedId(null)} />}
     </div>

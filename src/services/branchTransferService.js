@@ -154,6 +154,14 @@ export async function cancelBranchOut(id) {
   return post(EP.OUT_CANCEL, { EntityId: id, Entity: entity });
 }
 
+/** Receipts (Branch Ins) OrnaVerse created for sent transfers, keyed by the Branch Out id they came from. */
+export async function listReceiptsBySentTransfer({ take = 300 } = {}) {
+  const data = await post(EP.IN_LIST, { ref_document_id: BRANCH_OUT, Take: take, Sort: ['transaction_id DESC'] });
+  const map = new Map();
+  for (const r of data?.Entities ?? []) if (!map.has(r.ref_transaction_id)) map.set(r.ref_transaction_id, r);
+  return map;
+}
+
 export async function listBranchOuts({ skip = 0, take = 50 } = {}) {
   const data = await post(EP.OUT_LIST, { Skip: skip, Take: take, Sort: ['transaction_id DESC'] });
   return { rows: data?.Entities ?? [], totalCount: data?.TotalCount ?? 0 };

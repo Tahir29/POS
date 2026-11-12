@@ -16,6 +16,7 @@
 import axiosInstance from '@/lib/axios/axiosInstance';
 import API from '@/constants/apiEndpoints';
 import APP_CONFIG from '@/constants/appConfig';
+import { resolveImageSrc } from '@/lib/resolveImageSrc';
 
 /**
  * Order lines that have passed OrnaVerse's own live stock-allocation check
@@ -36,6 +37,19 @@ export async function getReadyToInvoiceLines({ partyId }) {
     validate_against_stock: true,
     document_id:            APP_CONFIG.DOCUMENT_TYPES.POS_INVOICE,
     document_status:        1,
+  });
+  return response.data?.Entities ?? [];
+}
+
+/** Every ready-to-invoice order line at the store, all customers (same call as above without party_id). */
+export async function getStoreReadyToInvoiceLines({ companyId }) {
+  if (!companyId) return [];
+  const response = await axiosInstance.post(API.ORDER_FULFILLMENT.READY_TO_INVOICE, {
+    company_id:             companyId,
+    validate_against_stock: true,
+    document_id:            APP_CONFIG.DOCUMENT_TYPES.POS_INVOICE,
+    document_status:        1,
+    Take:                   0,
   });
   return response.data?.Entities ?? [];
 }
@@ -95,7 +109,7 @@ export function mapFulfillmentLineToCartItem(line) {
     sizeId:     line.item_size_id ?? null,
     sizeName:   line.size_name ?? null,
     attributes: {},
-    image:      line.image ?? null,
+    image:      resolveImageSrc(line.image),
     // CONFIRMED LIVE 2026-09-08 (see API.ORDER_FULFILLMENT's header comment)
     // — the specific stock piece this order reserved, shared between this
     // row and its Inventory/StockJournal/List row via item_line_no. Tells

@@ -328,6 +328,8 @@ const API = {
 
   STOCK_ALLOCATION: {
     CREATE:            'Services/Inventory/StockAllocation/Create',
+    UPDATE:            'Services/Inventory/StockAllocation/Update',
+    POST:              'Services/Inventory/StockAllocation/Post',
     RETRIEVE:          'Services/Inventory/StockAllocation/Retrieve',
     LIST:              'Services/Inventory/StockAllocation/List',
     CANCEL:            'Services/Inventory/StockAllocation/Cancel',

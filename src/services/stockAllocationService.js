@@ -115,6 +115,23 @@ export async function nextDocumentNo({ documentId, companyId, companyCode }) {
   return `${prefix}${datePart}${pad(next, zeroes + String(next).length)}`;
 }
 
+/** OrnaVerse's Edit → Save: the retrieved allocation with its updated lines (a posted allocation can still be edited). */
+export async function updateStockAllocation({ id, lines }) {
+  const entity = await retrieveStockAllocation(id);
+  if (!entity) throw new Error('Allocation not found.');
+  return post(EP.UPDATE, { EntityId: id, Entity: { ...entity, line_items: lines } });
+}
+
+export async function postStockAllocation(id) {
+  const entity = await retrieveStockAllocation(id);
+  return post(EP.POST, { EntityId: id, Entity: entity });
+}
+
+export async function cancelStockAllocation(id) {
+  const entity = await retrieveStockAllocation(id);
+  return post(EP.CANCEL, { EntityId: id, Entity: entity });
+}
+
 export async function createStockAllocation({ companyId, companyCode, partyId, headerConfig, canPost, narration, lines }) {
   const entity = {
     document_no: await nextDocumentNo({ documentId: STOCK_ALLOCATION, companyId, companyCode }),
