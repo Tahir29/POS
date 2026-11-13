@@ -9,13 +9,13 @@ import { ChevronRight, UserRoundSearch } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useBuyerPurchases } from '@/hooks/buyers/useBuyerPurchases';
 import { groupPurchasesByBuyer } from '@/lib/buyers/groupPurchasesByBuyer';
+import { daysSince } from '@/lib/buyers/buyerFilters';
 import { selectActiveStoreId } from '@/store/slices/storeSlice';
 import { selectIsSuperAdmin } from '@/store/slices/authSlice';
 import { formatAmountOrDash } from '@/lib/priceUtils';
 import { formatMobileWithCountryCode } from '@/lib/phoneFormat';
 
 const LAPSED_DAYS = 90;
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 function getInitials(name) {
   if (!name) return '?';
@@ -23,7 +23,7 @@ function getInitials(name) {
   return ((parts[0]?.[0] ?? '') + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase();
 }
 
-/** Buyers of the active store whose last purchase was 90 or more days ago, most valuable first. */
+/** Every buyer of the active store with no purchase in the last 90 days, most valuable first. */
 export default function LapsedBuyersCard() {
   const router = useRouter();
   const activeStoreId = useSelector(selectActiveStoreId);
@@ -34,8 +34,8 @@ export default function LapsedBuyersCard() {
   if (!activeStoreId && !isSuperAdmin) return null;
 
   const buyers = groupPurchasesByBuyer(purchases)
-    .map((b) => ({ ...b, daysSince: b.lastPurchaseDate ? Math.floor((now - new Date(b.lastPurchaseDate).getTime()) / DAY_MS) : null }))
-    .filter((b) => b.daysSince != null && b.daysSince >= LAPSED_DAYS)
+    .map((b) => ({ ...b, daysSince: daysSince(b.lastPurchaseDate, now) }))
+    .filter((b) => b.daysSince != null && b.daysSince > LAPSED_DAYS)
     .sort((a, b) => b.totalSpend - a.totalSpend);
 
   return (
@@ -44,7 +44,7 @@ export default function LapsedBuyersCard() {
         <h2 className="font-heading text-base text-foreground">Buyers</h2>
         {!isLoading && (
           <span className="text-xs text-muted-foreground">
-            {buyers.length} with no purchase in {LAPSED_DAYS}+ days
+            <span className='hidden'>{buyers.length} with </span>No purchase in the last {LAPSED_DAYS} days
           </span>
         )}
       </div>
@@ -64,7 +64,7 @@ export default function LapsedBuyersCard() {
       ) : buyers.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-2 py-8 text-muted-foreground">
           <UserRoundSearch size={22} aria-hidden="true" />
-          <p className="text-sm">No buyers have gone {LAPSED_DAYS}+ days without a purchase.</p>
+          <p className="text-sm">Every buyer has purchased in the last {LAPSED_DAYS} days.</p>
         </div>
       ) : (
         <div className="max-h-80 overflow-y-auto divide-y divide-border">

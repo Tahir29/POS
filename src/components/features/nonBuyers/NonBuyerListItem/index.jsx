@@ -1,6 +1,6 @@
 'use client';
 
-import { User, Phone, Footprints, Calendar, History, Ban, Megaphone, Store } from 'lucide-react';
+import { User, Phone, Footprints, Calendar, Ban, Megaphone, Store } from 'lucide-react';
 import ListItemCard from '@/components/shared/ListItemCard';
 import { Badge } from '@/components/ui/badge';
 import { formatDatePadded } from '@/lib/dateUtils';
@@ -20,7 +20,7 @@ export function daysAgoLabel(days) {
 export default function NonBuyerListItem({ nonBuyer, onSelect }) {
   const {
     name, mobile, visitCount, lastVisitAt, daysSinceLastVisit,
-    sources, isPastBuyer, hasCancelledOrder, storeName,
+    sources, hasCancelledOrder, storeName,
   } = nonBuyer;
 
   return (
@@ -65,20 +65,12 @@ export default function NonBuyerListItem({ nonBuyer, onSelect }) {
         </div>
       )}
 
-      {(isPastBuyer || hasCancelledOrder) && (
+      {hasCancelledOrder && (
         <div className="flex items-center gap-2 flex-wrap">
-          {isPastBuyer && (
-            <Badge variant="secondary" className="gap-1">
-              <History size={11} aria-hidden="true" />
-              Past buyer
-            </Badge>
-          )}
-          {hasCancelledOrder && (
-            <Badge variant="destructive" className="gap-1">
-              <Ban size={11} aria-hidden="true" />
-              Cancelled order
-            </Badge>
-          )}
+          <Badge variant="destructive" className="gap-1">
+            <Ban size={11} aria-hidden="true" />
+            Cancelled order
+          </Badge>
         </div>
       )}
     </ListItemCard>
