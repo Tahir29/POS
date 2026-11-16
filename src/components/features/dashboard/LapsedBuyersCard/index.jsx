@@ -13,7 +13,7 @@ import { daysSince } from '@/lib/buyers/buyerFilters';
 import { selectActiveStoreId } from '@/store/slices/storeSlice';
 import { selectIsSuperAdmin } from '@/store/slices/authSlice';
 import { formatAmountOrDash } from '@/lib/priceUtils';
-import { formatMobileWithCountryCode } from '@/lib/phoneFormat';
+import PhoneLink from '@/components/shared/PhoneLink';
 
 const LAPSED_DAYS = 90;
 
@@ -69,11 +69,18 @@ export default function LapsedBuyersCard() {
       ) : (
         <div className="max-h-80 overflow-y-auto divide-y divide-border">
           {buyers.map((buyer) => (
-            <button
+            <div
               key={buyer._id}
-              type="button"
+              role="button"
+              tabIndex={0}
               onClick={() => router.push(`/buyers/${buyer._id}`)}
-              className="flex w-full items-center gap-3 rounded-lg px-2 -mx-2 py-2.5 text-left transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              onKeyDown={(e) => {
+                if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
+                  e.preventDefault();
+                  router.push(`/buyers/${buyer._id}`);
+                }
+              }}
+              className="flex w-full cursor-pointer items-center gap-3 rounded-lg px-2 -mx-2 py-2.5 text-left transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-sm font-bold text-primary">
                 {getInitials(buyer.customerName)}
@@ -81,12 +88,17 @@ export default function LapsedBuyersCard() {
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-foreground">{buyer.customerName || 'Customer'}</p>
                 <p className="truncate text-xs text-muted-foreground">
-                  {buyer.customerMobile ? `${formatMobileWithCountryCode(buyer.customerMobile)} · ` : ''}
+                  {buyer.customerMobile && (
+                    <>
+                      <PhoneLink phone={buyer.customerMobile} />
+                      <span> · </span>
+                    </>
+                  )}
                   Last purchase {buyer.daysSince} days ago
                 </p>
               </div>
               <span className="shrink-0 text-sm font-semibold tabular-nums text-foreground">{formatAmountOrDash(buyer.totalSpend)}</span>
-            </button>
+            </div>
           ))}
         </div>
       )}

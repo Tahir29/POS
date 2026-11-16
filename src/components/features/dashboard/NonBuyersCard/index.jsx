@@ -10,7 +10,7 @@ import NonBuyerDetailSheet from '@/components/features/nonBuyers/NonBuyerDetailS
 import { daysAgoLabel } from '@/components/features/nonBuyers/NonBuyerListItem';
 import { useNonBuyers } from '@/hooks/customer/useNonBuyers';
 import { selectActiveStoreId } from '@/store/slices/storeSlice';
-import { formatMobileWithCountryCode } from '@/lib/phoneFormat';
+import PhoneLink from '@/components/shared/PhoneLink';
 
 // Same defaults as the Non-Buyers page (every non-buyer), so both share one cached result.
 const FILTERS = {
@@ -77,33 +77,45 @@ export default function NonBuyersCard() {
         </div>
       ) : (
         <div ref={listRef} className="max-h-80 overflow-y-auto divide-y divide-border">
-            {nonBuyers.map((nb) => (
-              <button
-                key={nb.key ?? `${nb.mobile}-${nb.lastVisitAt}`}
-                type="button"
-                onClick={() => setSelected(nb)}
-                className="flex w-full items-center gap-3 rounded-lg px-2 -mx-2 py-2.5 text-left transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-sm font-bold text-primary">
-                  {getInitials(nb.name)}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-foreground">{nb.name || 'Unknown visitor'}</p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {nb.mobile ? `${formatMobileWithCountryCode(nb.mobile)} · ` : ''}
-                    Last visit {daysAgoLabel(nb.daysSinceLastVisit) ?? '—'}
-                  </p>
-                </div>
-                <span className="shrink-0 text-sm font-semibold tabular-nums text-foreground">
-                  {nb.visitCount} visit{nb.visitCount !== 1 ? 's' : ''}
-                </span>
-              </button>
-            ))}
-            {hasMore && (
-              <div ref={sentinelRef} className="flex justify-center py-3 text-xs text-muted-foreground">
-                {isLoadingMore && <Loader2 size={14} className="animate-spin" aria-hidden="true" />}
+          {nonBuyers.map((nb) => (
+            <div
+              key={nb.key ?? `${nb.mobile}-${nb.lastVisitAt}`}
+              role="button"
+              tabIndex={0}
+              onClick={() => setSelected(nb)}
+              onKeyDown={(e) => {
+                if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
+                  e.preventDefault();
+                  setSelected(nb);
+                }
+              }}
+              className="flex w-full cursor-pointer items-center gap-3 rounded-lg px-2 -mx-2 py-2.5 text-left transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-sm font-bold text-primary">
+                {getInitials(nb.name)}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-foreground">{nb.name || 'Unknown visitor'}</p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {nb.mobile && (
+                    <>
+                      <PhoneLink phone={nb.mobile} />
+                      <span> · </span>
+                    </>
+                  )}
+                  Last visit {daysAgoLabel(nb.daysSinceLastVisit) ?? '—'}
+                </p>
               </div>
-            )}
+              <span className="shrink-0 text-sm font-semibold tabular-nums text-foreground">
+                {nb.visitCount} visit{nb.visitCount !== 1 ? 's' : ''}
+              </span>
+            </div>
+          ))}
+          {hasMore && (
+            <div ref={sentinelRef} className="flex justify-center py-3 text-xs text-muted-foreground">
+              {isLoadingMore && <Loader2 size={14} className="animate-spin" aria-hidden="true" />}
+            </div>
+          )}
         </div>
       )}
 

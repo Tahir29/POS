@@ -5,7 +5,8 @@ import BottomSheet from '@/components/shared/BottomSheet';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { formatDatePadded } from '@/lib/dateUtils';
-import { formatMobileWithCountryCode } from '@/lib/phoneFormat';
+import { formatMobileWithCountryCode, toTelHref } from '@/lib/phoneFormat';
+import PhoneLink from '@/components/shared/PhoneLink';
 import { daysAgoLabel } from '@/components/features/nonBuyers/NonBuyerListItem';
 import TakeFeedbackButton from '@/components/features/voc/TakeFeedbackButton';
 
@@ -32,9 +33,7 @@ function Stat({ label, value }) {
  * @param {{ nonBuyer: object|null, isOpen: boolean, onClose: () => void }} props
  */
 export default function NonBuyerDetailSheet({ nonBuyer, isOpen, onClose }) {
-  const telHref = nonBuyer?.mobile && !nonBuyer.isMasked
-    ? `tel:${String(nonBuyer.mobile).replace(/[^\d+]/g, '')}`
-    : null;
+  const telHref = toTelHref(nonBuyer?.mobile);
 
   return (
     <BottomSheet
@@ -61,7 +60,7 @@ export default function NonBuyerDetailSheet({ nonBuyer, isOpen, onClose }) {
             {nonBuyer.mobile && (
               <span className="flex items-center gap-2">
                 <Phone size={14} aria-hidden="true" />
-                {formatMobileWithCountryCode(nonBuyer.mobile)}
+                <PhoneLink phone={nonBuyer.mobile} />
               </span>
             )}
             {nonBuyer.email && (

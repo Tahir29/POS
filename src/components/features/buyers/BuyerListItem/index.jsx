@@ -5,7 +5,7 @@ import ListItemCard from '@/components/shared/ListItemCard';
 import { Badge } from '@/components/ui/badge';
 import { formatAmountOrNull } from '@/lib/priceUtils';
 import { formatDatePadded } from '@/lib/dateUtils';
-import { formatMobileWithCountryCode } from '@/lib/phoneFormat';
+import PhoneLink from '@/components/shared/PhoneLink';
 
 /**
  * @param {{
@@ -38,7 +38,7 @@ export default function BuyerListItem({ buyer, onSelect }) {
       {customerMobile && (
         <div className="flex items-center gap-2 text-[13px] text-muted-foreground">
           <Phone size={13} className="shrink-0 text-muted-foreground/70" aria-hidden="true" />
-          <span className="truncate">{formatMobileWithCountryCode(customerMobile)}</span>
+          <PhoneLink phone={customerMobile} className="truncate" />
         </div>
       )}
 
