@@ -30,10 +30,30 @@ import { WALKIN_PURPOSES } from '@/constants/walkin';
 const isStoreWalkin = (visit) => !visit.source || /walk/i.test(visit.source);
 const last4 = (mobile) => String(mobile ?? '').replace(/\D/g, '').slice(-4);
 const visitKey = (mobile, iso) => `${last4(mobile)}|${iso ? new Date(iso).toDateString() : ''}`;
+// A customer can walk in twice in a day, so each walk-in takes the purpose recorded closest to it.
+function closestRecord(recordsByDay, visit) {
+  const candidates = recordsByDay.get(visitKey(visit.mobile, visit.visitedAt)) ?? [];
+  const at = visit.visitedAt ? new Date(visit.visitedAt).getTime() : 0;
+  return candidates.reduce((best, r) => (
+    !best || Math.abs(new Date(r.recordedAt) - at) < Math.abs(new Date(best.recordedAt) - at) ? r : best
+  ), null);
+}
 const ordinal = (n) => `${n}${['th', 'st', 'nd', 'rd'][(n % 100 > 10 && n % 100 < 14) ? 0 : n % 10] ?? 'th'}`;
 const ALL = 'all';
 const NOT_RECORDED = 'none';
 const CONVERTING = ['Sales', 'Order'];
+const STATUS = {
+  WALKIN_NOT_PURCHASED: 'walkin_not_purchased',
+  WALKIN_PURCHASED: 'walkin_purchased',
+  PURCHASE_NO_WALKIN: 'purchase_no_walkin',
+  OTHER_ONLY: 'other_only',
+};
+const STATUS_LABELS = {
+  [STATUS.WALKIN_NOT_PURCHASED]: 'Walk-in (But Not Purchase)',
+  [STATUS.WALKIN_PURCHASED]: 'Walk-in → Purchased',
+  [STATUS.PURCHASE_NO_WALKIN]: 'Purchased (no walk-in recorded)',
+  [STATUS.OTHER_ONLY]: 'Other activity only',
+};
 
 function fmtVisitedAt(iso) {
   if (!iso) return '—';
@@ -66,18 +86,28 @@ function VisitCard({ visit }) {
 
       <div className="flex flex-wrap items-center gap-1.5">
         {record?.purpose
-          ? <Badge>Purpose: {record.purpose}</Badge>
+          ? <Badge variant="secondary">Purpose: {record.purpose}</Badge>
           : visit.hasWalkin && <Badge variant="outline">Purpose not recorded</Badge>}
         {visit.visitNumber && <Badge variant="secondary">{visit.visitNumber === 1 ? 'First visit' : `${ordinal(visit.visitNumber)} visit`}</Badge>}
         {detail && <Badge variant="outline">{detail.isCustomer ? 'Registered customer' : 'Not yet a customer'}</Badge>}
-        {visit.converted && <Badge className="bg-status-in-stock text-white">Converted</Badge>}
-        {!visit.hasWalkin && <Badge variant="destructive">No walk-in recorded</Badge>}
+        <Badge
+          variant={visit.status === STATUS.WALKIN_NOT_PURCHASED || visit.status === STATUS.OTHER_ONLY ? 'outline' : undefined}
+          className={visit.converted ? 'bg-status-in-stock text-white' : undefined}
+        >
+          {STATUS_LABELS[visit.status]}
+        </Badge>
       </div>
-
-      {visit.activities.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1.5 text-[12px] text-muted-foreground">
-          <span>Activity that day:</span>
-          {visit.activities.map((a) => <Badge key={a} variant="outline">{a}</Badge>)}
+      {visit.events.length > 0 && (
+        <div className="flex flex-col gap-1 rounded-lg bg-muted/50 px-3 py-2 text-[12px]">
+          <span className="text-muted-foreground">
+            {visit.hasWalkin ? 'Logged in OrnaVerse after this walk-in:' : 'Logged in OrnaVerse:'}
+          </span>
+          {visit.events.map((e, i) => (
+            <div key={`${e.source}-${e.visitedAt}-${i}`} className="flex items-center justify-between gap-2">
+              <span className={CONVERTING.includes(e.source) ? 'font-medium text-status-in-stock' : 'text-foreground'}>{e.source}</span>
+              <span className="text-muted-foreground tabular-nums">{fmtVisitedAt(e.visitedAt)}</span>
+            </div>
+          ))}
         </div>
       )}
 
@@ -122,7 +152,6 @@ export default function WalkInsPage() {
   const [purposeFilter, setPurposeFilter] = useState(ALL);
   const [jcFilter, setJcFilter] = useState(ALL);
   const [sourceFilter, setSourceFilter] = useState(ALL);
-  const [showSystemVisits, setShowSystemVisits] = useState(false);
   const [activityFilter, setActivityFilter] = useState(ALL);
   const [outcomeFilter, setOutcomeFilter] = useState(ALL);
   const [visitTypeFilter, setVisitTypeFilter] = useState(ALL);
@@ -139,31 +168,64 @@ export default function WalkInsPage() {
     enabled: !!companyId,
     queryFn: async () => {
       const res = await fetch(`/api/walkins/visits?company_id=${companyId}`);
-      const rows = res.ok ? (await res.json()).visits ?? [] : [];
-      return new Map(rows.map((r) => [visitKey(r.mobileKey, r.recordedAt), r]));
+      // Throw so react-query retries — a transient OrnaVerse timeout must not read as "no purposes recorded".
+      if (!res.ok) throw new Error(`Walk-in purposes failed to load (${res.status})`);
+      const rows = (await res.json()).visits ?? [];
+      const byDay = new Map();
+      for (const r of rows) {
+        const key = visitKey(r.mobileKey, r.recordedAt);
+        if (!byDay.has(key)) byDay.set(key, []);
+        byDay.get(key).push(r);
+      }
+      return byDay;
     },
   });
 
-  // One card per customer per day: the walk-in itself, plus whatever OrnaVerse logged for them that day (Order, Sales…).
+  // One card per OrnaVerse walk-in entry. Like OrnaVerse, every later action by the same customer (Order, Sales,
+  // Receipt, Scheme receipt, Repair…) is its own visit row — here each is logged against the walk-in it followed,
+  // up to their next walk-in. Actions by a customer with no earlier walk-in get one card per day.
   const dayGroups = useMemo(() => {
-    const groups = new Map();
+    const time = (v) => (v.visitedAt ? new Date(v.visitedAt).getTime() : 0);
+    const byPerson = new Map();
     for (const v of visits) {
-      const key = `${v.leadId ?? last4(v.mobile)}|${v.visitedAt ? new Date(v.visitedAt).toDateString() : v.visitId}`;
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key).push(v);
+      const person = v.leadId ?? last4(v.mobile);
+      if (!byPerson.has(person)) byPerson.set(person, []);
+      byPerson.get(person).push(v);
     }
-    return [...groups.values()].map((group) => {
-      const walkin = group.find(isStoreWalkin);
-      const activities = [...new Set(group.filter((v) => !isStoreWalkin(v)).map((v) => v.source))];
-      return {
-        ...(walkin ?? group[0]),
-        hasWalkin: !!walkin,
-        activities,
-        converted: activities.some((a) => CONVERTING.includes(a)),
-      };
-    });
+    const cards = [];
+    for (const list of byPerson.values()) {
+      let current = null;
+      const orphanDays = new Map();
+      for (const v of [...list].sort((a, b) => time(a) - time(b))) {
+        if (isStoreWalkin(v)) {
+          current = { walkin: v, rows: [v] };
+          cards.push(current);
+        } else if (current) {
+          current.rows.push(v);
+        } else {
+          const day = v.visitedAt ? new Date(v.visitedAt).toDateString() : v.visitId;
+          if (!orphanDays.has(day)) {
+            orphanDays.set(day, { walkin: null, rows: [] });
+            cards.push(orphanDays.get(day));
+          }
+          orphanDays.get(day).rows.push(v);
+        }
+      }
+    }
+    return cards.map(({ walkin, rows }) => {
+      const events = rows.filter((v) => !isStoreWalkin(v))
+        .sort((a, b) => time(a) - time(b))
+        .map((v) => ({ source: v.source, visitedAt: v.visitedAt }));
+      const activities = [...new Set(events.map((e) => e.source))];
+      const converted = activities.some((a) => CONVERTING.includes(a));
+      const base = walkin ?? rows[rows.length - 1];
+      const status = walkin
+        ? (converted ? STATUS.WALKIN_PURCHASED : STATUS.WALKIN_NOT_PURCHASED)
+        : (converted ? STATUS.PURCHASE_NO_WALKIN : STATUS.OTHER_ONLY);
+      return { ...base, hasWalkin: !!walkin, events, activities, converted, status };
+    }).sort((a, b) => time(b) - time(a));
   }, [visits]);
-  const storeVisits = useMemo(() => dayGroups.filter((g) => g.hasWalkin || showSystemVisits), [dayGroups, showSystemVisits]);
+  const storeVisits = dayGroups;
   const leadIds = useMemo(() => [...new Set(storeVisits.map((v) => v.leadId).filter((id) => id != null))].sort(), [storeVisits]);
 
   // JC, source, interest and budget live once on the customer record in OrnaVerse.
@@ -192,7 +254,7 @@ export default function WalkInsPage() {
       return {
         ...v,
         detail,
-        record: recordByVisit.get(visitKey(v.mobile, v.visitedAt)) ?? null,
+        record: v.hasWalkin ? closestRecord(recordByVisit, v) : null,
         visitNumber: numbers.get(v.visitId) ?? null,
         sourceName: detail?.sourceId ? sourceNames.get(detail.sourceId) ?? null : null,
         interests: (detail?.interestTypeIds ?? []).map((id) => typeNames.get(id)).filter(Boolean).join(', ') || null,
@@ -214,7 +276,7 @@ export default function WalkInsPage() {
     if (jcFilter !== ALL && v.detail?.jc !== jcFilter) return false;
     if (sourceFilter !== ALL && v.sourceName !== sourceFilter) return false;
     if (activityFilter !== ALL && !v.activities.includes(activityFilter)) return false;
-    if (outcomeFilter !== ALL && (outcomeFilter === 'converted') !== v.converted) return false;
+    if (outcomeFilter !== ALL && v.status !== outcomeFilter) return false;
     if (visitTypeFilter !== ALL && (visitTypeFilter === 'first') !== (v.visitNumber === 1)) return false;
     if (customerFilter !== ALL && (customerFilter === 'customer') !== !!v.detail?.isCustomer) return false;
     if (recordedByFilter !== ALL && v.record?.recordedBy !== recordedByFilter) return false;
@@ -223,17 +285,17 @@ export default function WalkInsPage() {
   });
 
   const hasFilters = !!fromDate || !!toDate || purposeFilter !== ALL || jcFilter !== ALL || sourceFilter !== ALL
-    || activityFilter !== ALL || outcomeFilter !== ALL || showSystemVisits
+    || activityFilter !== ALL || outcomeFilter !== ALL
     || visitTypeFilter !== ALL || customerFilter !== ALL || recordedByFilter !== ALL;
   const clearFilters = () => {
     setFromDate(''); setToDate(''); setPurposeFilter(ALL); setJcFilter(ALL); setSourceFilter(ALL);
-    setActivityFilter(ALL); setOutcomeFilter(ALL); setShowSystemVisits(false);
+    setActivityFilter(ALL); setOutcomeFilter(ALL);
     setVisitTypeFilter(ALL); setCustomerFilter(ALL); setRecordedByFilter(ALL);
   };
 
-  const firstVisits = filtered.filter((v) => v.visitNumber === 1).length;
+  const countOf = (status) => filtered.filter((v) => v.status === status).length;
+  const walkinCount = filtered.filter((v) => v.hasWalkin).length;
   const purposeCounts = filtered.reduce((m, v) => (v.record?.purpose ? m.set(v.record.purpose, (m.get(v.record.purpose) ?? 0) + 1) : m), new Map());
-  const convertedCount = filtered.filter((v) => v.converted).length;
   const topPurpose = [...purposeCounts.entries()].sort((a, b) => b[1] - a[1])[0];
 
   return (
@@ -277,11 +339,12 @@ export default function WalkInsPage() {
       </div>
 
       {!isLoading && !isError && (
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
           {[
-            ['Walk-ins', filtered.length],
-            ['First visits', firstVisits],
-            ['Converted (Order / Sales)', convertedCount],
+            ['Walk-ins', walkinCount],
+            ['Walk-in (But Not Purchase)', countOf(STATUS.WALKIN_NOT_PURCHASED)],
+            ['Walk-in → Purchased', countOf(STATUS.WALKIN_PURCHASED)],
+            ['Purchased (no walk-in recorded)', countOf(STATUS.PURCHASE_NO_WALKIN)],
             ['Top purpose', topPurpose ? `${topPurpose[0]} (${topPurpose[1]})` : '—'],
           ].map(([label, value]) => (
             <div key={label} className="rounded-lg border border-border bg-card px-3 py-2">
@@ -368,21 +431,17 @@ export default function WalkInsPage() {
             options={[{ value: ALL, label: 'Anyone' }, ...recordedByOptions.map((n) => ({ value: n, label: n }))]}
           />
           <FilterSelect
-            label="Activity that day"
+            label="Activity logged"
             value={activityFilter}
             onChange={setActivityFilter}
             options={[{ value: ALL, label: 'Any activity' }, ...activityOptions.map((n) => ({ value: n, label: n }))]}
           />
           <FilterSelect
-            label="Outcome"
+            label="Status"
             value={outcomeFilter}
             onChange={setOutcomeFilter}
-            options={[{ value: ALL, label: 'Any outcome' }, { value: 'converted', label: 'Converted (Order / Sales)' }, { value: 'open', label: 'Not converted' }]}
+            options={[{ value: ALL, label: 'All statuses' }, ...Object.values(STATUS).map((s) => ({ value: s, label: STATUS_LABELS[s] }))]}
           />
-          <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer select-none">
-            <input type="checkbox" checked={showSystemVisits} onChange={(e) => setShowSystemVisits(e.target.checked)} className="h-4 w-4 accent-primary" />
-            Include days with OrnaVerse activity but no walk-in recorded
-          </label>
         </div>
       </BottomSheet>
 
