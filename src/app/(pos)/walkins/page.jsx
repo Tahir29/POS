@@ -109,11 +109,6 @@ function VisitCard({ visit }) {
               <span className="text-muted-foreground tabular-nums">{fmtVisitedAt(e.visitedAt)}</span>
             </div>
           ))}
-          {visit.status === STATUS.PURCHASE_NO_WALKIN && (
-            <span className="text-muted-foreground">
-              OrnaVerse has no walk-in entry for this customer at this store before this purchase (billed without a walk-in lookup, or an online / B2B order).
-            </span>
-          )}
         </div>
       )}
 
