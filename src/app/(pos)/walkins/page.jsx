@@ -38,6 +38,7 @@ function closestRecord(recordsByDay, visit) {
     !best || Math.abs(new Date(r.recordedAt) - at) < Math.abs(new Date(best.recordedAt) - at) ? r : best
   ), null);
 }
+const istDay = (iso) => (iso ? new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date(iso)) : null);
 const ordinal = (n) => `${n}${['th', 'st', 'nd', 'rd'][(n % 100 > 10 && n % 100 < 14) ? 0 : n % 10] ?? 'th'}`;
 const ALL = 'all';
 const NOT_RECORDED = 'none';
@@ -108,6 +109,11 @@ function VisitCard({ visit }) {
               <span className="text-muted-foreground tabular-nums">{fmtVisitedAt(e.visitedAt)}</span>
             </div>
           ))}
+          {visit.status === STATUS.PURCHASE_NO_WALKIN && (
+            <span className="text-muted-foreground">
+              OrnaVerse has no walk-in entry for this customer at this store before this purchase (billed without a walk-in lookup, or an online / B2B order).
+            </span>
+          )}
         </div>
       )}
 
@@ -126,16 +132,18 @@ function VisitCard({ visit }) {
   );
 }
 
-function FilterSelect({ label, value, onChange, options }) {
+function FilterSelect({ label, value, onChange, options, emptyNote }) {
+  const isEmpty = !!emptyNote && options.length <= 1;
   return (
     <div className="flex flex-col gap-1.5">
       <span className="text-xs font-medium text-muted-foreground">{label}</span>
-      <Select value={value} onValueChange={onChange}>
+      <Select value={value} onValueChange={onChange} disabled={isEmpty}>
         <SelectTrigger className="h-10 w-full" aria-label={label}><SelectValue /></SelectTrigger>
         <SelectContent className="max-h-72 overflow-y-auto">
           {options.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
         </SelectContent>
       </Select>
+      {isEmpty && <span className="text-[11px] text-muted-foreground">{emptyNote}</span>}
     </div>
   );
 }
@@ -156,7 +164,6 @@ export default function WalkInsPage() {
   const [outcomeFilter, setOutcomeFilter] = useState(ALL);
   const [visitTypeFilter, setVisitTypeFilter] = useState(ALL);
   const [customerFilter, setCustomerFilter] = useState(ALL);
-  const [recordedByFilter, setRecordedByFilter] = useState(ALL);
 
   const { visits, isLoading, isError, refetch } = useCrmVisits(companyId);
   const { sources } = useSources();
@@ -264,12 +271,18 @@ export default function WalkInsPage() {
 
   const jcOptions = useMemo(() => [...new Set(enriched.map((v) => v.detail?.jc).filter(Boolean))].sort(), [enriched]);
   const activityOptions = useMemo(() => [...new Set(enriched.flatMap((v) => v.activities))].sort(), [enriched]);
-  const sourceOptions = useMemo(() => [...new Set(enriched.map((v) => v.sourceName).filter(Boolean))].sort(), [enriched]);
-  const recordedByOptions = useMemo(() => [...new Set(enriched.map((v) => v.record?.recordedBy).filter(Boolean))].sort(), [enriched]);
+  const sourceOptions = useMemo(() => [...new Set([
+    ...sources.map((s) => s.source_name ?? s.name),
+    ...enriched.map((v) => v.sourceName),
+  ].filter(Boolean))].sort(), [sources, enriched]);
+  const purposeOptions = useMemo(() => {
+    const recorded = enriched.map((v) => v.record?.purpose).filter(Boolean);
+    return [...new Set([...WALKIN_PURPOSES.filter((p) => p !== 'Walk-in'), ...recorded])];
+  }, [enriched]);
 
   const term = search.trim().toLowerCase();
   const filtered = enriched.filter((v) => {
-    const day = v.visitedAt?.slice(0, 10);
+    const day = istDay(v.visitedAt);
     if (fromDate && (!day || day < fromDate)) return false;
     if (toDate && (!day || day > toDate)) return false;
     if (purposeFilter === NOT_RECORDED ? !!v.record : purposeFilter !== ALL && v.record?.purpose !== purposeFilter) return false;
@@ -279,18 +292,17 @@ export default function WalkInsPage() {
     if (outcomeFilter !== ALL && v.status !== outcomeFilter) return false;
     if (visitTypeFilter !== ALL && (visitTypeFilter === 'first') !== (v.visitNumber === 1)) return false;
     if (customerFilter !== ALL && (customerFilter === 'customer') !== !!v.detail?.isCustomer) return false;
-    if (recordedByFilter !== ALL && v.record?.recordedBy !== recordedByFilter) return false;
     if (term && !(v.customerName?.toLowerCase().includes(term) || String(v.mobile ?? '').includes(term))) return false;
     return true;
   });
 
   const hasFilters = !!fromDate || !!toDate || purposeFilter !== ALL || jcFilter !== ALL || sourceFilter !== ALL
     || activityFilter !== ALL || outcomeFilter !== ALL
-    || visitTypeFilter !== ALL || customerFilter !== ALL || recordedByFilter !== ALL;
+    || visitTypeFilter !== ALL || customerFilter !== ALL;
   const clearFilters = () => {
     setFromDate(''); setToDate(''); setPurposeFilter(ALL); setJcFilter(ALL); setSourceFilter(ALL);
     setActivityFilter(ALL); setOutcomeFilter(ALL);
-    setVisitTypeFilter(ALL); setCustomerFilter(ALL); setRecordedByFilter(ALL);
+    setVisitTypeFilter(ALL); setCustomerFilter(ALL);
   };
 
   const countOf = (status) => filtered.filter((v) => v.status === status).length;
@@ -398,13 +410,14 @@ export default function WalkInsPage() {
             label="Purpose"
             value={purposeFilter}
             onChange={setPurposeFilter}
-            options={[{ value: ALL, label: 'Any purpose' }, ...WALKIN_PURPOSES.map((p) => ({ value: p, label: p })), { value: NOT_RECORDED, label: 'Not recorded' }]}
+            options={[{ value: ALL, label: 'Any purpose' }, ...purposeOptions.map((p) => ({ value: p, label: p })), { value: NOT_RECORDED, label: 'Not recorded' }]}
           />
           <FilterSelect
             label="Jewelry Consultant"
             value={jcFilter}
             onChange={setJcFilter}
             options={[{ value: ALL, label: 'All consultants' }, ...jcOptions.map((n) => ({ value: n, label: n }))]}
+            emptyNote="No consultant saved on these customers in OrnaVerse yet."
           />
           <FilterSelect
             label="Visit type"
@@ -423,12 +436,6 @@ export default function WalkInsPage() {
             value={sourceFilter}
             onChange={setSourceFilter}
             options={[{ value: ALL, label: 'All sources' }, ...sourceOptions.map((n) => ({ value: n, label: n }))]}
-          />
-          <FilterSelect
-            label="Recorded by"
-            value={recordedByFilter}
-            onChange={setRecordedByFilter}
-            options={[{ value: ALL, label: 'Anyone' }, ...recordedByOptions.map((n) => ({ value: n, label: n }))]}
           />
           <FilterSelect
             label="Activity logged"
