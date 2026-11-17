@@ -21,11 +21,10 @@ import { TICKET_STATUS, advanceModeFields, goldKarat, ticketStatusLabel } from '
 import { useSelector } from 'react-redux';
 import BankPosSelect from '@/components/features/checkout/BankPosSelect';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { usePaymentModes } from '@/hooks/checkout/usePaymentModes';
 import { useOrderHeaderConfig } from '@/hooks/checkout/useOrderHeaderConfig';
 import { createAdvanceReceipt } from '@/services/advanceReceiptService';
 import AdvanceReceiptLink from '@/components/features/ticketing/AdvanceReceiptLink';
-import { paymentRequiresBank } from '@/lib/checkout/paymentModeRules';
+import { validatePayments, toStoredPayment } from '@/lib/checkout/paymentModeRules';
 import { resolveDocumentDateTime } from '@/lib/dateUtils';
 import { selectActiveStoreId } from '@/store/slices/storeSlice';
 import PhoneLink from '@/components/shared/PhoneLink';
@@ -354,17 +353,17 @@ function FinalDetails({ details }) {
   );
 }
 
-function ConfirmOrderDialog({ ticket, isOpen, onOpenChange, isPending, onSave, advanceReceiptId, onReceiptCreated }) {
+function ConfirmOrderDialog({ ticket, isOpen, onOpenChange, isPending, onSave, advanceReceipt, onReceiptCreated }) {
   const requested = ticket.requested_specs ?? {};
+  const advanceReceiptId = advanceReceipt?.id ?? null;
   const [order, setOrder] = useState(() => ({
     order_date: todayIso(),
     order_amount: '',
-    amount_received: '',
-    advance_received_on: todayIso(),
+    amount_received: advanceReceipt?.amount ?? '',
+    advance_received_on: advanceReceipt?.date ?? todayIso(),
     payment_mode_id: '',
     bank_pos_id: '',
     reference_no: '',
-    payment_details: {},
     expected_delivery_date: '',
     karat: ticket.specs?.karat ?? requested.karat ?? '',
     metal: ticket.specs?.metal ?? requested.metal ?? '',
@@ -373,7 +372,6 @@ function ConfirmOrderDialog({ ticket, isOpen, onOpenChange, isPending, onSave, a
     remarks: '',
   }));
   const set = (key) => (e) => setOrder({ ...order, [key]: e?.target ? e.target.value : e });
-  const setDetail = (key) => (e) => setOrder({ ...order, payment_details: { ...order.payment_details, [key]: e.target.value } });
 
   const { options: metalOptions } = useAttributeOptions(APP_CONFIG.ATTRIBUTE_TYPES.METAL_COLOR);
   const { options: karatOptions } = useKaratOptions();
@@ -381,9 +379,8 @@ function ConfirmOrderDialog({ ticket, isOpen, onOpenChange, isPending, onSave, a
   const { rates, isLoading: isRateLoading } = useMetalRates(rateCode ? [rateCode] : []);
   const goldRate = rateCode ? rates[0]?.rate ?? null : null;
 
-  const [advancePayments, setAdvancePayments] = useState([]);
+  const [advancePayments, setAdvancePayments] = useState(() => advanceReceipt?.payments ?? []);
   const hasAdvance = Number(order.amount_received) > 0;
-  const advancePaidTotal = advancePayments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
   const storeId = useSelector(selectActiveStoreId);
   const receiptHeader = useOrderHeaderConfig(APP_CONFIG.DOCUMENT_TYPES.POS_RECEIPT);
   const [isCreatingReceipt, setIsCreatingReceipt] = useState(false);
@@ -395,10 +392,10 @@ function ConfirmOrderDialog({ ticket, isOpen, onOpenChange, isPending, onSave, a
     !order.karat && 'karat',
     !goldRate && "today's gold rate",
     hasAdvance && !order.advance_received_on && 'advance received date',
-    hasAdvance && !receiptLocked && advancePayments.length === 0 && 'at least one payment mode',
-    hasAdvance && !receiptLocked && Math.abs(advancePaidTotal - Number(order.amount_received)) > 0.01 && 'payment amounts must equal amount received',
-    hasAdvance && !receiptLocked && advancePayments.some((p) => paymentRequiresBank(p) && (!p.bankPosId || !p.refNo?.trim())) && 'bank account and reference number for card/UPI tenders',
   ].filter(Boolean);
+  const paymentError = hasAdvance && !receiptLocked
+    ? validatePayments(advancePayments, { amountDue: Number(order.amount_received), label: 'the amount received' })
+    : null;
 
   // The advance becomes a real OrnaVerse advance receipt first, so checkout can adjust it against the order.
   // A receipt already created for this ticket (e.g. a retry after an error) is reused, never created twice.
@@ -425,7 +422,12 @@ function ConfirmOrderDialog({ ticket, isOpen, onOpenChange, isPending, onSave, a
         });
         receiptId = res?.EntityId;
         if (!receiptId) throw new Error('OrnaVerse did not return the advance receipt.');
-        onReceiptCreated(receiptId);
+        onReceiptCreated({
+          id: receiptId,
+          amount: order.amount_received,
+          date: order.advance_received_on,
+          payments: advancePayments.map(toStoredPayment),
+        });
         toast.success('Advance receipt created in OrnaVerse.');
       } catch (err) {
         toast.error(err?.response?.data?.Error?.Message ?? err?.message ?? 'The advance receipt could not be created.');
@@ -434,18 +436,15 @@ function ConfirmOrderDialog({ ticket, isOpen, onOpenChange, isPending, onSave, a
         setIsCreatingReceipt(false);
       }
     }
-    const modeLabel = advancePayments.map((p) => p.modeName).join(', ') || order.payment_mode || null;
-    const primaryModeId = advancePayments[0]?.modeId ?? order.payment_mode_id ?? null;
-    const bankPosId = advancePayments.find((p) => p.bankPosId)?.bankPosId ?? order.bank_pos_id ?? null;
-    const refNo = advancePayments.find((p) => p.refNo)?.refNo ?? order.reference_no ?? null;
+    const stored = hasAdvance ? advancePayments.map(toStoredPayment) : [];
     onSave({
       ...order,
-      payment_mode: modeLabel,
-      payment_mode_id: primaryModeId,
-      bank_pos_id: bankPosId,
-      reference_no: refNo,
+      payment_mode: stored.map((p) => p.modeName).join(', ') || null,
+      payment_mode_id: stored[0]?.modeId ?? null,
+      bank_pos_id: stored.find((p) => p.bankPosId)?.bankPosId ?? null,
+      reference_no: stored.map((p) => p.refNo).filter(Boolean).join(', ') || null,
       advance_receipt_id: receiptId,
-      payments: advancePayments,
+      payments: stored,
     });
   };
 
@@ -531,9 +530,12 @@ function ConfirmOrderDialog({ ticket, isOpen, onOpenChange, isPending, onSave, a
         {missing.length > 0 && (
           <p className="text-xs text-muted-foreground">To submit, fill in: {missing.join(', ')}.</p>
         )}
+        {paymentError && Number(order.amount_received) > 0 && (
+          <p className="text-xs text-muted-foreground">Advance payment: {paymentError}</p>
+        )}
         <DialogFooter>
           <Button type="button" variant="outline" className="h-11" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button type="button" className="h-11" disabled={isPending || isCreatingReceipt || missing.length > 0} onClick={handleSubmit}>
+          <Button type="button" className="h-11" disabled={isPending || isCreatingReceipt || missing.length > 0 || !!paymentError} onClick={handleSubmit}>
             {isCreatingReceipt ? 'Creating advance receipt…' : isPending ? 'Submitting…' : 'Submit'}
           </Button>
         </DialogFooter>
@@ -638,7 +640,7 @@ function EditRequestDialog({ ticket, isOpen, onOpenChange, isPending, onSave }) 
 export default function TicketDetail({ ticket, partyId }) {
   const action = useTicketAction(ticket.ticket_number, { partyId });
   const [dialog, setDialog] = useState(null);
-  const [advanceReceiptId, setAdvanceReceiptId] = useState(null);
+  const [advanceReceipt, setAdvanceReceipt] = useState(null);
 
   const run = (payload, successMessage) => action.mutate(payload, {
     onSuccess: () => {
@@ -775,7 +777,9 @@ export default function TicketDetail({ ticket, partyId }) {
                     ['Order amount', formatAmountOrDash(orderDetails.order_amount)],
                     ['Amount received', formatAmountOrDash(orderDetails.amount_received)],
                     ['Advance received', formatProfileDate(orderDetails.advance_received_on)],
-                    ['Payment mode', orderDetails.payment_mode ?? '—'],
+                    ['Payment mode', orderDetails.payments?.length
+                      ? orderDetails.payments.map((p) => `${p.modeName} ${formatAmountOrDash(p.amount)}`).join(' · ')
+                      : (orderDetails.payment_mode ?? '—')],
                     ['Advance receipt', <AdvanceReceiptLink key="advance-receipt" receipt={orderDetails.advance_receipt} customerName={ticket.customer_name} />],
                     ['Reference no.', orderDetails.reference_no ?? '—'],
                     ...advanceModeFields(orderDetails.payment_mode)
@@ -939,8 +943,8 @@ export default function TicketDetail({ ticket, partyId }) {
           isOpen
           onOpenChange={(open) => setDialog(open ? 'approve_g2d' : null)}
           isPending={action.isPending}
-          advanceReceiptId={advanceReceiptId}
-          onReceiptCreated={setAdvanceReceiptId}
+          advanceReceipt={advanceReceipt}
+          onReceiptCreated={setAdvanceReceipt}
           onSave={(order) => run(
             { action: 'approve_g2d', round: latestG2d.round, order },
             'Order confirmed and sent to CAD.',
