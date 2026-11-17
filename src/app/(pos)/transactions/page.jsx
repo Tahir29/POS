@@ -47,6 +47,7 @@ import PaymentStatusBadge                  from '@/components/shared/PaymentStat
 import TransactionDetailSheet              from '@/components/features/transactions/TransactionDetailSheet';
 import { usePaymentModesForRefund }        from '@/hooks/checkout/usePaymentModes';
 import { validatePayments }                from '@/lib/checkout/paymentModeRules';
+import { findReusedPaymentRefs }           from '@/services/advanceReceiptService';
 import { useURDMasterItem }                from '@/hooks/transactions/useURDMasterItem';
 import SalesPersonSelect                   from '@/components/features/checkout/SalesPersonSelect';
 import { useSoldItems }                    from '@/hooks/transactions/useSoldItems';
@@ -1104,6 +1105,11 @@ function AdvanceReceiptNewForm({ onDone }) {
     const paymentError = validatePayments(payments, { amountDue: Number(data.amount), label: 'the advance amount' });
     if (paymentError) return toast.error(paymentError);
     try {
+      const reused = await findReusedPaymentRefs(customerId, payments);
+      if (reused.length) {
+        const [first] = reused;
+        return toast.error(`Reference ${first.refNo} is already on advance receipt ${first.documentNo} for this customer — this payment is already booked.`);
+      }
       await create.mutateAsync({
         partyId: customerId,
         activeStoreId: storeId,

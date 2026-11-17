@@ -68,6 +68,26 @@ import APP_CONFIG from '@/constants/appConfig';
  * }} params
  * @returns {Promise<{ lineItems: object[], promotionDetails: object[], warnings: {promoCode: string, message: string}[] }>}
  */
+const rowIdentity = (r) => [r.stock_journal_id ?? '', r.item_id ?? '', r.item_line_no ?? '', r.sku ?? r.item_code ?? ''].join('|');
+
+// ApplyPromotions can return the rows in a different order than sent (a free gift moved elsewhere), but the
+// cart maps rows to its lines by position — so the response is put back in the order the rows were sent.
+// Rows the promotion trimmed (un-entitled free-gift units) simply drop out.
+function restoreRowOrder(sent, returned) {
+  const pool = new Map();
+  for (const row of returned) {
+    const key = rowIdentity(row);
+    if (!pool.has(key)) pool.set(key, []);
+    pool.get(key).push(row);
+  }
+  const ordered = [];
+  for (const row of sent) {
+    const match = pool.get(rowIdentity(row))?.shift();
+    if (match) ordered.push(match);
+  }
+  return ordered.length === returned.length ? ordered : returned;
+}
+
 export async function applyPromotionsToLines({
   lineItems, appliedPromos, documentId, exchangeRate = 1,
 }) {
@@ -187,7 +207,7 @@ export async function applyPromotionsToLines({
       );
     }
 
-    lines = items;
+    lines = restoreRowOrder(lines, items);
     promotionDetails = [...promotionDetails, ...rows];
   }
 

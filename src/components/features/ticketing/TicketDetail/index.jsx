@@ -22,7 +22,8 @@ import { useSelector } from 'react-redux';
 import BankPosSelect from '@/components/features/checkout/BankPosSelect';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useOrderHeaderConfig } from '@/hooks/checkout/useOrderHeaderConfig';
-import { createAdvanceReceipt } from '@/services/advanceReceiptService';
+import { useQuery } from '@tanstack/react-query';
+import { createAdvanceReceipt, listUnusedAdvanceReceipts, findReusedPaymentRefs } from '@/services/advanceReceiptService';
 import AdvanceReceiptLink from '@/components/features/ticketing/AdvanceReceiptLink';
 import { validatePayments, toStoredPayment } from '@/lib/checkout/paymentModeRules';
 import { resolveDocumentDateTime } from '@/lib/dateUtils';
@@ -397,6 +398,23 @@ function ConfirmOrderDialog({ ticket, isOpen, onOpenChange, isPending, onSave, a
     ? validatePayments(advancePayments, { amountDue: Number(order.amount_received), label: 'the amount received' })
     : null;
 
+  // Advance receipts already booked for this customer (e.g. at the counter) can be linked instead of booked again.
+  const existingAdvances = useQuery({
+    queryKey: ['ticket-unused-advances', ticket.customer_party_id],
+    queryFn: () => listUnusedAdvanceReceipts(ticket.customer_party_id),
+    enabled: isOpen && !receiptLocked && !!ticket.customer_party_id,
+    staleTime: 0,
+    gcTime: 0,
+  });
+  const linkExistingReceipt = (r) => {
+    const payments = r.details.map(toStoredPayment);
+    const date = String(r.documentDate ?? '').slice(0, 10) || todayIso();
+    setOrder({ ...order, amount_received: r.amount, advance_received_on: date });
+    setAdvancePayments(payments);
+    onReceiptCreated({ id: r.id, amount: r.amount, date, payments, documentNo: r.documentNo });
+    toast.success(`${r.documentNo} linked as this ticket's advance.`);
+  };
+
   // The advance becomes a real OrnaVerse advance receipt first, so checkout can adjust it against the order.
   // A receipt already created for this ticket (e.g. a retry after an error) is reused, never created twice.
   const handleSubmit = async () => {
@@ -410,6 +428,12 @@ function ConfirmOrderDialog({ ticket, isOpen, onOpenChange, isPending, onSave, a
       }
       setIsCreatingReceipt(true);
       try {
+        const reused = await findReusedPaymentRefs(ticket.customer_party_id, advancePayments);
+        if (reused.length) {
+          const [first] = reused;
+          toast.error(`Reference ${first.refNo} is already on advance receipt ${first.documentNo} for this customer — link that receipt instead of booking the payment twice.`);
+          return;
+        }
         const res = await createAdvanceReceipt({
           partyId: ticket.customer_party_id,
           activeStoreId: storeId,
@@ -499,8 +523,28 @@ function ConfirmOrderDialog({ ticket, isOpen, onOpenChange, isPending, onSave, a
         <FormSection title="Advance payment">
           {receiptLocked && (
             <p className="rounded-lg bg-muted/50 p-2 text-xs text-muted-foreground sm:col-span-2">
-              The advance receipt is already created in OrnaVerse — Submit links it to this ticket.
+              {advanceReceipt?.documentNo ? `Advance receipt ${advanceReceipt.documentNo}` : 'The advance receipt'} is linked
+              in OrnaVerse — Submit attaches it to this ticket.
             </p>
+          )}
+          {!receiptLocked && (existingAdvances.data ?? []).length > 0 && (
+            <div className="flex flex-col gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 sm:col-span-2 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+              <p className="font-medium">
+                {ticket.customer_name} already has unused advance receipts. If the advance was already taken, link it here
+                instead of booking it again:
+              </p>
+              {existingAdvances.data.map((r) => (
+                <div key={r.id} className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
+                  <span>
+                    <strong>{r.documentNo}</strong> · {formatAmountOrDash(r.amount)} · {formatProfileDate(r.documentDate)}
+                    {r.details.length > 0 && ` · ${r.details.map((d) => `${d.modeName}${d.refNo ? ` ref ${d.refNo}` : ''}`).join(', ')}`}
+                  </span>
+                  <Button type="button" size="sm" variant="outline" className="h-9 bg-background" onClick={() => linkExistingReceipt(r)}>
+                    Use this receipt
+                  </Button>
+                </div>
+              ))}
+            </div>
           )}
           <FormField label="Amount received (₹)" htmlFor="co-received">
             <Input id="co-received" className="h-11" type="number" min="0" inputMode="decimal" disabled={receiptLocked} value={order.amount_received} onChange={set('amount_received')} />
