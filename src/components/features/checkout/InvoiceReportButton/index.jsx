@@ -236,7 +236,7 @@ export default function InvoiceReportButton({
             <div className="flex items-center justify-between border-b border-border px-4 py-3">
               <h2 className="text-sm font-bold text-foreground">{documentLabel} preview</h2>
               <div className="flex items-center gap-2">
-                <Button type="button" onClick={printReport} disabled={!reportId} className="h-9 gap-2">
+                <Button type="button" onClick={printReport} disabled={!reportId} className="h-9 gap-2 hidden">
                   <Printer size={16} aria-hidden="true" /> Print
                 </Button>
                 <Button
