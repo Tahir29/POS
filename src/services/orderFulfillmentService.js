@@ -128,3 +128,41 @@ export function mapFulfillmentLineToCartItem(line) {
       : null,
   };
 }
+
+const ORDER_ADVANCE_MODE_TYPE = 14;
+
+/**
+ * The source order's unused advance, as an "Order Advance" credit row for checkout — mirrors OrnaVerse's own
+ * set_order_advance: advance = sum of the order's receipts, minus what earlier invoices already adjusted against it.
+ * Returns null when nothing is left.
+ */
+export async function getOrderAdvance({ orderId, orderNo }) {
+  if (!orderId) return null;
+  const post = (url, body) => axiosInstance.post(url, body).then((r) => r.data?.Entities ?? []);
+  const [receipts, used, modes] = await Promise.all([
+    post(API.ORDERS.RECEIPT_LIST, { transaction_id: orderId }),
+    post(API.INVOICE_RECEIPTS.LIST, { ref_transaction_id: orderId, mode_type: ORDER_ADVANCE_MODE_TYPE, document_status: 1 }),
+    post(API.SETTINGS.GET_PAYMENT_MODES, { mode_type: ORDER_ADVANCE_MODE_TYPE }),
+  ]);
+  const paid = receipts.reduce((s, r) => s + (Number(r.amount) || 0), 0);
+  const adjusted = used.reduce((s, r) => s + (Number(r.amount) || 0), 0);
+  const remaining = Math.max(0, Math.round((paid - adjusted) * 100) / 100);
+  const mode = modes.find((m) => m.mode_type === ORDER_ADVANCE_MODE_TYPE);
+  if (remaining <= 0.01 || !mode) return null;
+  const source = receipts[0];
+  return {
+    amount: remaining,
+    row: {
+      mode_id:            mode.mode_id,
+      mode_code:          mode.mode_code,
+      mode_name:          mode.mode_name,
+      mode_type:          ORDER_ADVANCE_MODE_TYPE,
+      ledger_id:          source?.document_ledger_id ?? mode.ledger_id,
+      document_ledger_id: source?.document_ledger_id ?? null,
+      document_no:        source?.document_no ?? orderNo,
+      document_id:        APP_CONFIG.DOCUMENT_TYPES.POS_ORDER,
+      transaction_id:     orderId,
+      balance_amount:     remaining,
+    },
+  };
+}
