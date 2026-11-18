@@ -1,6 +1,6 @@
 // The lucirajewelry.cloud workflow panel writes its CAD fields (cadVersions, status 'cad_shared'/'ok', …)
 // onto the same ticket documents; this maps them to the POS view of a ticket.
-import { TICKET_STATUS } from './constants';
+import { TICKET_STATUS, TICKET_FORMAT_MULTI } from './constants';
 
 const CAD_BASE_URL = 'https://lucirajewelry.cloud';
 
@@ -58,7 +58,7 @@ export function ticketDesigns(ticket) {
 }
 
 /** Status from the ticket's data rather than the raw field, which the panel sets in its own vocabulary. */
-export function effectiveStatus(ticket, designs = ticketDesigns(ticket), g2d = g2dEstimates(ticket)) {
+export function effectiveStatus(ticket, designs = ticketDesigns(ticket), g2d = g2dEstimates(ticket), { requireConfirmation = false } = {}) {
   if (ticket.status === TICKET_STATUS.CANCELLED) return TICKET_STATUS.CANCELLED;
   // Only an order the POS itself placed in OrnaVerse counts; the panel's own order_number is its manufacturing order.
   if (ticket.pos_order?.transaction_id) return TICKET_STATUS.ORDER_PLACED;
@@ -71,7 +71,9 @@ export function effectiveStatus(ticket, designs = ticketDesigns(ticket), g2d = g
   const estimate = g2d[0];
   if (!estimate) return ticket.status === 'g2d_shared' ? TICKET_STATUS.G2D_SHARED : TICKET_STATUS.AWAITING_G2D;
   if (!estimate.customer_decision) return TICKET_STATUS.G2D_SHARED;
-  return estimate.customer_decision === 'approved' ? TICKET_STATUS.AWAITING_CAD : TICKET_STATUS.AWAITING_G2D;
+  if (estimate.customer_decision !== 'approved') return TICKET_STATUS.AWAITING_G2D;
+  // In a multi-product ticket CAD starts only once the ticket's order (and advance) is confirmed.
+  return requireConfirmation && !ticket.order_details ? TICKET_STATUS.G2D_APPROVED : TICKET_STATUS.AWAITING_CAD;
 }
 
 // Panel history entries carry `time` ('YYYY-MM-DD HH:mm', UTC) and `author` ('name · from → to') instead of `at`/`user`.
@@ -132,8 +134,111 @@ export function requestedSpecs(ticket) {
   return specs;
 }
 
+export const isMultiTicket = (ticket) => ticket?.format === TICKET_FORMAT_MULTI;
+
+/** A product of a multi-product ticket, seen as a single-product ticket so the per-ticket helpers apply to it. */
+export function itemView(ticket, item) {
+  return {
+    ...item,
+    status: ticket.status === TICKET_STATUS.CANCELLED ? TICKET_STATUS.CANCELLED : item.status,
+    pos_order: ticket.pos_order ?? null,
+  };
+}
+
+export function itemStatus(ticket, item) {
+  const view = itemView(ticket, item);
+  return effectiveStatus(view, ticketDesigns(view), g2dEstimates(view), { requireConfirmation: true });
+}
+
+export const isActiveItem = (ticket, item) => itemStatus(ticket, item) !== TICKET_STATUS.CANCELLED;
+
+function toPublicItem(ticket, item) {
+  const view = itemView(ticket, item);
+  const designs = ticketDesigns(view);
+  const g2d = g2dEstimates(view);
+  return {
+    item_id: item.item_id,
+    item_seq: item.item_seq,
+    specs: item.specs ?? {},
+    requested_specs: requestedSpecs(item),
+    reference_images: item.reference_images ?? [],
+    status: effectiveStatus(view, designs, g2d, { requireConfirmation: true }),
+    panel_status: item.status ?? null,
+    panel_status_label: item.status_label ?? null,
+    designs,
+    g2d_estimates: g2d,
+    latest_design_label: designs[0]?.label ?? null,
+    cad_remarks: item.cadRemarks ?? null,
+    final_details: finalDetails(item),
+    final_revisions: item.final_revisions ?? [],
+    order_details: item.order_details ?? null,
+    awaiting_cad_since: item.awaiting_cad_since ?? null,
+    created_at: item.created_at ?? null,
+    cancel_reason: item.cancel_reason ?? null,
+    cancelled_at: item.cancelled_at ?? null,
+    cancelled_by: item.cancelled_by ?? null,
+  };
+}
+
+const STAGE_ORDER = [
+  TICKET_STATUS.AWAITING_G2D, TICKET_STATUS.G2D_SHARED, TICKET_STATUS.G2D_APPROVED, TICKET_STATUS.AWAITING_CAD,
+  TICKET_STATUS.AWAITING_CUSTOMER_FEEDBACK, TICKET_STATUS.AWAITING_FINAL, TICKET_STATUS.FINAL_RECEIVED,
+];
+
+/** Ticket-level status of a multi-product ticket from its active products. */
+export function multiTicketStatus(ticket, statuses) {
+  if (ticket.status === TICKET_STATUS.CANCELLED) return TICKET_STATUS.CANCELLED;
+  if (ticket.pos_order?.transaction_id) return TICKET_STATUS.ORDER_PLACED;
+  const active = statuses.filter((s) => s !== TICKET_STATUS.CANCELLED);
+  if (!active.length) return TICKET_STATUS.CANCELLED;
+  if (active.every((s) => s === TICKET_STATUS.FINAL_RECEIVED)) return TICKET_STATUS.FINAL_RECEIVED;
+  if (canConfirmOrder(active)) return TICKET_STATUS.READY_TO_CONFIRM;
+  return TICKET_STATUS.IN_PROGRESS;
+}
+
+/** Every active product not yet confirmed is G2D-approved, and at least one is waiting for confirmation. */
+export function canConfirmOrder(activeStatuses) {
+  const unconfirmed = activeStatuses.filter((s) => STAGE_ORDER.indexOf(s) <= STAGE_ORDER.indexOf(TICKET_STATUS.G2D_APPROVED));
+  return unconfirmed.length > 0 && unconfirmed.every((s) => s === TICKET_STATUS.G2D_APPROVED);
+}
+
+const normalizeComment = (c) => ({
+  id: c.id ?? null,
+  item_id: c.item_id ?? null,
+  text: c.text ?? '',
+  author: c.author ?? 'CAD team',
+  team: c.team ?? 'cad',
+  store_code: c.store_code ?? null,
+  at: c.at ?? null,
+});
+
+export const ticketComments = (ticket) => (ticket.comments ?? [])
+  .map(normalizeComment)
+  .sort((a, b) => new Date(a.at ?? 0) - new Date(b.at ?? 0));
+
+function toPublicMultiTicket(ticket) {
+  const { _id, items: rawItems = [], ...rest } = ticket;
+  const items = [...rawItems].sort((a, b) => a.item_seq - b.item_seq).map((item) => toPublicItem(ticket, item));
+  const active = items.filter((i) => i.status !== TICKET_STATUS.CANCELLED);
+  const itemHistory = rawItems.flatMap((item) => (item.history ?? []).map((h) => ({ ...normalizeHistoryEntry(h), item_id: item.item_id })));
+  const budgets = active.map((i) => Number(i.requested_specs?.budget)).filter((n) => Number.isFinite(n) && n > 0);
+  return {
+    ...rest,
+    format: TICKET_FORMAT_MULTI,
+    status: multiTicketStatus(ticket, items.map((i) => i.status)),
+    items,
+    active_item_count: active.length,
+    budget_total: budgets.length ? budgets.reduce((t, n) => t + n, 0) : null,
+    comments: ticketComments(ticket),
+    ...(ticket.history && {
+      history: [...ticket.history.map(normalizeHistoryEntry), ...itemHistory].sort((a, b) => new Date(a.at ?? 0) - new Date(b.at ?? 0)),
+    }),
+  };
+}
+
 export function toPublicTicket(ticket) {
   if (!ticket) return null;
+  if (isMultiTicket(ticket)) return toPublicMultiTicket(ticket);
   const { _id, ...rest } = ticket;
   const designs = ticketDesigns(ticket);
   const g2d = g2dEstimates(ticket);
@@ -150,6 +255,7 @@ export function toPublicTicket(ticket) {
     requested_specs: requestedSpecs(ticket),
     final_details: finalDetails(ticket),
     g2d_estimates: g2d,
+    comments: ticketComments(ticket),
     ...(ticket.history && {
       history: [...ticket.history.map(normalizeHistoryEntry), ...shared].sort((a, b) => new Date(a.at ?? 0) - new Date(b.at ?? 0)),
     }),

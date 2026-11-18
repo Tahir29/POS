@@ -24,9 +24,11 @@ function newsKeys(data, todayEvents, transfers) {
   return [
     ...transfers.map((t) => `transfer:${t.transaction_id}`),
     ...todayEvents.map((e) => `${e.type}:${e.partyId}:${today}`),
-    ...(data?.g2dShared ?? []).map((t) => `g2d:${t.ticket_number}`),
-    ...(data?.designReady ?? []).map((t) => `design:${t.ticket_number}:${t.latest_design_label}`),
+    ...(data?.g2dShared ?? []).map((t) => `g2d:${t.item_id ?? t.ticket_number}`),
+    ...(data?.designReady ?? []).map((t) => `design:${t.item_id ?? t.ticket_number}:${t.latest_design_label}`),
     ...(data?.finalReceived ?? []).map((t) => `final:${t.ticket_number}`),
+    ...(data?.readyToConfirm ?? []).map((t) => `confirm:${t.ticket_number}`),
+    ...(data?.newComments ?? []).map((t) => `comment:${t.ticket_number}:${t.comment_id}`),
   ];
 }
 
