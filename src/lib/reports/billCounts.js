@@ -4,7 +4,11 @@ import { postUpstream } from '@/lib/reports/serverAccess';
 const POSTED = 1;
 const CONCURRENCY = 4;
 const ALL_HISTORY_FROM = '2020-01-01';
-const INVOICE_LINE_COLUMNS = ['transaction_id', 'document_no', 'document_date', 'company_id', 'document_status', 'is_gift', 'item_id'];
+const STOCK_ALLOCATION_DOC = 37;
+const INVOICE_LINE_COLUMNS = [
+  'transaction_id', 'document_no', 'document_date', 'company_id', 'document_status', 'is_gift', 'item_id',
+  'ref_document_id', 'taxable_amount',
+];
 
 function nextDay(dateString) {
   const d = new Date(`${dateString}T00:00:00Z`);
@@ -61,9 +65,10 @@ async function fetchFulfilledOrderLines(session, orderCompanyIds, toDate) {
 }
 
 /**
- * Posted bills in the range with at least one non-gift line, split into MTO (a line fulfils a POS order,
- * per OrnaVerse's Order Bifurcation report) and RTS (the rest).
- * Checked on LIVE 2026-11-10 against the POS Dashboard's Closed MTO amount: exact in 67 of 74 store-months.
+ * Posted bills in the range, except bills holding only free (zero-value) gifts. A line is MTO when it fulfils a POS order
+ * (OrnaVerse's Order Bifurcation report) or comes from a Stock Allocation (website order); the rest is RTS.
+ * A bill holding both counts once under each. Values are pre-GST taxable amounts, the POS Dashboard's basis:
+ * on LIVE (Aug–Nov 2026) value matched RTS / MTO exactly in every store-month and Closed MTO within 1%.
  */
 export async function countBills(session, { companyIds, fromDate, toDate }, orderCompanyIds) {
   const [lines, fulfilled] = await Promise.all([
@@ -73,16 +78,32 @@ export async function countBills(session, { companyIds, fromDate, toDate }, orde
 
   const bills = new Map();
   for (const line of lines) {
-    const bill = bills.get(line.transaction_id) ?? { companyId: line.company_id, hasSale: false, mto: false };
+    const bill = bills.get(line.transaction_id)
+      ?? { companyId: line.company_id, hasSale: false, hasMto: false, hasRts: false, mtoValue: 0, rtsValue: 0 };
     bills.set(line.transaction_id, bill);
-    if (line.is_gift) continue;
+    const value = Number(line.taxable_amount) || 0;
+    const isMto = !line.is_gift && (
+      fulfilled.has(`${line.document_no}|${line.item_id}`) || line.ref_document_id === STOCK_ALLOCATION_DOC
+    );
+    if (isMto) bill.mtoValue += value;
+    else bill.rtsValue += value;
+    // Paid gold-coin sales are also flagged is_gift; only zero-value gift lines are free.
+    if (line.is_gift && value <= 0) continue;
     bill.hasSale = true;
-    if (fulfilled.has(`${line.document_no}|${line.item_id}`)) bill.mto = true;
+    if (isMto) bill.hasMto = true;
+    else bill.hasRts = true;
   }
 
   const tally = (list) => {
-    const mto = list.filter((b) => b.mto).length;
-    return { total_bill_count: list.length, mto_bill_count: mto, rts_bill_count: list.length - mto };
+    const sum = (key) => list.reduce((s, b) => s + b[key], 0);
+    return {
+      total_bill_count: list.length,
+      mto_bill_count: list.filter((b) => b.hasMto).length,
+      rts_bill_count: list.filter((b) => b.hasRts).length,
+      mto_value: sum('mtoValue'),
+      rts_value: sum('rtsValue'),
+      total_value: sum('mtoValue') + sum('rtsValue'),
+    };
   };
   const counted = [...bills.values()].filter((b) => b.hasSale);
   const byStore = Object.fromEntries(companyIds.map((id) => [id, tally(counted.filter((b) => b.companyId === id))]));
