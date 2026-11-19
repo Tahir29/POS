@@ -72,7 +72,7 @@ export default function TicketComments({ ticket, partyId, itemId = null, items =
           })}
         </ol>
       )}
-      <div className="flex flex-col gap-2">
+      <div className="relative flex flex-col gap-2">
         {!itemId && items?.length > 0 && (
           <Select value={target} onValueChange={setTarget}>
             <SelectTrigger className="h-10 w-full" aria-label="Comment about">
