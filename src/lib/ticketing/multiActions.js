@@ -208,6 +208,7 @@ export async function buildMultiAction({ input, ticket, session, store, request,
 
   if (input.action === 'cancel') {
     if (ticketStatus === TICKET_STATUS.CANCELLED) return fail('This ticket is already cancelled.');
+    if (ticket.pos_order?.transaction_id) return fail(`Order ${ticket.pos_order.document_no} is already placed — cancel it from Orders instead.`);
     const cancelFields = { cancel_reason: input.reason, cancelled_at: now, cancelled_by: session.username };
     return {
       filter,

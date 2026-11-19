@@ -174,7 +174,7 @@ function ProductCard({ ticket, item, partyId, run, isPending, canChange }) {
         <SubSection title="G2D estimate">
           {g2d.length === 0 ? (
             <p className="text-sm text-muted-foreground">The CAD team hasn&apos;t shared the G2D estimate yet.</p>
-          ) : g2d.map((estimate) => (
+          ) : [...g2d].reverse().map((estimate) => (
             <div key={estimate.round} className="flex flex-col gap-2 rounded-lg border border-border p-3">
               <div className="flex flex-wrap items-center gap-2 text-sm">
                 <span className="font-semibold">Round {estimate.round}</span>
@@ -226,7 +226,7 @@ function ProductCard({ ticket, item, partyId, run, isPending, canChange }) {
           {item.cad_remarks && <TextBlock label="CAD remarks">{item.cad_remarks}</TextBlock>}
           {designs.length === 0 ? (
             <p className="text-sm text-muted-foreground">The CAD team is working on the design.</p>
-          ) : designs.map((design) => (
+          ) : [...designs].reverse().map((design) => (
             <div key={design.version} className="flex flex-col gap-2 rounded-lg border border-border p-3">
               <div className="flex flex-wrap items-center gap-2 text-sm">
                 <span className="font-semibold">{design.label}</span>

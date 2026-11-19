@@ -1,9 +1,11 @@
 'use client';
 
 import Link from 'next/link';
+import { useQueryClient } from '@tanstack/react-query';
 import { ClipboardCheck, ClipboardList, Clock, MessageSquare, PenTool, Wallet } from 'lucide-react';
 
 import { ticketHref } from '@/components/features/ticketing/TicketList';
+import { QUERY_KEYS } from '@/constants/queryKeys';
 
 function NoticeRow({ href, icon: Icon, tone, onNavigate, children }) {
   return (
@@ -24,6 +26,13 @@ const noticeHref = (t) => `${ticketHref(t.ticket_number)}${t.item_id ? `#${t.ite
 
 /** Ticket notices for the store that raised each ticket, until someone acts on it. */
 export default function TicketNotificationsList({ data, onNavigate }) {
+  const queryClient = useQueryClient();
+  // A notice for the ticket already open only changes the #product anchor, so reload ticket data on every click.
+  const navigate = () => {
+    queryClient.invalidateQueries({ queryKey: [...QUERY_KEYS.TICKETING.ALL(), 'detail'] });
+    queryClient.invalidateQueries({ queryKey: [...QUERY_KEYS.TICKETING.ALL(), 'list'] });
+    onNavigate?.();
+  };
   const g2dShared = data?.g2dShared ?? [];
   const designReady = data?.designReady ?? [];
   const finalReceived = data?.finalReceived ?? [];
@@ -36,7 +45,7 @@ export default function TicketNotificationsList({ data, onNavigate }) {
     <div className="flex flex-col gap-2">
       {g2dShared.map((t) => (
         <NoticeRow
-          onNavigate={onNavigate}
+          onNavigate={navigate}
           key={`g2d-${t.item_id ?? t.ticket_number}`}
           href={noticeHref(t)}
           icon={ClipboardList}
@@ -48,7 +57,7 @@ export default function TicketNotificationsList({ data, onNavigate }) {
       ))}
       {designReady.map((t) => (
         <NoticeRow
-          onNavigate={onNavigate}
+          onNavigate={navigate}
           key={`design-${t.item_id ?? t.ticket_number}`}
           href={noticeHref(t)}
           icon={PenTool}
@@ -60,7 +69,7 @@ export default function TicketNotificationsList({ data, onNavigate }) {
       ))}
       {finalReceived.map((t) => (
         <NoticeRow
-          onNavigate={onNavigate}
+          onNavigate={navigate}
           key={t.ticket_number}
           href={ticketHref(t.ticket_number)}
           icon={ClipboardCheck}
@@ -72,7 +81,7 @@ export default function TicketNotificationsList({ data, onNavigate }) {
       ))}
       {readyToConfirm.map((t) => (
         <NoticeRow
-          onNavigate={onNavigate}
+          onNavigate={navigate}
           key={`confirm-${t.ticket_number}`}
           href={ticketHref(t.ticket_number)}
           icon={Wallet}
@@ -84,7 +93,7 @@ export default function TicketNotificationsList({ data, onNavigate }) {
       ))}
       {newComments.map((t) => (
         <NoticeRow
-          onNavigate={onNavigate}
+          onNavigate={navigate}
           key={`comment-${t.ticket_number}`}
           href={noticeHref(t)}
           icon={MessageSquare}
@@ -96,7 +105,7 @@ export default function TicketNotificationsList({ data, onNavigate }) {
       ))}
       {cadOverdue.map((t) => (
         <NoticeRow
-          onNavigate={onNavigate}
+          onNavigate={navigate}
           key={`overdue-${t.item_id ?? t.ticket_number}`}
           href={noticeHref(t)}
           icon={Clock}

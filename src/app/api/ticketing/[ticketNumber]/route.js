@@ -310,6 +310,10 @@ export async function POST(request, { params }) {
       if (status === TICKET_STATUS.CANCELLED) {
         return Response.json({ error: 'This ticket is already cancelled.' }, { status: 409 });
       }
+      if (ticket.pos_order?.transaction_id) {
+        return Response.json({ error: `Order ${ticket.pos_order.document_no} is already placed — cancel it from Orders instead.` }, { status: 409 });
+      }
+      filter.pos_order = null;
       update = {
         $set: {
           ...PANEL_STATE.CANCELLED,

@@ -90,7 +90,9 @@ function EventSection({ title, events, onSelect }) {
 export default function NotificationBell() {
   const router = useRouter();
   const { data } = useTicketNotifications();
-  const { birthdays, anniversaries } = useUpcomingEvents();
+  const events = useUpcomingEvents();
+  const birthdays = events.birthdays.filter((e) => e.daysUntil >= 0);
+  const anniversaries = events.anniversaries.filter((e) => e.daysUntil >= 0);
   const transfers = usePendingBranchIns();
   const [open, setOpen] = useState(false);
   const [seen, setSeen] = useState(readSeen);

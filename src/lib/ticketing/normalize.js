@@ -87,18 +87,26 @@ const isBlank = (v) => v == null || v === '' || v === 'blank';
 export function g2dEstimates(ticket) {
   const decisions = new Map((ticket.g2d_decisions ?? []).map((d) => [d.round, d]));
   const sharedSteps = (ticket.timeline ?? []).filter((t) => t.stage === 'g2d_shared');
+  let previous = [];
   return (ticket.history ?? [])
     .filter((h) => h.action === 'share_g2d_estimate')
     .map((h, i) => {
       const urls = [...new Set([h.thumbnail, sharedSteps[i]?.imageUrl].filter((u) => typeof u === 'string' && u))];
+      const own = (Array.isArray(h.changes) ? h.changes : []).map((c) => ({
+        field: c.field, from: isBlank(c.from) ? null : String(c.from), to: isBlank(c.to) ? null : String(c.to),
+      }));
+      // The panel logs only the fields it touched, so carry the rest forward from the earlier round.
+      const changes = [
+        ...previous.filter((p) => p.to != null && !own.some((c) => c.field === p.field)).map((p) => ({ field: p.field, from: p.to, to: p.to })),
+        ...own,
+      ];
+      previous = changes;
       return {
         round: i + 1,
         at: historyAt(h),
         by: historyUser(h),
         note: h.note || null,
-        changes: (Array.isArray(h.changes) ? h.changes : []).map((c) => ({
-          field: c.field, from: isBlank(c.from) ? null : String(c.from), to: isBlank(c.to) ? null : String(c.to),
-        })),
+        changes,
         files: urls.map((url, n) => ({ url: absoluteCadUrl(url), file_name: `G2D estimate ${i + 1}${urls.length > 1 ? `-${n + 1}` : ''}` })),
         customer_decision: decisions.get(i + 1)?.decision ?? null,
         customer_feedback: decisions.get(i + 1)?.feedback ?? null,
@@ -111,13 +119,24 @@ export function g2dEstimates(ticket) {
 
 /** The workflow panel's final data (its `estimation` object) plus its manufacturing order reference, or null. */
 export function finalDetails(ticket) {
-  if (!ticket.estimation) return null;
+  const est = ticket.estimation;
+  if (!est) return null;
   const created = ticket.history?.findLast((h) => h.action === 'order_created');
+  // Multi-product tickets: the panel saves the line item and totals flat, in snake_case.
+  const lineItem = est.lineItem ?? {
+    item_name: est.item_name, category: est.category, item_size_name: est.item_size_name,
+    sku: est.sku, design_code: est.design_code, image: est.image,
+  };
   return {
-    ...ticket.estimation,
-    manufacturing_order_number: ticket.orderNumber ?? ticket.order_number ?? null,
-    received_at: created?.at ?? ticket.order_placed_at ?? null,
-    received_by: created?.user ?? ticket.orderCreatedBy ?? null,
+    ...est,
+    lineItem,
+    subTotal: est.subTotal ?? est.sub_total,
+    taxAmount: est.taxAmount ?? est.tax_amount,
+    roundOff: est.roundOff ?? est.round_off,
+    netAmount: est.netAmount ?? est.net_amount,
+    manufacturing_order_number: ticket.orderNumber ?? ticket.order_number ?? est.order_number ?? null,
+    received_at: created?.at ?? ticket.order_placed_at ?? est.saved_at ?? null,
+    received_by: created?.user ?? ticket.orderCreatedBy ?? est.saved_by ?? null,
     panel_status_label: ticket.status_label ?? null,
   };
 }
@@ -205,11 +224,11 @@ export function canConfirmOrder(activeStatuses) {
 const normalizeComment = (c) => ({
   id: c.id ?? null,
   item_id: c.item_id ?? null,
-  text: c.text ?? '',
+  text: c.text ?? c.message ?? '',
   author: c.author ?? 'CAD team',
-  team: c.team ?? 'cad',
+  team: c.team === 'store' ? 'store' : (c.team ?? 'cad').toLowerCase(),
   store_code: c.store_code ?? null,
-  at: c.at ?? null,
+  at: c.at ?? c.created_at ?? null,
 });
 
 export const ticketComments = (ticket) => (ticket.comments ?? [])

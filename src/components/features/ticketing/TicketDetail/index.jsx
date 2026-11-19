@@ -735,7 +735,7 @@ export default function TicketDetail({ ticket, partyId }) {
             {ticket.customer_name} · {requested.category ?? '—'} · Raised {formatDateTime(ticket.created_at)}
           </p>
         </div>
-        {!isCancelled && (
+        {!isCancelled && status !== TICKET_STATUS.ORDER_PLACED && (
           <Button type="button" className="h-11 gap-1.5 bg-red-600 text-white hover:bg-red-700 hover:text-white" onClick={() => setDialog('cancel')}>
             <XCircle size={16} aria-hidden="true" /> Cancel ticket
           </Button>
@@ -788,7 +788,7 @@ export default function TicketDetail({ ticket, partyId }) {
           >
             {g2d.length === 0 ? (
               <p className="text-sm text-muted-foreground">The CAD team hasn&apos;t shared the G2D estimate yet.</p>
-            ) : g2d.map((estimate) => (
+            ) : [...g2d].reverse().map((estimate) => (
               <div key={estimate.round} className="flex flex-col gap-3 border-t border-border pt-3 first:border-0 first:pt-0">
                 <div className="flex flex-wrap items-center gap-2 text-sm">
                   <span className="font-semibold">Round {estimate.round}</span>
@@ -859,7 +859,7 @@ export default function TicketDetail({ ticket, partyId }) {
               <p className="text-sm text-muted-foreground">
                 {status === TICKET_STATUS.AWAITING_CAD ? 'The CAD team is working on the design.' : 'The CAD design follows once the G2D estimate is approved.'}
               </p>
-            ) : designs.map((design) => (
+            ) : [...designs].reverse().map((design) => (
               <div key={design.version} className="flex flex-col gap-2 border-t border-border pt-3 first:border-0 first:pt-0">
                 <div className="flex flex-wrap items-center gap-2 text-sm">
                   <span className="font-semibold">{design.label}</span>
