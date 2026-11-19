@@ -237,7 +237,7 @@ const SUMMARY_NOTES = [
   ['RTS', 'RTS / MTO minus Closed MTO — items sold from store stock. Excl. GST.'],
   ['New MTO', 'Customer orders booked in the range. OrnaVerse values these including GST.'],
   ['Total Sales', 'OrnaVerse’s own figure: RTS / MTO + New MTO − Return/Exchange, so it mixes amounts with and without GST.'],
-  ['Bills', 'Posted bills only; bills holding only free (₹0) gifts are not counted. A bill with both order and in-stock items counts under both MTO and RTS, so MTO + RTS bills can exceed Total Bills.'],
+  ['Bills', 'Every posted invoice counts as a bill, the same as OrnaVerse — including a ₹0 bill issued only for a free gift. A bill with both order and in-stock items counts under both MTO and RTS, so MTO + RTS bills can exceed Total Bills.'],
   ['Pending MTO', 'All open orders, not limited to the date range.'],
   ['Schemes', 'OrnaVerse reports this only for the store you’re logged into.'],
 ];
@@ -375,7 +375,7 @@ const withAtv = (row) => ({
 
 const ATV_NOTES = [
   ['ATV', 'Average Transaction Value = value ÷ number of bills (or orders), rounded to the rupee.'],
-  ['Bills', 'Posted sales invoices dated in the range. Draft and cancelled bills, and bills holding only free (₹0) gifts, are not counted. Paid gold-coin bills are counted.'],
+  ['Bills', 'Every posted invoice dated in the range, the same count as OrnaVerse — including a ₹0 bill issued only for a free gift (counted as RTS). Draft and cancelled bills are not counted.'],
   ['Value', 'Bill value is the taxable amount — after discount, before GST — the same basis OrnaVerse uses for RTS, Closed MTO and RTS / MTO on its POS Dashboard (and on Sales Summary).'],
   ['MTO', 'A bill item is MTO when it fulfils a customer order (OrnaVerse’s Order Bifurcation report) or a website order (Stock Allocation). MTO ATV = MTO value ÷ bills with an MTO item. Matches Closed MTO on Sales Summary.'],
   ['RTS', 'Every other item sold from store stock. RTS ATV = RTS value ÷ bills with an RTS item. Matches RTS on Sales Summary.'],

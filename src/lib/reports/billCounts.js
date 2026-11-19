@@ -65,7 +65,7 @@ async function fetchFulfilledOrderLines(session, orderCompanyIds, toDate) {
 }
 
 /**
- * Posted bills in the range, except bills holding only free (zero-value) gifts. A line is MTO when it fulfils a POS order
+ * Every posted bill in the range, as OrnaVerse counts invoices. A line is MTO when it fulfils a POS order
  * (OrnaVerse's Order Bifurcation report) or comes from a Stock Allocation (website order); the rest is RTS.
  * A bill holding both counts once under each. Values are pre-GST taxable amounts, the POS Dashboard's basis:
  * on LIVE (Aug–Nov 2026) value matched RTS / MTO exactly in every store-month and Closed MTO within 1%.
@@ -79,7 +79,7 @@ export async function countBills(session, { companyIds, fromDate, toDate }, orde
   const bills = new Map();
   for (const line of lines) {
     const bill = bills.get(line.transaction_id)
-      ?? { companyId: line.company_id, hasSale: false, hasMto: false, hasRts: false, mtoValue: 0, rtsValue: 0 };
+      ?? { companyId: line.company_id, hasMto: false, hasRts: false, mtoValue: 0, rtsValue: 0 };
     bills.set(line.transaction_id, bill);
     const value = Number(line.taxable_amount) || 0;
     const isMto = !line.is_gift && (
@@ -87,11 +87,14 @@ export async function countBills(session, { companyIds, fromDate, toDate }, orde
     );
     if (isMto) bill.mtoValue += value;
     else bill.rtsValue += value;
-    // Paid gold-coin sales are also flagged is_gift; only zero-value gift lines are free.
+    // A free (zero-value) gift doesn't make a bill RTS; paid gold coins are also flagged is_gift.
     if (line.is_gift && value <= 0) continue;
-    bill.hasSale = true;
     if (isMto) bill.hasMto = true;
     else bill.hasRts = true;
+  }
+  // Every posted invoice is a bill, as OrnaVerse counts them; a bill of only free gifts is stock-issued, so RTS.
+  for (const bill of bills.values()) {
+    if (!bill.hasMto && !bill.hasRts) bill.hasRts = true;
   }
 
   const tally = (list) => {
@@ -105,7 +108,7 @@ export async function countBills(session, { companyIds, fromDate, toDate }, orde
       total_value: sum('mtoValue') + sum('rtsValue'),
     };
   };
-  const counted = [...bills.values()].filter((b) => b.hasSale);
+  const counted = [...bills.values()];
   const byStore = Object.fromEntries(companyIds.map((id) => [id, tally(counted.filter((b) => b.companyId === id))]));
   return { ...tally(counted), byStore };
 }
