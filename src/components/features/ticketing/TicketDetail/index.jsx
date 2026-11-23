@@ -274,7 +274,7 @@ export function FinalDetails({ details }) {
           ['Received', `${formatDateTime(details.received_at)}${details.received_by ? ` by ${details.received_by}` : ''}`],
           ['Manufacturing order (panel)', details.manufacturing_order_number ?? '—'],
           ['Panel status', details.panel_status_label ?? '—'],
-          ['SKU', lineItem.sku ?? details.sku ?? 'Not received yet'],
+          ['SKU', lineItem.design_code ?? details.design_code ?? 'Not received yet'],
         ]}
       />
 
