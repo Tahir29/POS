@@ -319,4 +319,9 @@ export const QUERY_KEYS = {
     REFERRALS: (filters) => ['voc', 'referrals', filters],
     SKIPS:  (filters) => ['voc', 'skips', filters],
   },
+
+  FREJUN: {
+    CALLS:     (params) => ['frejun', 'calls', params],
+    ANALYTICS: (params) => ['frejun', 'analytics', params],
+  },
 };
