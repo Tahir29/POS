@@ -324,4 +324,9 @@ export const QUERY_KEYS = {
     CALLS:     (params) => ['frejun', 'calls', params],
     ANALYTICS: (params) => ['frejun', 'analytics', params],
   },
+
+  WORKFLOW_ORDERS: {
+    LIST: (params) => ['workflow-orders', 'list', params],
+    DETAIL: (id) => ['workflow-orders', 'detail', id],
+  },
 };

@@ -21,6 +21,7 @@ import {
   Truck,
   Target,
   PhoneCall,
+  Workflow,
 } from 'lucide-react';
 
 export const NAV_ITEMS = [
@@ -35,6 +36,8 @@ export const NAV_ITEMS = [
   // { label: 'Branch Transfer', href: '/branch-transfer', icon: Truck     },
   { label: 'Estimation',   href: '/estimation',   icon: FileSpreadsheet },
   { label: 'Ticketing',    href: '/ticketing',    icon: Ticket          },
+  { label: 'Workflow Orders', href: '/workflow-orders', icon: Workflow },
+
   // { label: 'Customers',    href: '/customers',    icon: Users           },
   { label: 'Schemes',      href: '/schemes',      icon: BookOpen        },
   { label: 'Walk-ins',     href: '/walkins',      icon: Footprints      },
