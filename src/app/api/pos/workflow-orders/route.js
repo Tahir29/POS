@@ -1,5 +1,4 @@
 // src/app/api/pos/workflow-orders/route.js
-import { NextResponse } from 'next/server';
 import { getSessionFromRequest } from '@/lib/ornaverse/session';
 import { getWorkflowOrders } from '@/lib/workflow/workflowOrdersClient';
 
@@ -45,7 +44,7 @@ async function authenticateRequest(request) {
 }
 
 export async function OPTIONS() {
-  return new NextResponse(null, {
+  return new Response(null, {
     status: 204,
     headers: getCorsHeaders(),
   });
@@ -54,7 +53,7 @@ export async function OPTIONS() {
 export async function GET(request) {
   const isAuth = await authenticateRequest(request);
   if (!isAuth) {
-    return NextResponse.json(
+    return Response.json(
       {
         success: false,
         error: 'Unauthorized: Invalid or missing API key.',
@@ -85,7 +84,7 @@ export async function GET(request) {
 
     const result = await getWorkflowOrders(params);
 
-    return NextResponse.json(result, {
+    return Response.json(result, {
       status: 200,
       headers: {
         'Content-Type': 'application/json',
@@ -93,7 +92,7 @@ export async function GET(request) {
       },
     });
   } catch (error) {
-    return NextResponse.json(
+    return Response.json(
       {
         success: false,
         error: error.message || 'Internal Server Error while querying workflow orders.',
@@ -108,29 +107,30 @@ export async function GET(request) {
 
 // Strictly Read-Only handlers: return 405 Method Not Allowed
 export async function POST() {
-  return NextResponse.json(
+  return Response.json(
     { success: false, error: 'Method Not Allowed. Workflow Orders API is strictly read-only.' },
     { status: 405, headers: getCorsHeaders() }
   );
 }
 
 export async function PUT() {
-  return NextResponse.json(
+  return Response.json(
     { success: false, error: 'Method Not Allowed. Workflow Orders API is strictly read-only.' },
     { status: 405, headers: getCorsHeaders() }
   );
 }
 
 export async function DELETE() {
-  return NextResponse.json(
+  return Response.json(
     { success: false, error: 'Method Not Allowed. Workflow Orders API is strictly read-only.' },
     { status: 405, headers: getCorsHeaders() }
   );
 }
 
 export async function PATCH() {
-  return NextResponse.json(
+  return Response.json(
     { success: false, error: 'Method Not Allowed. Workflow Orders API is strictly read-only.' },
     { status: 405, headers: getCorsHeaders() }
   );
 }
+
