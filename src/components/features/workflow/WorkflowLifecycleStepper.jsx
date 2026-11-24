@@ -1,181 +1,116 @@
-// src/components/features/workflow/WorkflowLifecycleStepper.jsx
-import React, { useState } from 'react';
-import { Check, Clock, AlertCircle, ChevronDown, ChevronUp } from 'lucide-react';
+'use client';
+
+import { useState } from 'react';
+import { Check, ChevronDown } from 'lucide-react';
 import { WORKFLOW_STAGES, getStageMeta } from '@/lib/workflow/workflowConstants';
+import { formatDateTime } from '@/lib/dateUtils';
 import { cn } from '@/lib/utils';
 
-export default function WorkflowLifecycleStepper({ order, className, initialExpanded = false }) {
-  const [expanded, setExpanded] = useState(initialExpanded);
-  const [selectedStageKey, setSelectedStageKey] = useState(null);
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/;
 
-  if (!order) return null;
+const humanize = (key) => key
+  .replace(/([a-z])([A-Z])/g, '$1 $2')
+  .replace(/_/g, ' ')
+  .replace(/^\w/, (c) => c.toUpperCase());
 
-  const currentMeta = getStageMeta(order.current_step);
-  const currentStepNumber = currentMeta?.stepNumber || 1;
-  const isCancelled = order.status === 'cancelled' || order.status === 'rejected';
-
-  const stagesData = order.stages || {};
-
-  // Find data object for a given stage
-  function getStageData(stage) {
-    if (stagesData[stage.stageKey]) return stagesData[stage.stageKey];
-    if (stagesData[stage.key]) return stagesData[stage.key];
-    if (stage.alternateKeys) {
-      for (const alt of stage.alternateKeys) {
-        if (stagesData[alt]) return stagesData[alt];
-      }
-    }
-    // Search by prefix
-    const foundKey = Object.keys(stagesData).find(
-      (k) => k.endsWith(`_${stage.key}`) || k === stage.key
-    );
-    return foundKey ? stagesData[foundKey] : null;
+function formatValue(value) {
+  if (value == null || value === '') return null;
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+  if (typeof value === 'string' && ISO_DATE.test(value)) return formatDateTime(value);
+  if (Array.isArray(value)) {
+    if (!value.length) return null;
+    return value.every((v) => typeof v !== 'object') ? value.join(', ') : `${value.length} record${value.length > 1 ? 's' : ''}`;
   }
+  if (typeof value === 'object') return null;
+  return String(value);
+}
 
-  const activeStage = selectedStageKey
-    ? WORKFLOW_STAGES.find((s) => s.key === selectedStageKey)
-    : currentMeta;
-  const activeStageData = activeStage ? getStageData(activeStage) : null;
+function stageData(stages, stage) {
+  if (!stages) return null;
+  if (stages[stage.stageKey]) return stages[stage.stageKey];
+  if (stages[stage.key]) return stages[stage.key];
+  const key = Object.keys(stages).find((k) => k.endsWith(`_${stage.key}`));
+  return key ? stages[key] : null;
+}
+
+/** The 11 workflow stages as a vertical timeline; stages with recorded data expand to show it. */
+export default function WorkflowLifecycleStepper({ order }) {
+  const current = getStageMeta(order.current_step)?.stepNumber ?? 0;
+  const isStopped = ['cancelled', 'rejected'].includes(String(order.status).toLowerCase());
+  const [open, setOpen] = useState(() => new Set([order.current_step]));
+
+  const toggle = (key) => setOpen((prev) => {
+    const next = new Set(prev);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    return next;
+  });
 
   return (
-    <div className={cn('bg-card border border-border rounded-xl p-4 flex flex-col gap-3 shadow-xs', className)}>
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-            11-Stage Manufacturing Lifecycle
-          </span>
-          <span className="text-xs text-muted-foreground">·</span>
-          <span className="text-xs font-medium text-foreground">
-            Stage {currentStepNumber} of 11: <strong className="text-primary">{currentMeta.label}</strong>
-          </span>
-        </div>
+    <ol className="flex flex-col">
+      {WORKFLOW_STAGES.map((stage, idx) => {
+        const isPast = stage.stepNumber < current;
+        const isCurrent = stage.stepNumber === current;
+        const rows = Object.entries(stageData(order.stages, stage) ?? {})
+          .map(([k, v]) => [humanize(k), formatValue(v)])
+          .filter(([, v]) => v != null);
+        const expandable = rows.length > 0 && (isPast || isCurrent);
+        const isOpen = expandable && open.has(stage.key);
+        const last = idx === WORKFLOW_STAGES.length - 1;
 
-        <button
-          type="button"
-          onClick={() => setExpanded((prev) => !prev)}
-          className="text-xs font-medium text-primary hover:text-primary/80 flex items-center gap-1 transition-colors"
-        >
-          {expanded ? 'Hide Stage Inspector' : 'Inspect Stages'}
-          {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-        </button>
-      </div>
-
-      {/* Stepper Bar */}
-      <div className="w-full overflow-x-auto pb-2 scrollbar-thin">
-        <div className="flex items-center justify-between min-w-[760px] relative px-2">
-          {/* Connecting Background Line */}
-          <div className="absolute left-6 right-6 top-3.5 h-0.5 bg-border -z-0" />
-
-          {WORKFLOW_STAGES.map((stage) => {
-            const stepNum = stage.stepNumber;
-            const isPast = stepNum < currentStepNumber && !isCancelled;
-            const isCurrent = stepNum === currentStepNumber;
-            const isSelected = selectedStageKey === stage.key;
-
-            let circleStyle = 'bg-muted border-border text-muted-foreground';
-            if (isPast) {
-              circleStyle = 'bg-emerald-600 border-emerald-600 text-white';
-            } else if (isCurrent) {
-              if (isCancelled) {
-                circleStyle = 'bg-destructive border-destructive text-destructive-foreground animate-pulse';
-              } else {
-                circleStyle = 'bg-primary border-primary text-primary-foreground ring-4 ring-primary/20 animate-pulse';
-              }
-            }
-
-            return (
-              <div
-                key={stage.key}
-                onClick={() => {
-                  setSelectedStageKey(stage.key);
-                  setExpanded(true);
-                }}
-                className="flex flex-col items-center cursor-pointer group relative z-10"
-              >
-                <div
-                  className={cn(
-                    'w-7 h-7 rounded-full border-2 flex items-center justify-center text-xs font-bold transition-all shadow-xs',
-                    circleStyle,
-                    isSelected && 'scale-110 ring-2 ring-primary ring-offset-2'
-                  )}
-                  title={`${stage.stepNumber}. ${stage.label}: ${stage.description}`}
-                >
-                  {isPast ? (
-                    <Check size={14} strokeWidth={3} />
-                  ) : isCurrent && isCancelled ? (
-                    <AlertCircle size={14} />
-                  ) : isCurrent ? (
-                    <Clock size={13} />
-                  ) : (
-                    <span>{stepNum}</span>
-                  )}
-                </div>
-
-                <span
-                  className={cn(
-                    'text-[10px] mt-1.5 text-center max-w-[65px] font-medium leading-tight transition-colors',
-                    isCurrent
-                      ? 'text-primary font-bold'
-                      : isPast
-                      ? 'text-foreground'
-                      : 'text-muted-foreground group-hover:text-foreground'
-                  )}
-                >
-                  {stage.shortLabel}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Expanded Stage Inspector Drawer / Details */}
-      {expanded && activeStage && (
-        <div className="mt-2 p-3 bg-muted/40 rounded-lg border border-border/60 text-xs flex flex-col gap-2 animate-in fade-in-50 duration-150">
-          <div className="flex items-center justify-between border-b border-border/40 pb-1.5">
-            <div className="flex items-center gap-2">
-              <span className="font-semibold text-foreground">
-                Step {activeStage.stepNumber}: {activeStage.label}
-              </span>
-              <span className="text-muted-foreground text-[11px]">({activeStage.description})</span>
-            </div>
-            {activeStageData?.status && (
-              <span className="px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider bg-background border border-border">
-                Status: {activeStageData.status}
-              </span>
+        return (
+          <li key={stage.key} className="relative flex gap-3 pb-1">
+            {!last && (
+              <span
+                aria-hidden="true"
+                className={cn('absolute left-3 top-7 bottom-0 w-px -translate-x-1/2', isPast ? 'bg-status-in-stock' : 'bg-border')}
+              />
             )}
-          </div>
+            <span
+              className={cn(
+                'relative z-10 mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold tabular-nums',
+                isPast && 'border-status-in-stock bg-status-in-stock text-white',
+                isCurrent && !isStopped && 'border-primary bg-primary text-primary-foreground ring-4 ring-primary/15',
+                isCurrent && isStopped && 'border-status-error bg-status-error text-white',
+                !isPast && !isCurrent && 'border-border bg-background text-muted-foreground',
+              )}
+            >
+              {isPast ? <Check size={13} strokeWidth={3} aria-hidden="true" /> : stage.stepNumber}
+            </span>
 
-          {activeStageData ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 py-1 text-muted-foreground">
-              {Object.entries(activeStageData).map(([key, value]) => {
-                if (typeof value === 'object' && value !== null) {
-                  return (
-                    <div key={key} className="col-span-2 sm:col-span-3 bg-background/50 p-2 rounded border border-border/40">
-                      <span className="font-medium text-foreground capitalize">{key.replace(/_/g, ' ')}:</span>
-                      <pre className="text-[11px] mt-1 overflow-x-auto">{JSON.stringify(value, null, 2)}</pre>
+            <div className="min-w-0 flex-1 pb-3">
+              <button
+                type="button"
+                onClick={() => expandable && toggle(stage.key)}
+                disabled={!expandable}
+                aria-expanded={expandable ? isOpen : undefined}
+                className="flex w-full min-h-8 items-center justify-between gap-2 text-left disabled:cursor-default"
+              >
+                <span className="min-w-0">
+                  <span className={cn('block text-sm', isCurrent ? 'font-semibold text-foreground' : isPast ? 'font-medium text-foreground' : 'text-muted-foreground')}>
+                    {stage.label}
+                    {isCurrent && <span className="ml-2 text-xs font-medium text-primary">{isStopped ? 'Stopped' : 'Current'}</span>}
+                  </span>
+                  <span className="block text-xs text-muted-foreground">{stage.description}</span>
+                </span>
+                {expandable && (
+                  <ChevronDown size={16} aria-hidden="true" className={cn('shrink-0 text-muted-foreground transition-transform', isOpen && 'rotate-180')} />
+                )}
+              </button>
+
+              {isOpen && (
+                <dl className="mt-2 grid grid-cols-1 gap-x-4 gap-y-1.5 rounded-lg bg-muted/40 p-3 text-xs sm:grid-cols-2">
+                  {rows.map(([label, value]) => (
+                    <div key={label} className="flex min-w-0 justify-between gap-3 sm:flex-col sm:justify-start sm:gap-0">
+                      <dt className="text-muted-foreground">{label}</dt>
+                      <dd className="min-w-0 break-words text-right font-medium text-foreground sm:text-left">{value}</dd>
                     </div>
-                  );
-                }
-                return (
-                  <div key={key} className="flex flex-col">
-                    <span className="text-[10px] uppercase font-semibold text-muted-foreground/80">
-                      {key.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ')}
-                    </span>
-                    <span className="font-medium text-foreground truncate" title={String(value)}>
-                      {String(value)}
-                    </span>
-                  </div>
-                );
-              })}
+                  ))}
+                </dl>
+              )}
             </div>
-          ) : (
-            <p className="text-muted-foreground italic py-1">
-              No detailed records captured yet for this stage. Stage is pending upstream progression.
-            </p>
-          )}
-        </div>
-      )}
-    </div>
+          </li>
+        );
+      })}
+    </ol>
   );
 }

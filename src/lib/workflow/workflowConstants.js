@@ -114,40 +114,27 @@ export function getStageMeta(stageKey) {
   );
 }
 
-export const WORKFLOW_STATUS_CONFIG = {
-  pending: {
-    label: 'Pending',
-    variant: 'secondary',
-    badgeClass: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800',
-  },
-  approved: {
-    label: 'Approved',
-    variant: 'default',
-    badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800',
-  },
-  in_production: {
-    label: 'In Production',
-    variant: 'default',
-    badgeClass: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-800',
-  },
-  completed: {
-    label: 'Completed',
-    variant: 'default',
-    badgeClass: 'bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/40 dark:text-teal-400 dark:border-teal-800',
-  },
-  delivered: {
-    label: 'Delivered',
-    variant: 'default',
-    badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800',
-  },
-  cancelled: {
-    label: 'Cancelled',
-    variant: 'destructive',
-    badgeClass: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-400 dark:border-red-800',
-  },
-  rejected: {
-    label: 'Rejected',
-    variant: 'destructive',
-    badgeClass: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-400 dark:border-rose-800',
-  },
+const TONE = {
+  done: 'bg-status-in-stock/10 text-status-in-stock ring-1 ring-status-in-stock/20',
+  active: 'bg-status-made-order/10 text-status-made-order ring-1 ring-status-made-order/20',
+  error: 'bg-status-error/10 text-status-error ring-1 ring-status-error/20',
+  neutral: 'bg-muted text-muted-foreground ring-1 ring-border',
 };
+
+export const WORKFLOW_STATUS_CONFIG = {
+  pending: { label: 'Pending', classes: TONE.neutral },
+  in_progress: { label: 'In progress', classes: TONE.active },
+  in_production: { label: 'In production', classes: TONE.active },
+  approved: { label: 'Approved', classes: TONE.done },
+  completed: { label: 'Completed', classes: TONE.done },
+  delivered: { label: 'Delivered', classes: TONE.done },
+  cancelled: { label: 'Cancelled', classes: TONE.error },
+  rejected: { label: 'Rejected', classes: TONE.error },
+};
+
+export const WORKFLOW_STATUS_OPTIONS = [
+  { value: 'pending', label: 'Pending' },
+  { value: 'in_progress', label: 'In progress' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'cancelled', label: 'Cancelled' },
+];

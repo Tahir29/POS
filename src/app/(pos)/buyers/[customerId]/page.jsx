@@ -6,18 +6,22 @@ import { Button } from '@/components/ui/button';
 import PhoneLink from '@/components/shared/PhoneLink';
 import PurchaseHistory from '@/components/features/buyers/PurchaseHistory';
 import { useBuyerHistory } from '@/hooks/buyers/useBuyerHistory';
-import { useCustomer360 } from '@/hooks/customer/useCustomer360';
+import { useRetrieveCustomer } from '@/hooks/customer/useRetrieveCustomer';
 
 export default function BuyerDetailPage() {
   const router = useRouter();
   const { customerId } = useParams();
-  const { purchases } = useBuyerHistory(customerId);
-  const { party } = useCustomer360(customerId);
+  const { purchases, isLoading } = useBuyerHistory(customerId);
 
   const first = purchases[0];
+  const purchaseEmail = purchases.find((p) => p.customerEmail)?.customerEmail;
+  const purchaseMobile = purchases.find((p) => p.customerMobile)?.customerMobile;
+  const needsParty = !isLoading && (!first?.customerName || !purchaseEmail || !purchaseMobile);
+  const { customer: party } = useRetrieveCustomer(customerId, { enabled: needsParty });
+
   const displayName = first?.customerName || party?.name || 'Customer';
-  const displayEmail = purchases.find((p) => p.customerEmail)?.customerEmail || (party?.email && party.email !== 'NA' ? party.email : null);
-  const displayMobile = purchases.find((p) => p.customerMobile)?.customerMobile || party?.mobile;
+  const displayEmail = purchaseEmail || party?.email;
+  const displayMobile = purchaseMobile || party?.mobile;
 
   return (
     <div className="flex flex-col gap-4 w-full p-4 md:p-6">

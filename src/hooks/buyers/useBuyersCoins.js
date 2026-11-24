@@ -1,129 +1,94 @@
-import { useEffect, useRef, useState, useMemo } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { getLoyaltyCheckoutSettings, previewLoyaltyCheckout } from '@/services/nectorService';
-import { isThirdPartyLoyalty } from '@/lib/checkout/loyaltyEligibility';
-import { createConcurrencyQueue } from '@/lib/concurrencyQueue';
-import { QUERY_KEYS } from '@/constants/queryKeys';
+import { useEffect, useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import {
+  useLoyaltySettings, pointsBalanceQuery, pointsBalanceKey, pointsFromPreview,
+} from '@/hooks/customers/useLuciraPoints';
 
-const PROBE_AMOUNT = 1000000;
-// Bounded queue of 4 concurrent requests to fetch live points safely without overloading OrnaVerse
-const previewQueue = createConcurrencyQueue(previewLoyaltyCheckout, { concurrency: 4 });
+const WORKERS = 3;
+const FLUSH_MS = 400;
 
 /**
- * Fetches live Lucira points for a list of buyers at a store on-demand (for sorting).
- * Always pulls fresh balances from OrnaVerse without requiring a hard page refresh (F5).
- * Zero persistence to MongoDB as requested.
+ * Live Lucira points for a list of buyers at a store, for sorting by coins. Balances are shared with the
+ * per-card pills through the React Query cache (fresh for 10 min), so revisits and the dashboard reuse them.
+ * Biggest spenders are fetched first so the top of a coins-sorted list settles early.
+ * Buyers whose balance couldn't be loaded are left out of the map (shown as "—", sorted last), never as 0.
  */
 export function useBuyersCoins({ buyers = [], companyId, enabled = true, refreshKey = 0 }) {
   const queryClient = useQueryClient();
-  const [coinsMap, setCoinsMap] = useState(() => new Map());
-  const [isLoadingCoins, setIsLoadingCoins] = useState(false);
-  const [progress, setProgress] = useState({ loaded: 0, total: 0 });
+  const { isLoyaltyEnabled, itemGroup, isLoading: isSettingsLoading } = useLoyaltySettings(companyId, { enabled });
+  const isReady = enabled && isLoyaltyEnabled;
 
-  const settingsQuery = useQuery({
-    queryKey: QUERY_KEYS.NECTOR.LOYALTY_CHECKOUT_SETTINGS(companyId),
-    queryFn: () => getLoyaltyCheckoutSettings(companyId),
-    enabled: enabled && !!companyId,
-    staleTime: 5 * 60 * 1000,
-  });
-
-  const settings = settingsQuery.data;
-  const isLoyaltyReady = enabled && !!companyId && isThirdPartyLoyalty(settings);
-  const itemGroup = settings?.item_groups?.[0] ?? null;
-
-  // Stable key representing buyer IDs to avoid re-triggering when object references change
-  const buyerKeys = useMemo(
-    () => buyers.map((b) => `${b._id}:${b.customerMobile ?? ''}`).join('|'),
+  const eligible = useMemo(
+    () => buyers
+      .filter((b) => b._id && b.customerMobile)
+      .sort((a, b) => (b.totalSpend ?? 0) - (a.totalSpend ?? 0)),
     [buyers],
   );
+  const eligibleKey = useMemo(() => eligible.map((b) => `${b._id}:${b.customerMobile}`).join('|'), [eligible]);
+  const runKey = `${isReady}|${companyId}|${itemGroup}|${refreshKey}|${eligibleKey}`;
 
-  const runIdRef = useRef(0);
+  const [run, setRun] = useState({ key: null, map: new Map(), loaded: 0, done: false });
 
   useEffect(() => {
-    if (!isLoyaltyReady || !buyers.length) {
-      setIsLoadingCoins(false);
-      return;
-    }
+    if (!isReady || !eligible.length) return undefined;
 
-    const eligible = buyers.filter((b) => b._id && b.customerMobile);
-    if (!eligible.length) {
-      setIsLoadingCoins(false);
-      return;
-    }
-
-    const currentRunId = ++runIdRef.current;
+    let cancelled = false;
+    const map = new Map();
     let loaded = 0;
-    const total = eligible.length;
-    setProgress({ loaded: 0, total });
-    setIsLoadingCoins(true);
+    let flushTimer = null;
 
-    // Pre-seed with any existing data in cache so UI does not show blanks while updating
-    const newMap = new Map();
+    const flush = () => {
+      flushTimer = null;
+      if (!cancelled) setRun({ key: runKey, map: new Map(map), loaded, done: loaded >= eligible.length });
+    };
+    const scheduleFlush = () => {
+      if (!flushTimer) flushTimer = setTimeout(flush, FLUSH_MS);
+    };
+
     for (const buyer of eligible) {
-      const partyId = Number(buyer._id);
-      const cacheKey = ['nector', 'points-balance', companyId, partyId];
-      const cached = queryClient.getQueryData(cacheKey);
-      if (cached !== undefined) {
-        newMap.set(partyId, cached?.success ? Number(cached.coin_value) || 0 : 0);
-      }
+      const cached = queryClient.getQueryData(pointsBalanceKey(companyId, buyer._id));
+      if (cached?.success !== undefined) map.set(Number(buyer._id), pointsFromPreview(cached));
     }
-    if (newMap.size > 0) {
-      setCoinsMap(new Map(newMap));
-    }
+    flushTimer = setTimeout(flush, 0);
 
-    let isCancelled = false;
-
-    // Always fetch fresh live balances from OrnaVerse
-    Promise.allSettled(
-      eligible.map(async (buyer) => {
+    let next = 0;
+    const worker = async () => {
+      while (!cancelled && next < eligible.length) {
+        const buyer = eligible[next++];
         const partyId = Number(buyer._id);
-        const mobile = buyer.customerMobile;
-        const cacheKey = ['nector', 'points-balance', companyId, partyId];
-
         try {
-          const res = await previewQueue({
-            companyId,
-            partyId,
-            mobile,
-            cartAmount: PROBE_AMOUNT,
-            applyCoins: true,
-            applyCredits: false,
-            netAmount: PROBE_AMOUNT,
-            remainingDue: PROBE_AMOUNT,
-            lines: itemGroup != null ? [{ item_group_id: itemGroup, taxable_amount: PROBE_AMOUNT }] : [],
-          });
-          queryClient.setQueryData(cacheKey, res);
-          const pts = res?.success ? Number(res.coin_value) || 0 : 0;
-          if (!isCancelled && runIdRef.current === currentRunId) {
-            newMap.set(partyId, pts);
-            loaded++;
-            setCoinsMap(new Map(newMap));
-            setProgress({ loaded, total });
-          }
+          const res = await queryClient.fetchQuery(
+            pointsBalanceQuery({ companyId, partyId, mobile: buyer.customerMobile, itemGroup }),
+          );
+          map.set(partyId, pointsFromPreview(res));
         } catch {
-          if (!isCancelled && runIdRef.current === currentRunId) {
-            newMap.set(partyId, newMap.get(partyId) ?? 0);
-            loaded++;
-            setCoinsMap(new Map(newMap));
-            setProgress({ loaded, total });
-          }
+          map.delete(partyId);
         }
-      }),
-    ).finally(() => {
-      if (!isCancelled && runIdRef.current === currentRunId) {
-        setIsLoadingCoins(false);
+        loaded++;
+        scheduleFlush();
       }
+    };
+    Promise.all(Array.from({ length: WORKERS }, worker)).then(() => {
+      if (flushTimer) clearTimeout(flushTimer);
+      flush();
     });
 
     return () => {
-      isCancelled = true;
+      cancelled = true;
+      if (flushTimer) clearTimeout(flushTimer);
     };
+    // runKey captures every input the sweep depends on.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoyaltyReady, companyId, buyerKeys, refreshKey]);
+  }, [runKey]);
+
+  const isCurrent = run.key === runKey;
+  const isSweeping = isReady && eligible.length > 0 && !(isCurrent && run.done);
 
   return {
-    coinsMap,
-    isLoadingCoins: (enabled && settingsQuery.isLoading) || isLoadingCoins,
-    progress,
+    coinsMap: isCurrent ? run.map : EMPTY_MAP,
+    isLoadingCoins: (enabled && isSettingsLoading) || isSweeping,
+    progress: { loaded: isCurrent ? run.loaded : 0, total: eligible.length },
   };
 }
+
+const EMPTY_MAP = new Map();

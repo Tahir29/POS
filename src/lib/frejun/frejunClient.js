@@ -2,10 +2,10 @@
 // SERVER-ONLY. Client for Frejun Cloud Telephony API (v2).
 
 const DEFAULT_BASE_URL = 'https://api.frejun.com/api/v2';
-const DEFAULT_API_KEY = '99765929.717d136acf61354a6b24441c8fb315b9';
-
 function getApiKey() {
-  return process.env.FREJUN_API_KEY || DEFAULT_API_KEY;
+  const key = process.env.FREJUN_API_KEY;
+  if (!key) throw new Error('FREJUN_API_KEY is not configured.');
+  return key;
 }
 
 function getBaseUrl() {

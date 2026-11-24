@@ -160,7 +160,7 @@ export default function CallAudioPlayer({
           )}
         </Button>
         {duration > 0 && !hasError && (
-          <span className="text-[11px] font-mono tabular-nums text-muted-foreground">
+          <span className="text-xs tabular-nums text-muted-foreground">
             {formatSeconds(isPlaying ? currentTime : duration)}
           </span>
         )}
@@ -235,7 +235,7 @@ export default function CallAudioPlayer({
       </div>
 
       <div className="flex items-center gap-2">
-        <span className="text-[11px] font-mono tabular-nums text-muted-foreground w-9 text-right">
+        <span className="text-xs tabular-nums text-muted-foreground w-9 text-right">
           {formatSeconds(currentTime)}
         </span>
         <input
@@ -246,7 +246,7 @@ export default function CallAudioPlayer({
           onChange={handleSeek}
           className="h-1.5 flex-1 cursor-pointer accent-primary rounded-lg bg-muted appearance-none"
         />
-        <span className="text-[11px] font-mono tabular-nums text-muted-foreground w-9">
+        <span className="text-xs tabular-nums text-muted-foreground w-9">
           {formatSeconds(duration)}
         </span>
       </div>

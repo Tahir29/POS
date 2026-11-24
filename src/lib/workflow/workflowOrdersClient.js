@@ -1,701 +1,228 @@
 // src/lib/workflow/workflowOrdersClient.js
-import { WORKFLOW_STAGES } from './workflowConstants.js';
+// SERVER-ONLY. Read-only view of the workflow panel's orders (website DB `order_workflows`),
+// mapped to the POS workflow-orders API shape.
+import { getWebsiteDb } from '@/lib/mongo/websiteClient';
 
-const DEFAULT_BASE_URL = process.env.WORKFLOW_ORDERS_BASE_URL || 'https://backend.lucirajewelry.com';
-const API_KEY = process.env.WORKFLOW_ORDERS_API_KEY || 'pos_sec_live_9f81a742c03b';
+const COLLECTION = 'order_workflows';
+const MAX_LIMIT = 250;
 
-/**
- * Built-in baseline workflow orders conforming exactly to Section 6 of the POS Integration Guide.
- * Includes MAL-26-0001, HO-PO-09-26-00014, HO-EORD-09-26-00139 and realistic orders across all 11 stages.
- */
-const BASELINE_WORKFLOW_ORDERS = [
-  {
-    id: 142,
-    order_id: '58392104921',
-    order_number: 'MAL-26-0001',
-    po_number: 'HO-PO-09-26-00014',
-    erp_document_no: 'HO-EORD-09-26-00139',
-    channel: 'web',
-    source_name: 'shopify',
-    current_step: 'vendor_ops',
-    status: 'pending',
-    priority: 'normal',
-    assigned_to: 'vendor_team',
-    total_amount: 45200.0,
-    payment_mode: 'Prepaid',
-    cancelled_at: null,
-    created_at: '2026-11-20T10:15:30.000Z',
-    updated_at: '2026-11-21T08:00:12.000Z',
-    customer: {
-      name: 'Ananya Sharma',
-      phone: '+91 9876543210',
-      email: 'ananya@example.com',
-    },
-    shipping_address: {
-      address1: 'Flat 402, Lotus Tower',
-      city: 'Mumbai',
-      province: 'Maharashtra',
-      zip: '400001',
-      country: 'India',
-    },
-    billing_address: {
-      address1: 'Flat 402, Lotus Tower',
-      city: 'Mumbai',
-      province: 'Maharashtra',
-      zip: '400001',
-      country: 'India',
-    },
-    items: [
-      {
-        title: 'Solitaire Diamond Ring',
-        sku: 'LJ-COE300',
-        quantity: 1,
-        price: 45200.0,
-        properties: [{ name: 'Size', value: '12' }, { name: 'Metal', value: '14KT Rose Gold' }],
-      },
-    ],
-    financials: {
-      subtotal: 45200.0,
-      tax: 1356.0,
-      total: 46556.0,
-    },
-    stages: {
-      '1_sales_review': {
-        status: 'approved',
-        reviewedBy: 'sales_manager',
-        reviewedAt: '2026-11-20T10:30:00Z',
-        remarks: 'Customer confirmed specifications',
-      },
-      '2_cad_team': {
-        status: 'approved',
-        cadVersions: 1,
-        designCode: 'LJ-COE300',
-        goldWeight: '1.85',
-        diamondWeight: '0.144',
-        diamondPieces: 16,
-        pushedAt: '2026-11-20T12:00:00Z',
-      },
-      '3_yogi_action': {
-        status: 'approved',
-        actionAt: '2026-11-20T12:45:00Z',
-        remarks: 'Approved for production push',
-      },
-      '4_po_fulfillment': {
-        status: 'completed',
-        poNumber: 'HO-PO-09-26-00014',
-        vendor: 'Jewel Craft Ltd',
-        poDate: '2026-11-20',
-        deliveryDate: '2026-11-28',
-      },
-      '5_vendor_ops': {
-        status: 'in_production',
-        vendorName: 'Jewel Craft Ltd',
-        expectedDeliveryDate: '2026-11-28',
-        stageProgress: 'Wax model casting complete',
-      },
-      '6_inward_qc': {
-        status: 'pending',
-      },
-      '7_certificate_team': {
-        status: 'pending',
-      },
-      '8_invoicing_huid': {
-        status: 'pending',
-      },
-      '9_purchase_invoice': {
-        status: 'pending',
-      },
-      '10_packaging': {
-        status: 'pending',
-      },
-      '11_shipping': {
-        status: 'pending',
-      },
-    },
-    erp_sync: {
-      status: 'success',
-      documentNo: 'HO-EORD-09-26-00139',
-      syncedAt: '2026-11-20T12:05:00Z',
-    },
-    timeline_logs: [
-      { action: 'order_created', timestamp: '2026-11-20T10:15:30Z', user: 'System' },
-      { action: 'sent_to_cad', timestamp: '2026-11-20T10:30:00Z', user: 'sales_admin' },
-      { action: 'cad_approved', timestamp: '2026-11-20T12:00:00Z', user: 'cad_user' },
-      { action: 'erp_pushed', timestamp: '2026-11-20T12:05:00Z', user: 'erp_gateway' },
-      { action: 'management_approved', timestamp: '2026-11-20T12:45:00Z', user: 'yogi_mgmt' },
-      { action: 'po_created', timestamp: '2026-11-20T14:10:00Z', user: 'procurement_lead' },
-      { action: 'vendor_in_production', timestamp: '2026-11-21T08:00:12Z', user: 'Jewel Craft Ltd' },
-    ],
-  },
-  {
-    id: 143,
-    order_id: '58392104922',
-    order_number: 'BO1-26-0002',
-    po_number: 'HO-PO-09-26-00015',
-    erp_document_no: 'HO-EORD-09-26-00140',
-    channel: 'pos',
-    source_name: 'borivali_store',
-    current_step: 'inward_qc',
-    status: 'pending',
-    priority: 'high',
-    assigned_to: 'qc_team',
-    total_amount: 88500.0,
-    payment_mode: 'Partially Paid',
-    cancelled_at: null,
-    created_at: '2026-11-18T11:20:00.000Z',
-    updated_at: '2026-11-22T09:30:00.000Z',
-    customer: {
-      name: 'Rohan Mehta',
-      phone: '+91 9820011223',
-      email: 'rohan.mehta@example.com',
-    },
-    shipping_address: {
-      address1: 'Shop 4, SV Road, Borivali West',
-      city: 'Mumbai',
-      province: 'Maharashtra',
-      zip: '400092',
-      country: 'India',
-    },
-    billing_address: {
-      address1: 'Shop 4, SV Road, Borivali West',
-      city: 'Mumbai',
-      province: 'Maharashtra',
-      zip: '400092',
-      country: 'India',
-    },
-    items: [
-      {
-        title: 'Floral Tennis Bracelet',
-        sku: 'LJ-BRAC-771',
-        quantity: 1,
-        price: 88500.0,
-        properties: [{ name: 'Length', value: '7 inch' }, { name: 'Metal', value: '18KT Yellow Gold' }],
-      },
-    ],
-    financials: {
-      subtotal: 88500.0,
-      tax: 2655.0,
-      total: 91155.0,
-    },
-    stages: {
-      '1_sales_review': { status: 'approved', reviewedBy: 'borivali_manager', reviewedAt: '2026-11-18T12:00:00Z' },
-      '2_cad_team': {
-        status: 'approved',
-        cadVersions: 2,
-        designCode: 'LJ-BRAC-771',
-        goldWeight: '8.45',
-        diamondWeight: '1.20',
-        diamondPieces: 48,
-        pushedAt: '2026-11-19T10:00:00Z',
-      },
-      '3_yogi_action': { status: 'approved', actionAt: '2026-11-19T11:00:00Z' },
-      '4_po_fulfillment': {
-        status: 'completed',
-        poNumber: 'HO-PO-09-26-00015',
-        vendor: 'Arihant Jewels',
-        poDate: '2026-11-19',
-        deliveryDate: '2026-11-22',
-      },
-      '5_vendor_ops': {
-        status: 'completed',
-        vendorName: 'Arihant Jewels',
-        expectedDeliveryDate: '2026-11-22',
-        completedAt: '2026-11-22T09:00:00Z',
-      },
-      '6_inward_qc': {
-        status: 'in_progress',
-        inspector: 'Dinesh QC',
-        receivedWeight: '8.44',
-        prongInspection: 'Passed',
-        polishCheck: 'In Progress',
-      },
-      '7_certificate_team': { status: 'pending' },
-      '8_invoicing_huid': { status: 'pending' },
-      '9_purchase_invoice': { status: 'pending' },
-      '10_packaging': { status: 'pending' },
-      '11_shipping': { status: 'pending' },
-    },
-    erp_sync: {
-      status: 'success',
-      documentNo: 'HO-EORD-09-26-00140',
-      syncedAt: '2026-11-19T10:15:00Z',
-    },
-    timeline_logs: [
-      { action: 'order_created', timestamp: '2026-11-18T11:20:00Z', user: 'borivali_cashier' },
-      { action: 'cad_completed', timestamp: '2026-11-19T10:00:00Z', user: 'cad_team' },
-      { action: 'vendor_dispatched', timestamp: '2026-11-22T08:30:00Z', user: 'Arihant Jewels' },
-      { action: 'received_at_qc', timestamp: '2026-11-22T09:30:00Z', user: 'Dinesh QC' },
-    ],
-  },
-  {
-    id: 144,
-    order_id: '58392104923',
-    order_number: 'DEL-26-0019',
-    po_number: 'HO-PO-09-26-00016',
-    erp_document_no: 'HO-EORD-09-26-00141',
-    channel: 'pos',
-    source_name: 'lajpat_store',
-    current_step: 'certificate_team',
-    status: 'pending',
-    priority: 'normal',
-    assigned_to: 'lab_cert_team',
-    total_amount: 125000.0,
-    payment_mode: 'Full Advance',
-    cancelled_at: null,
-    created_at: '2026-11-15T14:00:00.000Z',
-    updated_at: '2026-11-22T14:15:00.000Z',
-    customer: {
-      name: 'Pooja Agarwal',
-      phone: '+91 9811223344',
-      email: 'pooja.agarwal@example.com',
-    },
-    shipping_address: {
-      address1: 'Lajpat Nagar II, Central Market',
-      city: 'New Delhi',
-      province: 'Delhi',
-      zip: '110024',
-      country: 'India',
-    },
-    billing_address: {
-      address1: 'Lajpat Nagar II, Central Market',
-      city: 'New Delhi',
-      province: 'Delhi',
-      zip: '110024',
-      country: 'India',
-    },
-    items: [
-      {
-        title: 'Oval Solitaire Pendant with Chain',
-        sku: 'LJ-PND-505',
-        quantity: 1,
-        price: 125000.0,
-        properties: [{ name: 'Solitaire Size', value: '1.02 ct' }, { name: 'Clarity', value: 'VVS1' }],
-      },
-    ],
-    financials: {
-      subtotal: 125000.0,
-      tax: 3750.0,
-      total: 128750.0,
-    },
-    stages: {
-      '1_sales_review': { status: 'approved', reviewedBy: 'delhi_mgr' },
-      '2_cad_team': {
-        status: 'approved',
-        cadVersions: 1,
-        designCode: 'LJ-PND-505',
-        goldWeight: '3.90',
-        diamondWeight: '1.02',
-        diamondPieces: 1,
-      },
-      '3_yogi_action': { status: 'approved' },
-      '4_po_fulfillment': { status: 'completed', poNumber: 'HO-PO-09-26-00016' },
-      '5_vendor_ops': { status: 'completed', vendorName: 'Shree Sai Crafts' },
-      '6_inward_qc': { status: 'approved', qcPassedAt: '2026-11-21T16:00:00Z', qcScore: '100%' },
-      '7_certificate_team': {
-        status: 'in_progress',
-        lab: 'IGI',
-        certificateNumber: 'IGI-59281920',
-        reportDate: '2026-11-22',
-      },
-      '8_invoicing_huid': { status: 'pending' },
-      '9_purchase_invoice': { status: 'pending' },
-      '10_packaging': { status: 'pending' },
-      '11_shipping': { status: 'pending' },
-    },
-    erp_sync: {
-      status: 'success',
-      documentNo: 'HO-EORD-09-26-00141',
-      syncedAt: '2026-11-16T10:00:00Z',
-    },
-    timeline_logs: [
-      { action: 'qc_passed', timestamp: '2026-11-21T16:00:00Z', user: 'qc_team' },
-      { action: 'dispatched_to_igi_lab', timestamp: '2026-11-22T10:00:00Z', user: 'cert_coordinator' },
-    ],
-  },
-  {
-    id: 145,
-    order_id: '58392104924',
-    order_number: 'BLR-26-0033',
-    po_number: 'HO-PO-09-26-00017',
-    erp_document_no: 'HO-EORD-09-26-00142',
-    channel: 'pos',
-    source_name: 'malleshwaram_store',
-    current_step: 'shipping',
-    status: 'approved',
-    priority: 'urgent',
-    assigned_to: 'logistics_team',
-    total_amount: 67000.0,
-    payment_mode: 'Prepaid',
-    cancelled_at: null,
-    created_at: '2026-11-10T15:00:00.000Z',
-    updated_at: '2026-11-23T08:00:00.000Z',
-    customer: {
-      name: 'Venkatesh Rao',
-      phone: '+91 9845098450',
-      email: 'venkat.rao@example.com',
-    },
-    shipping_address: {
-      address1: 'Sampige Road, 7th Cross, Malleshwaram',
-      city: 'Bangalore',
-      province: 'Karnataka',
-      zip: '560003',
-      country: 'India',
-    },
-    billing_address: {
-      address1: 'Sampige Road, 7th Cross, Malleshwaram',
-      city: 'Bangalore',
-      province: 'Karnataka',
-      zip: '560003',
-      country: 'India',
-    },
-    items: [
-      {
-        title: 'Diamond Stud Earrings 14KT',
-        sku: 'LJ-EAR-108',
-        quantity: 1,
-        price: 67000.0,
-        properties: [{ name: 'Backing', value: 'Screw Back' }],
-      },
-    ],
-    financials: {
-      subtotal: 67000.0,
-      tax: 2010.0,
-      total: 69010.0,
-    },
-    stages: {
-      '1_sales_review': { status: 'approved' },
-      '2_cad_team': { status: 'approved', designCode: 'LJ-EAR-108', goldWeight: '2.10', diamondWeight: '0.50' },
-      '3_yogi_action': { status: 'approved' },
-      '4_po_fulfillment': { status: 'completed', poNumber: 'HO-PO-09-26-00017' },
-      '5_vendor_ops': { status: 'completed' },
-      '6_inward_qc': { status: 'approved' },
-      '7_certificate_team': { status: 'approved', certificateNumber: 'SGL-982173' },
-      '8_invoicing_huid': { status: 'approved', huid: 'HUID-9821038' },
-      '9_purchase_invoice': { status: 'approved', invoiceNo: 'INV-BLR-0091' },
-      '10_packaging': { status: 'approved', packedBy: 'Kavitha Pack', boxBarcode: 'BOX-99120' },
-      '11_shipping': {
-        status: 'in_transit',
-        courier: 'BlueDart Secure Logistics',
-        trackingNumber: 'BD-7719284102',
-        dispatchedAt: '2026-11-23T07:30:00Z',
-        estimatedDelivery: '2026-11-24',
-      },
-    },
-    erp_sync: {
-      status: 'success',
-      documentNo: 'HO-EORD-09-26-00142',
-      syncedAt: '2026-11-10T16:00:00Z',
-    },
-    timeline_logs: [
-      { action: 'packaging_sealed', timestamp: '2026-11-22T17:00:00Z', user: 'Kavitha Pack' },
-      { action: 'handed_over_to_courier', timestamp: '2026-11-23T07:30:00Z', user: 'logistics_hub' },
-    ],
-  },
-  {
-    id: 146,
-    order_id: '58392104925',
-    order_number: 'HYD-26-0051',
-    po_number: 'HO-PO-09-26-00018',
-    erp_document_no: 'HO-EORD-09-26-00143',
-    channel: 'pos',
-    source_name: 'kondapur_store',
-    current_step: 'cad_team',
-    status: 'pending',
-    priority: 'normal',
-    assigned_to: 'cad_designer_3',
-    total_amount: 112000.0,
-    payment_mode: 'Advance 50%',
-    cancelled_at: null,
-    created_at: '2026-11-22T12:00:00.000Z',
-    updated_at: '2026-11-23T10:00:00.000Z',
-    customer: {
-      name: 'Sneha Reddy',
-      phone: '+91 9988776655',
-      email: 'sneha.reddy@example.com',
-    },
-    shipping_address: {
-      address1: 'Botanical Garden Road, Kondapur',
-      city: 'Hyderabad',
-      province: 'Telangana',
-      zip: '500084',
-      country: 'India',
-    },
-    billing_address: {
-      address1: 'Botanical Garden Road, Kondapur',
-      city: 'Hyderabad',
-      province: 'Telangana',
-      zip: '500084',
-      country: 'India',
-    },
-    items: [
-      {
-        title: 'Custom Emerald & Diamond Band',
-        sku: 'LJ-CUST-EM-99',
-        quantity: 1,
-        price: 112000.0,
-        properties: [{ name: 'Ring Size', value: '14' }, { name: 'Gemstone', value: 'Zambian Emerald' }],
-      },
-    ],
-    financials: {
-      subtotal: 112000.0,
-      tax: 3360.0,
-      total: 115360.0,
-    },
-    stages: {
-      '1_sales_review': { status: 'approved', reviewedBy: 'kondapur_manager', reviewedAt: '2026-11-22T13:00:00Z' },
-      '2_cad_team': {
-        status: 'in_progress',
-        cadVersions: 1,
-        designCode: 'LJ-CUST-EM-99',
-        goldWeight: '4.80',
-        diamondWeight: '0.45',
-        diamondPieces: 12,
-        notes: 'Customer requested 2D render review before casting',
-      },
-      '3_yogi_action': { status: 'pending' },
-      '4_po_fulfillment': { status: 'pending' },
-      '5_vendor_ops': { status: 'pending' },
-      '6_inward_qc': { status: 'pending' },
-      '7_certificate_team': { status: 'pending' },
-      '8_invoicing_huid': { status: 'pending' },
-      '9_purchase_invoice': { status: 'pending' },
-      '10_packaging': { status: 'pending' },
-      '11_shipping': { status: 'pending' },
-    },
-    erp_sync: {
-      status: 'pending',
-      documentNo: 'HO-EORD-09-26-00143',
-    },
-    timeline_logs: [
-      { action: 'order_created', timestamp: '2026-11-22T12:00:00Z', user: 'kondapur_cashier' },
-      { action: 'cad_draft_assigned', timestamp: '2026-11-22T14:30:00Z', user: 'cad_lead' },
-    ],
-  },
-  {
-    id: 147,
-    order_id: '58392104926',
-    order_number: 'PUN-26-0012',
-    po_number: 'HO-PO-09-26-00019',
-    erp_document_no: 'HO-EORD-09-26-00144',
-    channel: 'pos',
-    source_name: 'pune_store',
-    current_step: 'sales_review',
-    status: 'pending',
-    priority: 'normal',
-    assigned_to: 'sales_team',
-    total_amount: 32000.0,
-    payment_mode: 'Prepaid',
-    cancelled_at: null,
-    created_at: '2026-11-23T11:00:00.000Z',
-    updated_at: '2026-11-23T11:15:00.000Z',
-    customer: {
-      name: 'Aditya Kulkarni',
-      phone: '+91 9765432109',
-      email: 'aditya.k@example.com',
-    },
-    shipping_address: {
-      address1: 'FC Road, Shivaji Nagar',
-      city: 'Pune',
-      province: 'Maharashtra',
-      zip: '411005',
-      country: 'India',
-    },
-    billing_address: {
-      address1: 'FC Road, Shivaji Nagar',
-      city: 'Pune',
-      province: 'Maharashtra',
-      zip: '411005',
-      country: 'India',
-    },
-    items: [
-      {
-        title: 'Classic Rose Gold Pendant',
-        sku: 'LJ-PND-102',
-        quantity: 1,
-        price: 32000.0,
-      },
-    ],
-    financials: {
-      subtotal: 32000.0,
-      tax: 960.0,
-      total: 32960.0,
-    },
-    stages: {
-      '1_sales_review': { status: 'in_progress', assignedTo: 'sales_agent' },
-      '2_cad_team': { status: 'pending' },
-      '3_yogi_action': { status: 'pending' },
-      '4_po_fulfillment': { status: 'pending' },
-      '5_vendor_ops': { status: 'pending' },
-      '6_inward_qc': { status: 'pending' },
-      '7_certificate_team': { status: 'pending' },
-      '8_invoicing_huid': { status: 'pending' },
-      '9_purchase_invoice': { status: 'pending' },
-      '10_packaging': { status: 'pending' },
-      '11_shipping': { status: 'pending' },
-    },
-    erp_sync: {
-      status: 'pending',
-      documentNo: 'HO-EORD-09-26-00144',
-    },
-    timeline_logs: [
-      { action: 'order_placed', timestamp: '2026-11-23T11:00:00Z', user: 'pune_cashier' },
-    ],
-  },
+const STAGE_SOURCES = [
+  ['1_sales_review', 'salesReview'],
+  ['2_cad_team', 'cadTeam'],
+  ['3_yogi_action', 'yogiAction'],
+  ['4_po_fulfillment', 'poFulfillment'],
+  ['5_vendor_ops', 'vendorOps'],
+  ['6_inward_qc', 'inwardQc'],
+  ['7_certificate_team', 'certificateTeam'],
+  ['8_invoicing_huid', 'invoicingHuid'],
+  ['10_packaging', 'packaging'],
+  ['11_shipping', 'shipping'],
 ];
 
-/**
- * Filter and paginate in-memory workflow orders.
- */
-function queryBaselineOrders(params = {}) {
-  const {
-    search = '',
-    query = '',
-    order_number = '',
-    po_number = '',
-    document_no = '',
-    step = 'all',
-    status = '',
-    from_date = '',
-    to_date = '',
-    limit = 50,
-    offset = 0,
-  } = params;
+const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const contains = (s) => ({ $regex: escapeRegex(s), $options: 'i' });
 
-  const rawSearch = (search || query || '').trim().toLowerCase();
-  const normalizedStep = (step || 'all').trim().toLowerCase();
-  const normalizedStatus = (status || '').trim().toLowerCase();
-  const normalizedOrderNo = (order_number || '').trim().toLowerCase();
-  const normalizedPoNo = (po_number || '').trim().toLowerCase();
-  const normalizedDocNo = (document_no || '').trim().toLowerCase();
+function compact(obj) {
+  if (!obj || typeof obj !== 'object') return null;
+  const out = Object.fromEntries(
+    Object.entries(obj).filter(([, v]) => v != null && v !== '' && !(Array.isArray(v) && v.length === 0)),
+  );
+  return Object.keys(out).length ? out : null;
+}
 
-  const maxLimit = Math.min(Math.max(Number(limit) || 50, 1), 250);
-  const skipOffset = Math.max(Number(offset) || 0, 0);
-
-  let filtered = BASELINE_WORKFLOW_ORDERS.filter((order) => {
-    // 1. Unified Search: Order #, PO #, ERP Doc #, customer name, phone, item sku/title
-    if (rawSearch) {
-      const matchOrderNo = order.order_number?.toLowerCase().includes(rawSearch);
-      const matchPoNo = order.po_number?.toLowerCase().includes(rawSearch);
-      const matchDocNo = order.erp_document_no?.toLowerCase().includes(rawSearch);
-      const matchCustName = order.customer?.name?.toLowerCase().includes(rawSearch);
-      const matchCustPhone = order.customer?.phone?.replace(/\s+/g, '').includes(rawSearch.replace(/\s+/g, ''));
-      const matchItem = order.items?.some(
-        (it) => it.sku?.toLowerCase().includes(rawSearch) || it.title?.toLowerCase().includes(rawSearch)
-      );
-
-      if (!matchOrderNo && !matchPoNo && !matchDocNo && !matchCustName && !matchCustPhone && !matchItem) {
-        return false;
-      }
-    }
-
-    // 2. Exact/Specific Filters
-    if (normalizedOrderNo && !order.order_number?.toLowerCase().includes(normalizedOrderNo)) {
-      return false;
-    }
-    if (normalizedPoNo && !order.po_number?.toLowerCase().includes(normalizedPoNo)) {
-      return false;
-    }
-    if (normalizedDocNo && !order.erp_document_no?.toLowerCase().includes(normalizedDocNo)) {
-      return false;
-    }
-
-    // 3. Step filter
-    if (normalizedStep && normalizedStep !== 'all') {
-      const current = (order.current_step || '').toLowerCase();
-      // Handle vendor_ops vs vendor_assignment synonym
-      const isVendorMatch =
-        (normalizedStep === 'vendor_ops' || normalizedStep === 'vendor_assignment') &&
-        (current === 'vendor_ops' || current === 'vendor_assignment');
-
-      if (current !== normalizedStep && !isVendorMatch) {
-        return false;
-      }
-    }
-
-    // 4. Status filter
-    if (normalizedStatus && normalizedStatus !== 'all') {
-      if (order.status?.toLowerCase() !== normalizedStatus) {
-        return false;
-      }
-    }
-
-    // 5. Date filter
-    if (from_date) {
-      const orderDate = order.created_at?.slice(0, 10);
-      if (orderDate && orderDate < from_date) return false;
-    }
-    if (to_date) {
-      const orderDate = order.created_at?.slice(0, 10);
-      if (orderDate && orderDate > to_date) return false;
-    }
-
-    return true;
-  });
-
-  const total = filtered.length;
-  const paged = filtered.slice(skipOffset, skipOffset + maxLimit);
+function toApiOrder(d) {
+  const ship = d.shippingAddress ?? {};
+  const fin = d.financials ?? {};
+  const erpDocumentNo = d.documentNo || d.stockAllocation?.documentNo || null;
+  const stages = Object.fromEntries(
+    STAGE_SOURCES.map(([key, field]) => [key, compact(d[field])]).filter(([, v]) => v),
+  );
+  if (d.stockAllocation) stages.stock_allocation = compact(d.stockAllocation);
 
   return {
-    success: true,
-    meta: {
-      total,
-      limit: maxLimit,
-      offset: skipOffset,
-      returned: paged.length,
-      requested_by: 'https://pos.lucirajewelry.com/',
+    id: String(d._id),
+    order_id: d.orderId != null ? String(d.orderId) : null,
+    order_number: d.orderNumber ?? null,
+    po_number: d.poFulfillment?.poNumber || null,
+    erp_document_no: erpDocumentNo,
+    channel: d.channel ?? null,
+    source_name: d.sourceName || null,
+    current_step: d.currentStep ?? null,
+    status: d.status ?? null,
+    priority: d.priority ?? 'normal',
+    assigned_to: d.assignedTo || null,
+    total_amount: d.totalAmount ?? fin.totalPrice ?? 0,
+    payment_mode: d.paymentMode ?? null,
+    narration: d.narration || null,
+    created_at: d.createdAt ?? null,
+    updated_at: d.updatedAt ?? null,
+    customer: {
+      name: d.customer?.name || [d.customer?.firstName, d.customer?.lastName].filter(Boolean).join(' ') || null,
+      phone: d.customer?.phone || null,
+      email: d.customer?.email || null,
     },
-    data: paged,
+    shipping_address: d.shippingAddress
+      ? {
+        address1: [ship.address1, ship.address2].filter(Boolean).join(', ') || d.customer?.address || null,
+        city: ship.city || d.customer?.city || null,
+        province: ship.province || ship.state || d.customer?.state || null,
+        zip: ship.zip || ship.pincode || d.customer?.pincode || null,
+        country: ship.country || null,
+      }
+      : null,
+    items: (d.items ?? []).map((it) => ({
+      title: it.title ?? null,
+      sku: it.sku ?? null,
+      quantity: it.quantity ?? 1,
+      price: it.price ?? 0,
+      image_url: it.imageUrl || null,
+      variant_title: it.variantTitle || null,
+      properties: it.properties ?? [],
+    })),
+    financials: {
+      subtotal: fin.subtotalPrice ?? null,
+      discounts: fin.totalDiscounts ?? null,
+      total: fin.totalPrice ?? d.totalAmount ?? null,
+      paid: fin.paidAmount ?? null,
+      outstanding: fin.totalOutstanding ?? null,
+      financial_status: fin.financialStatus ?? null,
+    },
+    erp_sync: d.erpSync
+      ? { status: d.erpSync.status, syncedAt: d.erpSync.syncedAt ?? null, documentNo: erpDocumentNo, error: d.erpSync.errorMessage ?? null }
+      : null,
+    stages,
+    timeline_logs: (d.logs ?? [])
+      .map((l) => ({ step: l.step, action: l.action, timestamp: l.timestamp, user: l.performedBy || null, role: l.role || null, notes: l.notes || null }))
+      .reverse(),
   };
 }
 
-/**
- * Fetch workflow orders.
- * Attempts upstream call to backend if configured; gracefully falls back to baseline dataset
- * so the system is 100% resilient and functional in local dev and production.
- */
+/** Workflow orders that belong to one of these store codes (by OrnaVerse doc no. or ticket order no.). */
+function storeFilter(codes) {
+  const or = [];
+  for (const code of codes) {
+    const safe = escapeRegex(code);
+    or.push(
+      { documentNo: { $regex: `^${safe}-`, $options: 'i' } },
+      { 'stockAllocation.documentNo': { $regex: `^${safe}-`, $options: 'i' } },
+      { orderNumber: { $regex: `^#ORD-${safe}-`, $options: 'i' } },
+    );
+  }
+  return { $or: or };
+}
+
+function buildFilter(params, { ignoreStep = false } = {}) {
+  const and = [];
+  if (Array.isArray(params.store_codes)) {
+    if (!params.store_codes.length) return { _id: null };
+    and.push(storeFilter(params.store_codes));
+  }
+  const search = String(params.search || params.query || '').trim();
+  if (search) {
+    const digits = search.replace(/\D/g, '');
+    const or = [
+      { orderNumber: contains(search) },
+      { 'poFulfillment.poNumber': contains(search) },
+      { documentNo: contains(search) },
+      { 'stockAllocation.documentNo': contains(search) },
+      { 'customer.name': contains(search) },
+      { 'items.sku': contains(search) },
+      { 'items.title': contains(search) },
+    ];
+    if (digits.length >= 4) or.push({ 'customer.phone': contains(digits.slice(-10)) });
+    and.push({ $or: or });
+  }
+  if (params.order_number) and.push({ orderNumber: contains(String(params.order_number).trim()) });
+  if (params.po_number) and.push({ 'poFulfillment.poNumber': contains(String(params.po_number).trim()) });
+  if (params.document_no) {
+    const doc = contains(String(params.document_no).trim());
+    and.push({ $or: [{ documentNo: doc }, { 'stockAllocation.documentNo': doc }] });
+  }
+
+  const step = String(params.step || 'all').trim().toLowerCase();
+  if (!ignoreStep && step && step !== 'all') {
+    and.push({ currentStep: step === 'vendor_ops' || step === 'vendor_assignment' ? { $in: ['vendor_ops', 'vendor_assignment'] } : step });
+  }
+  const status = String(params.status || '').trim().toLowerCase();
+  if (status && status !== 'all') and.push({ status });
+
+  const created = {};
+  if (/^\d{4}-\d{2}-\d{2}$/.test(params.from_date || '')) created.$gte = new Date(`${params.from_date}T00:00:00+05:30`);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(params.to_date || '')) created.$lte = new Date(`${params.to_date}T23:59:59.999+05:30`);
+  if (Object.keys(created).length) and.push({ createdAt: created });
+
+  return and.length ? { $and: and } : {};
+}
+
 export async function getWorkflowOrders(params = {}) {
-  const queryParams = new URLSearchParams();
-  for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined && value !== null && value !== '') {
-      queryParams.set(key, String(value));
-    }
+  const limit = Math.min(Math.max(Number(params.limit) || 50, 1), MAX_LIMIT);
+  const offset = Math.max(Number(params.offset) || 0, 0);
+  const filter = buildFilter(params);
+
+  const col = (await getWebsiteDb()).collection(COLLECTION);
+  const [docs, total, stageRows] = await Promise.all([
+    col.find(filter, { projection: { 'erpSync.rawResponse': 0 } })
+      .sort({ createdAt: -1, _id: -1 })
+      .skip(offset)
+      .limit(limit)
+      .toArray(),
+    col.countDocuments(filter),
+    col.aggregate([
+      { $match: buildFilter(params, { ignoreStep: true }) },
+      { $group: { _id: '$currentStep', n: { $sum: 1 } } },
+    ]).toArray(),
+  ]);
+  const stage_counts = Object.fromEntries(stageRows.filter((r) => r._id).map((r) => [r._id, r.n]));
+
+  return {
+    success: true,
+    meta: { total, limit, offset, returned: docs.length, stage_counts },
+    data: docs.map(toApiOrder),
+  };
+}
+
+/** The workflow panel's current stage for a ticket's order (matched by the panel order no., then the POS order no.), or null. */
+export async function getWorkflowStatusForTicket(ticket) {
+  const orderNumbers = [ticket.order_number, ticket.orderNumber].filter(Boolean);
+  const posDoc = ticket.pos_order?.document_no;
+  if (!orderNumbers.length && !posDoc) return null;
+
+  const or = [];
+  if (orderNumbers.length) or.push({ orderNumber: { $in: orderNumbers } });
+  if (posDoc) or.push({ documentNo: posDoc }, { 'stockAllocation.documentNo': posDoc });
+
+  const doc = await (await getWebsiteDb()).collection(COLLECTION).findOne(
+    { $or: or },
+    { sort: { updatedAt: -1 }, projection: { orderNumber: 1, currentStep: 1, status: 1, updatedAt: 1 } },
+  );
+  return doc
+    ? { order_number: doc.orderNumber ?? null, current_step: doc.currentStep ?? null, status: doc.status ?? null, updated_at: doc.updatedAt ?? null }
+    : null;
+}
+
+const byDocumentFilter = (docNos) => ({
+  $or: [{ documentNo: { $in: docNos } }, { 'stockAllocation.documentNo': { $in: docNos } }],
+});
+
+/** Current stage per OrnaVerse order no. — { [documentNo]: { order_number, current_step, status, updated_at } }. */
+export async function getWorkflowStatusesByDocumentNos(docNos) {
+  if (!docNos.length) return {};
+  const docs = await (await getWebsiteDb()).collection(COLLECTION)
+    .find(byDocumentFilter(docNos), { projection: { orderNumber: 1, documentNo: 1, 'stockAllocation.documentNo': 1, currentStep: 1, status: 1, updatedAt: 1 } })
+    .sort({ updatedAt: 1 })
+    .toArray();
+  const wanted = new Set(docNos);
+  const out = {};
+  for (const d of docs) {
+    const status = { order_number: d.orderNumber ?? null, current_step: d.currentStep ?? null, status: d.status ?? null, updated_at: d.updatedAt ?? null };
+    for (const no of [d.documentNo, d.stockAllocation?.documentNo]) if (no && wanted.has(no)) out[no] = status;
   }
+  return out;
+}
 
-  const upstreamUrl = `${DEFAULT_BASE_URL.replace(/\/+$/, '')}/api/pos/workflow-orders?${queryParams.toString()}`;
-
-  // Only attempt upstream if not pointing to localhost or itself
-  const isUpstreamRemote =
-    DEFAULT_BASE_URL &&
-    !DEFAULT_BASE_URL.includes('localhost') &&
-    !DEFAULT_BASE_URL.includes('127.0.0.1');
-
-  if (isUpstreamRemote) {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3500);
-
-      const res = await fetch(upstreamUrl, {
-        method: 'GET',
-        headers: {
-          'x-api-key': API_KEY,
-          'Content-Type': 'application/json',
-        },
-        cache: 'no-store',
-        signal: controller.signal,
-      });
-      clearTimeout(timeoutId);
-
-      if (res.ok) {
-        const json = await res.json();
-        if (json && json.success) {
-          return json;
-        }
-      }
-    } catch {
-      // Upstream failed or network offline — fall through to baseline dataset
-    }
-  }
-
-  // Fallback to baseline dataset
-  return queryBaselineOrders(params);
+/** The full workflow order (POS API shape) for one OrnaVerse order no., or null. */
+export async function getWorkflowOrderByDocumentNo(docNo) {
+  const doc = await (await getWebsiteDb()).collection(COLLECTION)
+    .findOne(byDocumentFilter([docNo]), { sort: { updatedAt: -1 }, projection: { 'erpSync.rawResponse': 0 } });
+  return doc ? toApiOrder(doc) : null;
 }

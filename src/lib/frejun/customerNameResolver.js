@@ -1,6 +1,6 @@
 // src/lib/frejun/customerNameResolver.js
 // SERVER-ONLY. Resolves customer/lead names for phone numbers from:
-// 1. In-memory LRU cache
+// 1. In-memory cache (TTL + size cap)
 // 2. POS MongoDB (buyerPurchases_POS, walkins_POS)
 // 3. Zoho CRM Leads API
 
@@ -9,7 +9,17 @@ import { getZohoAccessToken } from '@/lib/zoho/zohoCrmService';
 
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
 
+const CACHE_MAX_ENTRIES = 5000;
+
 globalThis.__frejunCustomerNameCache = globalThis.__frejunCustomerNameCache || new Map();
+
+function cacheSet(cache, key, value) {
+  cache.delete(key);
+  cache.set(key, value);
+  while (cache.size > CACHE_MAX_ENTRIES) {
+    cache.delete(cache.keys().next().value);
+  }
+}
 
 function cleanName(raw) {
   if (!raw) return null;
@@ -55,6 +65,7 @@ export async function enrichCallsWithCustomerNames(calls = []) {
     if (!digits10) return;
 
     const cached = cache.get(digits10);
+    if (cached && cached.expiresAt <= now) cache.delete(digits10);
     if (cached && cached.expiresAt > now) {
       if (cached.name) {
         call.candidate_name = cached.name;
@@ -93,7 +104,7 @@ export async function enrichCallsWithCustomerNames(calls = []) {
       const d = extract10Digits(b.customerMobile);
       const name = cleanName(b.customerName);
       if (d && name) {
-        cache.set(d, { name, expiresAt: now + CACHE_TTL_MS });
+        cacheSet(cache, d, { name, expiresAt: now + CACHE_TTL_MS });
         const indices = missingByDigits.get(d) || [];
         indices.forEach((i) => {
           calls[i].candidate_name = name;
@@ -106,7 +117,7 @@ export async function enrichCallsWithCustomerNames(calls = []) {
       const d = extract10Digits(w.mobile);
       const name = cleanName(w.customerName);
       if (d && name) {
-        cache.set(d, { name, expiresAt: now + CACHE_TTL_MS });
+        cacheSet(cache, d, { name, expiresAt: now + CACHE_TTL_MS });
         const indices = missingByDigits.get(d) || [];
         indices.forEach((i) => {
           calls[i].candidate_name = name;
@@ -147,7 +158,7 @@ export async function enrichCallsWithCustomerNames(calls = []) {
                 const rawName = lead?.Full_Name || lead?.First_Name || '';
                 const name = cleanName(rawName);
                 if (name) {
-                  cache.set(phone, { name, expiresAt: now + CACHE_TTL_MS });
+                  cacheSet(cache, phone, { name, expiresAt: now + CACHE_TTL_MS });
                   const indices = missingByDigits.get(phone) || [];
                   indices.forEach((idx) => {
                     calls[idx].candidate_name = name;
@@ -156,7 +167,7 @@ export async function enrichCallsWithCustomerNames(calls = []) {
                 }
               }
               // Negative cache for 15 mins to avoid hitting Zoho repeatedly
-              cache.set(phone, { name: null, expiresAt: now + 15 * 60 * 1000 });
+              cacheSet(cache, phone, { name: null, expiresAt: now + 15 * 60 * 1000 });
             } catch {
               // Ignore single phone lookup failure
             }

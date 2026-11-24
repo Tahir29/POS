@@ -1,58 +1,60 @@
 // src/app/api/pos/workflow-orders/route.js
 import { getSessionFromRequest } from '@/lib/ornaverse/session';
 import { getWorkflowOrders } from '@/lib/workflow/workflowOrdersClient';
+import { getWorkflowStoreCodes, effectiveStoreCodes } from '@/lib/workflow/access';
 
 export const dynamic = 'force-dynamic';
 
-const EXPECTED_API_KEY = process.env.WORKFLOW_ORDERS_API_KEY || 'pos_sec_live_9f81a742c03b';
+const EXPECTED_API_KEY = process.env.WORKFLOW_ORDERS_API_KEY;
+const ALLOWED_ORIGINS = (process.env.WORKFLOW_ORDERS_ALLOWED_ORIGINS || '')
+  .split(',')
+  .map((o) => o.trim())
+  .filter(Boolean);
 
-function getCorsHeaders() {
+function getCorsHeaders(origin = '') {
+  if (!origin || !ALLOWED_ORIGINS.includes(origin)) return { Vary: 'Origin' };
   return {
-    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Origin': origin,
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, x-api-key, Authorization',
+    Vary: 'Origin',
   };
 }
 
 /**
- * Validates request authentication:
- * 1. Checks x-api-key header
- * 2. Checks Authorization Bearer header
- * 3. Falls back to active POS session cookie
+ * Who is asking: an outside system with the API key (every store), or a POS login (limited to its own
+ * store unless it is a super admin). Returns null when neither.
  */
 async function authenticateRequest(request) {
   const apiKeyHeader = request.headers.get('x-api-key');
-  if (apiKeyHeader && apiKeyHeader === EXPECTED_API_KEY) {
-    return true;
+  const authHeader = request.headers.get('authorization') || '';
+  const [scheme, token] = authHeader.split(' ');
+  if (EXPECTED_API_KEY && (apiKeyHeader === EXPECTED_API_KEY || (scheme?.toLowerCase() === 'bearer' && token === EXPECTED_API_KEY))) {
+    return { allowedCodes: null };
   }
 
-  const authHeader = request.headers.get('authorization');
-  if (authHeader) {
-    const parts = authHeader.split(' ');
-    if (parts.length === 2 && parts[0].toLowerCase() === 'bearer' && parts[1] === EXPECTED_API_KEY) {
-      return true;
-    }
-  }
-
-  // Also allow active cashier session from POS frontend
   const session = await getSessionFromRequest(request);
-  if (session) {
-    return true;
-  }
-
-  return false;
+  if (!session) return null;
+  return { allowedCodes: await getWorkflowStoreCodes(session) };
 }
 
-export async function OPTIONS() {
+export async function OPTIONS(request) {
   return new Response(null, {
     status: 204,
-    headers: getCorsHeaders(),
+    headers: getCorsHeaders(request.headers.get('origin') || ''),
   });
 }
 
 export async function GET(request) {
-  const isAuth = await authenticateRequest(request);
-  if (!isAuth) {
+  const origin = request.headers.get('origin') || '';
+  let auth;
+  try {
+    auth = await authenticateRequest(request);
+  } catch (err) {
+    console.error('[api/pos/workflow-orders] store access check failed', err);
+    return Response.json({ success: false, error: 'Could not verify store access.' }, { status: 502, headers: getCorsHeaders(origin) });
+  }
+  if (!auth) {
     return Response.json(
       {
         success: false,
@@ -60,7 +62,7 @@ export async function GET(request) {
       },
       {
         status: 401,
-        headers: getCorsHeaders(),
+        headers: getCorsHeaders(origin),
       }
     );
   }
@@ -81,6 +83,8 @@ export async function GET(request) {
       limit: searchParams.get('limit') ? Number(searchParams.get('limit')) : 50,
       offset: searchParams.get('offset') ? Number(searchParams.get('offset')) : 0,
     };
+    const storeCodes = effectiveStoreCodes(auth.allowedCodes, searchParams.get('store'));
+    if (storeCodes) params.store_codes = storeCodes;
 
     const result = await getWorkflowOrders(params);
 
@@ -88,7 +92,7 @@ export async function GET(request) {
       status: 200,
       headers: {
         'Content-Type': 'application/json',
-        ...getCorsHeaders(),
+        ...getCorsHeaders(origin),
       },
     });
   } catch (error) {
@@ -99,7 +103,7 @@ export async function GET(request) {
       },
       {
         status: 500,
-        headers: getCorsHeaders(),
+        headers: getCorsHeaders(origin),
       }
     );
   }

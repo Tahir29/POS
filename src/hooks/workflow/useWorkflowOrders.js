@@ -14,6 +14,7 @@ export function useWorkflowOrders(params = {}, { enabled = true } = {}) {
     status = '',
     from_date = '',
     to_date = '',
+    store = '',
     page = 1,
     pageSize = 50,
   } = params;
@@ -30,6 +31,7 @@ export function useWorkflowOrders(params = {}, { enabled = true } = {}) {
     status: (status || '').trim(),
     from_date: (from_date || '').trim(),
     to_date: (to_date || '').trim(),
+    store: (store || '').trim(),
     limit,
     offset,
   };
@@ -39,6 +41,7 @@ export function useWorkflowOrders(params = {}, { enabled = true } = {}) {
     queryFn: () => fetchWorkflowOrders(queryParams),
     enabled,
     staleTime: 30 * 1000,
+    refetchInterval: 60 * 1000,
     placeholderData: (previousData) => previousData,
   });
 
@@ -64,5 +67,6 @@ export function useWorkflowOrders(params = {}, { enabled = true } = {}) {
     isFetching: queryResult.isFetching,
     error: queryResult.error,
     refetch: queryResult.refetch,
+    updatedAt: queryResult.dataUpdatedAt,
   };
 }

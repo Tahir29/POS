@@ -49,3 +49,17 @@ export async function getFrejunAnalytics(params = {}) {
   const json = await res.json();
   return json?.data ?? [];
 }
+
+/**
+ * Per-agent call totals for one store from /api/frejun/agents
+ */
+export async function getFrejunAgents(params = {}) {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && value !== '' && value !== 'all') query.set(key, String(value));
+  }
+  const res = await fetch(`/api/frejun/agents?${query.toString()}`, { headers: { 'Content-Type': 'application/json' } });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error || `Failed to load the agent overview (${res.status})`);
+  return json.data;
+}

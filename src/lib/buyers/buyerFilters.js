@@ -55,10 +55,9 @@ export function daysSince(date, now = Date.now()) {
 export function applyBuyerFilters(buyers, { recency = 'all', frequency = 'all', sort = 'coins_desc', coinsMap = null, now = Date.now() } = {}) {
   const rows = buyers
     .map((b) => {
-      const coins = coinsMap ? (coinsMap.get(b._id) ?? 0) : (b.luciraPoints ?? 0);
       return {
         ...b,
-        luciraPoints: coins,
+        luciraPoints: coinsMap?.get(Number(b._id)) ?? b.luciraPoints,
         daysSinceLastPurchase: daysSince(b.lastPurchaseDate, now),
       };
     })
@@ -67,8 +66,8 @@ export function applyBuyerFilters(buyers, { recency = 'all', frequency = 'all', 
 
   if (sort === 'coins_desc') {
     return rows.sort((a, b) => {
-      const aCoins = a.luciraPoints ?? 0;
-      const bCoins = b.luciraPoints ?? 0;
+      const aCoins = a.luciraPoints ?? -1;
+      const bCoins = b.luciraPoints ?? -1;
       if (bCoins !== aCoins) return bCoins - aCoins;
       return b.totalSpend - a.totalSpend;
     });

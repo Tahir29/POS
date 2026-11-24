@@ -323,10 +323,13 @@ export const QUERY_KEYS = {
   FREJUN: {
     CALLS:     (params) => ['frejun', 'calls', params],
     ANALYTICS: (params) => ['frejun', 'analytics', params],
+    AGENTS:    (params) => ['frejun', 'agents', params],
   },
 
   WORKFLOW_ORDERS: {
     LIST: (params) => ['workflow-orders', 'list', params],
     DETAIL: (id) => ['workflow-orders', 'detail', id],
+    STATUSES: (docNos) => ['workflow-orders', 'statuses', docNos],
+    BY_DOCUMENT: (docNo) => ['workflow-orders', 'by-document', docNo],
   },
 };

@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { getFrejunAnalytics } from '@/services/frejunService';
 import { QUERY_KEYS } from '@/constants/queryKeys';
 
-export function useFrejunAnalytics(params = {}, { enabled = true } = {}) {
+export function useFrejunAnalytics(params = {}, { enabled = true, refetchInterval = false } = {}) {
   const {
     dateStart = '',
     dateEnd = '',
@@ -20,7 +20,8 @@ export function useFrejunAnalytics(params = {}, { enabled = true } = {}) {
     queryKey: QUERY_KEYS.FREJUN.ANALYTICS(queryParams),
     queryFn: () => getFrejunAnalytics(queryParams),
     enabled,
-    staleTime: 60 * 1000, // 1 min
+    staleTime: 30 * 1000,
+    refetchInterval,
   });
 
   const analytics = query.data ?? [];
@@ -32,5 +33,6 @@ export function useFrejunAnalytics(params = {}, { enabled = true } = {}) {
     isError: query.isError,
     error: query.error,
     refetch: query.refetch,
+    updatedAt: query.dataUpdatedAt,
   };
 }

@@ -87,8 +87,8 @@ export default function LapsedBuyersCard() {
     return [...lapsedBuyers].sort((a, b) => {
       const partyIdA = Number(a._id);
       const partyIdB = Number(b._id);
-      const coinsA = coinsMap.get(partyIdA) ?? coinsMap.get(a._id) ?? 0;
-      const coinsB = coinsMap.get(partyIdB) ?? coinsMap.get(b._id) ?? 0;
+      const coinsA = coinsMap.get(partyIdA) ?? -1;
+      const coinsB = coinsMap.get(partyIdB) ?? -1;
       if (coinsB !== coinsA) return coinsB - coinsA;
       return b.totalSpend - a.totalSpend;
     });
@@ -160,7 +160,7 @@ export default function LapsedBuyersCard() {
                     companyId={activeStoreId}
                     partyId={Number(buyer._id)}
                     mobile={buyer.customerMobile}
-                    points={coinsMap.get(Number(buyer._id)) ?? coinsMap.get(buyer._id)}
+                    points={coinsMap.get(Number(buyer._id))}
                   />
                 )}
               </div>

@@ -103,7 +103,7 @@ export default function BuyersPage() {
   const hasActiveFilters = documentTypes.length !== ALL_DOCUMENT_TYPES.length || !!fromDate || !!toDate
     || salesPerson !== ALL_SALES_PERSONS || recency !== 'all' || frequency !== 'all' || sort !== 'coins_desc';
   const trimmedSearch = indianMobileFromQuery(search) ?? search.trim().toLowerCase();
-  const filteredBuyers = useMemo(() => {
+  const searchedBuyers = useMemo(() => {
     // With a sales person chosen: only the customers they sold to, and only their sales to them
     // (that customer's returns/exchanges/buybacks still count as outcomes).
     const selectedKey = salesPerson === ALL_SALES_PERSONS ? null : salesPersonKey(salesPerson);
@@ -129,13 +129,16 @@ export default function BuyersPage() {
       return true;
     });
     const grouped = groupPurchasesByBuyer(matching);
-    const searched = trimmedSearch
+    return trimmedSearch
       ? grouped.filter((b) =>
         b.customerName?.toLowerCase().includes(trimmedSearch)
         || b.customerMobile?.includes(trimmedSearch))
       : grouped;
-    return applyBuyerFilters(searched, { recency, frequency, sort, coinsMap });
-  }, [purchases, documentTypes, fromDate, toDate, trimmedSearch, salesPerson, recency, frequency, sort, coinsMap]);
+  }, [purchases, documentTypes, fromDate, toDate, trimmedSearch, salesPerson]);
+  const filteredBuyers = useMemo(
+    () => applyBuyerFilters(searchedBuyers, { recency, frequency, sort, coinsMap: sort === 'coins_desc' ? coinsMap : null }),
+    [searchedBuyers, recency, frequency, sort, coinsMap],
+  );
   const filterKey = `${documentTypes.join(',')}|${fromDate}|${toDate}|${salesPerson}|${recency}|${frequency}|${sort}|${trimmedSearch}|${purchases.length}`;
   if (pagination.key !== filterKey) {
     setPagination({ key: filterKey, visibleCount: PAGE_SIZE });
