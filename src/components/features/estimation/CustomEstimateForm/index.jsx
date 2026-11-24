@@ -435,6 +435,10 @@ export default function CustomEstimateForm({ onDone, ticket = null }) {
       : [];
     return {
       ...baseRow,
+      karat_id: metalComponent?.karat_id,
+      karat_name: metalComponent?.karat_name,
+      metal_color_id: metalComponent?.metal_color_id,
+      metal_color_name: metalComponent?.metal_color_name,
       weight: weightNum,
       net_weight: weightNum,
       pure_weight: pureWeight,

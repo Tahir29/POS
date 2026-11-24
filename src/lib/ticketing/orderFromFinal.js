@@ -89,6 +89,8 @@ export async function buildOrderFromFinal(final, ticket, lookups, overrides = {}
   };
   const [refRow] = await calculateItemRates([{
     ...selectedItem, weight, net_weight: weight,
+    ...(karatOpt && { karat_id: karatOpt.value, karat_name: karatOpt.label }),
+    ...(colorOpt && { metal_color_id: colorOpt.value, metal_color_name: colorOpt.label }),
     item_components: [{ ...defaultRow.item_components[0], ...metalPatch }],
   }], APP_CONFIG.DOCUMENT_TYPES.POS_ORDER);
   const refMetal = refRow?.item_components?.[0];
@@ -230,6 +232,8 @@ export async function buildOrderFromFinal(final, ticket, lookups, overrides = {}
   const rowTax = taxTemplate.length ? round2(taxAmount / taxTemplate.length) : 0;
   const line = {
     ...(refRow ?? defaultRow),
+    ...(karatOpt && { karat_id: karatOpt.value, karat_name: karatOpt.label }),
+    ...(colorOpt && { metal_color_id: colorOpt.value, metal_color_name: colorOpt.label }),
     weight, net_weight: weight, pure_weight: pureWeight,
     sub_total: subTotal, taxable_amount: subTotal, tax_amount: taxAmount, net_amount: netAmount,
     base_sub_total: subTotal, base_tax_amount: taxAmount, base_net_amount: netAmount,
