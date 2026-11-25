@@ -44,9 +44,6 @@ export default function WorkflowOrderDetailSheet({ order, isOpen, onClose }) {
           <div className="flex flex-wrap items-center gap-2">
             <WorkflowStatusBadge status={order.status} size="md" />
             <WorkflowStageBadge stageKey={order.current_step} className="text-xs" />
-            {order.priority === 'high' && (
-              <span className="rounded-full bg-status-error/10 px-3 py-1 text-xs font-medium text-status-error">High priority</span>
-            )}
           </div>
 
           <div className="flex flex-col gap-2">

@@ -366,13 +366,14 @@ export default function FrejunTelephonyPage() {
     resetPage();
   };
 
+  const handleAgentSelect = (v) => { setSelectedAgent(v); resetPage(); };
   const filterCount = [
     isSuperAdmin && selectedStoreTag !== defaultStore,
-    selectedAgent !== ALL,
     callType !== ALL,
     statusFilter !== ALL,
   ].filter(Boolean).length;
-  const hasFilters = filterCount > 0 || !!inputVal || datePreset !== DEFAULT_PRESET;
+  const hasFilters = filterCount > 0 || !!inputVal || datePreset !== DEFAULT_PRESET || selectedAgent !== ALL;
+  const agentLabel = selectedAgent === ALL ? null : agentOptions.find((o) => o.value === selectedAgent)?.label ?? selectedAgent;
   const dateControlProps = {
     preset: datePreset, fromDate, toDate, onPreset: handlePresetSelect, onCustom: handleCustomDateChange,
   };
@@ -415,13 +416,23 @@ export default function FrejunTelephonyPage() {
         />
         <div className="flex flex-wrap items-center justify-between gap-3">
           <PillTabs tabs={tabs} value={activeTab} onChange={setActiveTab} className="md:max-w-xs" />
-          <div className="hidden md:block">
+          <div className="hidden md:flex flex-wrap items-center justify-end gap-2">
+            <Select value={selectedAgent} onValueChange={handleAgentSelect}>
+              <SelectTrigger className="h-10 w-56" aria-label="Calling agent">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent align="end" className="max-h-72">
+                <SelectItem value={ALL}>All agents</SelectItem>
+                {agentOptions.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
             <DateRangeControls key={`${fromDate}|${toDate}`} {...dateControlProps} compact />
           </div>
         </div>
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
           <p className="text-xs text-muted-foreground">
             {storeLabel} · {dateLabel}
+            {agentLabel && ` · ${agentLabel}`}
             {filterCount > 0 && ` · ${filterCount} filter${filterCount !== 1 ? 's' : ''}`}
             {shownUpdatedAt > 0 && ` · Updated ${new Date(shownUpdatedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`}
             {isLiveRange && ' · live'}
@@ -568,13 +579,9 @@ export default function FrejunTelephonyPage() {
             <DateRangeControls key={`${fromDate}|${toDate}`} {...dateControlProps} />
           </section>
 
-          <FilterSelect
-            label="Calling agent"
-            value={selectedAgent}
-            onChange={(v) => { setSelectedAgent(v); resetPage(); }}
-            options={agentOptions}
-            allLabel="All agents"
-          />
+          <div className="md:hidden">
+            <FilterSelect label="Calling agent" value={selectedAgent} onChange={handleAgentSelect} options={agentOptions} allLabel="All agents" />
+          </div>
           <FilterSelect label="Direction" value={callType} onChange={setCallType} options={DIRECTION_OPTIONS} allLabel="All directions" />
           <FilterSelect label="Status" value={statusFilter} onChange={setStatusFilter} options={STATUS_OPTIONS} allLabel="All statuses" />
         </div>

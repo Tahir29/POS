@@ -29,16 +29,11 @@ export default function WorkflowOrderListItem({ order, onSelect }) {
     <ListItemCard
       onSelect={onSelect}
       header={(
-        <span className="flex items-start justify-between gap-2">
-          <span className="flex min-w-0 flex-col">
-            <span className="break-words">{order.erp_document_no || workflowSourceLabel(order)}</span>
-            <span className="break-words text-xs font-normal text-muted-foreground">
-              {order.erp_document_no ? workflowSourceLabel(order) : 'Not in OrnaVerse yet'}
-            </span>
+        <span className="flex min-w-0 flex-col">
+          <span className="break-words">{order.erp_document_no || workflowSourceLabel(order)}</span>
+          <span className="break-words text-xs font-normal text-muted-foreground">
+            {order.erp_document_no ? workflowSourceLabel(order) : 'Not in OrnaVerse yet'}
           </span>
-          {order.priority === 'high' && (
-            <span className="shrink-0 rounded-full bg-status-error/10 px-2 py-0.5 text-[11px] font-medium text-status-error">High priority</span>
-          )}
         </span>
       )}
       footer={(
