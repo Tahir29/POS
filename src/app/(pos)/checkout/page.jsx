@@ -1,7 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useSelector, useDispatch } from 'react-redux';
 import { ShieldCheck, Package, Receipt, CreditCard, UserCog } from 'lucide-react';
 import ConfirmDialog    from '@/components/shared/ConfirmDialog';
@@ -23,6 +23,7 @@ import { useCustomerSession }         from '@/hooks/customer/useCustomerSession'
 import { useRedirectOnCustomerChange } from '@/hooks/checkout/useRedirectOnCustomerChange';
 import { useCreateInvoice }           from '@/hooks/checkout/useCreateInvoice';
 import { useCreateOrder }             from '@/hooks/checkout/useCreateOrder';
+import { useCreateReserve, reserveBlocker } from '@/hooks/checkout/useCreateReserve';
 import { useCheckoutPricing }         from '@/hooks/checkout/useCheckoutPricing';
 import { buildCartDisplayRows, getPromoBreakdown } from '@/services/checkoutPricingService';
 import { useBackGuard } from '@/contexts/NavigationGuardContext';
@@ -66,7 +67,14 @@ function CheckoutScreen() {
   useCarryOverOrderPromos({ invoice, order, isPricing });
   const doc = invoice ?? order;
   const hasDoc = !!doc;
-  const documentType = invoice ? 'invoice' : 'order';
+  const [saleMode, setSaleMode] = useState(useSearchParams().get('mode') === 'reserve' ? 'reserve' : 'sale');
+  const canReserve = !!invoice && !order;
+  const isReserve = canReserve && saleMode === 'reserve';
+  const documentType = isReserve ? 'reserve' : invoice ? 'invoice' : 'order';
+  const { placeReserve, isPlacingReserve } = useCreateReserve();
+  const reserveIssue = isReserve
+    ? reserveBlocker(invoice?.lineItems, { customerId, hasPromos: appliedPromos.length > 0 })
+    : null;
   const discountBreakdown = getPromoBreakdown(appliedPromos, doc?.promotionDetails ?? []);
 
   const [payments, setPayments] = useState([]);
@@ -84,7 +92,7 @@ function CheckoutScreen() {
   );
 
   const amountCollected = payments.reduce((sum, p) => sum + (p.amount ?? 0), 0);
-  const isSubmitting = isPlacingInvoice || isPlacingOrder;
+  const isSubmitting = isPlacingInvoice || isPlacingOrder || isPlacingReserve;
   const payableTotal = doc?.amountDue ?? 0;
   const creditApplied = payments.find((p) => p.modeType === LOYALTY_MODE_TYPE)?.amount ?? 0;
   // Loyalty coins and applied balances (return/advance credits) are never taken on the terminal.
@@ -172,10 +180,10 @@ function CheckoutScreen() {
     cartTotal:    doc.amountDue,
     panNumber,
     panDocument,
-    allowPartialPayment: documentType === 'order',
+    allowPartialPayment: documentType !== 'invoice',
   }) : { success: true };
 
-  const isValid = validation.success && hasDoc && !isPricing && !pricingError;
+  const isValid = validation.success && hasDoc && !isPricing && !pricingError && !reserveIssue;
 
   const handlePlaceOrderClick = () => {
     if (!isValid || isSubmitting) return;
@@ -183,6 +191,20 @@ function CheckoutScreen() {
   };
   const handlePaymentConfirmed = async () => {
     dispatch(setCheckoutInProgress(true));
+
+    if (isReserve) {
+      try {
+        const outcome = await placeReserve({ paymentModes: payments, salesPersonId, pricedLineItems: invoice.lineItems, panNumber });
+        setIsConfirmed(true);
+        if (!isEmpty) clearCartKeepCustomer();
+        router.replace(`/reservations?created=${outcome.transactionId}`);
+      } catch {
+        // toast already shown by useCreateReserve
+      } finally {
+        dispatch(setCheckoutInProgress(false));
+      }
+      return;
+    }
 
     try {
       const outcome = documentType === 'invoice'
@@ -296,6 +318,30 @@ function CheckoutScreen() {
             </section>
           )}
 
+          {canReserve && (
+            <section className="flex flex-col gap-2 rounded-xl border border-border bg-card p-5 shadow-sm">
+              <div className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-1" role="radiogroup" aria-label="Sale or reserve">
+                {[['sale', 'Sell now'], ['reserve', 'Reserve']].map(([id, label]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    role="radio"
+                    aria-checked={saleMode === id}
+                    onClick={() => setSaleMode(id)}
+                    className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${saleMode === id ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {isReserve && (
+                <p className={`text-xs ${reserveIssue ? 'text-status-error' : 'text-muted-foreground'}`}>
+                  {reserveIssue ?? 'Holds these pieces for the customer in OrnaVerse (Reserve). Advance is optional.'}
+                </p>
+              )}
+            </section>
+          )}
+
           {hasDoc && (
             <section className="flex flex-col gap-3 rounded-xl border border-border bg-card p-5 shadow-sm">
               <h2 className="text-sm font-bold text-foreground flex items-center gap-1.5">
@@ -303,10 +349,10 @@ function CheckoutScreen() {
                 Payment
               </h2>
               <CheckoutPaymentSection
-                key={`payment-${customerId}`}
+                key={`payment-${customerId}-${documentType}`}
                 bare
                 amountDue={payableTotal}
-                allowPartial={documentType === 'order'}
+                allowPartial={documentType !== 'invoice'}
                 lineItems={doc.lineItems ?? []}
                 onChange={setPayments}
               />
@@ -373,7 +419,9 @@ function CheckoutScreen() {
       onOpenChange={setIsPaymentConfirmOpen}
       title="Confirm payment on terminal"
       description={
-        documentType === 'order'
+        documentType === 'reserve'
+          ? `Has the advance of ${formatAmount(terminalAmount)} been completed on the payment terminal? Confirming will reserve the stock — declining will not save anything.`
+          : documentType === 'order'
           ? `Has the advance of ${formatAmount(terminalAmount)} been completed on the payment terminal? Confirming will place the order — declining will not save anything.`
           : `Has the payment of ${formatAmount(terminalAmount)} been completed on the payment terminal? Confirming will generate the invoice — declining will not save anything.`
       }
@@ -388,5 +436,9 @@ function CheckoutScreen() {
 }
 
 export default function CheckoutPage() {
-  return <CheckoutScreen />;
+  return (
+    <Suspense fallback={null}>
+      <CheckoutScreen />
+    </Suspense>
+  );
 }

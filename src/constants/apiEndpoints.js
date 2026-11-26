@@ -172,6 +172,14 @@ const API = {
     APPLY_DISCOUNT: 'Services/POS/Invoice/ApplyAdditionalDiscount',
   },
 
+  RESERVES: {
+    CREATE:   'Services/POS/Reserve/Create',
+    POST:     'Services/POS/Reserve/Post',
+    CANCEL:   'Services/POS/Reserve/Cancel',
+    RETRIEVE: 'Services/POS/Reserve/Retrieve',
+    LIST:     'Services/POS/Reserve/List',
+  },
+
   // ─────────────────────────────────────────────────────────────────────────
   // INVOICE RECEIPTS
   // ─────────────────────────────────────────────────────────────────────────

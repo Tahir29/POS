@@ -31,6 +31,7 @@ import ProductReviewSummaryLink from '@/components/features/products/ProductRevi
 import RecentlyViewedCarousel from '@/components/features/products/RecentlyViewedCarousel';
 import SimilarProductsCarousel from '@/components/features/products/SimilarProductsCarousel';
 import WishlistButton         from '@/components/features/products/WishlistButton';
+import ReservedForNote        from '@/components/features/reserves/ReservedForNote';
 import { useRecordProductView } from '@/hooks/products/useRecentlyViewed';
 import { deriveKaratCode } from '@/lib/karat';
 import { resolveImageSrc } from '@/lib/resolveImageSrc';
@@ -353,6 +354,8 @@ function ProductDetailScreen() {
               </div>
             )}
             
+            <ReservedForNote itemId={activeItem?.item_id} itemCode={activeItem?.item_code} />
+
             {hasUnclaimableStock && (
               <div className="flex items-center gap-2.5 rounded-xl bg-status-made-order/10 border border-status-made-order/20 px-4 py-3">
                 <Info size={18} className="shrink-0 text-status-made-order" aria-hidden="true" />
