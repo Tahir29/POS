@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSelector, useDispatch } from 'react-redux';
-import { ShieldCheck, Package, Receipt, CreditCard, UserCog } from 'lucide-react';
+import { ShieldCheck, Package, Receipt, CreditCard, UserCog, Bookmark } from 'lucide-react';
 import ConfirmDialog    from '@/components/shared/ConfirmDialog';
 import CheckoutCustomerSummary  from '@/components/features/checkout/CheckoutCustomerSummary';
 import CheckoutPanCapture       from '@/components/features/checkout/CheckoutPanCapture';
@@ -44,7 +44,7 @@ function CheckoutScreen() {
   const dispatch = useDispatch();
   const { items, appliedPromos, isEmpty, clearCartKeepCustomer, removeItem } = useCart();
   const { total }          = useCartTotals();
-  const { customerId, customerMobile } = useCustomerSession();
+  const { customerId, customerName, customerMobile } = useCustomerSession();
   const activeStoreId      = useSelector(selectActiveStoreId);
   const customerAddress    = useSelector((s) => s.cart.customerAddress);
   const { goBack, clearGuard } = useSmartBack();
@@ -318,27 +318,20 @@ function CheckoutScreen() {
             </section>
           )}
 
-          {canReserve && (
-            <section className="flex flex-col gap-2 rounded-xl border border-border bg-card p-5 shadow-sm">
-              <div className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-1" role="radiogroup" aria-label="Sale or reserve">
-                {[['sale', 'Sell now'], ['reserve', 'Reserve']].map(([id, label]) => (
-                  <button
-                    key={id}
-                    type="button"
-                    role="radio"
-                    aria-checked={saleMode === id}
-                    onClick={() => setSaleMode(id)}
-                    className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${saleMode === id ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-              {isReserve && (
-                <p className={`text-xs ${reserveIssue ? 'text-status-error' : 'text-muted-foreground'}`}>
-                  {reserveIssue ?? 'Holds these pieces for the customer in OrnaVerse (Reserve). Advance is optional.'}
+          {isReserve && (
+            <section className="flex items-start gap-3 rounded-xl border border-status-made-order/20 bg-status-made-order/10 p-4">
+              <Bookmark size={18} className="mt-0.5 shrink-0 text-status-made-order" aria-hidden="true" />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-status-made-order">
+                  Reserving{customerName ? ` for ${customerName}` : ''}
                 </p>
-              )}
+                <p className={`text-xs ${reserveIssue ? 'text-status-error' : 'text-status-made-order/70'}`}>
+                  {reserveIssue ?? 'Holds these pieces for the customer.'}
+                </p>
+              </div>
+              <button type="button" onClick={() => setSaleMode('sale')} className="shrink-0 text-xs font-medium text-primary underline-offset-2 hover:underline">
+                Sell instead
+              </button>
             </section>
           )}
 

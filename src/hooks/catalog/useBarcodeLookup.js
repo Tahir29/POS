@@ -46,7 +46,7 @@ export function useBarcodeLookup({ storeId, partyId: partyIdOverride = null }) {
           toast.warning(
             line
               ? `${skuMatch.sku} is reserved for order ${line.document_no} (${line.party_name ?? 'customer'}).`
-              : `${skuMatch.sku} is reserved for a customer order and can't be sold separately.`,
+              : `${skuMatch.sku} is on hold (allocated) in OrnaVerse and can’t be sold until it is released.`,
             {
               duration: 15000,
               ...(line && { action: { label: 'Bill that order', onClick: () => router.push(`/orders?order=${encodeURIComponent(line.document_no)}`) } }),

@@ -26,3 +26,15 @@ export async function cancelReserve(id) {
   if (!entity) throw new Error('This reserve no longer exists in OrnaVerse');
   return post(EP.CANCEL, { EntityId: id, Entity: entity });
 }
+
+/** OrnaVerse's reserve "Pay": appends receipts to the posted reserve and saves it via Update. */
+export async function addReserveAdvance(id, receiptRows) {
+  const entity = await retrieveReserve(id);
+  if (!entity) throw new Error('This reserve no longer exists in OrnaVerse');
+  const receipt_details = [...(entity.receipt_details ?? []), ...receiptRows];
+  const receipt_amount = +receipt_details.reduce((s, r) => s + (Number(r.amount) || 0), 0).toFixed(2);
+  return post(EP.UPDATE, {
+    EntityId: id,
+    Entity: { ...entity, receipt_details, receipt_amount, balance_amount: +((entity.net_amount ?? 0) - receipt_amount).toFixed(2) },
+  });
+}

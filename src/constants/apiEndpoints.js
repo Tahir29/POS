@@ -174,6 +174,7 @@ const API = {
 
   RESERVES: {
     CREATE:   'Services/POS/Reserve/Create',
+    UPDATE:   'Services/POS/Reserve/Update',
     POST:     'Services/POS/Reserve/Post',
     CANCEL:   'Services/POS/Reserve/Cancel',
     RETRIEVE: 'Services/POS/Reserve/Retrieve',

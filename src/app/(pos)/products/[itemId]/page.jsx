@@ -367,7 +367,7 @@ function ProductDetailScreen() {
                   </p>
                   <p className="text-xs text-status-made-order/70">
                     {claimablePieces === 0
-                      ? `This piece can't be billed today — it may already be reserved by another sale, or not yet tagged for sale. It will book as Made to Order until that clears.`
+                      ? `This piece can't be billed today — it is on hold (allocated) in OrnaVerse, or not yet tagged for sale. It will book as Made to Order until that clears.`
                       : `Only ${claimablePieces} of ${summaryStock} can actually be billed today — the rest will book as Made to Order.`}
                   </p>
                 </div>

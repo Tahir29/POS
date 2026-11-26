@@ -108,6 +108,7 @@ export default function ProductStickyActionBar({
               disabled={effectiveUnitPrice == null}
               className="w-full sm:w-auto"
             />
+            {/* Reserve button hidden until rollout — uncomment to enable.
             {cartStockStatus === 'in_stock' && (
               <AddToCartButton
                 mode="reserve"
@@ -123,6 +124,7 @@ export default function ProductStickyActionBar({
                 disabled={effectiveUnitPrice == null}
               />
             )}
+            */}
           </div>
         </div>
       </div>
