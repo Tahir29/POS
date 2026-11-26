@@ -7,13 +7,16 @@ import { getStockPieceBySku, createItemEnquiry } from '@/services/inventoryServi
 import { getStoreReadyToInvoiceLines } from '@/services/orderFulfillmentService';
 import tracker from '@/lib/analytics/tracker';
 import EVENTS from '@/lib/analytics/events';
+import { useCustomerSession } from '@/hooks/customer/useCustomerSession';
 
 /**
  * @param {{ storeId: number|null, partyId?: number|null }} params
  * @returns {{ handleBarcodeDetected: (code: string) => Promise<void> }}
  */
-export function useBarcodeLookup({ storeId, partyId = null }) {
+export function useBarcodeLookup({ storeId, partyId: partyIdOverride = null }) {
   const router = useRouter();
+  const { customerId: attachedCustomerId } = useCustomerSession();
+  const partyId = partyIdOverride ?? attachedCustomerId ?? null;
 
   const handleBarcodeDetected = useCallback(async (code) => {
     const trimmed = code.trim();
