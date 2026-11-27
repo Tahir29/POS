@@ -70,6 +70,9 @@ const API = {
     ATTRIBUTES:    'Services/Master/Attributes/List',
     DESIGNS:       'Services/Master/Style/GetDesigns',
     DESIGN_DETAIL: 'Services/Master/Style/Retrieve',
+    STYLE_LIST:            'Services/Master/Style/List',
+    STYLE_CREATE:          'Services/Master/Style/Create',
+    STYLE_CREATE_VARIANTS: 'Services/Master/Style/CreateVariants',
   },
 
   // ─────────────────────────────────────────────────────────────────────────

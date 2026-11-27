@@ -634,7 +634,7 @@ function MultiOrderPanel({ ticket, partyId }) {
   const [note, setNote] = useState('');
   const [overrides, setOverrides] = useState({});
   const { ready, lookups } = useOrderLookups();
-  const { sendToCart, isAttaching } = useTicketCartHandoff(ticket);
+  const { sendToCart, isAttaching, isPreparing } = useTicketCartHandoff(ticket, lookups);
   const products = ticket.items.filter(isActive);
 
   const query = useQuery({
@@ -643,7 +643,7 @@ function MultiOrderPanel({ ticket, partyId }) {
       const results = [];
       for (const item of products) {
         const view = { ...item, specs: item.specs, order_details: item.order_details };
-        results.push({ item, result: await buildOrderFromFinal(item.final_details, view, lookups, overrides[item.item_id] ?? {}) });
+        results.push({ item, view, result: await buildOrderFromFinal(item.final_details, view, lookups, overrides[item.item_id] ?? {}) });
       }
       return results;
     },
@@ -685,7 +685,9 @@ function MultiOrderPanel({ ticket, partyId }) {
         note: note.trim() || null,
       }).catch(() => toast.warning('The acknowledgement could not be saved to the ticket history — the order still proceeds.'));
     }
-    await sendToCart(results.map(({ result }) => ({ item: result.item, line: result.line, summary: result.summary })));
+    await sendToCart(results.map(({ item, view, result }) => ({
+      final: item.final_details, view, overrides: overrides[item.item_id] ?? {}, line: result.line,
+    })));
   };
 
   return (
@@ -724,8 +726,8 @@ function MultiOrderPanel({ ticket, partyId }) {
           <Textarea id="multi-ack-note" rows={2} maxLength={1000} value={note} onChange={(e) => setNote(e.target.value)} />
         </div>
       )}
-      <Button type="button" className="h-11 gap-1.5 sm:self-end" disabled={!canProceed || action.isPending || isAttaching} onClick={handleCheckout}>
-        <ShoppingCart size={16} aria-hidden="true" /> {isAttaching ? 'Logging in customer…' : action.isPending ? 'Saving…' : 'Proceed to checkout'}
+      <Button type="button" className="h-11 gap-1.5 sm:self-end" disabled={!canProceed || action.isPending || isAttaching || isPreparing} onClick={handleCheckout}>
+        <ShoppingCart size={16} aria-hidden="true" /> {isPreparing ? 'Preparing OrnaVerse items…' : isAttaching ? 'Logging in customer…' : action.isPending ? 'Saving…' : 'Proceed to checkout'}
       </Button>
     </div>
   );
